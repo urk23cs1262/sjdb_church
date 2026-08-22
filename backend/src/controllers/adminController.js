@@ -303,7 +303,7 @@ const forceGlobalOtpReverification = async (req, res) => {
     // 4. Send Web Push Notification Broadcast
     try {
       await sendPushBroadcast({
-        title: '🔒 Security Alert — Re-verification Required',
+        title: 'Security Alert — Re-verification Required',
         body: 'All active sessions have been safely reset. Please log in with your password and verify your OTP.',
         notificationId: inAppNotif?._id ? inAppNotif._id.toString() : 'global-otp-reset',
         url: '/login',
