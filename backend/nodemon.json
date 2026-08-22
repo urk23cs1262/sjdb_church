@@ -1,0 +1,11 @@
+{
+  "watch": ["src"],
+  "ext": "js,mjs,cjs,json",
+  "ignore": [
+    "src/bot/session/*",
+    "src/bot/session/**/*",
+    "uploads/*",
+    "uploads/**/*"
+  ],
+  "exec": "node src/server.js"
+}

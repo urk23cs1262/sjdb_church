@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Environment files
+.env
+.env.local
+.env.*
+backend/.env
+frontend/.env
+!.env.example
+
+# Production builds
+dist/
+build/
+*/dist/
+
+# Uploads & User data
+uploads/
+backend/uploads/
+*.log
+
+# WhatsApp Baileys Auth Session Files
+baileys_auth_info/
+auth_info_baileys/
+backend/baileys_auth_info/
+backend/auth_info_baileys/
+session/
+*/session/
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
