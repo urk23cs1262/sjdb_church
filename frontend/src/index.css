@@ -1,0 +1,370 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+Tamil:wght@300;400;500;600;700&family=Outfit:wght@600;700;800;900&family=Plus+Jakarta+Sans:wght@600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.font-premium-banner {
+  font-family: 'Outfit', 'Plus Jakarta Sans', 'Cinzel', sans-serif;
+  letter-spacing: -0.03em;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-church-cream text-gray-800 font-sans;
+    transition: background-color 0.3s, color 0.3s;
+  }
+
+  body.dark {
+    @apply bg-church-dark text-gray-100;
+  }
+
+  /* Hide Google Translate Top Banner & Tooltip */
+  iframe.goog-te-banner-frame,
+  .goog-te-banner-frame,
+  .goog-te-banner-frame.skiptranslate,
+  .goog-te-gadget-icon,
+  .goog-tooltip,
+  #goog-gt-tt {
+    display: none !important;
+  }
+
+  html,
+  body {
+    top: 0px !important;
+  }
+
+  body {
+    position: relative !important;
+  }
+}
+
+@layer components {
+
+  /* Glassmorphism cards */
+  .glass {
+    @apply backdrop-blur-md bg-white/10 border border-white/20 shadow-glass;
+  }
+
+  .glass-dark {
+    @apply backdrop-blur-md bg-black/20 border border-white/10 shadow-glass;
+  }
+
+  .glass-card {
+    @apply backdrop-blur-sm bg-white/80 border border-white/40 shadow-card rounded-2xl;
+  }
+
+  /* Custom subtle scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: goldenrod;
+    border-radius: 9999px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: goldenrod;
+  }
+
+  /* Church button styles */
+  .btn-gold {
+    @apply px-6 py-3 bg-church-gold text-white font-semibold rounded-xl hover:bg-church-gold-light hover:shadow-gold transition-all duration-300 active:scale-95 inline-flex items-center justify-center gap-2;
+  }
+
+  .btn-royal {
+    @apply px-6 py-3 bg-church-royal-blue text-white font-semibold rounded-xl hover:bg-church-royal-light hover:shadow-royal transition-all duration-300 active:scale-95 inline-flex items-center justify-center gap-2;
+  }
+
+  .btn-outline-gold {
+    @apply px-6 py-3 border-2 border-church-gold text-church-gold font-semibold rounded-xl hover:bg-church-gold hover:text-white transition-all duration-300 active:scale-95 inline-flex items-center justify-center gap-2;
+  }
+
+  .btn-maroon {
+    @apply px-6 py-3 bg-church-maroon text-white font-semibold rounded-xl hover:bg-church-maroon-light transition-all duration-300 active:scale-95 inline-flex items-center justify-center gap-2;
+  }
+
+  .btn-ghost {
+    @apply px-6 py-3 text-gray-600 font-semibold rounded-xl hover:bg-gray-100 transition-all duration-300 active:scale-95 inline-flex items-center gap-2;
+  }
+
+  /* Church section headings */
+  .section-title {
+    @apply font-display text-3xl md:text-4xl font-bold text-church-royal-blue;
+  }
+
+  .section-subtitle {
+    @apply text-church-gold font-semibold text-sm uppercase tracking-widest;
+  }
+
+  /* Cards */
+  .church-card {
+    @apply bg-white rounded-2xl shadow-card p-6 border border-gray-100 hover:shadow-gold hover:-translate-y-1 transition-all duration-300;
+  }
+
+  /* Input */
+  .church-input {
+    @apply w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-church-gold focus:border-transparent transition-all duration-200 placeholder:text-gray-400;
+  }
+
+  .church-select {
+    @apply church-input cursor-pointer;
+  }
+
+  .church-label {
+    @apply block text-sm font-semibold text-gray-700 mb-1;
+  }
+
+  /* Badge */
+  .badge {
+    @apply px-3 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .badge-gold {
+    @apply badge bg-gold-100 text-gold-800;
+  }
+
+  .badge-blue {
+    @apply badge bg-blue-100 text-blue-800;
+  }
+
+  .badge-green {
+    @apply badge bg-green-100 text-green-800;
+  }
+
+  .badge-red {
+    @apply badge bg-red-100 text-red-800;
+  }
+
+  .badge-gray {
+    @apply badge bg-gray-100 text-gray-800;
+  }
+
+  /* Cross decoration */
+  .cross-decoration {
+    @apply relative;
+  }
+
+  .cross-decoration::before {
+    content: '';
+    @apply absolute -top-2 -left-2 text-church-gold opacity-20 text-6xl font-display;
+  }
+
+  /* Page hero */
+  .page-hero {
+    @apply relative bg-church-gradient min-h-[40vh] flex items-center justify-center overflow-hidden;
+  }
+
+  /* Animated gradient text */
+  .gradient-text {
+    background: linear-gradient(135deg, #d4a017, #f0c040, #d4a017);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 3s linear infinite;
+  }
+
+  /* Normal Global Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-100;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-church-gold rounded-full;
+  }
+
+  /* Admin Sidebar Custom Scrollbar (Blue track only in Admin Sidebar) */
+  .admin-sidebar-scroll::-webkit-scrollbar {
+    width: 5px;
+  }
+
+  .admin-sidebar-scroll::-webkit-scrollbar-track {
+    background-color: #1e3a8a;
+  }
+
+  .admin-sidebar-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.25);
+    border-radius: 9999px;
+  }
+
+  .admin-sidebar-scroll::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.45);
+  }
+
+  .admin-sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #d4a017 #1e3a8a;
+  }
+
+  /* Loading spinner */
+  .spinner {
+    @apply w-8 h-8 border-4 border-gold-200 border-t-church-gold rounded-full animate-spin;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* Accessibility Mode Utilities */
+html.high-contrast-mode,
+body.high-contrast-mode {
+  filter: contrast(135%) saturate(125%);
+}
+
+html.reduce-animations *,
+html.reduce-animations *::before,
+html.reduce-animations *::after,
+body.reduce-animations *,
+body.reduce-animations *::before,
+body.reduce-animations *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* ========================================================
+   Rosary & Songs Management Section Styles (Normal CSS)
+   ======================================================== */
+.rosary-management-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.rosary-management-banner {
+  background: linear-gradient(135deg, #1e3a8a 0%, #172554 60%, #1e1b4b 100%);
+  border-radius: 1.5rem;
+  padding: 1.75rem 2rem;
+  color: #ffffff;
+  box-shadow: 0 10px 25px -5px rgba(30, 58, 138, 0.25);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .rosary-management-banner {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+.rosary-management-banner-icon {
+  width: 3rem;
+  height: 3rem;
+  background-color: #d4a017;
+  border-radius: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(212, 160, 23, 0.35);
+  flex-shrink: 0;
+}
+
+.rosary-management-card {
+  background-color: #ffffff;
+  border-radius: 1.5rem;
+  padding: 1.5rem 1.75rem;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.rosary-song-list {
+  border: 1px solid #e5e7eb;
+  border-radius: 1rem;
+  overflow: hidden;
+  background-color: #ffffff;
+  display: flex;
+  flex-direction: column;
+}
+
+.rosary-song-item {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #f3f4f6;
+  gap: 0.75rem;
+  transition: background-color 0.15s ease;
+}
+
+.rosary-song-item:last-child {
+  border-bottom: none;
+}
+
+.rosary-song-item.active {
+  background-color: #ffffff;
+}
+
+.rosary-song-item.active:hover {
+  background-color: #f8fafc;
+}
+
+.rosary-song-item.inactive {
+  background-color: #f9fafb;
+  opacity: 0.65;
+}
+
+.rosary-song-item-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .rosary-song-item-header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+}
+
+.rosary-song-preview-container {
+  width: 100%;
+  padding-top: 0.75rem;
+  margin-top: 0.25rem;
+  border-top: 1px solid #fef3c7;
+}
+
+.rosary-management-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.625rem;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+}

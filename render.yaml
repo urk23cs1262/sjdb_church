@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: sjdb-church-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    # IMPORTANT: use an always-on instance for Baileys + cron workers.
+    # Render's free web services can sleep and cannot provide 24/7 WhatsApp service.
+    plan: starter
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: CLIENT_URL
+        sync: false

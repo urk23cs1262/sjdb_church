@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+
+  <!-- Favicon & App Icons -->
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+
+  <!-- iOS / iPadOS home screen icon -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="SJDB Church" />
+
+  <!-- Android / Chrome PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#001f3f" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- Windows tile -->
+  <meta name="msapplication-TileImage" content="/icon-512.png" />
+  <meta name="msapplication-TileColor" content="#001f3f" />
+
+  <!-- Open Graph (social share preview) -->
+  <meta property="og:image" content="/icon-512.png" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>St. John De Britto Church</title>
+</head>
+
+<style>
+  body,
+  html {
+    top: 0 !important;
+    position: relative !important;
+  }
+
+  .skiptranslate iframe,
+  .goog-te-banner-frame {
+    display: none !important;
+    visibility: hidden !important;
+  }
+</style>
+
+<body>
+  <div id="root"></div>
+  <script type="text/javascript">
+    function googleTranslateElementInit() {
+      new google.translate.TranslateElement({
+        pageLanguage: 'en',
+        includedLanguages: 'en,ta',
+        layout: google.translate.TranslateElement.InlineLayout.SIMPLE
+      }, 'google_translate_element');
+    }
+  </script>
+  <script type="text/javascript" async defer
+    src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"
+    onerror="console.warn('Google Translate element script could not be loaded (offline/blocked).');"></script>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+
+</html>
