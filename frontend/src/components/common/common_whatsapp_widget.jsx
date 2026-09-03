@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { FaWhatsapp } from 'react-icons/fa';
 import api from '../../services/api';
 
-const WHATSAPP_MESSAGE = encodeURIComponent('HI\n\n SJDB Connect\nConnecting Faith & Community');
+const WHATSAPP_MESSAGE = encodeURIComponent('Hi');
 
 export default function WhatsAppWidget({ videoAdOpen = false }) {
   const location = useLocation();

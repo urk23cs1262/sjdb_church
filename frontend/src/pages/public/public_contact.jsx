@@ -106,7 +106,7 @@ export default function Contact() {
                 </a>
 
                 <a
-                  href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent("HI\n\n SJDB Connect\nConnecting Faith & Community")}`}
+                  href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent("Hi")}`}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center justify-center gap-2.5 bg-church-royal-blue hover:bg-blue-900 text-white border-2 border-church-gold px-4 py-3.5 rounded-2xl transition-all shadow-lg font-bold text-xs sm:text-sm text-center"
