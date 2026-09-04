@@ -191,7 +191,7 @@ export default function Home() {
             <h1 className="font-display text-4xl sm:text-5xl md:text-7xl font-bold text-white mb-2 leading-tight">
               <span className="gradient-text">St. John de</span>
               <br />
-              <span className="text-white">Britto's Church</span>
+              <span className="text-white">Britto Church</span>
             </h1>
             <p className="text-gold-300 font-tamil text-2xl sm:text-3xl font-bold mb-3">
               புனித அருளானந்தர் தேவாலயம்
