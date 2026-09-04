@@ -41,7 +41,7 @@ const dispatchPreMaintenanceNotice = async (settings, options = {}) => {
     const formattedStart = format12H(fromStr);
     const formattedEnd = format12H(toStr);
 
-    const emailSubject = ` SCHEDULED MAINTENANCE NOTICE: St. John de Britto's Church`;
+    const emailSubject = ` SCHEDULED MAINTENANCE NOTICE: St. John de britto Church`;
     const noticeMessage = settings.noticeBanner?.message || settings.message || 'Scheduled system maintenance and upgrades.';
     const emailBody = `Dear Parishioner,\n\nPlease be informed that scheduled website maintenance is planned for our church portal.\n\n Scheduled Start: ${formattedStart}\n Expected Completion: ${formattedEnd}\n\nNotice Details: ${noticeMessage}\n\nDuring this window, the website may be briefly offline. Thank you for your understanding.`;
     const smsBody = ` Upcoming Maintenance Notice: St. John de Britto Church portal maintenance scheduled from ${formattedStart} to ${formattedEnd}. Details: ${noticeMessage}`;
@@ -91,7 +91,7 @@ const dispatchPreMaintenanceNotice = async (settings, options = {}) => {
                       <div style="width: 75px; height: 75px; margin: 0 auto 12px; border-radius: 50%; overflow: hidden; border: 3px solid #fbbf24; background: #ffffff; box-shadow: 0 4px 14px rgba(0,0,0,0.25);">
                         <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
                       </div>
-                      <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #fbbf24;">St. John de Britto's Church</h1>
+                      <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #fbbf24;">St. John de britto Church</h1>
                       <p style="margin: 4px 0 0 0; color: #e2e8f0; font-size: 13px; font-weight: 500;">Kalayarkoil — Pre-Maintenance Notice</p>
                     </div>
                     <div style="padding: 24px; color: #1e293b; line-height: 1.6;">
@@ -125,7 +125,7 @@ const dispatchPreMaintenanceNotice = async (settings, options = {}) => {
               sentVia: ['email', 'inApp', 'push', 'whatsapp']
             });
             inAppCount++;
-          } catch (e) {}
+          } catch (e) { }
 
           pushCount++;
 
@@ -136,9 +136,9 @@ const dispatchPreMaintenanceNotice = async (settings, options = {}) => {
             }
             try {
               const { broadcastMaintenanceCreated } = require('../services/whatsappBroadcastHelper');
-              broadcastMaintenanceCreated(settings).catch(() => {});
+              broadcastMaintenanceCreated(settings).catch(() => { });
               waCount++;
-            } catch (waErr) {}
+            } catch (waErr) { }
           }
         }
 
@@ -345,14 +345,14 @@ const sendMaintenanceNotices = async (req, res) => {
 
     const formattedCompletion = settings.expectedCompletion
       ? new Date(settings.expectedCompletion).toLocaleString('en-IN', {
-          timeZone: 'Asia/Kolkata',
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true
-        }) + ' IST'
+        timeZone: 'Asia/Kolkata',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      }) + ' IST'
       : 'Shortly';
 
     const finalEmailSubject = emailSubject || settings.notificationTemplate?.emailSubject || 'Church Website Maintenance Notice';

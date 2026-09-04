@@ -63,7 +63,7 @@ export default function Footer() {
                 <img src={churchLogo} alt="Church Logo" className="w-full h-full object-cover object-[center_20%]" />
               </div>
               <div>
-                <h3 className="font-display text-gold-300 font-bold text-xl leading-tight">St. John de Britto's</h3>
+                <h3 className="font-display text-gold-300 font-bold text-xl leading-tight">St. John de britto</h3>
                 <p className="text-gold-400 text-sm font-tamil font-semibold">புனித அருளானந்தர் தேவாலயம்</p>
               </div>
             </div>

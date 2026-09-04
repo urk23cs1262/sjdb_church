@@ -51,7 +51,7 @@ function formatAnnouncementWhatsApp(announcement) {
 
   // Guard against broken or placeholder values
   if (!content || content.toLowerCase() === 'ee' || content.toLowerCase() === 'undefined' || content.toLowerCase() === 'null') {
-    content = `The Parish Office of St. John de Britto's Church, Kalayarkoil, wishes to inform all parishioners regarding ${cleanTitle}.\n\nAll parishioners are kindly requested to take note of this information and participate actively in the parish community.\n\nFor further details, please contact the Parish Office.`;
+    content = `The Parish Office of St. John de britto Church, Kalayarkoil, wishes to inform all parishioners regarding ${cleanTitle}.\n\nAll parishioners are kindly requested to take note of this information and participate actively in the parish community.\n\nFor further details, please contact the Parish Office.`;
   }
 
   const announcementUrl = `${getPublicClientUrl()}/announcements`;
@@ -65,7 +65,7 @@ ${content}
 🌐 *Read the complete announcement:*
 ${announcementUrl}
 
-— *St. John de Britto's Church, Kalayarkoil*
+— *St. John de britto Church, Kalayarkoil*
 _SJDB Connect_`;
 }
 
@@ -76,7 +76,7 @@ function formatEventWhatsApp(event) {
   const cleanTitle = (event.title || 'Parish Event').trim();
   let desc = (event.description || '').trim();
   if (desc.toLowerCase() === 'ee' || desc.toLowerCase() === 'test' || desc.toLowerCase() === 'undefined') {
-    desc = `St. John de Britto's Church, Kalayarkoil, warmly invites all parishioners and their families to the ${cleanTitle}.\n\nThe gathering is being organized as an opportunity for parish families to come together in fellowship, strengthen community relationships, and participate in activities prepared by the parish.\n\nFor further information, please contact the Parish Office.`;
+    desc = `St. John de britto Church, Kalayarkoil, warmly invites all parishioners and their families to the ${cleanTitle}.\n\nThe gathering is being organized as an opportunity for parish families to come together in fellowship, strengthen community relationships, and participate in activities prepared by the parish.\n\nFor further information, please contact the Parish Office.`;
   }
 
   const dateFormatted = event.date ? formatEventDate(event.date) : '';
@@ -124,7 +124,7 @@ ${infoSection ? `${infoSection}\n\n` : ''}${regMessage}
 🌐 *View event details & register:*
 ${eventUrl}
 
-— *St. John de Britto's Church, Kalayarkoil*
+— *St. John de britto Church, Kalayarkoil*
 _SJDB Connect_`;
 }
 
@@ -181,7 +181,7 @@ async function broadcastEventCreated(event) {
     console.log(`[WhatsApp Broadcast] Auto-broadcasting new event "${event.title}" to ${recipients.length} recipients...`);
 
     for (const phone of recipients) {
-      wa.sendWhatsAppMessage(phone, msg).catch(() => {});
+      wa.sendWhatsAppMessage(phone, msg).catch(() => { });
       await new Promise(r => setTimeout(r, 70));
     }
   } catch (err) {
@@ -205,7 +205,7 @@ async function broadcastAnnouncementCreated(announcement) {
     console.log(`[WhatsApp Broadcast] Auto-broadcasting new announcement "${announcement.title}" to ${recipients.length} recipients...`);
 
     for (const phone of recipients) {
-      wa.sendWhatsAppMessage(phone, msg).catch(() => {});
+      wa.sendWhatsAppMessage(phone, msg).catch(() => { });
       await new Promise(r => setTimeout(r, 70));
     }
   } catch (err) {
@@ -234,13 +234,13 @@ async function broadcastMaintenanceCreated(maintenance) {
 
 ${maintenance.description ? `_${maintenance.description}_\n\n` : ''}Thank you for your cooperation and continued prayers. 🙏
 
-— *St. John de Britto's Church, Kalayarkoil*
+— *St. John de britto Church, Kalayarkoil*
 _SJDB Connect_`;
 
     console.log(`[WhatsApp Broadcast] Auto-broadcasting maintenance update to ${recipients.length} recipients...`);
 
     for (const phone of recipients) {
-      wa.sendWhatsAppMessage(phone, msg).catch(() => {});
+      wa.sendWhatsAppMessage(phone, msg).catch(() => { });
       await new Promise(r => setTimeout(r, 70));
     }
   } catch (err) {

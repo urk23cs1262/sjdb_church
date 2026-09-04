@@ -112,12 +112,12 @@ export async function showNativeNotification({
     if ('serviceWorker' in navigator) {
       const reg = await navigator.serviceWorker.ready;
       if (reg && reg.showNotification) {
-        await reg.showNotification(title || "St. John de Britto's Church", options);
+        await reg.showNotification(title || "St. John de britto Church", options);
         return true;
       }
     }
 
-    const n = new Notification(title || "St. John de Britto's Church", options);
+    const n = new Notification(title || "St. John de britto Church", options);
     n.onclick = (e) => {
       e.preventDefault();
       window.focus();

@@ -23,7 +23,7 @@ const { createNotification } = require('./notificationService');
 const { SITE_ROUTES, EXTERNAL_LINKS, getSiteUrl } = require('../config/siteRoutes');
 
 function sendWA(phone, text) {
-  return require('../bot/whatsapp').sendWhatsAppMessage(phone, text).catch(() => {});
+  return require('../bot/whatsapp').sendWhatsAppMessage(phone, text).catch(() => { });
 }
 
 // ─── HELPER FUNCTIONS ────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ async function sendReminderToAllUsers({
             <div style="width: 75px; height: 75px; margin: 0 auto 12px; border-radius: 50%; overflow: hidden; border: 3px solid #fbbf24; background: #ffffff; box-shadow: 0 4px 14px rgba(0,0,0,0.25);">
               <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
             </div>
-            <h2 style="margin: 0; color: #fbbf24; font-size: 20px; font-weight: 800; letter-spacing: 0.5px;">St. John de Britto's Church</h2>
+            <h2 style="margin: 0; color: #fbbf24; font-size: 20px; font-weight: 800; letter-spacing: 0.5px;">St. John de britto Church</h2>
             <p style="margin: 4px 0 0; color: #e2e8f0; font-size: 12.5px; font-weight: 500;">Kalayarkoil Parish Event & Announcement Reminder</p>
           </div>
           <div style="padding: 22px 18px; color: #334155; line-height: 1.6;">
@@ -145,7 +145,7 @@ async function sendReminderToAllUsers({
             </div>
           </div>
           <div style="background: #0f172a; padding: 16px 18px; text-align: center; color: #94a3b8; font-size: 11px;">
-            <p style="margin: 0;">© ${new Date().getFullYear()} St. John de Britto's Church, Kalayarkoil. All rights reserved.</p>
+            <p style="margin: 0;">© ${new Date().getFullYear()} St. John de britto Church, Kalayarkoil. All rights reserved.</p>
           </div>
         </div>
       </div>
@@ -157,7 +157,7 @@ ${dateText ? `📅 *Date:* ${dateText}\n` : ''}${timeText ? `⏰ *Time:* ${timeT
 ${details ? `_${details.slice(0, 160)}..._\n\n` : ''}🔗 *View Full Details:*
 ${fullLink}
 
-📍 _St. John de Britto's Church, Kalayarkoil_`;
+📍 _St. John de britto Church, Kalayarkoil_`;
 
     let count = 0;
 
@@ -199,7 +199,7 @@ ${fullLink}
       title,
       sentCount: count,
       sentAt: new Date()
-    }).catch(() => {});
+    }).catch(() => { });
 
     console.log(`✅ [Reminder Sent] ${itemModel} "${title}" (${reminderType}) dispatched to subscribers`);
     return count;

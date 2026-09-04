@@ -188,7 +188,7 @@ ${gospelR}
 Strengthen our faith, fill our hearts with
 your love, and help us to follow your word.`;
 
-    message = `⛪ *St. John de Britto's Church, Kalayarkoil*
+    message = `⛪ *St. John de britto Church, Kalayarkoil*
 
 🙏 Good Morning!
 
@@ -213,7 +213,7 @@ ${prayerBlock}
 
 ✨ Have a blessed day.
 
-📍 *St. John de Britto's Church*
+📍 *St. John de britto Church*
 _Kalayarkoil_`;
   }
 
@@ -270,7 +270,7 @@ ${prayerBlock}
 
 ✨ ദൈവം താങ്കളെ സമൃദ്ധമായി അനുഗ്രഹിക്കട്ടെ.
 
-📍 *St. John de Britto's Church*
+📍 *St. John de britto Church*
 _Kalayarkoil_`;
   }
 
@@ -317,7 +317,7 @@ your love, and help us to follow your word.`;
 எங்கள் விசுவாசத்தை திடப்படுத்தி, உம் அன்பால் இதயங்களை நிரப்பி,
 உம் வார்த்தையின்படி நடக்க அருள் தாரும்.`;
 
-    message = `⛪ *St. John de Britto's Church, Kalayarkoil*
+    message = `⛪ *St. John de britto Church, Kalayarkoil*
 _புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்_
 
 🙏 Good Morning! / காலை வணக்கம்!
@@ -350,7 +350,7 @@ ${prayerTa}
 ✨ Have a blessed day!
 இறைவன் உங்கள் நாளை ஆசீர்வதிப்பாராக.
 
-📍 *St. John de Britto's Church*
+📍 *St. John de britto Church*
 _Kalayarkoil_`;
   }
 
@@ -457,7 +457,7 @@ function generateSaintInfoMessage({ dailyContent, language = 'ta' }) {
   }
 
   msg += `🔗 *${isTamil ? 'மேலும் வாசிக்க' : 'Read More'}:*\n${saintLink}\n\n`;
-  msg += `— *${isTamil ? 'புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்' : "St. John de Britto's Church, Kalayarkoil"}*\n_SJDB Connect_`;
+  msg += `— *${isTamil ? 'புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்' : "St. John de britto Church, Kalayarkoil"}*\n_SJDB Connect_`;
 
   return msg;
 }
@@ -484,7 +484,7 @@ ${descEn}
 ${descTa && descTa !== descEn ? `\n*தமிழ் குறிப்பு:*\n${descTa}\n` : ''}
 May the intercession and holy life of ${saintNameEn} bring peace and blessings to your family today. 🙏❤️
 
-📍 *St. John de Britto's Church, Kalayarkoil*
+📍 *St. John de britto Church, Kalayarkoil*
 _புனித ஜான் டி பிரிட்டோ திருத்தலம்_`;
 }
 
@@ -538,7 +538,7 @@ ${reflectionLink}
 ✨ *Saint of the Day:*
 ${saintLink}
 
-— *St. John de Britto's Church, Kalayarkoil*
+— *St. John de britto Church, Kalayarkoil*
 _SJDB Connect_`;
 }
 

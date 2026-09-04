@@ -1,21 +1,23 @@
 {
   "name": "sjdb-church-backend",
   "version": "1.0.0",
-  "description": "St. John de Britto's Church Management API",
+  "description": "St. John de britto Church Management API",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "start:legacy": "node server.js",
     "dev": "node -e \"require('kill-port')(5000).then(() => console.log('Port 5000 cleared')).catch(() => {})\" && nodemon src/server.js",
     "seed": "node src/utils/seed.js",
-    "test:247": "node src/test_247_daemon_architecture.js"
+    "test:247": "node src/test_247_daemon_architecture.js",
+    "reset:notifications": "node src/scripts/reset_daily_notification_preferences.js",
+    "simulate:midnight": "node -e \"process.env.DAILY_SIMULATE_MIDNIGHT='true'; require('./src/services/dailyNotificationService').sendDailyChurchNotifications().then(r => { console.log(JSON.stringify(r,null,2)); process.exit(0); }).catch(e => { console.error(e); process.exit(1); })\""
   },
   "keywords": [
     "church",
     "catholic",
     "management"
   ],
-  "author": "St. John de Britto's Church",
+  "author": "St. John de britto Church",
   "license": "ISC",
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc13",

@@ -143,25 +143,46 @@ const { warmUpCache, getCacheDiagnostics } = require('./bot/churchDataCache');
 app.get(['/health', '/api/health', '/api/bot/health'], (req, res) => {
   const mongooseState = ['disconnected', 'connected', 'connecting', 'disconnecting'][require('mongoose').connection.readyState] || 'unknown';
   let waConnected = false;
+  let waStatus = 'unknown';
   try {
     const wa = require('./bot/whatsapp');
-    waConnected = wa.getConnectionStatus?.()?.isConnected || false;
+    const connStatus = wa.getConnectionStatus?.() || {};
+    // getConnectionStatus() returns { connected: bool, status: string, ... }
+    // NOT isConnected — using the wrong key was causing isLive to always be false
+    waConnected = connStatus.connected || false;
+    waStatus = connStatus.status || (waConnected ? 'connected' : 'disconnected');
   } catch (e) { }
+
+  let schedulerStatus = { schedulerRegistered: false };
+  try {
+    const { getSchedulerStatus } = require('./services/dailyNotificationService');
+    schedulerStatus = getSchedulerStatus();
+  } catch (e) { schedulerStatus = { schedulerRegistered: false, error: e.message }; }
 
   res.json({
     success: true,
     status: 'healthy',
-    service: "SJDB Connect — St. John de Britto's Church 24/7 Platform",
+    service: "SJDB Connect — St. John de britto Church 24/7 Platform",
     database: mongooseState,
     whatsappBot: {
       isLive: waConnected,
+      status: waStatus,
       mode: '24/7 Always-On Daemon'
     },
+    dailyCatholicScheduler: {
+      registered: schedulerStatus.schedulerRegistered,
+      timezone: schedulerStatus.timezone || 'Asia/Kolkata',
+      cronExpression: schedulerStatus.cronExpression || '0 0 * * *',
+      lastRunTime: schedulerStatus.lastRunTime || null,
+      lastRunDateKey: schedulerStatus.lastRunDateKey || null,
+      lastRunResult: schedulerStatus.lastRunResult || null,
+      nextRunIST: schedulerStatus.nextRunIST || null,
+    },
     backgroundWorkers: {
-      dailyBroadcast12AM: 'Active (0 0 * * * Asia/Kolkata)',
+      dailyBroadcast12AM: `${schedulerStatus.schedulerRegistered ? 'Active' : 'Registered'} (0 0 * * * Asia/Kolkata)`,
       reminderScheduler: 'Active (4:00 AM, 12:00 PM, Hourly)',
       dailyMassSync: 'Active (0 0 * * * Asia/Kolkata)',
-      birthdayWishes: 'Active (0 0 * * * Asia/Kolkata)'
+      birthdayWishes: 'Active (0 9 * * * Asia/Kolkata)'
     },
     cache: getCacheDiagnostics(),
     memory: {
@@ -176,7 +197,7 @@ app.get(['/health', '/api/health', '/api/bot/health'], (req, res) => {
 // Root route (stops Render showing "Cannot GET /")
 app.get('/', (req, res) => res.json({
   success: true,
-  message: "St. John de Britto's Church API & 24/7 Bot Daemon",
+  message: "St. John de britto Church API & 24/7 Bot Daemon",
 }));
 
 // 404
@@ -195,7 +216,7 @@ async function startServer() {
     await connectDB();
 
     const server = app.listen(PORT, () => {
-      console.log(`\nSt. John de Britto's Church API & 24/7 WhatsApp Daemon`);
+      console.log(`\nSt. John de britto Church API & 24/7 WhatsApp Daemon`);
       console.log(`Server running on port ${PORT}`);
       console.log(`Allowed origins: ${allowedOrigins.join(', ')}`);
       console.log(`Health: /api/health\n`);
@@ -215,7 +236,7 @@ async function startServer() {
 
     const gracefulShutdown = async signal => {
       console.log(`[Server] ${signal} received; shutting down gracefully...`);
-      try { shutdownWhatsApp(); } catch (e) {}
+      try { shutdownWhatsApp(); } catch (e) { }
       server.close(() => process.exit(0));
       setTimeout(() => process.exit(1), 10000).unref();
     };

@@ -489,28 +489,26 @@ export default function AdminWhatsApp() {
               </h1>
               {/* Connection Live Pill */}
               <span
-                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold shadow-xs ${
-                  waStatus.connected
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold shadow-xs ${waStatus.connected
                     ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                     : waStatus.status === 'connecting'
-                    ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
-                    : 'bg-rose-100 text-rose-800 border border-rose-300'
-                }`}
+                      ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
+                      : 'bg-rose-100 text-rose-800 border border-rose-300'
+                  }`}
               >
                 <span
-                  className={`w-2 h-2 rounded-full ${
-                    waStatus.connected
+                  className={`w-2 h-2 rounded-full ${waStatus.connected
                       ? 'bg-emerald-500 animate-pulse'
                       : waStatus.status === 'connecting'
-                      ? 'bg-amber-500'
-                      : 'bg-rose-500'
-                  }`}
+                        ? 'bg-amber-500'
+                        : 'bg-rose-500'
+                    }`}
                 />
                 {waStatus.connected
                   ? 'Connected'
                   : waStatus.status === 'connecting'
-                  ? 'Connecting...'
-                  : 'Disconnected'}
+                    ? 'Connecting...'
+                    : 'Disconnected'}
               </span>
             </div>
             <p className="text-xs text-gray-500 mt-0.5">
@@ -624,11 +622,10 @@ export default function AdminWhatsApp() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all shrink-0 cursor-pointer ${
-              activeTab === tab.id
+            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all shrink-0 cursor-pointer ${activeTab === tab.id
                 ? 'bg-church-royal-blue text-white shadow-md shadow-blue-900/20'
                 : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200/80'
-            }`}
+              }`}
           >
             <span className="text-xs sm:text-sm">{tab.icon}</span>
             <span>{tab.label}</span>
@@ -679,7 +676,7 @@ export default function AdminWhatsApp() {
               <div className="bg-gray-50/80 rounded-xl p-3 border border-gray-100">
                 <span className="text-[11px] font-semibold text-gray-400 block mb-1">Account Display</span>
                 <span className="text-xs sm:text-sm font-bold text-gray-800 truncate block">
-                  {waStatus.userName || "St. John de Britto's Church"}
+                  {waStatus.userName || "St. John de britto Church"}
                 </span>
               </div>
 
@@ -750,22 +747,20 @@ export default function AdminWhatsApp() {
                     <button
                       type="button"
                       onClick={() => setConnectionMode('qr')}
-                      className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                        connectionMode === 'qr'
+                      className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${connectionMode === 'qr'
                           ? 'bg-church-royal-blue text-white shadow-xs'
                           : 'text-gray-600 hover:text-gray-900'
-                      }`}
+                        }`}
                     >
                       <FiGrid className="text-xs" /> QR Code
                     </button>
                     <button
                       type="button"
                       onClick={() => setConnectionMode('phone')}
-                      className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                        connectionMode === 'phone'
+                      className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${connectionMode === 'phone'
                           ? 'bg-church-royal-blue text-white shadow-xs'
                           : 'text-gray-600 hover:text-gray-900'
-                      }`}
+                        }`}
                     >
                       <FiPhone className="text-xs" /> Pairing Code
                     </button>
@@ -854,8 +849,8 @@ export default function AdminWhatsApp() {
                           {isGeneratingPairing
                             ? 'Generating...'
                             : pairingCountdown > 0
-                            ? `Valid (${pairingCountdown}s)`
-                            : 'Generate Code'}
+                              ? `Valid (${pairingCountdown}s)`
+                              : 'Generate Code'}
                         </button>
                       </div>
                     </form>
@@ -958,11 +953,10 @@ export default function AdminWhatsApp() {
                 <button
                   key={f.id}
                   onClick={() => setSubscriberFilter(f.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                    subscriberFilter === f.id
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${subscriberFilter === f.id
                       ? 'bg-church-royal-blue text-white shadow-xs'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
+                    }`}
                 >
                   {f.label}
                 </button>
@@ -1013,11 +1007,10 @@ export default function AdminWhatsApp() {
                     </td>
                     <td className="py-3 px-4">
                       <span
-                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          sub.source === 'Website User'
+                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${sub.source === 'Website User'
                             ? 'bg-blue-100 text-blue-700'
                             : 'bg-emerald-100 text-emerald-700'
-                        }`}
+                          }`}
                       >
                         {sub.source}
                       </span>
@@ -1034,11 +1027,10 @@ export default function AdminWhatsApp() {
                     <td className="py-3 px-4">
                       <button
                         onClick={() => handleToggleOptIn(sub)}
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-colors ${
-                          sub.optedIn !== false
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-colors ${sub.optedIn !== false
                             ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
                             : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                        }`}
+                          }`}
                         title="Click to toggle opt-in state"
                       >
                         {sub.optedIn !== false ? '● Active' : '○ Paused'}
@@ -1103,21 +1095,19 @@ export default function AdminWhatsApp() {
                       setSendMode('broadcast');
                       setTargetSubscriber(null);
                     }}
-                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                      sendMode === 'broadcast'
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${sendMode === 'broadcast'
                         ? 'bg-church-royal-blue text-white shadow-xs'
                         : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                      }`}
                   >
                     All Subscribers ({stats?.active ?? subscribers.length})
                   </button>
                   <button
                     onClick={() => setSendMode('direct')}
-                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                      sendMode === 'direct'
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${sendMode === 'direct'
                         ? 'bg-church-royal-blue text-white shadow-xs'
                         : 'text-gray-600 hover:text-gray-900'
-                    }`}
+                      }`}
                   >
                     Direct 1-on-1
                   </button>
@@ -1211,11 +1201,10 @@ export default function AdminWhatsApp() {
 
                 {sendResult && (
                   <div
-                    className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
-                      sendResult.success
+                    className={`p-3 rounded-xl text-xs flex items-center gap-2 ${sendResult.success
                         ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                         : 'bg-rose-50 text-rose-800 border border-rose-200'
-                    }`}
+                      }`}
                   >
                     {sendResult.success ? <FiCheckCircle /> : <FiAlertTriangle />}
                     <span>{sendResult.text}</span>
@@ -1232,8 +1221,8 @@ export default function AdminWhatsApp() {
                     {sending
                       ? 'Sending Message...'
                       : sendMode === 'direct'
-                      ? `Send to ${targetSubscriber?.name || 'Selected'}`
-                      : `Broadcast to All (${stats?.active ?? subscribers.length}) Subscribers`}
+                        ? `Send to ${targetSubscriber?.name || 'Selected'}`
+                        : `Broadcast to All (${stats?.active ?? subscribers.length}) Subscribers`}
                   </span>
                 </button>
               </form>
@@ -1256,7 +1245,7 @@ export default function AdminWhatsApp() {
                   </div>
                   <div>{customMsg || todayPreview?.previewTa || '<Your announcement message will appear here>'}</div>
                   <div className="mt-2 text-[11px] italic text-gray-600 dark:text-gray-300">
-                    _St. John de Britto's Church, Kalayarkoil_
+                    _St. John de britto Church, Kalayarkoil_
                   </div>
                   <div className="text-[10px] text-gray-400 dark:text-green-200/60 text-right mt-1">
                     {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ✓✓
@@ -1379,17 +1368,15 @@ export default function AdminWhatsApp() {
                   className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[90%] sm:max-w-[80%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm whitespace-pre-wrap leading-relaxed shadow ${
-                      msg.sender === 'user'
+                    className={`max-w-[90%] sm:max-w-[80%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm whitespace-pre-wrap leading-relaxed shadow ${msg.sender === 'user'
                         ? 'bg-[#005c4b] text-white rounded-tr-none'
                         : 'bg-[#202c33] text-gray-100 rounded-tl-none border border-slate-700'
-                    }`}
+                      }`}
                   >
                     {msg.text}
                     <div
-                      className={`text-[10px] mt-1 text-right ${
-                        msg.sender === 'user' ? 'text-green-200/60' : 'text-gray-400'
-                      }`}
+                      className={`text-[10px] mt-1 text-right ${msg.sender === 'user' ? 'text-green-200/60' : 'text-gray-400'
+                        }`}
                     >
                       {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
@@ -1623,11 +1610,10 @@ export default function AdminWhatsApp() {
 
                 {broadcastResult && (
                   <div
-                    className={`p-3 rounded-xl text-xs font-semibold ${
-                      broadcastResult.status === 'success'
+                    className={`p-3 rounded-xl text-xs font-semibold ${broadcastResult.status === 'success'
                         ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
                         : 'bg-rose-50 text-rose-800 border border-rose-300'
-                    }`}
+                      }`}
                   >
                     {broadcastResult.message}
                   </div>
@@ -1709,7 +1695,7 @@ export default function AdminWhatsApp() {
               <h3 className="font-bold text-gray-900 text-base sm:text-lg mb-2">
                 ⚠️ Start Bot Fresh?
               </h3>
-              
+
               <p className="text-xs sm:text-sm text-gray-600 mb-6 leading-relaxed">
                 This will clear the current WhatsApp bot preferences and subscription selections for <strong>all users</strong>.
                 <br /><br />
@@ -1763,7 +1749,7 @@ export default function AdminWhatsApp() {
               <h3 className="font-bold text-gray-900 text-base sm:text-lg mb-2">
                 ⚠️ Delete Subscriber?
               </h3>
-              
+
               <p className="text-xs sm:text-sm text-gray-600 mb-2 leading-relaxed">
                 Are you sure you want to remove <strong>{subscriberToDelete.name}</strong> (+{subscriberToDelete.phoneNumber}) from SJDB Connect notifications?
               </p>

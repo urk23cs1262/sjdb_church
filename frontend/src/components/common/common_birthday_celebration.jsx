@@ -12,9 +12,9 @@ export default function BirthdayCelebration() {
     if (isAuthenticated && user?.dob) {
       const today = new Date();
       const birthDate = new Date(user.dob);
-      
-      const isBirthday = 
-        today.getDate() === birthDate.getDate() && 
+
+      const isBirthday =
+        today.getDate() === birthDate.getDate() &&
         today.getMonth() === birthDate.getMonth();
 
       if (isBirthday) {
@@ -31,7 +31,7 @@ export default function BirthdayCelebration() {
 
     const randomInRange = (min, max) => Math.random() * (max - min) + min;
 
-    const interval = setInterval(function() {
+    const interval = setInterval(function () {
       const timeLeft = animationEnd - Date.now();
 
       if (timeLeft <= 0) {
@@ -39,7 +39,7 @@ export default function BirthdayCelebration() {
       }
 
       const particleCount = 50 * (timeLeft / duration);
-      
+
       confetti({
         ...defaults,
         particleCount,
@@ -64,7 +64,7 @@ export default function BirthdayCelebration() {
           exit={{ scale: 0.5, opacity: 0, y: 50 }}
           className="bg-white/90 backdrop-blur-xl border-2 border-church-gold p-8 rounded-[2.5rem] shadow-2xl text-center max-w-sm pointer-events-auto relative"
         >
-          <button 
+          <button
             onClick={() => setShowCelebration(false)}
             className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors"
           >
@@ -76,7 +76,7 @@ export default function BirthdayCelebration() {
             Happy Birthday, {user?.name}!
           </h2>
           <p className="text-gray-600 mb-6">
-            St. John de Britto's Church wishes you a blessed day and year filled with joy and peace. 
+            St. John de britto Church wishes you a blessed day and year filled with joy and peace.
           </p>
           <button
             onClick={() => {

@@ -20,7 +20,7 @@ self.addEventListener('fetch', (event) => {
 
 self.addEventListener('push', (event) => {
   let data = {
-    title: "St. John de Britto's Church",
+    title: "St. John de britto Church",
     body: "New parish update received.",
     url: "/notifications"
   };
@@ -50,7 +50,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || "St. John de Britto's Church", options)
+    self.registration.showNotification(data.title || "St. John de britto Church", options)
   );
 });
 

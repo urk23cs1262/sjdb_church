@@ -355,7 +355,7 @@ const sendCustomMessage = async (req, res) => {
     // Direct single message mode
     if (recipientPhone) {
       const cleanTarget = recipientPhone.replace(/\D/g, '');
-      const formatted = `*SJDB Connect*\n\n${message.trim()}\n\n_St. John de Britto's Church_`;
+      const formatted = `*SJDB Connect*\n\n${message.trim()}\n\n_St. John de britto Church_`;
       const ok = await sendWA(cleanTarget, formatted);
       if (ok) {
         return res.json({ success: true, message: `Message delivered to +${cleanTarget}` });
@@ -384,7 +384,7 @@ const sendCustomMessage = async (req, res) => {
     setImmediate(async () => {
       let sent = 0;
       let failed = 0;
-      const formatted = `*SJDB Connect*\n\n${message.trim()}\n\n_St. John de Britto's Church_`;
+      const formatted = `*SJDB Connect*\n\n${message.trim()}\n\n_St. John de britto Church_`;
       for (const phone of targetList) {
         try {
           const ok = await sendWA(phone, formatted);
@@ -418,7 +418,7 @@ const testDirectMessage = async (req, res) => {
     }
 
     const cleanTarget = phoneNumber.replace(/\D/g, '');
-    const textToSend = message || `🧪 *SJDB Connect — Test Message*\n\nThis is a verified test message sent from the St. John de Britto's Church WhatsApp Bot.\n\n⏰ Timestamp: ${new Date().toLocaleTimeString('en-IN')}`;
+    const textToSend = message || `🧪 *SJDB Connect — Test Message*\n\nThis is a verified test message sent from the St. John de britto Church WhatsApp Bot.\n\n⏰ Timestamp: ${new Date().toLocaleTimeString('en-IN')}`;
 
     const ok = await sendWA(cleanTarget, textToSend);
     if (ok) {
@@ -469,7 +469,7 @@ const testBotMessage = async (req, res) => {
       if (newIsVerified && newProvidedPhone) {
         nextStep = 'done';
         botReply = `👋 *Welcome to SJDB Connect!*
-⛪ *St. John de Britto's Church, Kalayarkoil*
+⛪ *St. John de britto Church, Kalayarkoil*
 
 How can I help you today?
 
@@ -486,7 +486,7 @@ How can I help you today?
       } else {
         nextStep = 'phone_verification';
         botReply = `👋 *Welcome to SJDB Connect!*
-⛪ *St. John de Britto's Church, Kalayarkoil*
+⛪ *St. John de britto Church, Kalayarkoil*
 _Connecting Faith & Community_
 
 🔐 *Phone Number Verification*
@@ -496,7 +496,7 @@ To start chatting and access church services, please enter your **10-digit mobil
 📱 *Please reply with your 10-digit mobile number (e.g., 9876543210):*`;
       }
     } else if (step === 'welcome') {
-      botReply = `👋 *Welcome to SJDB Connect!*\n⛪ *St. John de Britto's Church, Kalayarkoil*\n\nPlease reply with *Hi* or enter your 10-digit mobile number to verify your account.`;
+      botReply = `👋 *Welcome to SJDB Connect!*\n⛪ *St. John de britto Church, Kalayarkoil*\n\nPlease reply with *Hi* or enter your 10-digit mobile number to verify your account.`;
     } else if (step === 'phone_verification' || step === 'ask_phone') {
       const rawDigits = rawText.replace(/\D/g, '');
       if (!rawDigits || rawDigits.length < 10) {
@@ -659,7 +659,7 @@ Select your preferred language for Daily Bible Verse, Mass Readings, Reflection 
         botReply = saintInfo;
       } else if (text === 'SERVICES' || text.toLowerCase().includes('service')) {
         botReply = `⛪ *SJDB Connect – Services & Help Desk*
-_St. John de Britto's Church, Kalayarkoil_
+_St. John de britto Church, Kalayarkoil_
 
 1️⃣ ⛪ *Mass Timings*
 2️⃣ 🕊️ *Confession Timings*
@@ -679,7 +679,7 @@ _St. John de Britto's Church, Kalayarkoil_
 👉 *Reply with a number (1-14) or type your question naturally.*`;
       } else if (text === 'MENU' || text === 'HOME' || text === '0') {
         botReply = `👋 *Welcome to SJDB Connect!*
-⛪ *St. John de Britto's Church, Kalayarkoil*
+⛪ *St. John de britto Church, Kalayarkoil*
 
 How can I help you today?
 
@@ -717,7 +717,11 @@ How can I help you today?
   }
 };
 
-// POST /api/bot/clear-start-fresh (and /api/bot/subscribers/clear-all) — Complete fresh reset of all bot sessions & preferences
+// POST /api/bot/clear-start-fresh (and /api/bot/subscribers/clear-all) — Complete fresh reset of all bot sessions
+// IMPORTANT: This ONLY clears WhatsApp bot conversation sessions and stale daily notification logs.
+// It does NOT set whatsappOptIn=false, because doing so would permanently opt out ALL users from the
+// automated midnight Daily Catholic Content delivery. User accounts, profiles, passwords, and
+// notification opt-in state are fully preserved.
 const clearAllBotSubscribers = async (req, res) => {
   try {
     const { _clearDedupCacheForTesting } = require('../bot/botHandler');
@@ -725,21 +729,34 @@ const clearAllBotSubscribers = async (req, res) => {
       _clearDedupCacheForTesting();
     }
 
+    // 1. Delete all WhatsApp bot conversation sessions
     const botResult = await BotSession.deleteMany({});
-    const userResult = await User.updateMany({}, { 
-      $set: { 
-        whatsappOptIn: false, 
-        botPreferences: [],
+
+    // 2. Reset bot-specific conversation preferences ONLY (do NOT touch whatsappOptIn)
+    //    whatsappOptIn must remain true so the midnight scheduler can deliver to all users.
+    const userResult = await User.updateMany({}, {
+      $set: {
+        botPreferences: ['verse', 'saint', 'mass', 'events', 'announcements', 'birthday'],
         readingPreference: 'full',
-        sendLinks: true
-      } 
+        sendLinks: true,
+        // Ensure whatsappOptIn is explicitly true so midnight delivery works for everyone
+        whatsappOptIn: true
+      }
     });
+
+    // 3. Clear today's DailyNotificationLog so a fresh broadcast can be triggered today
+    //    (stale 'sent' logs would otherwise block the idempotency check and skip all users)
+    const todayDateKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+    const logResult = await DailyNotificationLog.deleteMany({ dateKey: todayDateKey });
+
+    console.log(`[DAILY-CATHOLIC] Fresh reset: ${botResult.deletedCount} bot sessions deleted, ${userResult.modifiedCount} users restored to opt-in, ${logResult.deletedCount} today's delivery logs cleared.`);
 
     res.json({
       success: true,
-      message: `Fresh bot reset complete: Cleared ${botResult.deletedCount} bot sessions and reset ${userResult.modifiedCount} user subscription preferences. All accounts, registrations, and website content are safe.`,
-      deletedCount: botResult.deletedCount,
-      usersUpdated: userResult.modifiedCount
+      message: `Fresh reset complete: Cleared ${botResult.deletedCount} bot conversation sessions, restored ${userResult.modifiedCount} users to WhatsApp opt-in, and cleared ${logResult.deletedCount} stale daily notification logs. All user accounts and the midnight scheduler are fully intact.`,
+      deletedBotSessions: botResult.deletedCount,
+      usersRestoredToOptIn: userResult.modifiedCount,
+      staleLogsCleared: logResult.deletedCount
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

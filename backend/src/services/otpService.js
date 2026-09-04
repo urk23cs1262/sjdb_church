@@ -124,7 +124,7 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
       formattedPhone = '+91' + formattedPhone;
     }
 
-    const smsBody = `Your St. John de Britto's Church verification code is: ${otp}. Valid for 5 minutes. Do not share this code with anyone.`;
+    const smsBody = `Your St. John de britto Church verification code is: ${otp}. Valid for 5 minutes. Do not share this code with anyone.`;
 
     sendSMS(formattedPhone, smsBody).then(res => {
       if (res.success) console.log(` OTP SMS sent to ${formattedPhone}`);
@@ -165,7 +165,7 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
         <div style="width:75px; height:75px; margin:0 auto 14px; border-radius:50%; overflow:hidden; border:3px solid #fbbf24; background:#ffffff; box-shadow:0 6px 16px rgba(0,0,0,0.25);">
           <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width:100%; height:100%; object-fit:cover; display:block;" />
         </div>
-        <h1 style="margin:0; color:#fbbf24; font-size:24px; font-weight:800; letter-spacing:0.5px;">St. John de Britto's Church</h1>
+        <h1 style="margin:0; color:#fbbf24; font-size:24px; font-weight:800; letter-spacing:0.5px;">St. John de britto Church</h1>
         <p style="margin:4px 0 0; color:#ffffff; opacity:0.9; font-size:12.5px; font-weight:600; letter-spacing:0.5px;">PARISH ONLINE PORTAL VERIFICATION</p>
       </div>
 
@@ -186,7 +186,7 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
 
       <!-- Footer -->
       <div style="background-color:#111827; padding:18px 16px; text-align:center; color:#9ca3af; font-size:11.5px; line-height:1.6;">
-        <p style="margin:0 0 4px; color:#e5e7eb; font-weight:700;">St. John de Britto's Church, Kalayarkoil - 630551</p>
+        <p style="margin:0 0 4px; color:#e5e7eb; font-weight:700;">St. John de britto Church, Kalayarkoil - 630551</p>
         <p style="margin:0; color:#6b7280;">Automated System Message • Do not reply</p>
       </div>
     </div>
@@ -221,9 +221,9 @@ const verifyOTPSession = async ({ userId, inputOtp, purpose, req }) => {
   const session = await OTPVerification.findOne(query).sort({ createdAt: -1 });
 
   if (!session) {
-    return { 
-      valid: false, 
-      message: 'No active verification session found. Please request a fresh OTP or log in again.' 
+    return {
+      valid: false,
+      message: 'No active verification session found. Please request a fresh OTP or log in again.'
     };
   }
 
@@ -232,9 +232,9 @@ const verifyOTPSession = async ({ userId, inputOtp, purpose, req }) => {
   if (now > session.otpExpiresAt) {
     session.status = 'expired';
     await session.save();
-    return { 
-      valid: false, 
-      message: 'This OTP has expired. A fresh OTP is required.' 
+    return {
+      valid: false,
+      message: 'This OTP has expired. A fresh OTP is required.'
     };
   }
 
@@ -258,16 +258,16 @@ const verifyOTPSession = async ({ userId, inputOtp, purpose, req }) => {
         extra: { purpose: session.purpose }
       }).catch(e => console.warn('Admin MULTIPLE_FAILED_OTP notification error:', e.message));
 
-      return { 
-        valid: false, 
-        message: 'Maximum OTP verification attempts exceeded. Please request a new OTP.' 
+      return {
+        valid: false,
+        message: 'Maximum OTP verification attempts exceeded. Please request a new OTP.'
       };
     }
 
     await session.save();
-    return { 
-      valid: false, 
-      message: `Invalid OTP code. ${5 - session.attempts} attempts remaining.` 
+    return {
+      valid: false,
+      message: `Invalid OTP code. ${5 - session.attempts} attempts remaining.`
     };
   }
 
@@ -278,7 +278,7 @@ const verifyOTPSession = async ({ userId, inputOtp, purpose, req }) => {
 
   // Mark user as verified, active, unsuspended and clear all failure/lockout counters
   // Preserve all existing account records and profile details completely
-  const user = await User.findByIdAndUpdate(userId, { 
+  const user = await User.findByIdAndUpdate(userId, {
     isVerified: true,
     isActive: true,
     isSuspended: false,
@@ -297,7 +297,7 @@ const verifyOTPSession = async ({ userId, inputOtp, purpose, req }) => {
     const SecurityIncident = require('../models/SecurityIncident');
     await SecurityIncident.updateMany(
       { userId: user?._id, status: { $in: ['Awaiting Review', 'Under Review'] } },
-      { 
+      {
         $set: { status: 'Reactivated', reactivationTime: new Date() },
         $push: { actionsTaken: `Auto-reactivated via verified OTP session on ${new Date().toISOString()}` }
       }

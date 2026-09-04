@@ -98,14 +98,14 @@ const generateUserReportPdf = async (user, sessionInfo = {}) => {
 
       // Title & Subtitle
       doc.fillColor('#1e3a8a')
-         .fontSize(22)
-         .font('Helvetica-Bold')
-         .text("St. John de Britto's Church", margin, 48, { width: contentWidth - 95, align: 'left' });
+        .fontSize(22)
+        .font('Helvetica-Bold')
+        .text("St. John de britto Church", margin, 48, { width: contentWidth - 95, align: 'left' });
 
       doc.fillColor('#b45309')
-         .fontSize(10)
-         .font('Helvetica-Bold')
-         .text("Kalayarkoil, Sivagangai District, Tamil Nadu - 630551", margin, 74, { width: contentWidth - 95, align: 'left' });
+        .fontSize(10)
+        .font('Helvetica-Bold')
+        .text("Kalayarkoil, Sivagangai District, Tamil Nadu - 630551", margin, 74, { width: contentWidth - 95, align: 'left' });
 
       // QR Code top right inside frame
       doc.rect(pageWidth - margin - 75, 46, 75, 75).fillAndStroke('#f8fafc', '#cbd5e1');
@@ -113,18 +113,18 @@ const generateUserReportPdf = async (user, sessionInfo = {}) => {
 
       // Document Title & Timestamp
       doc.fillColor('#0f172a')
-         .fontSize(12)
-         .font('Helvetica-Bold')
-         .text("OFFICIAL MEMBER PROFILE & ACTIVITY RECORD", margin, 92);
+        .fontSize(12)
+        .font('Helvetica-Bold')
+        .text("OFFICIAL MEMBER PROFILE & ACTIVITY RECORD", margin, 92);
 
-      const lastModStr = user.updatedAt 
-        ? new Date(user.updatedAt).toLocaleString('en-GB') 
+      const lastModStr = user.updatedAt
+        ? new Date(user.updatedAt).toLocaleString('en-GB')
         : (user.createdAt ? new Date(user.createdAt).toLocaleString('en-GB') : 'N/A');
 
       doc.fillColor('#64748b')
-         .fontSize(8.5)
-         .font('Helvetica')
-         .text(`Report Generated: ${new Date().toLocaleString('en-GB')}  |  Last Profile Update: ${lastModStr}`, margin, 108);
+        .fontSize(8.5)
+        .font('Helvetica')
+        .text(`Report Generated: ${new Date().toLocaleString('en-GB')}  |  Last Profile Update: ${lastModStr}`, margin, 108);
 
       // Divider Line
       doc.strokeColor('#cbd5e1').lineWidth(1).moveTo(margin, 122).lineTo(pageWidth - margin, 122).stroke();
@@ -182,7 +182,7 @@ const generateUserReportPdf = async (user, sessionInfo = {}) => {
 
       // 2. PARISH & ECCLESIAL MEMBERSHIP
       drawSectionHeader('PARISH & ECCLESIAL MEMBERSHIP');
-      renderFieldLine('Primary Parish:', "St. John de Britto's Church, Kalayarkoil");
+      renderFieldLine('Primary Parish:', "St. John de britto Church, Kalayarkoil");
       renderFieldLine('Anbiyam Name:', user.anbiyam || user.sccGroup || 'N/A');
       renderFieldLine('Member Status:', user.memberStatus || (user.isSuspended ? 'Suspended' : (user.isActive ? 'Active' : 'Inactive')));
       renderFieldLine('System Access Role:', (user.role || 'user').toUpperCase());
@@ -267,7 +267,7 @@ const generateUserReportPdf = async (user, sessionInfo = {}) => {
         doc.switchToPage(i);
         doc.strokeColor('#cbd5e1').lineWidth(0.5).moveTo(margin, 765).lineTo(pageWidth - margin, 765).stroke();
         doc.fillColor('#64748b').fontSize(8.5).font('Helvetica').text(
-          `St. John de Britto's Church, Kalayarkoil — Official Member Record | Page ${i + 1} of ${range.count}`,
+          `St. John de britto Church, Kalayarkoil — Official Member Record | Page ${i + 1} of ${range.count}`,
           margin,
           774,
           { align: 'center', width: contentWidth }

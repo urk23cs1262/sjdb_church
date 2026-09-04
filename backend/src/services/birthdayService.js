@@ -23,7 +23,7 @@ const sendBirthdayWishes = async () => {
 
     for (const user of birthdayUsers) {
       const title = "Birthday Blessings";
-      const message = `Dear ${user.name}, St. John de Britto's Church wishes you a very Happy Birthday! May God bless you with abundant joy, health, and peace on your special day. `;
+      const message = `Dear ${user.name}, St. John de britto Church wishes you a very Happy Birthday! May God bless you with abundant joy, health, and peace on your special day. `;
 
       // Send via email and SMS
       await createNotification({
@@ -42,11 +42,13 @@ const sendBirthdayWishes = async () => {
   }
 };
 
-// Schedule to run every day at 9:00 AM
+// Schedule to run every day at 9:00 AM IST
+// IMPORTANT: timezone must be specified — server may run in UTC (e.g. Render)
 cron.schedule('0 9 * * *', () => {
-  console.log(' Running daily birthday wishes job...');
+  console.log('🎂 [Birthday Service] Running daily birthday wishes job (9:00 AM IST)...');
   sendBirthdayWishes();
-});
+}, { timezone: 'Asia/Kolkata' });
+
 
 // For testing purposes: also run 1 minute after server starts if needed
 // setTimeout(sendBirthdayWishes, 60000);

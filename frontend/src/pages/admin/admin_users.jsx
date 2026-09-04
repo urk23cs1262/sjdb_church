@@ -528,9 +528,9 @@ export default function AdminUsers() {
                         </td>
                         <td className="py-3 px-4">
                           <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold ${u.memberStatus === 'Deceased' ? 'bg-gray-200 text-gray-800 border border-gray-400' :
-                              u.memberStatus === 'Transferred' ? 'bg-blue-100 text-blue-800 border border-blue-300' :
-                                u.memberStatus === 'Inactive' || !u.isActive ? 'bg-amber-100 text-amber-800 border border-amber-300' :
-                                  'bg-green-100 text-green-800 border border-green-300'
+                            u.memberStatus === 'Transferred' ? 'bg-blue-100 text-blue-800 border border-blue-300' :
+                              u.memberStatus === 'Inactive' || !u.isActive ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                                'bg-green-100 text-green-800 border border-green-300'
                             }`}>
                             {u.memberStatus || (u.isActive ? 'Active' : 'Inactive')}
                           </span>
@@ -618,8 +618,8 @@ export default function AdminUsers() {
                         </td>
                         <td className="py-3 px-4">
                           <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold capitalize ${req.status === 'approved' ? 'bg-green-100 text-green-700' :
-                              req.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                                'bg-amber-100 text-amber-700'
+                            req.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                              'bg-amber-100 text-amber-700'
                             }`}>
                             {req.status === 'approved' && <FiCheckCircle />}
                             {req.status === 'rejected' && <FiXCircle />}
@@ -762,11 +762,10 @@ export default function AdminUsers() {
                       />
                       {familyIdStatus && (
                         <div className="mt-1.5 flex items-center gap-1.5">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border inline-flex items-center gap-1 ${
-                            familyIdStatus.isExisting
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border inline-flex items-center gap-1 ${familyIdStatus.isExisting
                               ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
                               : 'bg-amber-50 text-amber-900 border-amber-300'
-                          }`}>
+                            }`}>
                             {familyIdStatus.isExisting ? '✓' : '★'} {familyIdStatus.message}: <strong>{familyIdStatus.familyId}</strong>
                           </span>
                         </div>
@@ -836,7 +835,7 @@ export default function AdminUsers() {
                   {/* Sacramental Milestones Section */}
                   <div className="pt-3 border-t border-gray-100 space-y-3">
                     <p className="font-bold text-gray-800 text-xs flex items-center gap-1.5 font-display">
-                       Sacramental Milestones & Certificates
+                      Sacramental Milestones & Certificates
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-amber-50/50 p-3 rounded-2xl border border-amber-200/60">
                       <div>
@@ -878,127 +877,127 @@ export default function AdminUsers() {
         )}
       </AnimatePresence>
 
-        {/* Modify Member & Family ID Format Modal */}
-        <AnimatePresence>
-          {showFormatModal && (
-            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" onClick={() => setShowFormatModal(false)}>
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                onClick={e => e.stopPropagation()}
-                className="bg-white rounded-2xl w-full max-w-2xl max-h-[88vh] shadow-2xl relative my-auto flex flex-col overflow-hidden"
-              >
-                {/* Fixed Header */}
-                <div className="flex items-center justify-between p-6 pb-4 border-b border-gray-100 flex-shrink-0">
-                  <div>
-                    <h2 className="font-display text-xl font-bold text-church-royal-blue flex items-center gap-2">
-                      <FiTag className="text-church-gold" /> Modify Member & Family ID Format
-                    </h2>
-                    <p className="text-xs text-gray-500 mt-0.5">Configure global Parish Member ID and Family ID structures for all members</p>
+      {/* Modify Member & Family ID Format Modal */}
+      <AnimatePresence>
+        {showFormatModal && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" onClick={() => setShowFormatModal(false)}>
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white rounded-2xl w-full max-w-2xl max-h-[88vh] shadow-2xl relative my-auto flex flex-col overflow-hidden"
+            >
+              {/* Fixed Header */}
+              <div className="flex items-center justify-between p-6 pb-4 border-b border-gray-100 flex-shrink-0">
+                <div>
+                  <h2 className="font-display text-xl font-bold text-church-royal-blue flex items-center gap-2">
+                    <FiTag className="text-church-gold" /> Modify Member & Family ID Format
+                  </h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Configure global Parish Member ID and Family ID structures for all members</p>
+                </div>
+                <button onClick={() => setShowFormatModal(false)} className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
+                  <FiX size={20} />
+                </button>
+              </div>
+
+              {/* Scrollable Form Body */}
+              <form onSubmit={handleUpdateFormat} className="flex flex-col flex-1 overflow-hidden">
+                <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+                  {/* Format Comparison Overview */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 space-y-2">
+                    <p className="font-bold flex items-center gap-1.5"><FiTag /> Format Comparison Overview:</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-[11px]">
+                      <div className="bg-white/80 p-2.5 rounded-lg border border-amber-300/60 shadow-2xs space-y-1">
+                        <span className="text-gray-500 block font-sans text-[10px] font-semibold mb-0.5">Previous Formats:</span>
+                        <p className="font-bold text-gray-800 break-all">Member: {formatData.prefix || 'SJDB_M'}01...</p>
+                        <p className="font-bold text-amber-800 break-all">Family: {formatData.familyPrefix || 'SJDB_FAM-'}01...</p>
+                      </div>
+                      <div className="bg-amber-100/90 p-2.5 rounded-lg border border-amber-400 font-bold text-amber-950 shadow-2xs space-y-1">
+                        <span className="text-amber-800 block font-sans text-[10px] font-semibold mb-0.5">New Format Previews:</span>
+                        <p className="break-all text-blue-900">Member: {newPrefix.trim() || 'SJDB_M'}{String(1).padStart(Number(newPadLength), '0')}...</p>
+                        <p className="break-all text-purple-900">Family: {newFamilyPrefix.trim() || 'SJDB_FAM-'}{String(1).padStart(Number(newFamilyPadLength), '0')}...</p>
+                      </div>
+                    </div>
                   </div>
-                  <button onClick={() => setShowFormatModal(false)} className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
-                    <FiX size={20} />
-                  </button>
+
+                  {/* Member ID Section */}
+                  <div className="bg-blue-50/50 p-3.5 rounded-xl border border-blue-100 space-y-3">
+                    <h4 className="font-bold text-xs text-church-royal-blue uppercase tracking-wider">Parish Member ID Configuration</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="church-label text-[11px]">Member ID Prefix *</label>
+                        <input
+                          value={newPrefix}
+                          onChange={e => setNewPrefix(e.target.value.toUpperCase())}
+                          className="church-input font-mono font-bold tracking-wider uppercase text-church-royal-blue text-xs"
+                          placeholder="e.g. SJDB_M, STJDB_"
+                        />
+                      </div>
+                      <div>
+                        <label className="church-label text-[11px]">Number Digits Format *</label>
+                        <select
+                          value={newPadLength}
+                          onChange={e => setNewPadLength(Number(e.target.value))}
+                          className="church-select font-mono text-xs"
+                        >
+                          <option value={2}>2 Digits (01, 02... 99)</option>
+                          <option value={3}>3 Digits (001, 002... 999)</option>
+                          <option value={4}>4 Digits (0001, 0002... 9999)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Family ID Section */}
+                  <div className="bg-purple-50/50 p-3.5 rounded-xl border border-purple-100 space-y-3">
+                    <h4 className="font-bold text-xs text-purple-900 uppercase tracking-wider">Family Member ID Configuration</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="church-label text-[11px]">Family ID Prefix *</label>
+                        <input
+                          value={newFamilyPrefix}
+                          onChange={e => setNewFamilyPrefix(e.target.value.toUpperCase())}
+                          className="church-input font-mono font-bold tracking-wider uppercase text-purple-900 text-xs"
+                          placeholder="e.g. SJDB_FAM-, FAM-"
+                        />
+                      </div>
+                      <div>
+                        <label className="church-label text-[11px]">Number Digits Format *</label>
+                        <select
+                          value={newFamilyPadLength}
+                          onChange={e => setNewFamilyPadLength(Number(e.target.value))}
+                          className="church-select font-mono text-xs"
+                        >
+                          <option value={2}>2 Digits (01, 02... 99)</option>
+                          <option value={3}>3 Digits (001, 002... 999)</option>
+                          <option value={4}>4 Digits (0001, 0002... 9999)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-[11px] text-red-700 flex items-start gap-2">
+                    <span>
+                      <strong>Note:</strong> Saving will immediately re-generate and re-assign both <strong>Parish Member IDs</strong> and <strong>Family IDs</strong> for all {total} existing members in sequential order of registration date, and apply this format to all new registrations.
+                    </span>
+                  </div>
                 </div>
 
-                {/* Scrollable Form Body */}
-                <form onSubmit={handleUpdateFormat} className="flex flex-col flex-1 overflow-hidden">
-                  <div className="p-6 space-y-4 overflow-y-auto custom-scrollbar flex-1">
-                    {/* Format Comparison Overview */}
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-xs text-amber-900 space-y-2">
-                      <p className="font-bold flex items-center gap-1.5"><FiTag /> Format Comparison Overview:</p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 font-mono text-[11px]">
-                        <div className="bg-white/80 p-2.5 rounded-lg border border-amber-300/60 shadow-2xs space-y-1">
-                          <span className="text-gray-500 block font-sans text-[10px] font-semibold mb-0.5">Previous Formats:</span>
-                          <p className="font-bold text-gray-800 break-all">Member: {formatData.prefix || 'SJDB_M'}01...</p>
-                          <p className="font-bold text-amber-800 break-all">Family: {formatData.familyPrefix || 'SJDB_FAM-'}01...</p>
-                        </div>
-                        <div className="bg-amber-100/90 p-2.5 rounded-lg border border-amber-400 font-bold text-amber-950 shadow-2xs space-y-1">
-                          <span className="text-amber-800 block font-sans text-[10px] font-semibold mb-0.5">New Format Previews:</span>
-                          <p className="break-all text-blue-900">Member: {newPrefix.trim() || 'SJDB_M'}{String(1).padStart(Number(newPadLength), '0')}...</p>
-                          <p className="break-all text-purple-900">Family: {newFamilyPrefix.trim() || 'SJDB_FAM-'}{String(1).padStart(Number(newFamilyPadLength), '0')}...</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Member ID Section */}
-                    <div className="bg-blue-50/50 p-3.5 rounded-xl border border-blue-100 space-y-3">
-                      <h4 className="font-bold text-xs text-church-royal-blue uppercase tracking-wider">Parish Member ID Configuration</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="church-label text-[11px]">Member ID Prefix *</label>
-                          <input
-                            value={newPrefix}
-                            onChange={e => setNewPrefix(e.target.value.toUpperCase())}
-                            className="church-input font-mono font-bold tracking-wider uppercase text-church-royal-blue text-xs"
-                            placeholder="e.g. SJDB_M, STJDB_"
-                          />
-                        </div>
-                        <div>
-                          <label className="church-label text-[11px]">Number Digits Format *</label>
-                          <select
-                            value={newPadLength}
-                            onChange={e => setNewPadLength(Number(e.target.value))}
-                            className="church-select font-mono text-xs"
-                          >
-                            <option value={2}>2 Digits (01, 02... 99)</option>
-                            <option value={3}>3 Digits (001, 002... 999)</option>
-                            <option value={4}>4 Digits (0001, 0002... 9999)</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Family ID Section */}
-                    <div className="bg-purple-50/50 p-3.5 rounded-xl border border-purple-100 space-y-3">
-                      <h4 className="font-bold text-xs text-purple-900 uppercase tracking-wider">Family Member ID Configuration</h4>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="church-label text-[11px]">Family ID Prefix *</label>
-                          <input
-                            value={newFamilyPrefix}
-                            onChange={e => setNewFamilyPrefix(e.target.value.toUpperCase())}
-                            className="church-input font-mono font-bold tracking-wider uppercase text-purple-900 text-xs"
-                            placeholder="e.g. SJDB_FAM-, FAM-"
-                          />
-                        </div>
-                        <div>
-                          <label className="church-label text-[11px]">Number Digits Format *</label>
-                          <select
-                            value={newFamilyPadLength}
-                            onChange={e => setNewFamilyPadLength(Number(e.target.value))}
-                            className="church-select font-mono text-xs"
-                          >
-                            <option value={2}>2 Digits (01, 02... 99)</option>
-                            <option value={3}>3 Digits (001, 002... 999)</option>
-                            <option value={4}>4 Digits (0001, 0002... 9999)</option>
-                          </select>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-[11px] text-red-700 flex items-start gap-2">
-                      <span>
-                        <strong>Note:</strong> Saving will immediately re-generate and re-assign both <strong>Parish Member IDs</strong> and <strong>Family IDs</strong> for all {total} existing members in sequential order of registration date, and apply this format to all new registrations.
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Fixed Footer */}
-                  <div className="p-4 sm:px-6 bg-gray-50/70 border-t border-gray-100 flex gap-3 flex-shrink-0">
-                    <button type="button" onClick={() => setShowFormatModal(false)} className="btn-ghost flex-1 justify-center py-2.5 text-xs font-bold cursor-pointer">
-                      Cancel
-                    </button>
-                    <button type="submit" disabled={isUpdatingFormat} className="btn-gold flex-1 justify-center py-2.5 text-xs font-bold shadow-gold cursor-pointer">
-                      {isUpdatingFormat ? 'Regenerating IDs...' : 'Apply Format to All Users'}
-                    </button>
-                  </div>
-                </form>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
+                {/* Fixed Footer */}
+                <div className="p-4 sm:px-6 bg-gray-50/70 border-t border-gray-100 flex gap-3 flex-shrink-0">
+                  <button type="button" onClick={() => setShowFormatModal(false)} className="btn-ghost flex-1 justify-center py-2.5 text-xs font-bold cursor-pointer">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={isUpdatingFormat} className="btn-gold flex-1 justify-center py-2.5 text-xs font-bold shadow-gold cursor-pointer">
+                    {isUpdatingFormat ? 'Regenerating IDs...' : 'Apply Format to All Users'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Member QR Scan & Profile Lookup Modal */}
       <AnimatePresence>
@@ -1061,7 +1060,7 @@ export default function AdminUsers() {
                 <div className="space-y-5 border-t border-gray-100 pt-5">
                   <div className="bg-slate-900 text-slate-100 rounded-2xl p-5 font-mono text-xs leading-relaxed space-y-2 border border-slate-700 shadow-inner">
                     <div className="text-amber-400 font-bold text-sm pb-2 border-b border-slate-800 flex items-center justify-between">
-                      <span>ST. JOHN DE BRITTO'S CHURCH</span>
+                      <span>ST. JOHN DE britto CHURCH</span>
                       <span className="bg-amber-400/20 text-amber-300 text-[10px] px-2 py-0.5 rounded-md font-sans">
                         {scannedUserResult.statusText}
                       </span>
@@ -1166,9 +1165,8 @@ export default function AdminUsers() {
                 {userToDelete.role && (
                   <div className="flex justify-between items-center">
                     <span className="text-gray-500 font-medium">Role:</span>
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
-                      userToDelete.role === 'admin' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
-                    }`}>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${userToDelete.role === 'admin' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+                      }`}>
                       {userToDelete.role}
                     </span>
                   </div>

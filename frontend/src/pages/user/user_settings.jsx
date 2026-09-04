@@ -207,7 +207,7 @@ export default function UserSettings() {
         setValue('settings.notifications.push', true, { shouldDirty: true });
         toast.success('Browser push pop-ups enabled!');
         showNativeNotification({
-          title: "St. John de Britto's Church ",
+          title: "St. John de britto Church ",
           body: " Push Alert Enabled! Real-time browser notifications active.",
           url: "/dashboard/settings"
         });
@@ -219,7 +219,7 @@ export default function UserSettings() {
 
   const handleTestPush = () => {
     showNativeNotification({
-      title: "St. John de Britto's Church ",
+      title: "St. John de britto Church ",
       body: " Test Push Alert: Real-time browser notifications are working perfectly!",
       url: "/dashboard/settings"
     });
@@ -227,7 +227,7 @@ export default function UserSettings() {
   };
 
   useEffect(() => {
-    api.get('/permission-requests/user/pending').then(r => setPendingRequests(r.data.requests || [])).catch(() => {});
+    api.get('/permission-requests/user/pending').then(r => setPendingRequests(r.data.requests || [])).catch(() => { });
   }, []);
 
   useEffect(() => {
@@ -560,8 +560,8 @@ export default function UserSettings() {
                       key={sec.id}
                       onClick={() => setActiveTab(sec.id)}
                       className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all text-left ${isActive
-                          ? 'bg-church-gold text-white shadow-gold font-bold scale-[1.01]'
-                          : 'text-gray-700 hover:bg-gray-100'
+                        ? 'bg-church-gold text-white shadow-gold font-bold scale-[1.01]'
+                        : 'text-gray-700 hover:bg-gray-100'
                         }`}
                     >
                       <span className={`text-sm ${isActive ? 'text-white' : 'text-church-gold'}`}>{sec.icon}</span>
@@ -863,11 +863,10 @@ export default function UserSettings() {
                         <button
                           type="button"
                           onClick={handleTogglePush}
-                          className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all shadow-sm ${
-                            pushStatus === 'denied'
+                          className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all shadow-sm ${pushStatus === 'denied'
                               ? 'bg-amber-100 text-amber-900 border border-amber-300'
                               : 'bg-church-royal-blue text-white hover:bg-church-royal-blue/90'
-                          }`}
+                            }`}
                         >
                           <FiSmartphone />
                           {pushStatus === 'denied'
@@ -1500,7 +1499,7 @@ export default function UserSettings() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-2">
                       <h3 className="font-bold text-xs text-church-royal-blue uppercase tracking-wider">Church Management System</h3>
-                      <p className="text-xs text-gray-600">St. John de Britto's Church, Kalayarkoil</p>
+                      <p className="text-xs text-gray-600">St. John de britto Church, Kalayarkoil</p>
                       <p className="text-[11px] text-gray-400">Version 2.4.0 (Build 2026.07)</p>
                     </div>
 

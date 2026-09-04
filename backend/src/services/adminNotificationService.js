@@ -344,7 +344,7 @@ const notifyAdmin = async (event) => {
         <div style="width:75px; height:75px; margin:0 auto 12px; border-radius:50%; background:#ffffff; overflow:hidden; border:3px solid #fbbf24; box-shadow:0 6px 16px rgba(0,0,0,0.25);">
           <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width:100%; height:100%; object-fit:cover; display:block;" />
         </div>
-        <h1 style="color:#fbbf24; margin:0 0 4px; font-size:22px; font-weight:800; letter-spacing:0.5px;">St. John de Britto's Church</h1>
+        <h1 style="color:#fbbf24; margin:0 0 4px; font-size:22px; font-weight:800; letter-spacing:0.5px;">St. John de britto Church</h1>
         <p style="margin:0; font-size:12px; color:#e2e8f0; font-weight:600; letter-spacing:0.5px; opacity:0.9;">PARISH ADMINISTRATION & SECURITY REGISTRY</p>
       </div>
 
@@ -447,7 +447,7 @@ const notifyAdmin = async (event) => {
 
       <!-- FOOTER -->
       <div style="background-color:#0f172a; padding:20px 16px; text-align:center; color:#94a3b8; font-size:11.5px; line-height:1.6;">
-        <p style="margin:0 0 4px; font-weight:700; color:#cbd5e1;">St. John de Britto's Church, Kalayarkoil - 630551</p>
+        <p style="margin:0 0 4px; font-weight:700; color:#cbd5e1;">St. John de britto Church, Kalayarkoil - 630551</p>
         <p style="margin:0; color:#64748b;">Automated Administrative Notification • Plain credentials & passwords strictly excluded</p>
       </div>
     </div>

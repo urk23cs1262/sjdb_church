@@ -47,7 +47,7 @@ export default function AdminRegistrations() {
       doc.setTextColor(0, 0, 0);
       doc.setFontSize(20);
       doc.setFont('helvetica', 'bold');
-      doc.text("St. John de Britto's Church", pageWidth / 2, 15, { align: 'center' });
+      doc.text("St. John de britto Church", pageWidth / 2, 15, { align: 'center' });
 
       // Tamil Name - Using a workaround (English label if rendering fails, or standard text)
       // Since standard jsPDF doesn't support Tamil, we'll use a very simple fallback or a large clear label
@@ -66,7 +66,7 @@ export default function AdminRegistrations() {
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       doc.text("EVENT REGISTRATION REPORT", 14, 42);
-      
+
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
       doc.text(`Event: ${event.title}`, 14, 50);
@@ -90,15 +90,15 @@ export default function AdminRegistrations() {
         head: [['S.No', 'Name', 'Phone', 'Email', 'Gender', 'Sub-station', 'Date Registered']],
         body: tableData,
         theme: 'grid', // Simple table with borders
-        headStyles: { 
-          fillColor: [240, 240, 240], 
+        headStyles: {
+          fillColor: [240, 240, 240],
           textColor: [0, 0, 0],
           fontSize: 10,
           fontStyle: 'bold',
           lineWidth: 0.1,
           lineColor: [200, 200, 200]
         },
-        styles: { 
+        styles: {
           fontSize: 9,
           cellPadding: 4,
           overflow: 'linebreak',
@@ -208,11 +208,10 @@ export default function AdminRegistrations() {
               <button
                 key={ev._id}
                 onClick={() => setSelectedEvent(ev)}
-                className={`w-full text-left p-4 rounded-2xl border transition-all ${
-                  selectedEvent?._id === ev._id
+                className={`w-full text-left p-4 rounded-2xl border transition-all ${selectedEvent?._id === ev._id
                     ? 'bg-church-royal-blue text-white border-church-royal-blue shadow-lg'
                     : 'bg-white text-gray-700 border-gray-100 hover:border-church-gold'
-                }`}
+                  }`}
               >
                 <h4 className="font-bold line-clamp-1">{ev.title}</h4>
                 <div className={`flex items-center justify-between mt-2 text-xs ${selectedEvent?._id === ev._id ? 'text-white/80' : 'text-gray-400'}`}>

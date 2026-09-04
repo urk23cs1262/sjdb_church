@@ -27,7 +27,7 @@
   },
   "home": {
     "welcome": "Welcome to",
-    "churchName": "St. John de Britto's Church",
+    "churchName": "St. John de britto Church",
     "churchNameTa": "புனித அருளானந்தர் தேவாலயம்",
     "subtitle": "A Community of Faith, Hope & Love",
     "location": "Kalayarkoil, Tamil Nadu",
@@ -201,7 +201,7 @@
     "chatSjdbConnect": "Chat with SJDB Connect"
   },
   "footer": {
-    "churchName": "St. John de Britto's Church",
+    "churchName": "St. John de britto Church",
     "address": "Murthi Nagar, Kalayarkoil,\nTamil Nadu 630551, India",
     "phone": "+91 04577 XXXXXX",
     "email": "sjdbchurch@gmail.com",
@@ -210,7 +210,7 @@
     "quickLinks": "Quick Links",
     "services": "Services",
     "follow": "Follow Us",
-    "copyright": "© {{year}} St. John de Britto's Church, Kalayarkoil. All rights reserved.",
+    "copyright": "© {{year}} St. John de britto Church, Kalayarkoil. All rights reserved.",
     "madeWith": "Made with for God's Glory"
   }
 }

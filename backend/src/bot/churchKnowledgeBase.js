@@ -6,13 +6,13 @@
  */
 
 const SJDB_OFFICIAL_KNOWLEDGE = {
-  parishName: "St. John de Britto's Church (புனித அருளானந்தர் திருத்தலம்)",
+  parishName: "St. John de britto Church (புனித அருளானந்தர் திருத்தலம்)",
   location: "Kalayarkoil, Sivagangai District, Tamil Nadu - 630551",
   diocese: "Diocese of Sivagangai",
   patronSaint: "St. John de Britto (புனித அருளானந்தர்)",
   feastDay: "February 4 (புனித அருளானந்தர் பெருவிழா)",
 
-  history: `St. John de Britto's Church in Kalayarkoil stands as a historic sanctuary of faith in the Sivagangai Diocese. It honors St. John de Britto (known lovingly as Arulanandar), a Portuguese Jesuit missionary who adopted local Indian attire and customs to proclaim the Gospel across the Marava country before his martyrdom at Oriyur on February 4, 1693. The parish has nurtured generations of devoted Catholic families, vocations, and vibrant Anbiyam communities.`,
+  history: `St. John de britto Church in Kalayarkoil stands as a historic sanctuary of faith in the Sivagangai Diocese. It honors St. John de Britto (known lovingly as Arulanandar), a Portuguese Jesuit missionary who adopted local Indian attire and customs to proclaim the Gospel across the Marava country before his martyrdom at Oriyur on February 4, 1693. The parish has nurtured generations of devoted Catholic families, vocations, and vibrant Anbiyam communities.`,
 
   historyTa: `காளையார்கோவிலில் அமைந்துள்ள புனித அருளானந்தர் திருத்தலம் சிவகங்கை மறைமாவட்டத்தின் புகழ்மிக்க ஆலயமாகும். போர்ச்சுகல் நாட்டைச் சேர்ந்த இயேசு சபை துறவியான புனித அருளானந்தர் (ஜான் டி பிரிட்டோ), இந்திய துறவி போல காவி உடை தரித்து மறவ நாட்டில் நற்செய்தி அறிவித்து, 1693 பிப்ரவரி 4 அன்று ஓரியூரில் மறைசாட்சியாக உயிர் நீத்தார். அவரது நினைவாகவும் இறை ஆசீருடனும் விளங்கும் இத்திருத்தலம் பல தலைமுறைகளாக மக்களின் ஆன்மீகக் கோட்டையாகத் திகழ்கிறது.`,
 
@@ -34,7 +34,7 @@ const SJDB_OFFICIAL_KNOWLEDGE = {
   },
 
   contact: {
-    address: "St. John de Britto's Church, Church Road, Kalayarkoil - 630551, Sivagangai District, Tamil Nadu, India",
+    address: "St. John de britto Church, Church Road, Kalayarkoil - 630551, Sivagangai District, Tamil Nadu, India",
     addressTa: "புனித அருளானந்தர் திருத்தலம், தேவாலய சாலை, காளையார்கோவில் - 630551, சிவகங்கை மாவட்டம், தமிழ்நாடு, இந்தியா",
     phone: "+91 96556 39144",
     email: "arndas777@gmail.com",

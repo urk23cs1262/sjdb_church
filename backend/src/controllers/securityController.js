@@ -88,7 +88,7 @@ const confirmUnauthorized = async (req, res) => {
     if (user.email) {
       sendMail({
         to: user.email,
-        subject: `Emergency Security Password Reset — St. John de Britto's Church`,
+        subject: `Emergency Security Password Reset — St. John de britto Church`,
         html: `
 <div style="background:#f1f5f9; padding:20px 10px; font-family:'Segoe UI',Arial,sans-serif;">
   <div style="max-width:580px; margin:0 auto; background:#ffffff; border-radius:18px; overflow:hidden; box-shadow:0 8px 24px rgba(0,0,0,0.06); border:1px solid #e2e8f0;">
@@ -96,7 +96,7 @@ const confirmUnauthorized = async (req, res) => {
       <div style="width:75px; height:75px; margin:0 auto 12px; border-radius:50%; overflow:hidden; border:3px solid #fbbf24; background:#ffffff; box-shadow:0 4px 14px rgba(0,0,0,0.3);">
         <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width:100%; height:100%; object-fit:cover; display:block;" />
       </div>
-      <h1 style="color:#fbbf24; margin:0; font-size:20px; font-weight:800;">St. John de Britto's Church</h1>
+      <h1 style="color:#fbbf24; margin:0; font-size:20px; font-weight:800;">St. John de britto Church</h1>
       <p style="color:#fca5a5; margin:4px 0 0; font-size:12.5px; font-weight:600;">Emergency Account Security Notice</p>
     </div>
     <div style="padding:24px 20px; color:#1e293b; line-height:1.6;">
@@ -118,7 +118,7 @@ const confirmUnauthorized = async (req, res) => {
       <!-- DYNAMIC_BIBLE_VERSE -->
     </div>
     <div style="background:#0f172a; padding:16px 18px; text-align:center; color:#94a3b8; font-size:11px;">
-      <p style="margin:0;">St. John de Britto's Church Security Team • Kalayarkoil</p>
+      <p style="margin:0;">St. John de britto Church Security Team • Kalayarkoil</p>
     </div>
   </div>
 </div>
@@ -222,7 +222,7 @@ const reactivateUserAccount = async (req, res) => {
     // Also update any pending incident for this user
     await SecurityIncident.updateMany(
       { userId: user._id, status: { $in: ['Awaiting Review', 'Under Review'] } },
-      { 
+      {
         $set: { status: 'Reactivated', reactivationTime: new Date(), adminWhoReactivated: req.user._id },
         $push: { actionsTaken: `Reactivated by Admin ${req.user.name} on ${new Date().toISOString()}` }
       }
@@ -286,7 +286,7 @@ const reactivateUserByUserId = async (req, res) => {
     // Also update any pending incident for this user
     await SecurityIncident.updateMany(
       { userId: user._id, status: { $in: ['Awaiting Review', 'Under Review'] } },
-      { 
+      {
         $set: { status: 'Reactivated', reactivationTime: new Date(), adminWhoReactivated: req.user._id },
         $push: { actionsTaken: `Reactivated by Admin ${req.user.name} on ${new Date().toISOString()}` }
       }
@@ -368,7 +368,7 @@ async function sendAdminSecurityIncidentEmail({ user, incident, decoded }) {
         <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width:100%; height:100%; object-fit:cover; display:block;" />
       </div>
       <h1 style="margin:4px 0 0; color:#ffffff; font-size:20px; font-weight:900; line-height:1.3;">Security Incident: Unauthorized Login Reported</h1>
-      <p style="margin:6px 0 0; color:#fca5a5; font-size:12px; font-weight:600;">St. John de Britto's Church — Parish Management System</p>
+      <p style="margin:6px 0 0; color:#fca5a5; font-size:12px; font-weight:600;">St. John de britto Church — Parish Management System</p>
     </div>
 
     <!-- BODY CONTENT -->
@@ -581,7 +581,7 @@ async function sendAdminSecurityIncidentEmail({ user, incident, decoded }) {
 
     <!-- FOOTER -->
     <div style="background-color:#0f172a; padding:16px 20px; text-align:center; color:#94a3b8; font-size:12px; border-top:1px solid #334155;">
-      <p style="margin:0; font-weight:700; color:#cbd5e1;">St. John de Britto's Church, Kalayarkoil</p>
+      <p style="margin:0; font-weight:700; color:#cbd5e1;">St. John de britto Church, Kalayarkoil</p>
       <p style="margin:4px 0 0; color:#64748b; font-size:11px;">Parish Management System • Automated Security Monitor</p>
     </div>
 
@@ -595,7 +595,7 @@ async function sendAdminSecurityIncidentEmail({ user, incident, decoded }) {
     adminEmails.forEach(adminEmail => {
       sendMail({
         to: adminEmail,
-        subject: ` Security Incident #${incidentCode}: Unauthorized Login Reported — St. John de Britto's Church`,
+        subject: ` Security Incident #${incidentCode}: Unauthorized Login Reported — St. John de britto Church`,
         html: emailHtml
       }).then(res => {
         if (res.success) console.log(` Security incident email sent to admin ${adminEmail}`);

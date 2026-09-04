@@ -12,7 +12,7 @@ export const POLICY_DATA = {
     sections: [
       {
         heading: '1. Acceptance of Terms',
-        content: `By registering an account, accessing, or using the St. John de Britto's Church Parish Management Platform, you acknowledge that you have read, understood, and agree to be bound by these Terms & Conditions and all applicable laws and regulations. If you do not agree, please do not use our services.`
+        content: `By registering an account, accessing, or using the St. John de britto Church Parish Management Platform, you acknowledge that you have read, understood, and agree to be bound by these Terms & Conditions and all applicable laws and regulations. If you do not agree, please do not use our services.`
       },
       {
         heading: '2. User Accounts & Responsibilities',
@@ -165,7 +165,7 @@ export default function PolicyModal({ isOpen, onClose, initialTab = 'terms' }) {
         </div>
 
         {/* Policy Tab Bar without ugly browser scrollbar */}
-        <div 
+        <div
           className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2.5 sm:py-3 bg-slate-100/90 border-b border-slate-200 overflow-x-auto flex-shrink-0"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
@@ -173,11 +173,10 @@ export default function PolicyModal({ isOpen, onClose, initialTab = 'terms' }) {
             <button
               key={p.id}
               onClick={() => { setActiveTab(p.id); setSearchTerm(''); }}
-              className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 sm:gap-2 ${
-                activeTab === p.id
+              className={`px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 sm:gap-2 ${activeTab === p.id
                   ? 'bg-church-royal-blue text-white shadow-md shadow-blue-900/20 scale-[1.02]'
                   : 'bg-white text-gray-700 hover:bg-gray-200/80 border border-gray-200'
-              }`}
+                }`}
             >
               <span>{p.icon}</span>
               <span>{p.title}</span>

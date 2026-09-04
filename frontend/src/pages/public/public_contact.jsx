@@ -24,7 +24,7 @@ export default function Contact() {
           setWhatsappNumber(String(num).replace(/\D/g, ''));
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const onSubmit = async (data) => {
@@ -97,7 +97,7 @@ export default function Contact() {
               {/* WhatsApp & SJDB Connect Action Buttons */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
                 <a
-                  href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent("Hello St. John de Britto's Church")}`}
+                  href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent("Hello St. John de britto Church")}`}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center justify-center gap-2.5 bg-[#25D366] hover:bg-green-600 text-white px-4 py-3.5 rounded-2xl transition-all shadow-lg font-bold text-xs sm:text-sm text-center"
@@ -118,7 +118,7 @@ export default function Contact() {
               {/* Google Maps */}
               <div className="rounded-2xl overflow-hidden shadow-card border border-gray-100 ">
                 <iframe
-                  title="St. John de Britto's Church Location"
+                  title="St. John de britto Church Location"
                   width="100%" height="320"
                   style={{ border: 0 }}
                   loading="lazy"

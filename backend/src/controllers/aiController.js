@@ -21,8 +21,8 @@ function generateParishAIContent(type, title, category, extra = {}) {
   const cleanTitle = (title || '').trim();
   const lowerTitle = cleanTitle.toLowerCase();
   const catStr = (category || extra.category || '').toLowerCase();
-  const venueStr = extra.venue || "St. John de Britto's Church Parish Hall, Kalayarkoil";
-  const organizerStr = extra.organizer || "St. John de Britto's Church Parish Office";
+  const venueStr = extra.venue || "St. John de britto Church Parish Hall, Kalayarkoil";
+  const organizerStr = extra.organizer || "St. John de britto Church Parish Office";
   const dateStr = extra.date ? formatParishDate(extra.date) : '';
   const timeStr = extra.time || '';
   const isRegRequired = extra.registrationRequired === true || extra.registrationRequired === 'true';
@@ -30,18 +30,18 @@ function generateParishAIContent(type, title, category, extra = {}) {
   // 1. GALLERY
   if (type === 'gallery') {
     if (catStr === 'feast' || lowerTitle.includes('feast') || lowerTitle.includes('novena')) {
-      return `A solemn moment capturing "${cleanTitle}" during St. John de Britto's Annual Feast celebration. Parishioners and devotees gather in heartfelt prayer, Holy Mass, and sacred procession to honor our patron saint.`;
+      return `A solemn moment capturing "${cleanTitle}" during St. John de britto Annual Feast celebration. Parishioners and devotees gather in heartfelt prayer, Holy Mass, and sacred procession to honor our patron saint.`;
     }
     if (catStr === 'events' || lowerTitle.includes('event') || lowerTitle.includes('youth') || lowerTitle.includes('choir')) {
-      return `Vibrant highlights from "${cleanTitle}" at St. John de Britto's Church, Kalayarkoil. Capturing the joy, fellowship, and active participation of our parish community.`;
+      return `Vibrant highlights from "${cleanTitle}" at St. John de britto Church, Kalayarkoil. Capturing the joy, fellowship, and active participation of our parish community.`;
     }
     if (catStr === 'priests' || lowerTitle.includes('fr') || lowerTitle.includes('father') || lowerTitle.includes('priest')) {
-      return `Blessed moments with clergy during "${cleanTitle}" at St. John de Britto's Church, Kalayarkoil, offering pastoral guidance, holy sacraments, and spiritual leadership to our parish family.`;
+      return `Blessed moments with clergy during "${cleanTitle}" at St. John de britto Church, Kalayarkoil, offering pastoral guidance, holy sacraments, and spiritual leadership to our parish family.`;
     }
     if (catStr === 'church' || lowerTitle.includes('altar') || lowerTitle.includes('shrine') || lowerTitle.includes('statue')) {
-      return `A sacred view of "${cleanTitle}" at St. John de Britto's Church, Kalayarkoil. A peaceful place of prayer, divine grace, and spiritual reflection for all believers.`;
+      return `A sacred view of "${cleanTitle}" at St. John de britto Church, Kalayarkoil. A peaceful place of prayer, divine grace, and spiritual reflection for all believers.`;
     }
-    return `A cherished photograph capturing "${cleanTitle}" at St. John de Britto's Church, Kalayarkoil. Preserving moments of faith, fellowship, and sacred traditions of our parish family.`;
+    return `A cherished photograph capturing "${cleanTitle}" at St. John de britto Church, Kalayarkoil. Preserving moments of faith, fellowship, and sacred traditions of our parish family.`;
   }
 
   // 2. EVENTS
@@ -52,7 +52,7 @@ function generateParishAIContent(type, title, category, extra = {}) {
 
     // Feast / Novena
     if (catStr === 'feast' || lowerTitle.includes('feast') || lowerTitle.includes('novena') || lowerTitle.includes('britto')) {
-      return `St. John de Britto's Church, Kalayarkoil, warmly invites all parishioners, families, and devotees to join in the solemn celebration of ${cleanTitle} ${dateTimeClause}.
+      return `St. John de britto Church, Kalayarkoil, warmly invites all parishioners, families, and devotees to join in the solemn celebration of ${cleanTitle} ${dateTimeClause}.
 
 The celebration is being organized by ${organizerStr} as an occasion for our entire parish community to unite in heartfelt prayer, Holy Mass, and fellowship to receive divine blessings through the intercession of our patron saint.
 
@@ -67,7 +67,7 @@ For further information, please contact the Parish Office.`;
 
     // Youth / Choir / Meeting / Catechism
     if (catStr === 'youth' || catStr === 'choir' || catStr === 'catechism' || catStr === 'meeting' || lowerTitle.includes('youth') || lowerTitle.includes('choir') || lowerTitle.includes('meeting') || lowerTitle.includes('seminar')) {
-      return `St. John de Britto's Church, Kalayarkoil, warmly invites all concerned members and families to participate in ${cleanTitle} ${dateTimeClause}.
+      return `St. John de britto Church, Kalayarkoil, warmly invites all concerned members and families to participate in ${cleanTitle} ${dateTimeClause}.
 
 The program is being organized by ${organizerStr} to promote spiritual growth, leadership development, and active engagement within our parish community and ministries.
 
@@ -80,7 +80,7 @@ For further details and registration assistance, please contact the Parish Offic
 
     // Medical / Blood donation / Charity
     if (lowerTitle.includes('blood') || lowerTitle.includes('medical') || lowerTitle.includes('camp') || lowerTitle.includes('health') || lowerTitle.includes('charity')) {
-      return `St. John de Britto's Church, Kalayarkoil, in collaboration with ${organizerStr}, is organizing ${cleanTitle} ${dateTimeClause} to serve our parish families and the wider local community.
+      return `St. John de britto Church, Kalayarkoil, in collaboration with ${organizerStr}, is organizing ${cleanTitle} ${dateTimeClause} to serve our parish families and the wider local community.
 
 Qualified medical professionals and parish volunteers will be present to offer free medical consultations, essential health screenings, and voluntary blood donation facilities.
 
@@ -92,7 +92,7 @@ For appointments and further information, please contact the Parish Office.`;
     }
 
     // Default Complete Parish Event (e.g. Parish Family Gathering, Community Day)
-    return `St. John de Britto's Church, Kalayarkoil, warmly invites all parishioners and their families to the ${cleanTitle}.
+    return `St. John de britto Church, Kalayarkoil, warmly invites all parishioners and their families to the ${cleanTitle}.
 
 The gathering is being organized as an opportunity for parish families to come together in fellowship, strengthen community relationships, and participate in activities prepared by the parish.
 
@@ -113,7 +113,7 @@ For further information, please contact the Parish Office.`;
         ? `on ${dateStr || 'the scheduled date'}${timeStr ? ` at ${timeStr}` : ' at 5:00 PM'} at ${venueStr || 'the Parish Hall'}`
         : 'on Sunday, 30 August 2026, at 5:00 PM at the Parish Hall';
 
-      return `The Parish Office of St. John de Britto's Church, Kalayarkoil, wishes to inform all parishioners that a ${cleanTitle} will be held ${scheduleInfo}.
+      return `The Parish Office of St. John de britto Church, Kalayarkoil, wishes to inform all parishioners that a ${cleanTitle} will be held ${scheduleInfo}.
 
 All Parish Council members and concerned representatives are kindly requested to attend the meeting on time. Important matters concerning the parish community, upcoming pastoral activities, and parish programs will be discussed during the meeting.
 
@@ -124,7 +124,7 @@ For further details, please contact the Parish Office.`;
 
     // Mass / Liturgy Timings
     if (lowerTitle.includes('mass') || lowerTitle.includes('timing') || lowerTitle.includes('schedule') || lowerTitle.includes('liturgy')) {
-      return `The Parish Office of St. John de Britto's Church, Kalayarkoil, wishes to inform all parishioners regarding the upcoming schedule for ${cleanTitle}.
+      return `The Parish Office of St. John de britto Church, Kalayarkoil, wishes to inform all parishioners regarding the upcoming schedule for ${cleanTitle}.
 
 Please take note of the updated Mass timings and liturgical services. All parishioners are kindly requested to arrive at the church 15 minutes prior to Holy Mass for personal prayer and spiritual preparation.
 
@@ -137,7 +137,7 @@ For further inquiries, please contact the Parish Office.`;
 
     // Feast / Novena Announcement
     if (lowerTitle.includes('feast') || lowerTitle.includes('novena') || lowerTitle.includes('procession') || catStr === 'feast') {
-      return `The Parish Office of St. John de Britto's Church, Kalayarkoil, joyfully announces to all parishioners the upcoming celebration of ${cleanTitle}.
+      return `The Parish Office of St. John de britto Church, Kalayarkoil, joyfully announces to all parishioners the upcoming celebration of ${cleanTitle}.
 
 All parishioners, devotees, and parish families are warmly invited to participate in the Holy Eucharistic celebrations, novena devotions, and parish programs organized in honor of our patron saint.
 
@@ -152,7 +152,7 @@ For further information, please contact the Parish Office.`;
     if (lowerTitle.includes('emergency') || lowerTitle.includes('alert') || lowerTitle.includes('urgent') || catStr === 'emergency' || extra.priority === 'urgent') {
       return `URGENT PARISH NOTICE: ${cleanTitle}
 
-The Parish Office of St. John de Britto's Church, Kalayarkoil, wishes to urgently inform all parishioners about ${cleanTitle}.
+The Parish Office of St. John de britto Church, Kalayarkoil, wishes to urgently inform all parishioners about ${cleanTitle}.
 
 All parishioners, Anbiyam leaders, and parish units are requested to take immediate note of this notice and follow the guidelines issued by the Parish Administration.
 
@@ -163,7 +163,7 @@ For emergency pastoral assistance or clarifications, please contact the Parish O
 
     // Marriage / Banns
     if (lowerTitle.includes('marriage') || lowerTitle.includes('bann') || catStr === 'marriage') {
-      return `The Parish Office of St. John de Britto's Church, Kalayarkoil, publishes the announcement regarding ${cleanTitle}.
+      return `The Parish Office of St. John de britto Church, Kalayarkoil, publishes the announcement regarding ${cleanTitle}.
 
 The parish community is requested to pray for the couples preparing to receive the Holy Sacrament of Matrimony, that their married life may be filled with God's peace, love, and grace.
 
@@ -173,7 +173,7 @@ For further information, please contact the Parish Office.`;
     }
 
     // General Parish Announcement Default
-    return `The Parish Office of St. John de Britto's Church, Kalayarkoil, wishes to inform all parishioners regarding ${cleanTitle}.
+    return `The Parish Office of St. John de britto Church, Kalayarkoil, wishes to inform all parishioners regarding ${cleanTitle}.
 
 All parishioners and Basic Christian Communities (Anbiyams) are kindly requested to take note of this information and participate actively in the related parish initiatives.
 
@@ -184,26 +184,26 @@ For further details or clarifications, please contact the Parish Office.`;
 
   // 4. PRIESTS
   if (type === 'priests' || type === 'priest') {
-    return `Rev. Fr. ${cleanTitle} serves as a dedicated shepherd at St. John de Britto's Church, Kalayarkoil. With a deep commitment to spiritual guidance, Eucharistic celebrations, pastoral counseling, and youth ministry, Fr. ${cleanTitle} works tirelessly to strengthen the faith and unity of our parish family.`;
+    return `Rev. Fr. ${cleanTitle} serves as a dedicated shepherd at St. John de britto Church, Kalayarkoil. With a deep commitment to spiritual guidance, Eucharistic celebrations, pastoral counseling, and youth ministry, Fr. ${cleanTitle} works tirelessly to strengthen the faith and unity of our parish family.`;
   }
 
   // 5. TEAM MEMBERS
   if (type === 'team') {
-    return `${cleanTitle} actively serves our parish family at St. John de Britto's Church, Kalayarkoil. Dedicated to organizing parish ministries, Anbiyam outreach, and church events, working in unity to support our priests and parishioners.`;
+    return `${cleanTitle} actively serves our parish family at St. John de britto Church, Kalayarkoil. Dedicated to organizing parish ministries, Anbiyam outreach, and church events, working in unity to support our priests and parishioners.`;
   }
 
   // 6. DOCUMENTS
   if (type === 'documents' || type === 'document') {
-    return `Official parish guidelines for requesting "${cleanTitle}" certificate from St. John de Britto's Church, Kalayarkoil. Please submit your application form along with necessary details. Certificates are verified and issued by the Parish Priest after verification.`;
+    return `Official parish guidelines for requesting "${cleanTitle}" certificate from St. John de britto Church, Kalayarkoil. Please submit your application form along with necessary details. Certificates are verified and issued by the Parish Priest after verification.`;
   }
 
   // 7. DONATIONS
   if (type === 'donations' || type === 'donation') {
-    return `Support our parish campaign: "${cleanTitle}". Your generous contributions to St. John de Britto's Church help maintain our sanctuary, support parish welfare initiatives, and serve those in need. "Each of you should give what you have decided in your heart to give, not reluctantly or under compulsion, for God loves a cheerful giver." (2 Corinthians 9:7)`;
+    return `Support our parish campaign: "${cleanTitle}". Your generous contributions to St. John de britto Church help maintain our sanctuary, support parish welfare initiatives, and serve those in need. "Each of you should give what you have decided in your heart to give, not reluctantly or under compulsion, for God loves a cheerful giver." (2 Corinthians 9:7)`;
   }
 
   // DEFAULT FALLBACK
-  return `The Parish Office of St. John de Britto's Church, Kalayarkoil, publishes this official information regarding "${cleanTitle}". Serving our parish community with faith, hope, and Christian charity.`;
+  return `The Parish Office of St. John de britto Church, Kalayarkoil, publishes this official information regarding "${cleanTitle}". Serving our parish community with faith, hope, and Christian charity.`;
 }
 
 // POST /api/ai/generate-content
@@ -243,7 +243,7 @@ exports.generateAIContent = async (req, res) => {
         else if (type === 'documents' || type === 'document') typeDescription = 'Certificate Application Guidelines';
         else if (type === 'donations' || type === 'donation') typeDescription = 'Charitable Donation Campaign Appeal';
 
-        const prompt = `You are the official Catholic Parish Communication Assistant for St. John de Britto's Church, Kalayarkoil.
+        const prompt = `You are the official Catholic Parish Communication Assistant for St. John de britto Church, Kalayarkoil.
 Write a comprehensive, dignified, realistic, and complete ${typeDescription} for the item titled "${cleanTitle}".
 
 Context Information:
@@ -252,18 +252,18 @@ Context Information:
 - Category: ${category || 'General'}
 ${date ? `- Date: ${date}` : ''}
 ${time ? `- Time: ${time}` : ''}
-${venue ? `- Venue: ${venue}` : "- Venue: St. John de Britto's Church Parish Hall, Kalayarkoil"}
-${organizer ? `- Organizer: ${organizer}` : "- Organizer: St. John de Britto's Church Parish Office"}
+${venue ? `- Venue: ${venue}` : "- Venue: St. John de britto Church Parish Hall, Kalayarkoil"}
+${organizer ? `- Organizer: ${organizer}` : "- Organizer: St. John de britto Church Parish Office"}
 ${registrationRequired ? '- Requires Registration: Yes' : '- Requires Registration: No'}
 ${priority ? `- Priority: ${priority}` : ''}
 ${album ? `- Album: ${album}` : ''}
 ${role ? `- Role: ${role}` : ''}
 
 Strict Formatting Rules:
-1. Write in a warm, welcoming, and pastoral Catholic tone representing St. John de Britto's Church, Kalayarkoil.
+1. Write in a warm, welcoming, and pastoral Catholic tone representing St. John de britto Church, Kalayarkoil.
 2. The content must be a COMPLETE, full-length parish text (between 80 and 160 words across 3-4 structured paragraphs).
-3. For Announcements: Start with "The Parish Office of St. John de Britto's Church, Kalayarkoil, wishes to inform all parishioners that...", provide the purpose, date/time/venue details if applicable, request attendance/action, and conclude with "For further details, please contact the Parish Office."
-4. For Events: Start with "St. John de Britto's Church, Kalayarkoil, warmly invites all parishioners and their families to...", detail the purpose and program highlights, advise arriving on time, and conclude with contact instructions.
+3. For Announcements: Start with "The Parish Office of St. John de britto Church, Kalayarkoil, wishes to inform all parishioners that...", provide the purpose, date/time/venue details if applicable, request attendance/action, and conclude with "For further details, please contact the Parish Office."
+4. For Events: Start with "St. John de britto Church, Kalayarkoil, warmly invites all parishioners and their families to...", detail the purpose and program highlights, advise arriving on time, and conclude with contact instructions.
 5. NEVER output short broken words, placeholders (like "Niki" or "ee"), or bullet symbols.
 6. Output clean, readable plain text paragraphs only without markdown headings (# or ##).`;
 

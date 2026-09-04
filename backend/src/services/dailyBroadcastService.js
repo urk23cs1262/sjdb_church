@@ -23,7 +23,7 @@ and be gracious to you."*
 May God fill your life with joy, peace, and abundant blessings today and always!
 
 With love & prayers,
-⛪ *St. John de Britto's Church*
+⛪ *St. John de britto Church*
 _SJDB Connect — Connecting Faith & Community_`;
 }
 
@@ -73,10 +73,7 @@ async function runWhatsAppBirthdayWishes() {
   }
 }
 
-// ─── Midnight Birthday Wishes Cron Job ────────────────────────────────────────
-cron.schedule('0 0 * * *', () => {
-  console.log('🎂 [CRON Midnight IST] Running WhatsApp birthday wishes...');
-  runWhatsAppBirthdayWishes();
-}, { timezone: 'Asia/Kolkata' });
+// NOTE: Birthday cron is managed by birthdayService.js — do NOT add a duplicate cron here.
+// Having two midnight birthday crons would send duplicate messages to all users.
 
 module.exports = { runDailyBroadcast, triggerBroadcastNow, runWhatsAppBirthdayWishes };

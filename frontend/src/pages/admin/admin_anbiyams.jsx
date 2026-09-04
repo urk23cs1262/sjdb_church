@@ -362,7 +362,7 @@ export default function AnbiyamAdmin() {
       doc.setTextColor(30, 58, 138); // Royal blue
       doc.setFontSize(18);
       doc.setFont('helvetica', 'bold');
-      doc.text("St. John de Britto's Church • Kalayarkoil", pageWidth / 2, 14, { align: 'center' });
+      doc.text("St. John de britto Church • Kalayarkoil", pageWidth / 2, 14, { align: 'center' });
 
       doc.setTextColor(100, 100, 100);
       doc.setFontSize(10);
@@ -528,8 +528,8 @@ export default function AnbiyamAdmin() {
           <button
             onClick={() => setActiveTab('groups')}
             className={`pb-3 text-sm font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${activeTab === 'groups'
-                ? 'border-church-gold text-church-royal-blue'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'border-church-gold text-church-royal-blue'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
           >
             <GiChurch className="text-lg" /> Anbiyam Units / Wards ({groups.length})
@@ -537,8 +537,8 @@ export default function AnbiyamAdmin() {
           <button
             onClick={() => setActiveTab('members')}
             className={`pb-3 text-sm font-bold transition-all border-b-2 cursor-pointer flex items-center gap-2 ${activeTab === 'members'
-                ? 'border-church-gold text-church-royal-blue'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+              ? 'border-church-gold text-church-royal-blue'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
               }`}
           >
             <FiUsers className="text-lg" /> Member Directory ({members.length})

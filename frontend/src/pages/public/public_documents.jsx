@@ -220,11 +220,11 @@ export default function PublicDocuments() {
   const handleDownloadPDF = (doc) => {
     try {
       const pdf = new jsPDF();
-      
+
       // Header Banner
       pdf.setFillColor(27, 54, 93); // Royal Blue
       pdf.rect(0, 0, 210, 38, 'F');
-      
+
       pdf.setFillColor(212, 160, 23); // Church Gold
       pdf.rect(0, 38, 210, 3, 'F');
 
@@ -232,8 +232,8 @@ export default function PublicDocuments() {
       pdf.setTextColor(255, 255, 255);
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(15);
-      pdf.text("ST. JOHN DE BRITTO'S CHURCH", 105, 16, { align: 'center' });
-      
+      pdf.text("ST. JOHN DE britto CHURCH", 105, 16, { align: 'center' });
+
       pdf.setFontSize(10);
       pdf.setFont('helvetica', 'normal');
       pdf.text('Kalayarkoil, Sivagangai District - 630 551 | Diocese of Sivagangai', 105, 24, { align: 'center' });
@@ -297,7 +297,7 @@ export default function PublicDocuments() {
         pdf.setPage(i);
         pdf.setDrawColor(212, 160, 23);
         pdf.line(14, 280, 196, 280);
-        
+
         pdf.setFontSize(8);
         pdf.setTextColor(120, 120, 120);
         pdf.text("St. John de Britto Church, Kalayarkoil • Official Publication", 14, 286);
@@ -314,11 +314,11 @@ export default function PublicDocuments() {
 
   return (
     <div className="min-h-screen pt-12 sm:pt-16 bg-slate-50 text-gray-800">
-      
+
       {/* 1. Page Hero */}
-      <PageHero 
-        title={<>Parish Documents & Reports</>} 
-        subtitle={<>பங்கு ஆவணங்கள் & அறிக்கைகள் • Official Constitution, Reports & Guidelines</>} 
+      <PageHero
+        title={<>Parish Documents & Reports</>}
+        subtitle={<>பங்கு ஆவணங்கள் & அறிக்கைகள் • Official Constitution, Reports & Guidelines</>}
       />
 
       {/* Breadcrumbs */}
@@ -333,7 +333,7 @@ export default function PublicDocuments() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-10">
-        
+
         {/* 2. Top Info Banner & Certificate Portal Callout */}
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-8 bg-white rounded-3xl p-6 sm:p-8 border border-gray-200 shadow-xs space-y-3">
@@ -347,7 +347,7 @@ export default function PublicDocuments() {
               பங்கின் சட்டவிதிகள், ஆண்டு அறிக்கைகள் மற்றும் சான்றிதழ் படிவங்கள்
             </p>
             <p className="text-xs sm:text-sm text-gray-600 leading-relaxed text-justify">
-              Access official publications of <strong>St. John de Britto's Church</strong>, including the Parish Pastoral Council Constitution, annual pastoral reports, sacramental guidelines, catechism handbooks, and downloadable application forms. All documents reflect diocesan norms and parish council resolutions.
+              Access official publications of <strong>St. John de britto Church</strong>, including the Parish Pastoral Council Constitution, annual pastoral reports, sacramental guidelines, catechism handbooks, and downloadable application forms. All documents reflect diocesan norms and parish council resolutions.
             </p>
           </div>
 
@@ -393,11 +393,10 @@ export default function PublicDocuments() {
                 key={cat.id}
                 type="button"
                 onClick={() => setSelectedCategory(cat.id)}
-                className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  selectedCategory === cat.id
+                className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${selectedCategory === cat.id
                     ? 'bg-church-royal-blue text-white shadow-sm'
                     : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-                }`}
+                  }`}
               >
                 <span>{cat.icon}</span>
                 <span>{cat.label}</span>

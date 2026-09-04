@@ -70,7 +70,7 @@ export default function Login() {
       if (res.data.success && res.data.isEnabled) {
         setIsMaintenanceActive(true);
       }
-    }).catch(() => {});
+    }).catch(() => { });
   }, []);
 
   const getRedirectDestination = (userData) => {
@@ -253,7 +253,7 @@ export default function Login() {
               <img src={churchLogo} alt="Logo" className="w-full h-full object-cover object-[center_20%] transform" />
             </div>
             <h1 className="font-display text-2xl font-bold text-church-royal-blue ">{t('auth.login')}</h1>
-            <p className="text-gray-500 text-sm mt-1">St. John de Britto's Church</p>
+            <p className="text-gray-500 text-sm mt-1">St. John de britto Church</p>
           </div>
 
           {/* Login Form */}
@@ -348,7 +348,7 @@ export default function Login() {
 
               <div>
                 <span className="text-[11px] font-bold text-amber-800 uppercase tracking-widest bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
-                   Access Restricted
+                  Access Restricted
                 </span>
                 <h2 className="text-xl font-display font-extrabold text-church-royal-blue mt-2">
                   Access Restricted
@@ -395,7 +395,7 @@ export default function Login() {
 
               <div>
                 <span className="text-[11px] font-bold text-red-700 uppercase tracking-widest bg-red-50 px-3 py-1 rounded-full border border-red-200">
-                   Account Under Security Review
+                  Account Under Security Review
                 </span>
                 <h2 className="text-xl font-display font-extrabold text-church-royal-blue mt-2">
                   Account Under Security Review
@@ -490,7 +490,7 @@ export default function Login() {
                     <div className="flex flex-col items-center gap-2 w-full px-4 py-1">
                       <p className="text-amber-800 text-xs font-semibold">Sending...</p>
                       <div className="w-full bg-amber-200 h-1.5 rounded-full overflow-hidden">
-                        <motion.div 
+                        <motion.div
                           className="bg-amber-500 h-full"
                           initial={{ width: "0%" }}
                           animate={{ width: "100%" }}
@@ -521,9 +521,9 @@ export default function Login() {
                 <input {...register('otp', { required: true, minLength: 6, maxLength: 6 })} className="church-input text-center text-2xl tracking-widest font-bold" placeholder="000000" maxLength={6} />
               </div>
               <button type="submit" disabled={isSubmitting} className="btn-gold w-full justify-center py-3.5">{t('auth.verifyOtp')}</button>
-              <button type="button" onClick={async () => { 
-                const res = await api.post('/auth/resend-otp', { userId }); 
-                toast.success('OTP resent!'); 
+              <button type="button" onClick={async () => {
+                const res = await api.post('/auth/resend-otp', { userId });
+                toast.success('OTP resent!');
                 if (res.data.devOtp) {
                   setDevOtp(res.data.devOtp);
                   setIsOtpLoading(true);
@@ -557,7 +557,7 @@ export default function Login() {
                     <div className="flex flex-col items-center gap-2 w-full px-4 py-1">
                       <p className="text-amber-800 text-xs font-semibold">Sending...</p>
                       <div className="w-full bg-amber-200 h-1.5 rounded-full overflow-hidden">
-                        <motion.div 
+                        <motion.div
                           className="bg-amber-500 h-full"
                           initial={{ width: "0%" }}
                           animate={{ width: "100%" }}

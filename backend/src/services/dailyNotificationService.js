@@ -217,7 +217,8 @@ async function sendDailyChurchNotifications({
     }
 
     isBroadcasting = true;
-    console.log(`[Daily Notification Service] 12:00 AM IST Multi-Channel Daily Broadcast started for ${dailyContent.dateKey}...`);
+    console.log(`[DAILY-CATHOLIC] Starting daily job for ${dailyContent.dateKey}...`);
+    console.log(`[DAILY-CATHOLIC] Timezone: Asia/Kolkata`);
 
     // Ensure mass readings, English translations, saint, and verse are synchronized before broadcasting
     try {
@@ -240,7 +241,7 @@ async function sendDailyChurchNotifications({
 
     const botSessions = await BotSession.find({ step: 'done' }).lean();
 
-    console.log(`[Daily Notification Service] Found ${users.length} active parishioners and ${botSessions.length} bot sessions.`);
+    console.log(`[DAILY-CATHOLIC] Eligible users: ${users.length} registered + ${botSessions.length} WhatsApp bot sessions`);
 
     let sentCount = 0;
     let skippedCount = 0;
@@ -561,8 +562,10 @@ async function sendDailyChurchNotifications({
     }
 
     isBroadcasting = false;
-    console.log(`[Daily Notification Service] 12:00 AM Multi-Channel Broadcast complete for ${dailyContent.dateKey}: Sent=${sentCount}, Skipped=${skippedCount}, Failed=${failedCount}`);
-    console.log('[Daily Notification Service] Channel breakdown:', JSON.stringify(channelStats));
+    console.log(`[DAILY-CATHOLIC] Job completed for ${dailyContent.dateKey}`);
+    console.log(`[DAILY-CATHOLIC] WhatsApp deliveries: ${channelStats.whatsapp.sent} sent, ${channelStats.whatsapp.failed} failed, ${channelStats.whatsapp.disabled} disabled`);
+    console.log(`[DAILY-CATHOLIC] Email deliveries: ${channelStats.email.sent} sent, ${channelStats.email.failed} failed, ${channelStats.email.disabled} disabled`);
+    console.log(`[DAILY-CATHOLIC] Successful: ${sentCount} | Failed: ${failedCount} | Skipped: ${skippedCount}`);
 
     return {
       success: true,
@@ -575,7 +578,7 @@ async function sendDailyChurchNotifications({
     };
   } catch (err) {
     isBroadcasting = false;
-    console.error('[Daily Notification Service] Fatal 4-channel broadcast error:', err);
+    console.error('[DAILY-CATHOLIC] Fatal broadcast error:', err.message);
     return {
       success: false,
       error: err.message
@@ -656,49 +659,194 @@ async function getUserNotificationHistory(userId) {
   }
 }
 
+
+
+// ─── Scheduler State Tracking ────────────────────────────────────────────────
+let lastRunTime = null;
+let lastRunDateKey = null;
+let lastRunResult = null;
+let schedulerRegisteredAt = null;
+let nextRunIST = null;
+
+function computeNextMidnightIST() {
+  const now = new Date();
+  // Next midnight Asia/Kolkata
+  const kolkataNow = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(now);
+  const [y, m, d] = kolkataNow.split('-').map(Number);
+  // Midnight IST = UTC - 5h30m = 18:30 UTC previous day
+  const midnightIST = new Date(Date.UTC(y, m - 1, d, 18, 30, 0)); // 00:00 IST = 18:30 UTC
+  if (midnightIST <= now) {
+    midnightIST.setUTCDate(midnightIST.getUTCDate() + 1);
+  }
+  return midnightIST;
+}
+
+// ─── 12:00 AM IST Daily Automated Scheduled Job (Midnight) ───────────────────
+const scheduledJob = cron.schedule('0 0 * * *', async () => {
+  const istDateKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  console.log(`[DAILY-CATHOLIC] ⏰ Cron fired at 12:00 AM IST — Starting daily job for ${istDateKey}...`);
+  lastRunTime = new Date();
+  lastRunDateKey = istDateKey;
+  nextRunIST = computeNextMidnightIST();
+  const result = await sendDailyChurchNotifications();
+  lastRunResult = result;
+  console.log(`[DAILY-CATHOLIC] ✅ Cron job complete for ${istDateKey}. Result: Sent=${result?.sentCount ?? 'N/A'}, Failed=${result?.failedCount ?? 'N/A'}`);
+}, {
+  timezone: 'Asia/Kolkata',
+  scheduled: true
+});
+
+schedulerRegisteredAt = new Date();
+nextRunIST = computeNextMidnightIST();
+
+console.log('✅ [DAILY-CATHOLIC] Scheduler initialized');
+console.log(`[DAILY-CATHOLIC] Timezone: Asia/Kolkata`);
+console.log(`[DAILY-CATHOLIC] Schedule: 0 0 * * * (Every day at 12:00 AM IST)`);
+console.log(`[DAILY-CATHOLIC] Next run: ${nextRunIST.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST`);
+
 /**
- * Deployment / Startup Trigger with Idempotency Protection
+ * Get scheduler status for health checks and admin monitoring
+ */
+function getSchedulerStatus() {
+  return {
+    schedulerRegistered: true,
+    registeredAt: schedulerRegisteredAt?.toISOString() || null,
+    timezone: 'Asia/Kolkata',
+    cronExpression: '0 0 * * *',
+    lastRunTime: lastRunTime?.toISOString() || null,
+    lastRunDateKey: lastRunDateKey || null,
+    lastRunResult: lastRunResult
+      ? { sentCount: lastRunResult.sentCount, failedCount: lastRunResult.failedCount, success: lastRunResult.success }
+      : null,
+    nextRunIST: nextRunIST
+      ? nextRunIST.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+      : null,
+    nextRunUTC: nextRunIST?.toISOString() || null,
+  };
+}
+
+/**
+ * Recover a missed run — checks if today's broadcast was sent; if not, runs it now.
+ * Safe to call multiple times — idempotency prevents duplicate sends.
+ */
+async function recoverMissedRun() {
+  try {
+    const today = new Date();
+    const todayDateKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(today);
+
+    const totalUsers = await User.countDocuments({ isActive: { $ne: false } });
+    const sentCount = await DailyNotificationLog.countDocuments({
+      dateKey: todayDateKey,
+      status: { $in: ['sent', 'partially_sent'] }
+    });
+
+    console.log(`[DAILY-CATHOLIC] Recovery check for ${todayDateKey}: ${sentCount}/${totalUsers} users already delivered.`);
+
+    if (sentCount >= Math.max(1, totalUsers)) {
+      return {
+        success: true,
+        recovered: false,
+        reason: `Today's broadcast (${todayDateKey}) is already complete: ${sentCount}/${totalUsers} sent.`,
+        dateKey: todayDateKey,
+        sentCount
+      };
+    }
+
+    console.log(`[DAILY-CATHOLIC] Missed/incomplete run detected for ${todayDateKey}. Triggering recovery broadcast...`);
+    const result = await sendDailyChurchNotifications();
+    lastRunTime = new Date();
+    lastRunDateKey = todayDateKey;
+    lastRunResult = result;
+
+    return {
+      success: true,
+      recovered: true,
+      dateKey: todayDateKey,
+      previouslySent: sentCount,
+      totalUsers,
+      result
+    };
+  } catch (err) {
+    console.error('[DAILY-CATHOLIC] Recovery error:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
+ * Startup Recovery — Fully Automatic, No Manual Action Required
+ *
+ * Runs 90 seconds after server boot (to let WhatsApp authenticate).
+ * Checks if today's Daily Catholic Content broadcast was sent.
+ * If missed for ANY reason (crash, deploy, power cut, etc.), it runs automatically.
+ * Safe at any time of day — idempotency prevents duplicates for already-sent users.
+ *
+ * Flow:
+ *   Server boots → 90s delay → check DailyNotificationLog for today
+ *   ├─ Already sent to all users → skip (log confirmation)
+ *   └─ Not sent (or partially sent) → run broadcast now
+ *       ├─ Per-user idempotency: skip users already delivered
+ *       └─ New users → deliver → record in DailyNotificationLog
  */
 async function checkAndSendOnStartup() {
   try {
     const dailyContent = await getTodayDailyContent();
     const todayDateKey = dailyContent.dateKey;
 
+    // Count how many users already received today's broadcast
     const sentCountToday = await DailyNotificationLog.countDocuments({
       dateKey: todayDateKey,
       status: { $in: ['sent', 'partially_sent'] }
     });
 
+    // Count total active users to determine if broadcast is complete
+    const totalActive = await User.countDocuments({ isActive: { $ne: false } });
+
     if (sentCountToday > 0) {
-      console.log(`[Daily Notification Service] Startup Check: Today's notifications (${todayDateKey}) have already been delivered (${sentCountToday} logs). Skipping duplicate send.`);
-      return { skipped: true, dateKey: todayDateKey, sentCountToday };
+      if (sentCountToday >= totalActive) {
+        console.log(`[DAILY-CATHOLIC] Startup check: Today's broadcast (${todayDateKey}) already complete — ${sentCountToday}/${totalActive} users delivered. Skipping.`);
+        return { skipped: true, reason: 'already_complete', dateKey: todayDateKey, sentCountToday, totalActive };
+      } else {
+        // Partial delivery — some users missed, recover the rest
+        console.log(`[DAILY-CATHOLIC] Startup check: Partial delivery detected for ${todayDateKey} — ${sentCountToday}/${totalActive} delivered. Recovering remaining users...`);
+      }
+    } else {
+      // No delivery at all — trigger full broadcast
+      const nowIST = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false
+      }).format(new Date());
+      console.log(`[DAILY-CATHOLIC] Startup check: Today's broadcast (${todayDateKey}) has NOT been sent (current IST: ${nowIST}:xx). Triggering automatic recovery...`);
     }
 
-    console.log(`[Daily Notification Service] Startup Check: Today's daily notification (${todayDateKey}) has not been sent yet. Automatically triggering 12:00 AM broadcast for all users...`);
-    await sendDailyChurchNotifications();
+    // Run recovery — idempotency inside sendDailyChurchNotifications skips already-sent users
+    const result = await sendDailyChurchNotifications();
+    lastRunTime = new Date();
+    lastRunDateKey = todayDateKey;
+    lastRunResult = result;
+    console.log(`[DAILY-CATHOLIC] Startup recovery complete for ${todayDateKey}: Sent=${result?.sentCount ?? 'N/A'}, Skipped=${result?.skippedCount ?? 'N/A'}, Failed=${result?.failedCount ?? 'N/A'}`);
+    return result;
   } catch (err) {
-    console.error('[Daily Notification Service] Startup trigger error:', err.message);
+    console.error('[DAILY-CATHOLIC] Startup check error:', err.message);
   }
 }
 
-// ─── 12:00 AM IST Daily Automated Scheduled Job (Midnight) ───────────────────
-cron.schedule('0 0 * * *', async () => {
-  console.log('🔔 [CRON 12:00 AM IST] Triggering automated Daily Catholic Readings & 4-Channel broadcast...');
-  await sendDailyChurchNotifications();
-}, {
-  timezone: 'Asia/Kolkata'
-});
 
-console.log('✅ [Daily Notification Service] 12:00 AM IST Cron Scheduler registered (Asia/Kolkata).');
-
-// Run startup check 5 seconds after server boot
+// Run startup check 90 seconds after server boot.
+// 90 seconds gives WhatsApp (Baileys) time to authenticate and connect before we attempt WA sends.
 setTimeout(() => {
-  checkAndSendOnStartup().catch(err => console.error('[Daily Notification Service] Startup execution error:', err.message));
-}, 5000);
+  console.log('[DAILY-CATHOLIC] Running startup missed-broadcast check (90s after boot)...');
+  checkAndSendOnStartup().catch(err =>
+    console.error('[DAILY-CATHOLIC] Startup check failed:', err.message)
+  );
+}, 90 * 1000);
 
 module.exports = {
   sendDailyChurchNotifications,
   getDailyNotificationStatus,
   getUserNotificationHistory,
-  checkAndSendOnStartup
+  checkAndSendOnStartup,
+  getSchedulerStatus,
+  recoverMissedRun
 };

@@ -76,7 +76,7 @@ ${changeList}
 ${clientUrl}/dashboard/notifications?requestId=${request._id}
 
  _For your privacy, settings will NOT take effect until you approve._
- _St. John de Britto's Church, Kalayarkoil_`;
+ _St. John de britto Church, Kalayarkoil_`;
 
     sendWhatsAppToUser(targetUser, waMsg).catch(err => console.warn('User WA notification error:', err.message));
 
@@ -103,7 +103,7 @@ ${clientUrl}/dashboard/notifications?requestId=${request._id}
       <div style="width:75px; height:75px; margin:0 auto 12px; border-radius:50%; overflow:hidden; border:3px solid #fbbf24; background:#ffffff; box-shadow:0 4px 14px rgba(0,0,0,0.25);">
         <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width:100%; height:100%; object-fit:cover; display:block;" />
       </div>
-      <h1 style="margin:0; color:#fbbf24; font-size:22px; font-weight:800;">St. John de Britto's Church</h1>
+      <h1 style="margin:0; color:#fbbf24; font-size:22px; font-weight:800;">St. John de britto Church</h1>
       <p style="margin:4px 0 0; color:#ffffff; opacity:0.9; font-size:13px;">Parish Privacy & Governance</p>
     </div>
     <div style="padding:22px 18px;">
@@ -131,7 +131,7 @@ ${clientUrl}/dashboard/notifications?requestId=${request._id}
       </p>
     </div>
     <div style="background:#0f172a; padding:16px; text-align:center; color:#94a3b8; font-size:11px;">
-      <p style="margin:0;">St. John de Britto's Church, Kalayarkoil</p>
+      <p style="margin:0;">St. John de britto Church, Kalayarkoil</p>
       <p style="margin:4px 0 0; color:#64748b;">© ${new Date().getFullYear()} St. John de Britto Church. All rights reserved.</p>
     </div>
   </div>
@@ -140,7 +140,7 @@ ${clientUrl}/dashboard/notifications?requestId=${request._id}
 
       sendMail({
         to: targetUser.email,
-        subject: `Account Settings Approval Required — St. John de Britto's Church`,
+        subject: `Account Settings Approval Required — St. John de britto Church`,
         html: emailHtml
       }).then(res => {
         if (res.success) console.log(` Settings approval email dispatched to ${targetUser.email}`);
@@ -196,7 +196,7 @@ exports.respondToRequest = async (req, res) => {
       const user = await User.findById(req.user._id);
       if (user) {
         let settingsCopy = JSON.parse(JSON.stringify(user.settings || {}));
-        
+
         Object.entries(request.requestedChanges || {}).forEach(([keyPath, diff]) => {
           setNestedPath(settingsCopy, keyPath, diff.new);
         });
@@ -286,7 +286,7 @@ Hello *${adminUser.name}*, parish member *${req.user.name}* has *${status.toUppe
  *View Requests Log on Website:*
 ${clientUrl}/admin/users?tab=requests
 
- _St. John de Britto's Church, Kalayarkoil_`;
+ _St. John de britto Church, Kalayarkoil_`;
 
         sendWhatsAppToUser(adminUser, adminWaMsg).catch(err => console.warn('Admin WA error:', err.message));
       }
@@ -300,7 +300,7 @@ ${clientUrl}/admin/users?tab=requests
       <div style="width:75px; height:75px; margin:0 auto 12px; border-radius:50%; overflow:hidden; border:3px solid #fbbf24; background:#ffffff; box-shadow:0 4px 14px rgba(0,0,0,0.25);">
         <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width:100%; height:100%; object-fit:cover; display:block;" />
       </div>
-      <h1 style="margin:0; color:#fbbf24; font-size:22px; font-weight:800;">St. John de Britto's Church</h1>
+      <h1 style="margin:0; color:#fbbf24; font-size:22px; font-weight:800;">St. John de britto Church</h1>
       <p style="margin:4px 0 0; color:#ffffff; opacity:0.9; font-size:13px;">Member Settings Governance</p>
     </div>
     <div style="padding:24px 20px;">
@@ -324,7 +324,7 @@ ${clientUrl}/admin/users?tab=requests
       </div>
     </div>
     <div style="background:#0f172a; padding:16px; text-align:center; color:#94a3b8; font-size:11px;">
-      <p style="margin:0;">St. John de Britto's Church, Kalayarkoil</p>
+      <p style="margin:0;">St. John de britto Church, Kalayarkoil</p>
       <p style="margin:4px 0 0; color:#64748b;">© ${new Date().getFullYear()} St. John de Britto Church. All rights reserved.</p>
     </div>
   </div>

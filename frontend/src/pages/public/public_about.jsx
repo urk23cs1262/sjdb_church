@@ -118,7 +118,7 @@ export default function About() {
 
       <section className="py-16 md:py-24">
         <div className="max-w-6xl mx-auto px-4">
-          
+
           {/* 2 & 3. About Church & Our History */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-20">
             <motion.div
@@ -130,7 +130,7 @@ export default function About() {
               <h2 className="section-title mb-6">A Church with Deep Roots</h2>
               <div className="space-y-4 text-gray-700 leading-relaxed text-sm sm:text-base">
                 <p>
-                  St. John de Britto's Church, situated in Kalayarkoil, Tamil Nadu, is a vibrant beacon of faith in the Sivaganga Diocese. Named after <strong>St. John de Britto (Arulanandar)</strong>, the Jesuit missionary and martyr, the parish stands as a spiritual home for generations of devout Catholic families.
+                  St. John de britto Church, situated in Kalayarkoil, Tamil Nadu, is a vibrant beacon of faith in the Sivaganga Diocese. Named after <strong>St. John de Britto (Arulanandar)</strong>, the Jesuit missionary and martyr, the parish stands as a spiritual home for generations of devout Catholic families.
                 </p>
                 <p>
                   Our parish community is rooted in prayer, the celebration of the Holy Eucharist, and dedicated service to the community. Guided by the missionary zeal of our patron saint, we strive to live out the Gospel message of love, reconciliation, and hope.
@@ -192,7 +192,7 @@ export default function About() {
             </div>
 
             <div className="bg-white rounded-3xl p-6 sm:p-10 md:p-12 shadow-xl border border-amber-100 space-y-10">
-              
+
               {/* Introduction & Life */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center border-b border-gray-100 pb-8">
                 <div className="space-y-4 text-gray-700 leading-relaxed">
@@ -315,15 +315,13 @@ export default function About() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: index * 0.05 }}
-                  className={`church-card flex flex-col justify-between p-6 ${
-                    station.isMain ? 'border-2 border-church-gold shadow-gold bg-amber-50/40' : ''
-                  }`}
+                  className={`church-card flex flex-col justify-between p-6 ${station.isMain ? 'border-2 border-church-gold shadow-gold bg-amber-50/40' : ''
+                    }`}
                 >
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <span className={`text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
-                        station.isMain ? 'bg-church-gold text-white' : 'bg-church-royal-blue/10 text-church-royal-blue'
-                      }`}>
+                      <span className={`text-[11px] font-bold px-3 py-1 rounded-full uppercase tracking-wider ${station.isMain ? 'bg-church-gold text-white' : 'bg-church-royal-blue/10 text-church-royal-blue'
+                        }`}>
                         {station.type}
                       </span>
                       <span className="text-xs text-gray-500 font-semibold flex items-center gap-1">

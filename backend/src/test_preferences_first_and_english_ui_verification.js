@@ -199,7 +199,7 @@ async function runTests() {
   assert(taCatholicMsg.includes('புனித ஜான் டி பிரிட்டோ திருத்தலம்') || taCatholicMsg.includes('இன்றைய'), 'Tamil devotions render Tamil liturgical content');
 
   const enCatholicMsg = generateDailyCatholicMessage({ dailyContent, language: 'en' });
-  assert(enCatholicMsg.includes("St. John de Britto's Church") && enCatholicMsg.includes('DAILY BIBLE VERSE'), 'English devotions render English liturgical content');
+  assert(enCatholicMsg.includes("St. John de britto Church") && enCatholicMsg.includes('DAILY BIBLE VERSE'), 'English devotions render English liturgical content');
 
   console.log('\n========================================================================');
   console.log(`🏁 TEST RESULTS: ${passedAssertions} Passed, ${failedAssertions} Failed`);

@@ -73,7 +73,7 @@ const sendMail = async ({ to, subject, html, attachments = [] }) => {
     }
 
     const info = await transporter.sendMail({
-      from: `"St. John de Britto's Church" <${fromEmail}>`,
+      from: `"St. John de britto Church" <${fromEmail}>`,
       to,
       subject,
       html: processedHtml,

@@ -18,11 +18,11 @@ const generateDonationReceipt = async (donation, user) => {
       const receiptId = donation._id.toString().slice(-6).toUpperCase();
       const filename = `Donation_Receipt_${receiptId}.pdf`;
       const dir = path.join(__dirname, '..', '..', 'uploads', 'receipts');
-      
+
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
-      
+
       const filePath = path.join(dir, filename);
       const stream = fs.createWriteStream(filePath);
 
@@ -34,7 +34,7 @@ const generateDonationReceipt = async (donation, user) => {
       const donorName = donation.donorName || user?.name || donation.userId?.name || 'N/A';
       const categoryLabel = DONATION_LABELS[donation.type] || donation.type || 'General Offering';
       const purposeText = categoryLabel.toLowerCase().includes('offering') || categoryLabel.toLowerCase().includes('fund') || categoryLabel.toLowerCase().includes('donation')
-        ? categoryLabel 
+        ? categoryLabel
         : `${categoryLabel} Offering`;
 
       const paymentRef = donation.razorpayPaymentId || donation.transactionId || 'N/A';
@@ -56,12 +56,12 @@ const generateDonationReceipt = async (donation, user) => {
       if (activeLogo) {
         try {
           doc.image(activeLogo, 40, headerTop, { width: 60, height: 60, fit: [60, 60] });
-        } catch {}
+        } catch { }
       }
 
       // Church name & address (Left aligned next to logo)
       doc.fontSize(19).fillColor('#1e3a8a').font('Helvetica-Bold');
-      doc.text("ST. JOHN DE BRITTO'S CHURCH", 110, headerTop + 4);
+      doc.text("ST. JOHN DE britto CHURCH", 110, headerTop + 4);
 
       doc.fontSize(11).fillColor('#b8860b').font('Helvetica');
       doc.text("Kalayarkoil Parish • Sivagangai Diocese", 110, headerTop + 26);
@@ -115,7 +115,7 @@ const generateDonationReceipt = async (donation, user) => {
 
       // ─── 4. Table: Donation Description & Amount Paid ───────────────────────
       const tableTop = gridTop + 105;
-      
+
       // Table Header (light grey background)
       doc.rect(40, tableTop, 515, 26).fill('#f3f4f6').stroke('#dddddd');
       doc.fontSize(10).fillColor('#000000').font('Helvetica-Bold');
@@ -143,7 +143,7 @@ const generateDonationReceipt = async (donation, user) => {
       doc.fontSize(10).fillColor('#222222').font('Helvetica');
       doc.text("Thank you for your generous contribution", 40, blessingY, { align: 'center', width: 515 });
       doc.text("towards the ministry and mission of", 40, blessingY + 14, { align: 'center', width: 515 });
-      doc.font('Helvetica-Bold').text("St. John de Britto's Church.", 40, blessingY + 28, { align: 'center', width: 515 });
+      doc.font('Helvetica-Bold').text("St. John de britto Church.", 40, blessingY + 28, { align: 'center', width: 515 });
 
       doc.font('Helvetica').text("May God bless you abundantly.", 40, blessingY + 52, { align: 'center', width: 515 });
 

@@ -19,7 +19,7 @@ export default function PageLoader() {
         transition={{ duration: 1.5, repeat: Infinity }}
         className="text-gold-300 font-display text-xl font-bold"
       >
-        St. John de Britto's Church
+        St. John de britto Church
       </motion.p>
       <p className="text-gold-400 font-tamil text-sm mt-1">புனித அருளானந்தர் தேவாலயம்</p>
       <div className="mt-6 flex gap-2">

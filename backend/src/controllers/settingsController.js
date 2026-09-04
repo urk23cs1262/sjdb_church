@@ -19,7 +19,7 @@ const getSettings = async (req, res) => {
       videoAdId: 'wQ49o-0L1Gk',
       donationUpiId: process.env.DONATION_UPI_ID || '112520120',
       whatsappBotPhoneNumber: process.env.WHATSAPP_BOT_PHONE_NUMBER || '919655639144',
-      merchantName: process.env.MERCHANT_NAME || "St. John de Britto's Church"
+      merchantName: process.env.MERCHANT_NAME || "St. John de britto Church"
     };
     settings.forEach(s => { map[s.key] = s.value; });
     cachedMap = map;
@@ -39,7 +39,7 @@ const getSetting = async (req, res) => {
       if (req.params.key === 'videoAdId') value = 'wQ49o-0L1Gk';
       else if (req.params.key === 'donationUpiId' || req.params.key === 'donation_upi_id') value = process.env.DONATION_UPI_ID || '112520120';
       else if (req.params.key === 'whatsappBotPhoneNumber' || req.params.key === 'whatsapp_bot_phone_number') value = process.env.WHATSAPP_BOT_PHONE_NUMBER || '919655639144';
-      else if (req.params.key === 'merchantName' || req.params.key === 'merchant_name') value = process.env.MERCHANT_NAME || "St. John de Britto's Church";
+      else if (req.params.key === 'merchantName' || req.params.key === 'merchant_name') value = process.env.MERCHANT_NAME || "St. John de britto Church";
     }
     res.json({ success: true, value });
   } catch (err) {
@@ -86,7 +86,7 @@ const uploadFileSetting = async (req, res) => {
     const priorSetting = await SiteSettings.findOne({ key }).lean();
     if (priorSetting && priorSetting.value && priorSetting.value.startsWith('/api/files/')) {
       const priorId = priorSetting.value.replace('/api/files/', '');
-      try { await deleteFromGridFS(priorId); } catch (_) {}
+      try { await deleteFromGridFS(priorId); } catch (_) { }
     }
 
     const setting = await SiteSettings.findOneAndUpdate(
@@ -108,7 +108,7 @@ const deleteSetting = async (req, res) => {
     const priorSetting = await SiteSettings.findOne({ key }).lean();
     if (priorSetting && priorSetting.value && priorSetting.value.startsWith('/api/files/')) {
       const priorId = priorSetting.value.replace('/api/files/', '');
-      try { await deleteFromGridFS(priorId); } catch (_) {}
+      try { await deleteFromGridFS(priorId); } catch (_) { }
     }
 
     await SiteSettings.findOneAndDelete({ key });

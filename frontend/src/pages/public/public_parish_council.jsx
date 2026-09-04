@@ -235,8 +235,8 @@ export default function ParishCouncil() {
       ]);
 
       if (teamRes.status === 'fulfilled' && teamRes.value.data?.members) {
-        const councilList = teamRes.value.data.members.filter(m => 
-          m.department === 'Parish Council' || 
+        const councilList = teamRes.value.data.members.filter(m =>
+          m.department === 'Parish Council' ||
           m.role?.toLowerCase().includes('council') ||
           m.role?.toLowerCase().includes('president') ||
           m.role?.toLowerCase().includes('secretary') ||
@@ -290,7 +290,7 @@ export default function ParishCouncil() {
   // Filtered Council Members
   const filteredMembers = useMemo(() => {
     return allMembers.filter(m => {
-      const matchesSearch = searchQuery === '' || 
+      const matchesSearch = searchQuery === '' ||
         m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (m.role && m.role.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (m.badge && m.badge.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -315,7 +315,7 @@ export default function ParishCouncil() {
     if (!contactForm.name || !contactForm.phone || !contactForm.message) return;
     try {
       setSubmittingContact(true);
-      await api.post('/contact', contactForm).catch(() => {});
+      await api.post('/contact', contactForm).catch(() => { });
       setContactSuccess(true);
       setContactForm({
         name: '',
@@ -338,25 +338,25 @@ export default function ParishCouncil() {
 
   return (
     <div className="min-h-screen pt-12 sm:pt-16 bg-slate-50 text-gray-800">
-      
+
       {/* 1. Page Hero Banner */}
-      <PageHero 
-        title={<>Parish Pastoral Council</>} 
-        subtitle={<>பங்கு அருள்பணி பேரவை • Governance & Pastoral Leadership</>} 
+      <PageHero
+        title={<>Parish Pastoral Council</>}
+        subtitle={<>பங்கு அருள்பணி பேரவை • Governance & Pastoral Leadership</>}
       />
 
-      
+
       {loading ? (
         <div className="py-24">
           <SectionLoader text="Loading Parish Council records..." />
         </div>
       ) : (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-12 sm:space-y-16">
-          
+
           {/* 2. Introduction & Purpose Overview */}
           <section className="bg-white rounded-3xl p-6 sm:p-10 border border-gray-200/80 shadow-xs relative overflow-hidden">
             {/* <div className="absolute top-0 right-0 w-64 h-64 bg-amber-50 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20" /> */}
-            
+
             <div className="w-full">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100/80 text-amber-900 text-xs font-bold uppercase tracking-wider mb-3">
                 <FiInfo className="text-church-gold" /> Parish Governance & Co-Responsibility
@@ -368,7 +368,7 @@ export default function ParishCouncil() {
                 பங்கின் ஆன்மீக, நிர்வாக மற்றும் சமூக வளர்ச்சிக்கான வழிகாட்டுதல் சபை
               </p>
               <p className="mt-4 text-sm sm:text-base text-gray-600 leading-relaxed text-justify w-full">
-                The Parish Pastoral Council of <strong>St. John de Britto's Church</strong> serves as a consultative body to the Parish Priest. Rooted in Catholic Canon Law and Vatican II teachings, the council brings together dedicated lay representatives, religious, and ministry coordinators to foster spiritual growth, oversee administrative integrity, and coordinate all parish ministries for the greater glory of God.
+                The Parish Pastoral Council of <strong>St. John de britto Church</strong> serves as a consultative body to the Parish Priest. Rooted in Catholic Canon Law and Vatican II teachings, the council brings together dedicated lay representatives, religious, and ministry coordinators to foster spiritual growth, oversee administrative integrity, and coordinate all parish ministries for the greater glory of God.
               </p>
             </div>
 
@@ -406,8 +406,8 @@ export default function ParishCouncil() {
                 {/* Priest Photo / Avatar */}
                 <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-2xl overflow-hidden border-2 border-church-gold flex-shrink-0 bg-blue-950 shadow-lg relative">
                   {parishPriest.image ? (
-                    <img 
-                      src={getMediaUrl(parishPriest.image)} 
+                    <img
+                      src={getMediaUrl(parishPriest.image)}
                       alt={parishPriest.name}
                       className="w-full h-full object-cover object-top"
                     />
@@ -469,7 +469,7 @@ export default function ParishCouncil() {
           </section>
 
 
-          
+
           {/* 5. All Council Members & Ministry Heads with Search / Filter */}
           <section className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-gray-200 pb-4">
@@ -498,11 +498,10 @@ export default function ParishCouncil() {
                       key={cat}
                       type="button"
                       onClick={() => setFilterCategory(cat)}
-                      className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
-                        filterCategory === cat
+                      className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${filterCategory === cat
                           ? 'bg-white text-church-royal-blue shadow-2xs font-black'
                           : 'text-gray-600 hover:text-gray-900'
-                      }`}
+                        }`}
                     >
                       {cat}
                     </button>
@@ -525,8 +524,8 @@ export default function ParishCouncil() {
                   <div className="flex items-start gap-3.5">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-church-royal-blue to-indigo-900 text-white flex items-center justify-center font-bold text-base flex-shrink-0 shadow-xs">
                       {member.image ? (
-                        <img 
-                          src={getMediaUrl(member.image)} 
+                        <img
+                          src={getMediaUrl(member.image)}
                           alt={member.name}
                           className="w-full h-full object-cover object-top rounded-xl"
                         />
@@ -607,7 +606,7 @@ export default function ParishCouncil() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {RESPONSIBILITIES.map((item, idx) => (
-                <div 
+                <div
                   key={idx}
                   className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200/90 shadow-2xs hover:shadow-md transition-all space-y-2.5"
                 >
@@ -632,7 +631,7 @@ export default function ParishCouncil() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {MINISTRIES.map((min, idx) => (
-                <div 
+                <div
                   key={idx}
                   className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-200/80 shadow-2xs hover:border-church-gold transition-all flex flex-col justify-between"
                 >
@@ -649,7 +648,7 @@ export default function ParishCouncil() {
                       <strong>Head:</strong> {min.coordinator}
                     </p>
                     {min.phone && (
-                      <a 
+                      <a
                         href={`tel:${min.phone.replace(/\s+/g, '')}`}
                         className="inline-flex items-center gap-1 text-[11px] text-church-royal-blue font-bold mt-1 hover:underline"
                       >
@@ -776,7 +775,7 @@ export default function ParishCouncil() {
               <div className="lg:col-span-4 flex flex-col items-center justify-center text-center p-6 bg-church-cream rounded-2xl border border-gold-300/50">
                 <GiChurch className="text-5xl text-church-gold mb-3" />
                 <h3 className="font-bold text-church-royal-blue text-base">Visit Our Parish</h3>
-                <p className="text-gray-500 text-xs my-2">St. John de Britto's Church, Kalayarkoil, Sivagangai District</p>
+                <p className="text-gray-500 text-xs my-2">St. John de britto Church, Kalayarkoil, Sivagangai District</p>
                 <Link to="/contact" className="btn-gold w-full justify-center text-center py-2.5 text-xs font-bold shadow-md mt-2">
                   Contact us
                 </Link>
@@ -815,8 +814,8 @@ export default function ParishCouncil() {
               <div className="text-center space-y-3">
                 <div className="w-20 h-20 rounded-2xl mx-auto overflow-hidden bg-gradient-to-br from-church-royal-blue to-indigo-900 text-white flex items-center justify-center text-2xl font-bold border-2 border-church-gold shadow-md">
                   {selectedMember.image ? (
-                    <img 
-                      src={getMediaUrl(selectedMember.image)} 
+                    <img
+                      src={getMediaUrl(selectedMember.image)}
                       alt={selectedMember.name}
                       className="w-full h-full object-cover object-top"
                     />

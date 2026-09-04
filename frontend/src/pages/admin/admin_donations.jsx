@@ -57,8 +57,8 @@ export default function AdminDonations() {
       if (res.data?.donation) {
         setDonations(prev => prev.map(d => d._id === id ? res.data.donation : d));
       }
-    } catch { 
-      toast.error('Failed to verify donation'); 
+    } catch {
+      toast.error('Failed to verify donation');
     }
   };
 
@@ -67,8 +67,8 @@ export default function AdminDonations() {
       await api.put(`/donations/${id}/reject`);
       setDonations(prev => prev.map(d => d._id === id ? { ...d, isVerified: false, status: 'rejected' } : d));
       toast.success('Donation marked rejected');
-    } catch { 
-      toast.error('Failed to reject donation'); 
+    } catch {
+      toast.error('Failed to reject donation');
     }
   };
 
@@ -107,7 +107,7 @@ export default function AdminDonations() {
       if (res.data?.success && res.data.receiptUrl) {
         const baseUrl = api.defaults.baseURL ? api.defaults.baseURL.replace('/api', '') : 'http://localhost:5000';
         const fileUrl = `${baseUrl}${res.data.receiptUrl}`;
-        
+
         const a = document.createElement('a');
         a.href = fileUrl;
         a.download = res.data.filename || `Donation_Receipt_${donation._id.slice(-6).toUpperCase()}.pdf`;
@@ -152,7 +152,7 @@ export default function AdminDonations() {
 
   const filteredDonations = useMemo(() => {
     return donations.filter(d => {
-      const matchesSearch = 
+      const matchesSearch =
         !searchTerm ||
         (d.donorName && d.donorName.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (d.email && d.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
@@ -162,8 +162,8 @@ export default function AdminDonations() {
 
       const matchesCategory = categoryFilter === 'all' || d.type === categoryFilter;
       const isPaid = d.status === 'paid' || d.status === 'verified' || d.isVerified;
-      const matchesStatus = 
-        statusFilter === 'all' || 
+      const matchesStatus =
+        statusFilter === 'all' ||
         (statusFilter === 'paid' && isPaid) ||
         (statusFilter === 'pending' && !isPaid && d.status !== 'rejected') ||
         (statusFilter === 'rejected' && d.status === 'rejected');
@@ -209,7 +209,7 @@ export default function AdminDonations() {
         <div className="glass-card p-4 rounded-2xl border border-gray-100 flex flex-col sm:flex-row items-center gap-3">
           <div className="relative flex-1 w-full">
             <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input 
+            <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Search by donor name, email, phone, or payment ID..."
@@ -218,7 +218,7 @@ export default function AdminDonations() {
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
-            <select 
+            <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
               className="px-3 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold focus:outline-none bg-gray-50/50 text-gray-700"
@@ -230,7 +230,7 @@ export default function AdminDonations() {
               <option value="candle">Candle</option>
             </select>
 
-            <select 
+            <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="px-3 py-2.5 rounded-xl border border-gray-200 text-xs font-semibold focus:outline-none bg-gray-50/50 text-gray-700"
@@ -269,10 +269,10 @@ export default function AdminDonations() {
                   filteredDonations.map((d, i) => {
                     const isPaid = d.status === 'paid' || d.status === 'verified' || d.isVerified;
                     return (
-                      <motion.tr 
-                        key={d._id} 
-                        initial={{ opacity: 0 }} 
-                        animate={{ opacity: 1 }} 
+                      <motion.tr
+                        key={d._id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
                         transition={{ delay: i * 0.02 }}
                         className="hover:bg-gold-50/40 transition-colors text-xs sm:text-sm"
                       >
@@ -301,11 +301,10 @@ export default function AdminDonations() {
                           {new Date(d.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                         </td>
                         <td className="py-3.5 px-4">
-                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                            isPaid ? 'bg-green-100 text-green-700' :
-                            d.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                            'bg-amber-100 text-amber-700'
-                          }`}>
+                          <span className={`inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold ${isPaid ? 'bg-green-100 text-green-700' :
+                              d.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                                'bg-amber-100 text-amber-700'
+                            }`}>
                             {isPaid ? 'Paid' : d.status || 'Pending'}
                           </span>
                         </td>
@@ -322,7 +321,7 @@ export default function AdminDonations() {
                             </button>
 
                             {/* 2. Download Official PDF Receipt */}
-                            <button 
+                            <button
                               onClick={() => downloadReceipt(d)}
                               disabled={downloadingId === d._id}
                               className="px-2 py-1.5 rounded-lg bg-gold-50 text-church-gold hover:bg-gold-100 border border-gold-200 text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50 shadow-xs"
@@ -354,16 +353,16 @@ export default function AdminDonations() {
                             {/* 4. Verify & Reject Actions for pending offline donations */}
                             {!isPaid && d.status !== 'rejected' && (
                               <>
-                                <button 
-                                  onClick={() => verifyDonation(d._id)} 
-                                  className="p-1.5 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors cursor-pointer" 
+                                <button
+                                  onClick={() => verifyDonation(d._id)}
+                                  className="p-1.5 rounded-lg bg-green-100 text-green-700 hover:bg-green-200 transition-colors cursor-pointer"
                                   title="Mark Verified & Send Email"
                                 >
                                   <FiCheck />
                                 </button>
-                                <button 
-                                  onClick={() => rejectDonation(d._id)} 
-                                  className="p-1.5 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors cursor-pointer" 
+                                <button
+                                  onClick={() => rejectDonation(d._id)}
+                                  className="p-1.5 rounded-lg bg-red-100 text-red-700 hover:bg-red-200 transition-colors cursor-pointer"
                                   title="Reject"
                                 >
                                   <FiX />
@@ -386,7 +385,7 @@ export default function AdminDonations() {
       <AnimatePresence>
         {selectedReceipt && (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
@@ -422,7 +421,7 @@ export default function AdminDonations() {
 
               {/* Exact Receipt Document Sheet */}
               <div className="overflow-y-auto p-4 sm:p-8 bg-white flex-1">
-                <div 
+                <div
                   ref={modalReceiptRef}
                   style={{ width: '100%', maxWidth: '700px', margin: 'auto', background: '#ffffff', fontFamily: 'Arial, sans-serif', color: '#222' }}
                 >
@@ -441,7 +440,7 @@ export default function AdminDonations() {
                     <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
                       <img src={churchLogo} style={{ width: '60px', height: '60px', objectFit: 'contain' }} alt="Church Logo" />
                       <div style={{ textAlign: 'left' }}>
-                        <h1 style={{ margin: 0, fontSize: '22px', color: '#1e3a8a', fontWeight: 'bold' }}>ST. JOHN DE BRITTO'S CHURCH</h1>
+                        <h1 style={{ margin: 0, fontSize: '22px', color: '#1e3a8a', fontWeight: 'bold' }}>ST. JOHN DE britto CHURCH</h1>
                         <h2 style={{ margin: '3px 0', fontSize: '14px', color: '#b8860b', fontWeight: 'normal' }}>புனித அருளானந்தர் தேவாலயம்</h2>
                         <p style={{ margin: 0, fontSize: '11px', color: '#666' }}>Murthi Nagar, Kalayarkoil, Tamil Nadu 630551, India.</p>
                       </div>
@@ -516,7 +515,7 @@ export default function AdminDonations() {
                   <div style={{ marginTop: '24px', textAlign: 'center', lineHeight: '1.7', fontSize: '13px', color: '#333' }}>
                     Thank you for your generous contribution<br />
                     towards the ministry and mission of<br />
-                    <strong>St. John de Britto's Church.</strong><br /><br />
+                    <strong>St. John de britto Church.</strong><br /><br />
                     May God bless you abundantly.
                   </div>
 

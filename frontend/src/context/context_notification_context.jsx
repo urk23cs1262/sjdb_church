@@ -24,23 +24,23 @@ export const NotificationProvider = ({ children }) => {
         if (permission === 'granted') {
           console.log(' Push notification permission auto-granted!');
           showNativeNotification({
-            title: "St. John de Britto's Church ",
+            title: "St. John de britto Church ",
             body: "Real-time browser notifications auto-enabled! You will receive instant parish updates.",
             url: "/dashboard"
           });
         }
-      }).catch(() => {});
+      }).catch(() => { });
     }
   }, []);
 
   const triggerNativePush = (notif) => {
-    let title = "St. John de Britto's Church ";
+    let title = "St. John de britto Church ";
     let body = notif.message || notif.title;
     let url = notif.actionUrl || '/dashboard';
 
     const cat = notif.category || notif.type;
     if (cat === 'events' || cat === 'event') {
-      title = " St. John de Britto's Church — New Event";
+      title = " St. John de britto Church — New Event";
       url = '/events';
     } else if (cat === 'announcements' || cat === 'announcement') {
       title = " Church Announcement";

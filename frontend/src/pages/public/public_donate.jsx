@@ -135,7 +135,7 @@ export default function Donate() {
         key: keyId,
         amount: amount,
         currency: currency,
-        name: "St. John de Britto's Church",
+        name: "St. John de britto Church",
         description: `${purposeTitle} - ₹${effectiveAmount}`,
         order_id: orderId,
         prefill: {
@@ -303,14 +303,14 @@ export default function Donate() {
 
       <section className="py-10 sm:py-14">
         <div className="max-w-3xl mx-auto px-4">
-          
+
           {/* Centered Step Indicator */}
           {step <= 2 && (
             <div className="max-w-md mx-auto mb-10 px-4">
               <div className="relative flex items-center justify-between">
                 {/* Background Line */}
                 <div className="absolute left-6 right-6 top-5 -translate-y-1/2 h-1 bg-gray-200 -z-0 rounded-full" />
-                <div 
+                <div
                   className="absolute left-6 top-5 -translate-y-1/2 h-1 bg-church-gold transition-all duration-300 -z-0 rounded-full"
                   style={{ width: step === 1 ? '0%' : '100%' }}
                 />
@@ -324,13 +324,12 @@ export default function Donate() {
                   return (
                     <div key={s.num} className="flex flex-col items-center relative z-10">
                       <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm transition-all duration-300 shadow-xs ${
-                          isCompleted
+                        className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm transition-all duration-300 shadow-xs ${isCompleted
                             ? 'bg-church-gold text-white shadow-gold'
                             : isActive
-                            ? 'bg-church-royal-blue text-white ring-4 ring-gold-100'
-                            : 'bg-white text-gray-400 border-2 border-gray-200'
-                        }`}
+                              ? 'bg-church-royal-blue text-white ring-4 ring-gold-100'
+                              : 'bg-white text-gray-400 border-2 border-gray-200'
+                          }`}
                       >
                         {isCompleted ? <FiCheckCircle className="text-base" /> : s.num}
                       </div>
@@ -347,10 +346,10 @@ export default function Donate() {
           <AnimatePresence mode="wait">
             {/* STEP 1: PURPOSE & AMOUNT */}
             {step === 1 && (
-              <motion.div 
-                key="step1" 
-                initial={{ opacity: 0, y: 15 }} 
-                animate={{ opacity: 1, y: 0 }} 
+              <motion.div
+                key="step1"
+                initial={{ opacity: 0, y: 15 }}
+                animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -15 }}
                 transition={{ duration: 0.2 }}
                 className="max-w-2xl mx-auto space-y-8"
@@ -370,16 +369,14 @@ export default function Donate() {
                           key={dt.id}
                           type="button"
                           onClick={() => setSelectedType(dt.id)}
-                          className={`p-4 sm:p-5 rounded-2xl border-2 bg-white text-left transition-all duration-200 hover:shadow-md flex items-center gap-3.5 cursor-pointer ${
-                            isSelected ? 'border-church-gold bg-gold-50/20 ring-2 ring-church-gold/20 shadow-xs' : 'border-gray-100 hover:border-gray-200'
-                          }`}
+                          className={`p-4 sm:p-5 rounded-2xl border-2 bg-white text-left transition-all duration-200 hover:shadow-md flex items-center gap-3.5 cursor-pointer ${isSelected ? 'border-church-gold bg-gold-50/20 ring-2 ring-church-gold/20 shadow-xs' : 'border-gray-100 hover:border-gray-200'
+                            }`}
                         >
                           <div
-                            className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl transition-colors shrink-0 ${
-                              isSelected
+                            className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl transition-colors shrink-0 ${isSelected
                                 ? 'bg-church-gold text-white shadow-xs'
                                 : 'bg-gold-50 text-church-gold'
-                            }`}
+                              }`}
                           >
                             {dt.icon}
                           </div>
@@ -408,11 +405,10 @@ export default function Donate() {
                           key={amt}
                           type="button"
                           onClick={() => handlePresetClick(amt)}
-                          className={`py-3.5 px-4 rounded-xl font-bold text-sm transition-all border-2 cursor-pointer ${
-                            isSelected
+                          className={`py-3.5 px-4 rounded-xl font-bold text-sm transition-all border-2 cursor-pointer ${isSelected
                               ? 'bg-church-royal-blue text-white border-church-royal-blue shadow-sm ring-2 ring-blue-100'
                               : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-gray-300 hover:bg-gray-100'
-                          }`}
+                            }`}
                         >
                           ₹{amt.toLocaleString()}
                         </button>
@@ -425,17 +421,16 @@ export default function Donate() {
                     <label className="block text-xs font-bold text-gray-700 mb-1.5">Or Enter Custom Amount (₹)</label>
                     <div className="relative">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-500 text-sm">₹</span>
-                      <input 
+                      <input
                         type="number"
                         min="1"
                         value={customAmount}
                         onChange={handleCustomAmountChange}
                         placeholder="e.g. 2500"
-                        className={`w-full pl-8 pr-4 py-3 rounded-xl border text-sm font-bold focus:outline-none focus:ring-2 bg-gray-50/50 transition-all ${
-                          customAmount 
-                            ? 'border-church-gold ring-2 ring-church-gold/30 text-gray-900' 
+                        className={`w-full pl-8 pr-4 py-3 rounded-xl border text-sm font-bold focus:outline-none focus:ring-2 bg-gray-50/50 transition-all ${customAmount
+                            ? 'border-church-gold ring-2 ring-church-gold/30 text-gray-900'
                             : 'border-gray-200 text-gray-700 focus:border-church-gold focus:ring-church-gold/30'
-                        }`}
+                          }`}
                       />
                     </div>
                   </div>
@@ -459,18 +454,18 @@ export default function Donate() {
 
             {/* STEP 2: DONOR DETAILS & RAZORPAY CHECKOUT */}
             {step === 2 && (
-              <motion.div 
-                key="step2" 
-                initial={{ opacity: 0, x: 20 }} 
-                animate={{ opacity: 1, x: 0 }} 
+              <motion.div
+                key="step2"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.2 }}
                 className="max-w-md mx-auto"
               >
                 <div className="flex items-center justify-between mb-4">
-                  <button 
+                  <button
                     type="button"
-                    onClick={() => setStep(1)} 
+                    onClick={() => setStep(1)}
                     className="text-church-gold hover:text-gold-700 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
                   >
                     ← Change Amount & Purpose
@@ -496,10 +491,10 @@ export default function Donate() {
                       <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1">
                         <FiUser className="text-gray-400" /> Donor Name *
                       </label>
-                      <input 
-                        {...register('donorName', { required: 'Donor name is required' })} 
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-church-gold/40 focus:border-church-gold bg-gray-50/50" 
-                        placeholder="Your full name" 
+                      <input
+                        {...register('donorName', { required: 'Donor name is required' })}
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-church-gold/40 focus:border-church-gold bg-gray-50/50"
+                        placeholder="Your full name"
                       />
                       {errors.donorName && <p className="text-red-500 text-xs mt-1">{errors.donorName.message}</p>}
                     </div>
@@ -508,11 +503,11 @@ export default function Donate() {
                       <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1">
                         <FiMail className="text-gray-400" /> Email Address (For Receipt)
                       </label>
-                      <input 
-                        {...register('email')} 
+                      <input
+                        {...register('email')}
                         type="email"
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-church-gold/40 focus:border-church-gold bg-gray-50/50" 
-                        placeholder="you@example.com" 
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-church-gold/40 focus:border-church-gold bg-gray-50/50"
+                        placeholder="you@example.com"
                       />
                     </div>
 
@@ -520,27 +515,27 @@ export default function Donate() {
                       <label className="block text-xs font-bold text-gray-700 mb-1.5 flex items-center gap-1">
                         <FiPhone className="text-gray-400" /> Mobile Number
                       </label>
-                      <input 
-                        {...register('phone')} 
+                      <input
+                        {...register('phone')}
                         type="tel"
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-church-gold/40 focus:border-church-gold bg-gray-50/50" 
-                        placeholder="e.g. 9876543210" 
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-church-gold/40 focus:border-church-gold bg-gray-50/50"
+                        placeholder="e.g. 9876543210"
                       />
                     </div>
 
                     <div>
                       <label className="block text-xs font-bold text-gray-700 mb-1.5">Special Intention / Message (Optional)</label>
-                      <textarea 
-                        {...register('note')} 
-                        rows={3} 
-                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-church-gold/40 focus:border-church-gold bg-gray-50/50 resize-none" 
-                        placeholder="Any prayer intention or message for the parish priest..." 
+                      <textarea
+                        {...register('note')}
+                        rows={3}
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-church-gold/40 focus:border-church-gold bg-gray-50/50 resize-none"
+                        placeholder="Any prayer intention or message for the parish priest..."
                       />
                     </div>
 
                     <div className="pt-2">
-                      <button 
-                        type="submit" 
+                      <button
+                        type="submit"
                         disabled={isProcessing}
                         className="w-full py-4 px-6 rounded-xl bg-gradient-to-r from-church-royal-blue to-indigo-900 hover:from-blue-900 hover:to-indigo-950 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50"
                       >
@@ -569,21 +564,21 @@ export default function Donate() {
 
             {/* STEP 3: SUCCESS & OFFICIAL RECEIPT */}
             {step === 3 && finalDonation && (
-              <motion.div 
-                key="step3" 
-                initial={{ opacity: 0, scale: 0.92 }} 
-                animate={{ opacity: 1, scale: 1 }} 
+              <motion.div
+                key="step3"
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
                 className="text-center py-6 max-w-lg mx-auto"
               >
                 <div className="bg-white rounded-3xl p-8 border border-gray-100 shadow-xl space-y-6">
                   <div className="w-20 h-20 bg-green-50 text-green-600 rounded-full flex items-center justify-center text-4xl mx-auto shadow-xs">
                     <FiCheckCircle />
                   </div>
-                  
+
                   <div>
                     <h2 className="text-2xl sm:text-3xl font-bold text-church-royal-blue font-display">God Bless You!</h2>
                     <p className="text-gray-500 text-xs sm:text-sm mt-1">
-                      Thank you for your generous contribution towards St. John de Britto's Church.
+                      Thank you for your generous contribution towards St. John de britto Church.
                     </p>
                   </div>
 
@@ -606,21 +601,21 @@ export default function Donate() {
                       <span className="capitalize font-bold text-gray-800">{DONATION_TYPES.find(t => t.id === finalDonation.type)?.label || finalDonation.type}</span>
                     </div>
                   </div>
-                  
+
                   <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
-                    <button 
-                      onClick={downloadReceipt} 
+                    <button
+                      onClick={downloadReceipt}
                       disabled={isGeneratingPDF}
                       className="py-3.5 px-6 rounded-xl bg-church-gold hover:bg-gold-600 text-white font-bold text-xs sm:text-sm shadow-gold flex items-center gap-2 justify-center cursor-pointer transition-all disabled:opacity-50"
                     >
                       {isGeneratingPDF ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <FiDownload />}
                       Download Official Receipt
                     </button>
-                    <button 
-                      onClick={() => { 
-                        setStep(1); 
-                        setFinalDonation(null); 
-                      }} 
+                    <button
+                      onClick={() => {
+                        setStep(1);
+                        setFinalDonation(null);
+                      }}
                       className="py-3.5 px-6 rounded-xl border border-gray-200 text-gray-700 font-bold text-xs sm:text-sm hover:bg-gray-50 transition-all cursor-pointer"
                     >
                       Donate Again
@@ -638,7 +633,7 @@ export default function Donate() {
                         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
                           <img src={churchLogo} style={{ width: '70px', height: '70px', objectFit: 'contain' }} alt="Logo" />
                           <div style={{ textAlign: 'left' }}>
-                            <h1 style={{ margin: 0, fontSize: '30px', color: '#1e3a8a' }}>ST. JOHN DE BRITTO'S CHURCH</h1>
+                            <h1 style={{ margin: 0, fontSize: '30px', color: '#1e3a8a' }}>ST. JOHN DE britto CHURCH</h1>
                             <h2 style={{ margin: '5px 0', fontSize: '18px', color: '#b8860b', fontWeight: 'normal' }}>புனித அருளானந்தர் தேவாலயம்</h2>
                             <p style={{ margin: 0, fontSize: '13px', color: '#555' }}>Murthi Nagar, Kalayarkoil, Tamil Nadu 630551, India.</p>
                           </div>
@@ -678,7 +673,7 @@ export default function Donate() {
                         "{finalDonation.note || finalDonation.message || 'Prayers for parish and family blessings'}"
                       </div>
                       <div style={{ marginTop: '40px', textAlign: 'center', lineHeight: '1.9', fontSize: '15px' }}>
-                        Thank you for your generous contribution<br />towards the ministry and mission of<br /><strong>St. John de Britto's Church.</strong><br /><br />May God bless you abundantly.
+                        Thank you for your generous contribution<br />towards the ministry and mission of<br /><strong>St. John de britto Church.</strong><br /><br />May God bless you abundantly.
                       </div>
                       <div style={{ marginTop: '45px', textAlign: 'center', fontSize: '14px', lineHeight: '1.8', color: '#555' }}>
                         Contact Details :<br />Parish Office Phone : +91 96291 95484 <br />Parish Office Email : arndas777@gmail.com <br />Parish Office Website : www.stjohnchurch.com

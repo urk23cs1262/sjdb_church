@@ -30,7 +30,7 @@ const register = async (req, res) => {
 
     // Sanitize empty strings for unique fields so they don't trigger E11000 duplicate key errors
     if (email === "") email = undefined;
-    
+
     // Auto-generate sequential Member ID (SJDB_M01, SJDB_M02...) if not provided
     if (!parishMemberId || parishMemberId.trim() === "") {
       parishMemberId = await generateNextMemberId();
@@ -91,20 +91,20 @@ const register = async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const user = await User.create({ 
-      name, 
-      familyName, 
+    const user = await User.create({
+      name,
+      familyName,
       familyId,
-      dob, 
-      gender, 
-      phone, 
-      email, 
-      address, 
+      dob,
+      gender,
+      phone,
+      email,
+      address,
       subStation,
       familyRole,
       familyMembers,
-      parishMemberId, 
-      passwordHash 
+      parishMemberId,
+      passwordHash
     });
 
     const { otp } = await createAndSendOTP({
@@ -177,7 +177,7 @@ const verifyOtp = async (req, res) => {
       const SecurityIncident = require('../models/SecurityIncident');
       await SecurityIncident.updateMany(
         { userId: user._id, status: { $in: ['Awaiting Review', 'Under Review'] } },
-        { 
+        {
           $set: { status: 'Reactivated', reactivationTime: now },
           $push: { actionsTaken: `Auto-reactivated via verified OTP login on ${now.toISOString()}` }
         }
@@ -209,7 +209,7 @@ const verifyOtp = async (req, res) => {
       createNotification({
         userId: user._id,
         recipient: 'user',
-        title: "Welcome to St. John de Britto's Church! ",
+        title: "Welcome to St. John de britto Church! ",
         message: `Dear ${user.name}, thank you for registering with our Parish platform. Our website allows you to book Mass intentions, request documents, view daily readings, and stay updated with church events. We are glad to have you with us!`,
         type: 'general',
         category: 'account',
@@ -227,7 +227,7 @@ const verifyOtp = async (req, res) => {
             userId: user._id,
             isBroadcast: false,
             title: "Birthday Blessings",
-            message: `Dear ${user.name}, St. John de Britto's Church wishes you a very Happy Birthday! May God bless you with abundant joy, health, and peace on your special day. `,
+            message: `Dear ${user.name}, St. John de britto Church wishes you a very Happy Birthday! May God bless you with abundant joy, health, and peace on your special day. `,
             type: 'general',
             channels: ['email']
           }).catch(e => console.warn('Birthday notification error:', e.message));
@@ -235,18 +235,18 @@ const verifyOtp = async (req, res) => {
       }
     }
 
-    return res.json({ 
-      success: true, 
-      message: isReVerification ? 'Re-verified successfully. Your account remains active.' : 'Verified successfully', 
-      token, 
-      user: { 
-        _id: updatedUser._id, 
-        name: updatedUser.name, 
+    return res.json({
+      success: true,
+      message: isReVerification ? 'Re-verified successfully. Your account remains active.' : 'Verified successfully',
+      token,
+      user: {
+        _id: updatedUser._id,
+        name: updatedUser.name,
         role: updatedUser.role,
         dob: updatedUser.dob,
         isVerified: true,
         isActive: updatedUser.isActive
-      } 
+      }
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -414,7 +414,7 @@ const login = async (req, res) => {
           message: 'Your account has been automatically suspended due to repeated failed login attempts for your security. Please contact the administrator to restore access.'
         });
 
-      } 
+      }
       // RULE: 5 Failed Attempts = 15-MINUTE TEMPORARY LOCKOUT
       else if (failedAttempts >= 5) {
         const lockUntil = new Date(Date.now() + 15 * 60 * 1000);
@@ -447,7 +447,7 @@ const login = async (req, res) => {
           message: 'Your account has been temporarily locked for 15 minutes due to multiple failed login attempts. Please check your email or reset your password.'
         });
 
-      } 
+      }
       // RULE: 4 Failed Attempts = WARNING MESSAGE
       else if (failedAttempts === 4) {
         notifyAdmin({
@@ -464,7 +464,7 @@ const login = async (req, res) => {
           message: 'You have 1 attempt remaining before your account is temporarily locked for 15 minutes.'
         });
 
-      } 
+      }
       // ℹ RULE: 1 - 3 Failed Attempts = STANDARD ERROR MESSAGE
       else {
         notifyAdmin({
@@ -560,12 +560,12 @@ const login = async (req, res) => {
     return res.json({
       success: true,
       token,
-      user: { 
-        _id: user._id, 
-        name: user.name, 
-        email: user.email, 
-        phone: user.phone, 
-        role: user.role, 
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
         isTechnicalTeam: user.isTechnicalTeam || (user.role === 'staff' || user.role === 'technical_team'),
         profilePhoto: user.profilePhoto,
         dob: user.dob
@@ -610,7 +610,7 @@ const forgotPassword = async (req, res) => {
     }
 
     const { login: loginId } = req.body;
-    
+
     let user = await User.findOne({
       $or: [
         { email: { $regex: new RegExp('^' + loginId.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&') + '$', 'i') } },
@@ -723,9 +723,9 @@ const lookupFamily = async (req, res) => {
     const families = users.map(user => {
       const allMembers = [];
       if (user.name) {
-        allMembers.push({ 
-          name: user.name, 
-          role: user.familyRole || 'Head', 
+        allMembers.push({
+          name: user.name,
+          role: user.familyRole || 'Head',
           isRegisteredUser: true,
           parishMemberId: user.parishMemberId || '—',
           familyId: user.familyId || '—'
@@ -734,9 +734,9 @@ const lookupFamily = async (req, res) => {
       if (user.familyMembers && Array.isArray(user.familyMembers)) {
         user.familyMembers.forEach(m => {
           if (m.name) {
-            allMembers.push({ 
-              name: m.name, 
-              role: m.role || 'Member', 
+            allMembers.push({
+              name: m.name,
+              role: m.role || 'Member',
               isRegisteredUser: false,
               parishMemberId: m.parishMemberId || '—',
               familyId: user.familyId || '—'

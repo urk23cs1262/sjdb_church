@@ -94,7 +94,7 @@ const UNSUPPORTED_LANGUAGE_MSG = "Currently I'm available in only English and Ta
  */
 function getMainMenuMessage(userName) {
   return `👋 *Welcome to SJDB Connect!*
-⛪ *St. John de Britto's Church, Kalayarkoil*
+⛪ *St. John de britto Church, Kalayarkoil*
 
 How can I help you today?
 
@@ -115,7 +115,7 @@ How can I help you today?
  */
 function getServicesMenuMessage() {
   return `⛪ *SJDB Connect – Services & Help Desk*
-_St. John de Britto's Church, Kalayarkoil_
+_St. John de britto Church, Kalayarkoil_
 
 1️⃣ ⛪ *Mass Timings*
 2️⃣ 🕊️ *Confession Timings*
@@ -199,7 +199,7 @@ ${prefList || '• 📖 Daily Bible Verse\n• ⛪ Daily Mass Readings & Reflect
 
 May God bless you and your family! 🙏❤️
 — *SJDB Connect*
-_St. John de Britto's Church, Kalayarkoil_
+_St. John de britto Church, Kalayarkoil_
 
 ➡️ Type *Menu* for Quick Commands
 ➡️ Type *Services* for Help Desk`;
@@ -333,101 +333,101 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
 
     session.lastMessage = new Date();
 
-  // ── First-Time User Admin Email Notification ────────────────────────────────
-  if (!session.firstInteractionEmailSent) {
-    try {
-      const searchPhone = (phone || '').slice(-10);
-      let parishUser = null;
+    // ── First-Time User Admin Email Notification ────────────────────────────────
+    if (!session.firstInteractionEmailSent) {
+      try {
+        const searchPhone = (phone || '').slice(-10);
+        let parishUser = null;
+        if (session.linkedUserId) {
+          parishUser = await User.findById(session.linkedUserId);
+        } else if (searchPhone) {
+          parishUser = await User.findOne({ phone: { $regex: searchPhone } });
+        }
+
+        const isRegistered = Boolean(parishUser);
+        const userName = isRegistered ? parishUser.name : (pushName || 'Unregistered WhatsApp User');
+        const userEmail = isRegistered ? (parishUser.email || 'None') : 'Unregistered (No Email)';
+        const userPhone = isRegistered ? (parishUser.phone || phone) : phone;
+
+        await notifyAdmin({
+          type: 'FIRST_BOT_INTERACTION',
+          user: parishUser,
+          extra: {
+            isRegistered,
+            name: userName,
+            phone: userPhone,
+            email: userEmail,
+            accountStatus: isRegistered ? `Registered Parishioner (${parishUser.isActive !== false ? 'Active' : 'Pending'})` : 'Unregistered User (No Website Account)',
+            memberId: parishUser?.parishMemberId || 'N/A',
+            familyId: parishUser?.familyId || 'N/A',
+            anbiyam: parishUser?.anbiyam || parishUser?.subStation || 'N/A',
+            language: session.language === 'en' ? 'English' : session.language === 'both' ? 'Tamil + English' : 'Tamil (தமிழ்)',
+            initialMessage: rawText || 'Hi',
+            pushName: pushName || ''
+          }
+        });
+
+        session.firstInteractionEmailSent = true;
+        session.firstInteractionAt = new Date();
+        if (pushName) session.pushName = pushName;
+        if (parishUser && !session.linkedUserId) session.linkedUserId = parishUser._id;
+        await session.save();
+      } catch (notifErr) {
+        console.error('[BotHandler] Failed to dispatch first-time user admin email:', notifErr.message);
+      }
+    }
+
+    const wa = getWA();
+
+    const isStopCommand = rawText.toUpperCase() === 'STOP' || rawText.toUpperCase() === 'UNSUBSCRIBE';
+    if (isStopCommand) {
+      session.step = 'stopped';
+      session.isOnboarded = false;
+      session.preferences = [];
+      await session.save();
+
       if (session.linkedUserId) {
-        parishUser = await User.findById(session.linkedUserId);
-      } else if (searchPhone) {
-        parishUser = await User.findOne({ phone: { $regex: searchPhone } });
+        try {
+          await User.findByIdAndUpdate(session.linkedUserId, { whatsappOptIn: false, botPreferences: [] });
+        } catch (e) { }
       }
 
-      const isRegistered = Boolean(parishUser);
-      const userName = isRegistered ? parishUser.name : (pushName || 'Unregistered WhatsApp User');
-      const userEmail = isRegistered ? (parishUser.email || 'None') : 'Unregistered (No Email)';
-      const userPhone = isRegistered ? (parishUser.phone || phone) : phone;
-
-      await notifyAdmin({
-        type: 'FIRST_BOT_INTERACTION',
-        user: parishUser,
-        extra: {
-          isRegistered,
-          name: userName,
-          phone: userPhone,
-          email: userEmail,
-          accountStatus: isRegistered ? `Registered Parishioner (${parishUser.isActive !== false ? 'Active' : 'Pending'})` : 'Unregistered User (No Website Account)',
-          memberId: parishUser?.parishMemberId || 'N/A',
-          familyId: parishUser?.familyId || 'N/A',
-          anbiyam: parishUser?.anbiyam || parishUser?.subStation || 'N/A',
-          language: session.language === 'en' ? 'English' : session.language === 'both' ? 'Tamil + English' : 'Tamil (தமிழ்)',
-          initialMessage: rawText || 'Hi',
-          pushName: pushName || ''
-        }
-      });
-
-      session.firstInteractionEmailSent = true;
-      session.firstInteractionAt = new Date();
-      if (pushName) session.pushName = pushName;
-      if (parishUser && !session.linkedUserId) session.linkedUserId = parishUser._id;
-      await session.save();
-    } catch (notifErr) {
-      console.error('[BotHandler] Failed to dispatch first-time user admin email:', notifErr.message);
-    }
-  }
-
-  const wa = getWA();
-
-  const isStopCommand = rawText.toUpperCase() === 'STOP' || rawText.toUpperCase() === 'UNSUBSCRIBE';
-  if (isStopCommand) {
-    session.step = 'stopped';
-    session.isOnboarded = false;
-    session.preferences = [];
-    await session.save();
-
-    if (session.linkedUserId) {
-      try {
-        await User.findByIdAndUpdate(session.linkedUserId, { whatsappOptIn: false, botPreferences: [] });
-      } catch (e) {}
+      const stopMsg = `You have been unsubscribed from SJDB Connect.\n\nReply *HI*, *MENU*, or *SERVICES* anytime to re-subscribe. God bless! 🙏`;
+      await wa.sendWhatsAppMessage(replyTarget, stopMsg);
+      return;
     }
 
-    const stopMsg = `You have been unsubscribed from SJDB Connect.\n\nReply *HI*, *MENU*, or *SERVICES* anytime to re-subscribe. God bless! 🙏`;
-    await wa.sendWhatsAppMessage(replyTarget, stopMsg);
-    return;
-  }
+    // ── Central System State Check (Maintenance / Emergency) ────────────────────
+    const { getSystemState } = require('../services/systemStateService');
+    const systemState = await getSystemState();
 
-  // ── Central System State Check (Maintenance / Emergency) ────────────────────
-  const { getSystemState } = require('../services/systemStateService');
-  const systemState = await getSystemState();
+    if (systemState && (systemState.status === 'maintenance' || systemState.status === 'emergency')) {
+      let hasBypass = false;
+      let linkedUser = null;
 
-  if (systemState && (systemState.status === 'maintenance' || systemState.status === 'emergency')) {
-    let hasBypass = false;
-    let linkedUser = null;
+      if (session.linkedUserId) {
+        linkedUser = await User.findById(session.linkedUserId).select('role isTechnicalTeam isActive');
+      } else if (phone) {
+        linkedUser = await User.findOne({
+          phone: { $in: [phone, `+91${phone}`, `91${phone}`, fromNumber] },
+          isActive: { $ne: false }
+        }).select('role isTechnicalTeam isActive');
+      }
 
-    if (session.linkedUserId) {
-      linkedUser = await User.findById(session.linkedUserId).select('role isTechnicalTeam isActive');
-    } else if (phone) {
-      linkedUser = await User.findOne({
-        phone: { $in: [phone, `+91${phone}`, `91${phone}`, fromNumber] },
-        isActive: { $ne: false }
-      }).select('role isTechnicalTeam isActive');
-    }
+      if (linkedUser && linkedUser.isActive !== false) {
+        const userRole = (linkedUser.role || '').toLowerCase();
+        const isAdmin = ['admin', 'priest'].includes(userRole);
+        const isTech = Boolean(linkedUser.isTechnicalTeam) || ['staff', 'technical_team', 'tech_team', 'technical'].includes(userRole);
+        const isContentEditor = ['content_editor', 'editor', 'office'].includes(userRole);
 
-    if (linkedUser && linkedUser.isActive !== false) {
-      const userRole = (linkedUser.role || '').toLowerCase();
-      const isAdmin = ['admin', 'priest'].includes(userRole);
-      const isTech = Boolean(linkedUser.isTechnicalTeam) || ['staff', 'technical_team', 'tech_team', 'technical'].includes(userRole);
-      const isContentEditor = ['content_editor', 'editor', 'office'].includes(userRole);
+        if (isAdmin && systemState.allowAdminLogin !== false) hasBypass = true;
+        if (isTech && systemState.allowTechTeam !== false) hasBypass = true;
+        if (isContentEditor && systemState.allowContentEditors) hasBypass = true;
+      }
 
-      if (isAdmin && systemState.allowAdminLogin !== false) hasBypass = true;
-      if (isTech && systemState.allowTechTeam !== false) hasBypass = true;
-      if (isContentEditor && systemState.allowContentEditors) hasBypass = true;
-    }
-
-    if (!hasBypass) {
-      if (systemState.status === 'emergency') {
-        const emergencyMsg = `🚨 *SJDB Connect Emergency Lockdown*
+      if (!hasBypass) {
+        if (systemState.status === 'emergency') {
+          const emergencyMsg = `🚨 *SJDB Connect Emergency Lockdown*
 
 Our church digital services and WhatsApp Bot are temporarily locked due to an emergency system event.
 
@@ -435,106 +435,106 @@ Our church digital services and WhatsApp Bot are temporarily locked due to an em
 
 We are working swiftly to restore normal operation. Thank you for your patience and prayers.
 
-— *St. John de Britto's Church, Kalayarkoil*
+— *St. John de britto Church, Kalayarkoil*
 _SJDB Connect_`;
-        await wa.sendWhatsAppMessage(replyTarget, emergencyMsg);
-        return;
-      }
+          await wa.sendWhatsAppMessage(replyTarget, emergencyMsg);
+          return;
+        }
 
-      const maintMsg = `🔧 *SJDB Connect is Temporarily Unavailable*
+        const maintMsg = `🔧 *SJDB Connect is Temporarily Unavailable*
 
 Our church digital services are currently under maintenance.
 The WhatsApp Bot is temporarily unavailable while we carry out scheduled maintenance and improvements.
 
 Please try again later. Thank you for your patience.
 
-— *St. John de Britto's Church, Kalayarkoil*
+— *St. John de britto Church, Kalayarkoil*
 _SJDB Connect_`;
-      await wa.sendWhatsAppMessage(replyTarget, maintMsg);
+        await wa.sendWhatsAppMessage(replyTarget, maintMsg);
+        return;
+      }
+    }
+
+    // ── Language Filter (English & Tamil Only) ──────────────────────────────────
+    if (isUnsupportedLanguage(rawText)) {
+      await wa.sendWhatsAppMessage(replyTarget, UNSUPPORTED_LANGUAGE_MSG);
       return;
     }
-  }
 
-  // ── Language Filter (English & Tamil Only) ──────────────────────────────────
-  if (isUnsupportedLanguage(rawText)) {
-    await wa.sendWhatsAppMessage(replyTarget, UNSUPPORTED_LANGUAGE_MSG);
-    return;
-  }
+    // ── Inappropriate Content Scan ──────────────────────────────────────────────
+    const { hasInappropriate, detectedWords } = scanInappropriateContent(rawText);
+    if (hasInappropriate) {
+      console.warn(`[WhatsApp Moderation] Inappropriate content from ${sessionKey}:`, detectedWords);
+      session.moderationFlags.push({
+        detectedWords,
+        timestamp: new Date(),
+        rawText
+      });
+      await session.save();
 
-  // ── Inappropriate Content Scan ──────────────────────────────────────────────
-  const { hasInappropriate, detectedWords } = scanInappropriateContent(rawText);
-  if (hasInappropriate) {
-    console.warn(`[WhatsApp Moderation] Inappropriate content from ${sessionKey}:`, detectedWords);
-    session.moderationFlags.push({
-      detectedWords,
-      timestamp: new Date(),
-      rawText
-    });
-    await session.save();
-
-    const warningMsg = `⚠️ *Warning*
+      const warningMsg = `⚠️ *Warning*
 Inappropriate language or content was detected in your message.
 
 *Your records are stored. Severe action will be taken for misuse of this service.*
 
 Detected words: ${detectedWords.map(w => `\`${w}\``).join(', ')}`;
 
-    await wa.sendWhatsAppMessage(replyTarget, warningMsg);
-    return;
-  }
-
-  const normalizedText = rawText.toLowerCase().replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
-  const isTamilQuery = /[\u0B80-\u0BFF]/.test(rawText) || session.language === 'ta';
-
-  // ── Phone Number Verification Gate ──────────────────────────────────────────
-  const isVerifyCommand = /^(verify|reverify|சரிபார்|மீண்டும் சரிபார்)$/i.test(normalizedText);
-  if (isVerifyCommand) {
-    session.isVerified = false;
-    session.step = 'phone_verification';
-    await session.save();
-
-    const verifyPrompt = `🔐 *Phone Number Verification*\n\n📱 Please enter your 10-digit mobile phone number (e.g., *9876543210*) to verify:`;
-    await wa.sendWhatsAppMessage(replyTarget, verifyPrompt);
-    return;
-  }
-
-  // If user is not yet verified, they must verify their phone number first before chatting
-  if (!session.isVerified) {
-    const rawDigits = rawText.replace(/\D/g, '');
-    const isPhoneNumberInput = rawDigits.length >= 10;
-
-    if (isPhoneNumberInput) {
-      const clean10Digits = rawDigits.slice(-10);
-      session.providedPhone = clean10Digits;
-      session.isVerified = true;
-      session.step = 'preferences';
-
-      const parishUser = await User.findOne({ phone: { $regex: clean10Digits } });
-      if (parishUser) {
-        session.linkedUserId = parishUser._id;
-      }
-      await session.save();
-
-      let ackHeader = '';
-      if (parishUser) {
-        const zoneOrAnbiyam = parishUser.anbiyam || parishUser.subStation || parishUser.parishZone || 'Parishioner';
-        ackHeader = `✅ *Phone Number Verified!*\nWelcome, *${parishUser.name}* (${zoneOrAnbiyam})! 🙏\n\n`;
-      } else {
-        ackHeader = `✅ *Phone number verified.*\n\nYou can use SJDB Connect and access the available church information and services.\n\nFor faster and more accurate information, please create a *Parish Account*.\n\n📝 *Create Parish Account:*\n${getSiteUrl(SITE_ROUTES.REGISTER)}\n\nYou can continue using the bot without registering.\n\n`;
-      }
-
-      // Immediately send the exact Preferences message after successful number verification
-      const prefMsg = `${ackHeader}${getPreferencesMenuMessage()}`;
-      await wa.sendWhatsAppMessage(replyTarget, prefMsg);
+      await wa.sendWhatsAppMessage(replyTarget, warningMsg);
       return;
     }
 
-    // User sent "Hi", "Hello", or any greeting/question without verifying their number yet
-    session.step = 'phone_verification';
-    await session.save();
+    const normalizedText = rawText.toLowerCase().replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const isTamilQuery = /[\u0B80-\u0BFF]/.test(rawText) || session.language === 'ta';
 
-    const verifyPrompt = `👋 *Welcome to SJDB Connect!*
-⛪ *St. John de Britto's Church, Kalayarkoil*
+    // ── Phone Number Verification Gate ──────────────────────────────────────────
+    const isVerifyCommand = /^(verify|reverify|சரிபார்|மீண்டும் சரிபார்)$/i.test(normalizedText);
+    if (isVerifyCommand) {
+      session.isVerified = false;
+      session.step = 'phone_verification';
+      await session.save();
+
+      const verifyPrompt = `🔐 *Phone Number Verification*\n\n📱 Please enter your 10-digit mobile phone number (e.g., *9876543210*) to verify:`;
+      await wa.sendWhatsAppMessage(replyTarget, verifyPrompt);
+      return;
+    }
+
+    // If user is not yet verified, they must verify their phone number first before chatting
+    if (!session.isVerified) {
+      const rawDigits = rawText.replace(/\D/g, '');
+      const isPhoneNumberInput = rawDigits.length >= 10;
+
+      if (isPhoneNumberInput) {
+        const clean10Digits = rawDigits.slice(-10);
+        session.providedPhone = clean10Digits;
+        session.isVerified = true;
+        session.step = 'preferences';
+
+        const parishUser = await User.findOne({ phone: { $regex: clean10Digits } });
+        if (parishUser) {
+          session.linkedUserId = parishUser._id;
+        }
+        await session.save();
+
+        let ackHeader = '';
+        if (parishUser) {
+          const zoneOrAnbiyam = parishUser.anbiyam || parishUser.subStation || parishUser.parishZone || 'Parishioner';
+          ackHeader = `✅ *Phone Number Verified!*\nWelcome, *${parishUser.name}* (${zoneOrAnbiyam})! 🙏\n\n`;
+        } else {
+          ackHeader = `✅ *Phone number verified.*\n\nYou can use SJDB Connect and access the available church information and services.\n\nFor faster and more accurate information, please create a *Parish Account*.\n\n📝 *Create Parish Account:*\n${getSiteUrl(SITE_ROUTES.REGISTER)}\n\nYou can continue using the bot without registering.\n\n`;
+        }
+
+        // Immediately send the exact Preferences message after successful number verification
+        const prefMsg = `${ackHeader}${getPreferencesMenuMessage()}`;
+        await wa.sendWhatsAppMessage(replyTarget, prefMsg);
+        return;
+      }
+
+      // User sent "Hi", "Hello", or any greeting/question without verifying their number yet
+      session.step = 'phone_verification';
+      await session.save();
+
+      const verifyPrompt = `👋 *Welcome to SJDB Connect!*
+⛪ *St. John de britto Church, Kalayarkoil*
 _Connecting Faith & Community_
 
 🔐 *Phone Number Verification*
@@ -543,212 +543,212 @@ To start chatting and access church services, please enter your **10-digit mobil
 
 📱 *Please reply with your 10-digit mobile number (e.g., 9876543210):*`;
 
-    await wa.sendWhatsAppMessage(replyTarget, verifyPrompt);
-    return;
-  }
-
-  // ── Step: Preferences Selection ─────────────────────────────────────────────
-  if (session.step === 'preferences') {
-    // Allow direct navigation commands even during preferences
-    if (/^(menu|0|home|quick commands)$/i.test(normalizedText)) {
-      const welcomeMenu = getMainMenuMessage();
-      await wa.sendWhatsAppMessage(replyTarget, welcomeMenu);
+      await wa.sendWhatsAppMessage(replyTarget, verifyPrompt);
       return;
     }
-    if (/^(services|service|help desk)$/i.test(normalizedText)) {
+
+    // ── Step: Preferences Selection ─────────────────────────────────────────────
+    if (session.step === 'preferences') {
+      // Allow direct navigation commands even during preferences
+      if (/^(menu|0|home|quick commands)$/i.test(normalizedText)) {
+        const welcomeMenu = getMainMenuMessage();
+        await wa.sendWhatsAppMessage(replyTarget, welcomeMenu);
+        return;
+      }
+      if (/^(services|service|help desk)$/i.test(normalizedText)) {
+        const servicesMsg = getServicesMenuMessage();
+        await wa.sendWhatsAppMessage(replyTarget, servicesMsg);
+        return;
+      }
+
+      // Parse selections: 7 / ALL / all / All / 1,2,3 / 1, 2, 3 / 1,2
+      let selectedPrefs = [];
+      if (normalizedText === '7' || /^(all|\*|all of the above)$/i.test(normalizedText)) {
+        selectedPrefs = ['verse', 'saint', 'mass', 'events', 'announcements', 'birthday'];
+      } else {
+        const prefMap = {
+          '1': 'verse',
+          '2': 'saint',
+          '3': 'mass',
+          '4': 'events',
+          '5': 'announcements',
+          '6': 'birthday'
+        };
+        const parts = rawText.split(/[,\s]+/).map(s => s.trim().replace(/[^0-9]/g, '')).filter(Boolean);
+        selectedPrefs = Array.from(new Set(parts.map(p => prefMap[p]).filter(Boolean)));
+      }
+
+      if (selectedPrefs.length > 0) {
+        session.preferences = selectedPrefs;
+        session.step = 'language';
+        await session.save();
+
+        if (session.linkedUserId) {
+          try {
+            await User.findByIdAndUpdate(session.linkedUserId, {
+              botPreferences: selectedPrefs,
+              whatsappOptIn: true
+            });
+          } catch (uErr) {
+            console.warn('[BotHandler] User preferences update error:', uErr.message);
+          }
+        }
+
+        // Prompt for Daily Catholic Content Language Selection
+        const langPrompt = getDailyContentLanguagePrompt();
+        await wa.sendWhatsAppMessage(replyTarget, langPrompt);
+        return;
+      }
+
+      // Invalid input for preferences
+      const retryMsg = `⚠️ Invalid selection. Please reply with numbers separated by commas (e.g., *1,2,3*) or reply *7 / ALL* for all services.\n\n` + getPreferencesMenuMessage();
+      await wa.sendWhatsAppMessage(replyTarget, retryMsg);
+      return;
+    }
+
+    // ── Step: Catholic Content Language Selection ───────────────────────────────
+    if (session.step === 'language') {
+      // Allow direct navigation commands even during language selection
+      if (/^(menu|0|home|quick commands)$/i.test(normalizedText)) {
+        const welcomeMenu = getMainMenuMessage();
+        await wa.sendWhatsAppMessage(replyTarget, welcomeMenu);
+        return;
+      }
+      if (/^(services|service|help desk)$/i.test(normalizedText)) {
+        const servicesMsg = getServicesMenuMessage();
+        await wa.sendWhatsAppMessage(replyTarget, servicesMsg);
+        return;
+      }
+
+      let chosenLang = null;
+      if (/^(1|tamil|தமிழ்|ta)$/i.test(normalizedText)) {
+        chosenLang = 'ta';
+      } else if (/^(2|english|eng|en)$/i.test(normalizedText)) {
+        chosenLang = 'en';
+      } else if (/^(3|both|tamil \+ english|தமிழ் \+ english|all)$/i.test(normalizedText)) {
+        chosenLang = 'both';
+      }
+
+      if (chosenLang) {
+        session.language = chosenLang;
+        session.step = 'done';
+        session.isOnboarded = true;
+        await session.save();
+
+        if (session.linkedUserId) {
+          try {
+            await User.findByIdAndUpdate(session.linkedUserId, {
+              language: chosenLang,
+              mass_reflection_language: chosenLang,
+              preferredLanguage: chosenLang
+            });
+          } catch (lErr) {
+            console.warn('[BotHandler] User language update error:', lErr.message);
+          }
+        }
+
+        const confirmMsg = getPreferencesConfirmationMessage(session.preferences, session.language);
+        await wa.sendWhatsAppMessage(replyTarget, confirmMsg);
+
+        // Only after all setup is complete -> Send the SJDB Connect Assistance overview message
+        const assistanceMsg = getAssistanceWelcomeMessage();
+        await wa.sendWhatsAppMessage(replyTarget, assistanceMsg);
+        return;
+      }
+
+      const langRetryMsg = `⚠️ Please reply with *1*, *2*, or *3* to choose your Daily Catholic Content language:\n\n1️⃣ Tamil (தமிழ்)\n2️⃣ English\n3️⃣ Both (Tamil + English)`;
+      await wa.sendWhatsAppMessage(replyTarget, langRetryMsg);
+      return;
+    }
+
+    // ── 1. SERVICES / HELP DESK MENU COMMAND (Exact Case-Insensitive or Natural Inquiry) ─────
+    const isServicesTrigger = /^(services|service|help desk|சேவைகள்|பங்கு சேவைகள்)$/i.test(normalizedText) ||
+      normalizedText.includes('what services do you provide') ||
+      normalizedText.includes('what services') ||
+      normalizedText.includes('services list') ||
+      normalizedText.includes('church services') ||
+      normalizedText.includes('parish services') ||
+      normalizedText.includes('available services') ||
+      normalizedText.includes('என்னென்ன சேவைகள்');
+
+    if (isServicesTrigger) {
       const servicesMsg = getServicesMenuMessage();
       await wa.sendWhatsAppMessage(replyTarget, servicesMsg);
       return;
     }
 
-    // Parse selections: 7 / ALL / all / All / 1,2,3 / 1, 2, 3 / 1,2
-    let selectedPrefs = [];
-    if (normalizedText === '7' || /^(all|\*|all of the above)$/i.test(normalizedText)) {
-      selectedPrefs = ['verse', 'saint', 'mass', 'events', 'announcements', 'birthday'];
-    } else {
-      const prefMap = {
-        '1': 'verse',
-        '2': 'saint',
-        '3': 'mass',
-        '4': 'events',
-        '5': 'announcements',
-        '6': 'birthday'
-      };
-      const parts = rawText.split(/[,\s]+/).map(s => s.trim().replace(/[^0-9]/g, '')).filter(Boolean);
-      selectedPrefs = Array.from(new Set(parts.map(p => prefMap[p]).filter(Boolean)));
+    // ── 2. MAIN MENU / QUICK COMMANDS (0, Menu, Home, Start, Hi, Quick Commands) ──────────
+    const isMenuTrigger = /^(menu|0|home|start|hi|hello|hey|quick commands|வணக்கம்)$/i.test(normalizedText) ||
+      normalizedText.includes('main menu') ||
+      normalizedText.includes('முதன்மை மெனு') ||
+      normalizedText.includes('sjdb connect');
+
+    if (isMenuTrigger) {
+      let linkedUser = null;
+      if (session.linkedUserId) {
+        linkedUser = await User.findById(session.linkedUserId);
+      } else if (session.providedPhone || phone) {
+        const searchPhone = (session.providedPhone || phone).slice(-10);
+        linkedUser = await User.findOne({ phone: { $regex: searchPhone } });
+      }
+
+      const userName = linkedUser ? linkedUser.name : (pushName || '');
+      const menuMsg = getMainMenuMessage(userName);
+      await wa.sendWhatsAppMessage(replyTarget, menuMsg);
+      return;
     }
 
-    if (selectedPrefs.length > 0) {
-      session.preferences = selectedPrefs;
+    // ── Preferences Command (Trigger preferences update anytime) ───────────────
+    if (/^(preferences|prefs|விருப்பங்கள்)$/i.test(normalizedText)) {
+      session.step = 'preferences';
+      await session.save();
+      await wa.sendWhatsAppMessage(replyTarget, getPreferencesMenuMessage());
+      return;
+    }
+
+    // ── Language Command (Trigger Catholic content language update anytime) ─────
+    if (/^(language|lang|மொழி)$/i.test(normalizedText)) {
       session.step = 'language';
       await session.save();
-
-      if (session.linkedUserId) {
-        try {
-          await User.findByIdAndUpdate(session.linkedUserId, {
-            botPreferences: selectedPrefs,
-            whatsappOptIn: true
-          });
-        } catch (uErr) {
-          console.warn('[BotHandler] User preferences update error:', uErr.message);
-        }
-      }
-
-      // Prompt for Daily Catholic Content Language Selection
-      const langPrompt = getDailyContentLanguagePrompt();
-      await wa.sendWhatsAppMessage(replyTarget, langPrompt);
+      await wa.sendWhatsAppMessage(replyTarget, getDailyContentLanguagePrompt());
       return;
     }
 
-    // Invalid input for preferences
-    const retryMsg = `⚠️ Invalid selection. Please reply with numbers separated by commas (e.g., *1,2,3*) or reply *7 / ALL* for all services.\n\n` + getPreferencesMenuMessage();
-    await wa.sendWhatsAppMessage(replyTarget, retryMsg);
-    return;
-  }
-
-  // ── Step: Catholic Content Language Selection ───────────────────────────────
-  if (session.step === 'language') {
-    // Allow direct navigation commands even during language selection
-    if (/^(menu|0|home|quick commands)$/i.test(normalizedText)) {
-      const welcomeMenu = getMainMenuMessage();
-      await wa.sendWhatsAppMessage(replyTarget, welcomeMenu);
-      return;
-    }
-    if (/^(services|service|help desk)$/i.test(normalizedText)) {
-      const servicesMsg = getServicesMenuMessage();
-      await wa.sendWhatsAppMessage(replyTarget, servicesMsg);
-      return;
-    }
-
-    let chosenLang = null;
-    if (/^(1|tamil|தமிழ்|ta)$/i.test(normalizedText)) {
-      chosenLang = 'ta';
-    } else if (/^(2|english|eng|en)$/i.test(normalizedText)) {
-      chosenLang = 'en';
-    } else if (/^(3|both|tamil \+ english|தமிழ் \+ english|all)$/i.test(normalizedText)) {
-      chosenLang = 'both';
-    }
-
-    if (chosenLang) {
-      session.language = chosenLang;
-      session.step = 'done';
-      session.isOnboarded = true;
+    // ── Language Switching Commands (Case-Insensitive) ─────────────────────────
+    if (/^(tamil|தமிழ்|ta)$/i.test(normalizedText) || normalizedText === 'change to tamil' || normalizedText === 'switch to tamil') {
+      session.language = 'ta';
       await session.save();
-
-      if (session.linkedUserId) {
-        try {
-          await User.findByIdAndUpdate(session.linkedUserId, {
-            language: chosenLang,
-            mass_reflection_language: chosenLang,
-            preferredLanguage: chosenLang
-          });
-        } catch (lErr) {
-          console.warn('[BotHandler] User language update error:', lErr.message);
-        }
-      }
-
-      const confirmMsg = getPreferencesConfirmationMessage(session.preferences, session.language);
-      await wa.sendWhatsAppMessage(replyTarget, confirmMsg);
-
-      // Only after all setup is complete -> Send the SJDB Connect Assistance overview message
-      const assistanceMsg = getAssistanceWelcomeMessage();
-      await wa.sendWhatsAppMessage(replyTarget, assistanceMsg);
+      const taAck = `✅ *Daily Catholic Content Language set to Tamil (தமிழ்) successfully!*\nBible Verse, Mass Readings, Reflection & Saint of the Day will be delivered in Tamil.\n\n📌 Type *MENU* for Quick Commands or *SERVICES* for Help Desk.`;
+      await wa.sendWhatsAppMessage(replyTarget, taAck);
       return;
     }
 
-    const langRetryMsg = `⚠️ Please reply with *1*, *2*, or *3* to choose your Daily Catholic Content language:\n\n1️⃣ Tamil (தமிழ்)\n2️⃣ English\n3️⃣ Both (Tamil + English)`;
-    await wa.sendWhatsAppMessage(replyTarget, langRetryMsg);
-    return;
-  }
-
-  // ── 1. SERVICES / HELP DESK MENU COMMAND (Exact Case-Insensitive or Natural Inquiry) ─────
-  const isServicesTrigger = /^(services|service|help desk|சேவைகள்|பங்கு சேவைகள்)$/i.test(normalizedText) ||
-    normalizedText.includes('what services do you provide') ||
-    normalizedText.includes('what services') ||
-    normalizedText.includes('services list') ||
-    normalizedText.includes('church services') ||
-    normalizedText.includes('parish services') ||
-    normalizedText.includes('available services') ||
-    normalizedText.includes('என்னென்ன சேவைகள்');
-
-  if (isServicesTrigger) {
-    const servicesMsg = getServicesMenuMessage();
-    await wa.sendWhatsAppMessage(replyTarget, servicesMsg);
-    return;
-  }
-
-  // ── 2. MAIN MENU / QUICK COMMANDS (0, Menu, Home, Start, Hi, Quick Commands) ──────────
-  const isMenuTrigger = /^(menu|0|home|start|hi|hello|hey|quick commands|வணக்கம்)$/i.test(normalizedText) ||
-    normalizedText.includes('main menu') ||
-    normalizedText.includes('முதன்மை மெனு') ||
-    normalizedText.includes('sjdb connect');
-
-  if (isMenuTrigger) {
-    let linkedUser = null;
-    if (session.linkedUserId) {
-      linkedUser = await User.findById(session.linkedUserId);
-    } else if (session.providedPhone || phone) {
-      const searchPhone = (session.providedPhone || phone).slice(-10);
-      linkedUser = await User.findOne({ phone: { $regex: searchPhone } });
+    if (/^(english|eng|en)$/i.test(normalizedText) || normalizedText === 'change to english' || normalizedText === 'switch to english') {
+      session.language = 'en';
+      await session.save();
+      const enAck = `✅ *Daily Catholic Content Language set to English successfully!*\nBible Verse, Mass Readings, Reflection & Saint of the Day will be delivered in English.\n\n📌 Type *MENU* for Quick Commands or *SERVICES* for Help Desk.`;
+      await wa.sendWhatsAppMessage(replyTarget, enAck);
+      return;
     }
 
-    const userName = linkedUser ? linkedUser.name : (pushName || '');
-    const menuMsg = getMainMenuMessage(userName);
-    await wa.sendWhatsAppMessage(replyTarget, menuMsg);
-    return;
-  }
+    // ── 3. NUMBERED MENU & DIRECT INTENT ROUTING ────────────────────────────────
 
-  // ── Preferences Command (Trigger preferences update anytime) ───────────────
-  if (/^(preferences|prefs|விருப்பங்கள்)$/i.test(normalizedText)) {
-    session.step = 'preferences';
-    await session.save();
-    await wa.sendWhatsAppMessage(replyTarget, getPreferencesMenuMessage());
-    return;
-  }
+    // Option 1: Daily Bible (Main Menu 1) OR Mass Timings (Services 1)
+    const isDailyBibleQuery = /^(daily bible|bible|today bible|readings|verse)$/i.test(normalizedText) ||
+      /(தினசரி விவிலியம்|விவிலியம்|இறைவார்த்தை|தினசரி வாசகம்)/.test(rawText);
 
-  // ── Language Command (Trigger Catholic content language update anytime) ─────
-  if (/^(language|lang|மொழி)$/i.test(normalizedText)) {
-    session.step = 'language';
-    await session.save();
-    await wa.sendWhatsAppMessage(replyTarget, getDailyContentLanguagePrompt());
-    return;
-  }
+    if (normalizedText === '1' || isDailyBibleQuery) {
+      await sendTodayDevotionsToUser(replyTarget, session, wa);
+      return;
+    }
 
-  // ── Language Switching Commands (Case-Insensitive) ─────────────────────────
-  if (/^(tamil|தமிழ்|ta)$/i.test(normalizedText) || normalizedText === 'change to tamil' || normalizedText === 'switch to tamil') {
-    session.language = 'ta';
-    await session.save();
-    const taAck = `✅ *Daily Catholic Content Language set to Tamil (தமிழ்) successfully!*\nBible Verse, Mass Readings, Reflection & Saint of the Day will be delivered in Tamil.\n\n📌 Type *MENU* for Quick Commands or *SERVICES* for Help Desk.`;
-    await wa.sendWhatsAppMessage(replyTarget, taAck);
-    return;
-  }
+    // Option 2: Mass Timings (Main Menu 2 & Services 1)
+    const isMassTimingsQuery = normalizedText === '2' ||
+      /\b(mass timings|mass time|mass schedule|when is mass|what time is mass|morning mass|evening mass|sunday mass|today mass)\b/i.test(normalizedText) ||
+      /(திருப்பலி நேரம்|பூசை நேரம்|திருப்பலி நேரங்கள்|ஞாயிறு திருப்பலி)/.test(rawText);
 
-  if (/^(english|eng|en)$/i.test(normalizedText) || normalizedText === 'change to english' || normalizedText === 'switch to english') {
-    session.language = 'en';
-    await session.save();
-    const enAck = `✅ *Daily Catholic Content Language set to English successfully!*\nBible Verse, Mass Readings, Reflection & Saint of the Day will be delivered in English.\n\n📌 Type *MENU* for Quick Commands or *SERVICES* for Help Desk.`;
-    await wa.sendWhatsAppMessage(replyTarget, enAck);
-    return;
-  }
-
-  // ── 3. NUMBERED MENU & DIRECT INTENT ROUTING ────────────────────────────────
-
-  // Option 1: Daily Bible (Main Menu 1) OR Mass Timings (Services 1)
-  const isDailyBibleQuery = /^(daily bible|bible|today bible|readings|verse)$/i.test(normalizedText) ||
-    /(தினசரி விவிலியம்|விவிலியம்|இறைவார்த்தை|தினசரி வாசகம்)/.test(rawText);
-
-  if (normalizedText === '1' || isDailyBibleQuery) {
-    await sendTodayDevotionsToUser(replyTarget, session, wa);
-    return;
-  }
-
-  // Option 2: Mass Timings (Main Menu 2 & Services 1)
-  const isMassTimingsQuery = normalizedText === '2' ||
-    /\b(mass timings|mass time|mass schedule|when is mass|what time is mass|morning mass|evening mass|sunday mass|today mass)\b/i.test(normalizedText) ||
-    /(திருப்பலி நேரம்|பூசை நேரம்|திருப்பலி நேரங்கள்|ஞாயிறு திருப்பலி)/.test(rawText);
-
-  if (isMassTimingsQuery) {
-    const massMsg = `⛪ *St. John de Britto's Church — Holy Mass Timings*
+    if (isMassTimingsQuery) {
+      const massMsg = `⛪ *St. John de britto Church — Holy Mass Timings*
 _Kalayarkoil, Sivagangai Diocese_
 
 📅 *Weekdays (Mon – Sat):*
@@ -769,73 +769,73 @@ _Kalayarkoil, Sivagangai Diocese_
 
 🌐 *Full Schedule:* ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}`;
 
-    await wa.sendWhatsAppMessage(replyTarget, massMsg);
-    return;
-  }
-
-  // Option 3: Services Menu (Main Menu 3)
-  if (normalizedText === '3') {
-    const servicesMsg = getServicesMenuMessage();
-    await wa.sendWhatsAppMessage(replyTarget, servicesMsg);
-    return;
-  }
-
-  // Option 4: Church Events (Main Menu 4) OR Verse (Services 4)
-  const isEventsChoice = normalizedText === '4' ||
-    /\b(events|upcoming events|church events)\b/i.test(normalizedText) ||
-    /(நிகழ்வுகள்|நிகழ்ச்சிகள்)/.test(rawText);
-
-  if (isEventsChoice) {
-    try {
-      const events = await getCachedEvents();
-
-      let eventsMsg = '';
-      if (events && events.length > 0) {
-        const lines = events.map(ev => {
-          const dt = new Date(ev.date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
-          return `📌 *${ev.title}*\n📅 ${dt} ${ev.time ? `• ⏰ ${ev.time}` : ''}\n📍 ${ev.venue || 'Church Premises'}\n`;
-        }).join('\n');
-        eventsMsg = `📅 *Upcoming Church Events:*\n\n${lines}\n🔗 ${getSiteUrl(SITE_ROUTES.EVENTS)}`;
-      } else {
-        eventsMsg = `📅 *Church Events:*\n\nNo special upcoming events scheduled currently.\n\n🌐 ${getSiteUrl(SITE_ROUTES.EVENTS)}`;
-      }
-      await wa.sendWhatsAppMessage(replyTarget, eventsMsg);
+      await wa.sendWhatsAppMessage(replyTarget, massMsg);
       return;
-    } catch (eErr) {
-      console.error('[BotHandler] Events error:', eErr.message);
     }
-  }
 
-  // Option 5: Parish Announcements (Main Menu 5 & Services 9)
-  const isAnnouncementsChoice = normalizedText === '5' || normalizedText === '9' ||
-    /\b(announcements?|notices?|parish announcements?)\b/i.test(normalizedText) ||
-    /(அறிவிப்புகள்|பங்கு அறிவிப்பு)/.test(rawText);
-
-  if (isAnnouncementsChoice) {
-    try {
-      const announcements = await getCachedAnnouncements();
-
-      let annMsg = '';
-      if (announcements && announcements.length > 0) {
-        const lines = announcements.map(a => `📢 *${a.title}*\n${(a.content || a.description || '').slice(0, 120)}...\n`).join('\n');
-        annMsg = `📢 *Parish Announcements:*\n\n${lines}\n🌐 ${getSiteUrl(SITE_ROUTES.ANNOUNCEMENTS)}`;
-      } else {
-        annMsg = `📢 *Parish Announcements:*\n\nThere are no new announcements at this moment.\n\n🌐 ${getSiteUrl(SITE_ROUTES.ANNOUNCEMENTS)}`;
-      }
-      await wa.sendWhatsAppMessage(replyTarget, annMsg);
+    // Option 3: Services Menu (Main Menu 3)
+    if (normalizedText === '3') {
+      const servicesMsg = getServicesMenuMessage();
+      await wa.sendWhatsAppMessage(replyTarget, servicesMsg);
       return;
-    } catch (aErr) {
-      console.error('[BotHandler] Announcements error:', aErr.message);
     }
-  }
 
-  // Option 6: Church Information & History (Main Menu 6 & Services 13)
-  const isChurchInfoChoice = normalizedText === '6' || normalizedText === '13' ||
-    /\b(church information|church info|about church|history|patron saint)\b/i.test(normalizedText) ||
-    /(ஆலய விபரம்|பங்கு வரலாறு|புனிதர் வரலாறு|வரலாறு)/.test(rawText);
+    // Option 4: Church Events (Main Menu 4) OR Verse (Services 4)
+    const isEventsChoice = normalizedText === '4' ||
+      /\b(events|upcoming events|church events)\b/i.test(normalizedText) ||
+      /(நிகழ்வுகள்|நிகழ்ச்சிகள்)/.test(rawText);
 
-  if (isChurchInfoChoice) {
-    const histMsg = `🏛️ *St. John de Britto's Church — Church Information*
+    if (isEventsChoice) {
+      try {
+        const events = await getCachedEvents();
+
+        let eventsMsg = '';
+        if (events && events.length > 0) {
+          const lines = events.map(ev => {
+            const dt = new Date(ev.date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+            return `📌 *${ev.title}*\n📅 ${dt} ${ev.time ? `• ⏰ ${ev.time}` : ''}\n📍 ${ev.venue || 'Church Premises'}\n`;
+          }).join('\n');
+          eventsMsg = `📅 *Upcoming Church Events:*\n\n${lines}\n🔗 ${getSiteUrl(SITE_ROUTES.EVENTS)}`;
+        } else {
+          eventsMsg = `📅 *Church Events:*\n\nNo special upcoming events scheduled currently.\n\n🌐 ${getSiteUrl(SITE_ROUTES.EVENTS)}`;
+        }
+        await wa.sendWhatsAppMessage(replyTarget, eventsMsg);
+        return;
+      } catch (eErr) {
+        console.error('[BotHandler] Events error:', eErr.message);
+      }
+    }
+
+    // Option 5: Parish Announcements (Main Menu 5 & Services 9)
+    const isAnnouncementsChoice = normalizedText === '5' || normalizedText === '9' ||
+      /\b(announcements?|notices?|parish announcements?)\b/i.test(normalizedText) ||
+      /(அறிவிப்புகள்|பங்கு அறிவிப்பு)/.test(rawText);
+
+    if (isAnnouncementsChoice) {
+      try {
+        const announcements = await getCachedAnnouncements();
+
+        let annMsg = '';
+        if (announcements && announcements.length > 0) {
+          const lines = announcements.map(a => `📢 *${a.title}*\n${(a.content || a.description || '').slice(0, 120)}...\n`).join('\n');
+          annMsg = `📢 *Parish Announcements:*\n\n${lines}\n🌐 ${getSiteUrl(SITE_ROUTES.ANNOUNCEMENTS)}`;
+        } else {
+          annMsg = `📢 *Parish Announcements:*\n\nThere are no new announcements at this moment.\n\n🌐 ${getSiteUrl(SITE_ROUTES.ANNOUNCEMENTS)}`;
+        }
+        await wa.sendWhatsAppMessage(replyTarget, annMsg);
+        return;
+      } catch (aErr) {
+        console.error('[BotHandler] Announcements error:', aErr.message);
+      }
+    }
+
+    // Option 6: Church Information & History (Main Menu 6 & Services 13)
+    const isChurchInfoChoice = normalizedText === '6' || normalizedText === '13' ||
+      /\b(church information|church info|about church|history|patron saint)\b/i.test(normalizedText) ||
+      /(ஆலய விபரம்|பங்கு வரலாறு|புனிதர் வரலாறு|வரலாறு)/.test(rawText);
+
+    if (isChurchInfoChoice) {
+      const histMsg = `🏛️ *St. John de britto Church — Church Information*
 _Kalayarkoil, Sivagangai Diocese_
 
 👑 *Patron Saint:* St. John de Britto (Arulanandar)
@@ -847,48 +847,48 @@ Our parish in Kalayarkoil stands as a historic sanctuary of faith, vibrant Anbiy
 
 🌐 *Read Complete History & Info:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`;
 
-    await wa.sendWhatsAppMessage(replyTarget, histMsg);
-    return;
-  }
-
-  // Option 7: Saint of the Day (Main Menu 7 & Services 6)
-  const isSaintChoice = normalizedText === '7' ||
-    /\b(saint|today saint|saint of the day|who is today saint|who is the saint today|today\'?s saint|saints)\b/i.test(normalizedText) ||
-    /(இன்றைய புனிதர்|புனிதர் யார்|புனிதர்)/.test(rawText);
-
-  if (isSaintChoice) {
-    try {
-      const dailyContent = await getCachedDailyContent();
-      const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
-      const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: session.language || 'en' });
-
-      let sentMedia = false;
-      if (saintImageUrl && typeof wa.sendWhatsAppMedia === 'function') {
-        try {
-          sentMedia = await wa.sendWhatsAppMedia(replyTarget, { url: saintImageUrl, caption: saintInfoMsg, mimetype: 'image/jpeg' });
-        } catch (mErr) {
-          console.warn('[BotHandler] Saint media send fallback:', mErr.message);
-          sentMedia = false;
-        }
-      }
-
-      if (!sentMedia) {
-        await wa.sendWhatsAppMessage(replyTarget, saintInfoMsg);
-      }
+      await wa.sendWhatsAppMessage(replyTarget, histMsg);
       return;
-    } catch (sErr) {
-      console.error('[BotHandler] Saint fetch error:', sErr.message);
     }
-  }
 
-  // Option 8: Help (Main Menu 8)
-  const isHelpChoice = normalizedText === '8' ||
-    /\b(help|commands|how to use|guide|options)\b/i.test(normalizedText) ||
-    /(உதவி|வழிகாட்டி)/.test(rawText);
+    // Option 7: Saint of the Day (Main Menu 7 & Services 6)
+    const isSaintChoice = normalizedText === '7' ||
+      /\b(saint|today saint|saint of the day|who is today saint|who is the saint today|today\'?s saint|saints)\b/i.test(normalizedText) ||
+      /(இன்றைய புனிதர்|புனிதர் யார்|புனிதர்)/.test(rawText);
 
-  if (isHelpChoice) {
-    const helpMsg = `❓ *SJDB Connect — Help & Guidance*
-_St. John de Britto's Church, Kalayarkoil_
+    if (isSaintChoice) {
+      try {
+        const dailyContent = await getCachedDailyContent();
+        const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
+        const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: session.language || 'en' });
+
+        let sentMedia = false;
+        if (saintImageUrl && typeof wa.sendWhatsAppMedia === 'function') {
+          try {
+            sentMedia = await wa.sendWhatsAppMedia(replyTarget, { url: saintImageUrl, caption: saintInfoMsg, mimetype: 'image/jpeg' });
+          } catch (mErr) {
+            console.warn('[BotHandler] Saint media send fallback:', mErr.message);
+            sentMedia = false;
+          }
+        }
+
+        if (!sentMedia) {
+          await wa.sendWhatsAppMessage(replyTarget, saintInfoMsg);
+        }
+        return;
+      } catch (sErr) {
+        console.error('[BotHandler] Saint fetch error:', sErr.message);
+      }
+    }
+
+    // Option 8: Help (Main Menu 8)
+    const isHelpChoice = normalizedText === '8' ||
+      /\b(help|commands|how to use|guide|options)\b/i.test(normalizedText) ||
+      /(உதவி|வழிகாட்டி)/.test(rawText);
+
+    if (isHelpChoice) {
+      const helpMsg = `❓ *SJDB Connect — Help & Guidance*
+_St. John de britto Church, Kalayarkoil_
 
 📌 *Key Commands You Can Type Anytime:*
 • *MENU* — Main Navigation Menu
@@ -901,17 +901,17 @@ _St. John de Britto's Church, Kalayarkoil_
 
 💡 You can reply with numbers 1 to 8 or type your questions naturally in English or Tamil!`;
 
-    await wa.sendWhatsAppMessage(replyTarget, helpMsg);
-    return;
-  }
+      await wa.sendWhatsAppMessage(replyTarget, helpMsg);
+      return;
+    }
 
-  // Option 10: Church Location & Google Maps
-  const isLocationChoice = normalizedText === '10' ||
-    /\b(where is the church|where is church|church location|location|how to reach|maps?)\b/i.test(normalizedText) ||
-    /(அமைவிடம்|கோவில் எங்கு|ஆலயம் எங்கு|முகவரி)/.test(rawText);
+    // Option 10: Church Location & Google Maps
+    const isLocationChoice = normalizedText === '10' ||
+      /\b(where is the church|where is church|church location|location|how to reach|maps?)\b/i.test(normalizedText) ||
+      /(அமைவிடம்|கோவில் எங்கு|ஆலயம் எங்கு|முகவரி)/.test(rawText);
 
-  if (isLocationChoice) {
-    const locMsg = `🏛️ *St. John de Britto's Church — Location*
+    if (isLocationChoice) {
+      const locMsg = `🏛️ *St. John de britto Church — Location*
 Church Road, Kalayarkoil — 630551, Sivagangai District, Tamil Nadu, India.
 
 🕒 *Visiting Hours:* Open daily from 5:30 AM to 8:00 PM
@@ -921,17 +921,17 @@ ${EXTERNAL_LINKS.GOOGLE_MAPS}
 
 🌐 ${getSiteUrl(SITE_ROUTES.CONTACT)}`;
 
-    await wa.sendWhatsAppMessage(replyTarget, locMsg);
-    return;
-  }
+      await wa.sendWhatsAppMessage(replyTarget, locMsg);
+      return;
+    }
 
-  // Option 11: Parish Ministries & Anbiyams
-  const isMinistriesChoice = normalizedText === '11' ||
-    /\b(ministr(y|ies)|anbiyams?|council|choir|youth group|catechism)\b/i.test(normalizedText) ||
-    /(அன்பியம்|அன்பியங்கள்|பங்கு அமைப்புகள்|பாடகர் குழு|இளைஞர் இயக்கம்)/.test(rawText);
+    // Option 11: Parish Ministries & Anbiyams
+    const isMinistriesChoice = normalizedText === '11' ||
+      /\b(ministr(y|ies)|anbiyams?|council|choir|youth group|catechism)\b/i.test(normalizedText) ||
+      /(அன்பியம்|அன்பியங்கள்|பங்கு அமைப்புகள்|பாடகர் குழு|இளைஞர் இயக்கம்)/.test(rawText);
 
-  if (isMinistriesChoice) {
-    const minMsg = `👥 *Parish Ministries & Anbiyams*
+    if (isMinistriesChoice) {
+      const minMsg = `👥 *Parish Ministries & Anbiyams*
 
 • 👥 *12 Active Anbiyams:* Ward family prayer cells
 • 🏛️ *Parish Pastoral Council:* Pastoral leadership & guidance
@@ -943,46 +943,46 @@ ${EXTERNAL_LINKS.GOOGLE_MAPS}
 
 🌐 *Read More:* ${getSiteUrl(SITE_ROUTES.ANBIYAMS)}`;
 
-    await wa.sendWhatsAppMessage(replyTarget, minMsg);
-    return;
-  }
+      await wa.sendWhatsAppMessage(replyTarget, minMsg);
+      return;
+    }
 
-  // Option 12: Parish Priests & Clergy
-  const isPriestsChoice = normalizedText === '12' ||
-    /\b(priests?|parish priest|clergy|father)\b/i.test(normalizedText) ||
-    /(பங்குத்தந்தை|அருட்தந்தை|குருக்கள்)/.test(rawText);
+    // Option 12: Parish Priests & Clergy
+    const isPriestsChoice = normalizedText === '12' ||
+      /\b(priests?|parish priest|clergy|father)\b/i.test(normalizedText) ||
+      /(பங்குத்தந்தை|அருட்தந்தை|குருக்கள்)/.test(rawText);
 
-  if (isPriestsChoice) {
-    try {
-      const priests = await getCachedPriests();
-      let pList = '';
-      if (priests && priests.length > 0) {
-        pList = priests.map(p => `• *${p.designation || 'Priest'}:* Rev. Fr. ${p.name} ${p.phone ? `(Ph: ${p.phone})` : ''}`).join('\n');
-      } else {
-        pList = `• *Parish Priest:* Rev. Fr. Parish Priest (Ph: +91 96556 39144)`;
-      }
+    if (isPriestsChoice) {
+      try {
+        const priests = await getCachedPriests();
+        let pList = '';
+        if (priests && priests.length > 0) {
+          pList = priests.map(p => `• *${p.designation || 'Priest'}:* Rev. Fr. ${p.name} ${p.phone ? `(Ph: ${p.phone})` : ''}`).join('\n');
+        } else {
+          pList = `• *Parish Priest:* Rev. Fr. Parish Priest (Ph: +91 96556 39144)`;
+        }
 
-      const pMsg = `👑 *Parish Priests & Clergy*
-_St. John de Britto's Church, Kalayarkoil_
+        const pMsg = `👑 *Parish Priests & Clergy*
+_St. John de britto Church, Kalayarkoil_
 
 ${pList}
 
 🌐 ${getSiteUrl(SITE_ROUTES.PRIESTS)}`;
 
-      await wa.sendWhatsAppMessage(replyTarget, pMsg);
-      return;
-    } catch (pErr) {
-      console.error('[BotHandler] Priests error:', pErr.message);
+        await wa.sendWhatsAppMessage(replyTarget, pMsg);
+        return;
+      } catch (pErr) {
+        console.error('[BotHandler] Priests error:', pErr.message);
+      }
     }
-  }
 
-  // Option 13: Church History & Patron Saint
-  const isHistoryChoice = normalizedText === '13' ||
-    /\b(church history|saint history|about church|history|patron saint)\b/i.test(normalizedText) ||
-    /(ஆலய வரலாறு|பங்கு வரலாறு|புனிதர் வரலாறு)/.test(rawText);
+    // Option 13: Church History & Patron Saint
+    const isHistoryChoice = normalizedText === '13' ||
+      /\b(church history|saint history|about church|history|patron saint)\b/i.test(normalizedText) ||
+      /(ஆலய வரலாறு|பங்கு வரலாறு|புனிதர் வரலாறு)/.test(rawText);
 
-  if (isHistoryChoice) {
-    const histMsg = `🏛️ *St. John de Britto's Church — History*
+    if (isHistoryChoice) {
+      const histMsg = `🏛️ *St. John de britto Church — History*
 _Diocese of Sivagangai_
 
 👑 *Patron Saint:* St. John de Britto (Arulanandar)
@@ -994,20 +994,20 @@ Our parish in Kalayarkoil stands as a historic sanctuary of faith, vibrant Anbiy
 
 🌐 *Read Complete History:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`;
 
-    await wa.sendWhatsAppMessage(replyTarget, histMsg);
-    return;
-  }
+      await wa.sendWhatsAppMessage(replyTarget, histMsg);
+      return;
+    }
 
-  // Option 14: Contact Church & Office Hours
-  const isContactChoice = normalizedText === '14' ||
-    /\b(contact|office hours|phone number|email|phone)\b/i.test(normalizedText) ||
-    /(தொடர்பு|அலுவலக நேரம்|தொலைபேசி)/.test(rawText);
+    // Option 14: Contact Church & Office Hours
+    const isContactChoice = normalizedText === '14' ||
+      /\b(contact|office hours|phone number|email|phone)\b/i.test(normalizedText) ||
+      /(தொடர்பு|அலுவலக நேரம்|தொலைபேசி)/.test(rawText);
 
-  if (isContactChoice) {
-    const contactMsg = `📞 *Parish Contact & Office Hours*
+    if (isContactChoice) {
+      const contactMsg = `📞 *Parish Contact & Office Hours*
 
 🏛️ *Address:*
-St. John de Britto's Church,
+St. John de britto Church,
 Church Road, Kalayarkoil — 630551,
 Sivagangai District, Tamil Nadu, India.
 
@@ -1020,45 +1020,45 @@ ${EXTERNAL_LINKS.GOOGLE_MAPS}
 
 🌐 ${getSiteUrl(SITE_ROUTES.CONTACT)}`;
 
-    await wa.sendWhatsAppMessage(replyTarget, contactMsg);
-    return;
-  }
-
-  // ── Natural Language Understanding via Church RAG Engine ────────────────────
-  try {
-    let linkedUser = null;
-    if (session.linkedUserId) {
-      linkedUser = await User.findById(session.linkedUserId).lean();
-    } else if (session.providedPhone || session.phoneNumber) {
-      const searchPhone = (session.providedPhone || session.phoneNumber).replace(/^91/, '').replace(/\D/g, '');
-      linkedUser = await User.findOne({ phone: { $regex: new RegExp(searchPhone + '$') } }).lean();
-    }
-
-    const userAuthContext = { user: linkedUser, session };
-    const ragResult = await answerChurchQuestion(rawText, 'en', userAuthContext);
-
-    if (ragResult && ragResult.reply) {
-      let sentMedia = false;
-      if (ragResult.isSaintOfDayFlow && ragResult.imageUrl && typeof wa.sendWhatsAppMedia === 'function') {
-        try {
-          sentMedia = await wa.sendWhatsAppMedia(replyTarget, { url: ragResult.imageUrl, caption: ragResult.reply, mimetype: 'image/jpeg' });
-        } catch (mErr) {
-          console.warn('[BotHandler] RAG Saint media send fallback:', mErr.message);
-          sentMedia = false;
-        }
-      }
-      if (!sentMedia) {
-        await wa.sendWhatsAppMessage(replyTarget, ragResult.reply);
-      }
+      await wa.sendWhatsAppMessage(replyTarget, contactMsg);
       return;
     }
-  } catch (ragErr) {
-    console.error('[BotHandler] RAG processing error:', ragErr.message);
-  }
 
-  // Fallback default helpful reply
-  const fallbackMsg = getMainMenuMessage(session.pushName || '', isTamilQuery);
-  await wa.sendWhatsAppMessage(replyTarget, fallbackMsg);
+    // ── Natural Language Understanding via Church RAG Engine ────────────────────
+    try {
+      let linkedUser = null;
+      if (session.linkedUserId) {
+        linkedUser = await User.findById(session.linkedUserId).lean();
+      } else if (session.providedPhone || session.phoneNumber) {
+        const searchPhone = (session.providedPhone || session.phoneNumber).replace(/^91/, '').replace(/\D/g, '');
+        linkedUser = await User.findOne({ phone: { $regex: new RegExp(searchPhone + '$') } }).lean();
+      }
+
+      const userAuthContext = { user: linkedUser, session };
+      const ragResult = await answerChurchQuestion(rawText, 'en', userAuthContext);
+
+      if (ragResult && ragResult.reply) {
+        let sentMedia = false;
+        if (ragResult.isSaintOfDayFlow && ragResult.imageUrl && typeof wa.sendWhatsAppMedia === 'function') {
+          try {
+            sentMedia = await wa.sendWhatsAppMedia(replyTarget, { url: ragResult.imageUrl, caption: ragResult.reply, mimetype: 'image/jpeg' });
+          } catch (mErr) {
+            console.warn('[BotHandler] RAG Saint media send fallback:', mErr.message);
+            sentMedia = false;
+          }
+        }
+        if (!sentMedia) {
+          await wa.sendWhatsAppMessage(replyTarget, ragResult.reply);
+        }
+        return;
+      }
+    } catch (ragErr) {
+      console.error('[BotHandler] RAG processing error:', ragErr.message);
+    }
+
+    // Fallback default helpful reply
+    const fallbackMsg = getMainMenuMessage(session.pushName || '', isTamilQuery);
+    await wa.sendWhatsAppMessage(replyTarget, fallbackMsg);
   } finally {
     activeSessionLocks.delete(lockKey);
   }
@@ -1074,6 +1074,6 @@ module.exports = {
       if (require('mongoose').connection.readyState === 1) {
         await ProcessedMessage.deleteMany({});
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 };

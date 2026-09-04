@@ -89,7 +89,7 @@ async function checkAndSendMonthlyVerificationReminders({ forceAll = false, trig
 
       // ── B. Web Push Notification ────────────────────────────────────────────
       sendPushToUser(user._id, {
-        title: "⚡ Re-verification Pending — St. John de Britto's Church",
+        title: "⚡ Re-verification Pending — St. John de britto Church",
         body: "Your account re-verification is pending. Complete now to use all church features freely!",
         url: "/login?verify=true",
         icon: "/favicon.png",
@@ -127,7 +127,7 @@ async function checkAndSendMonthlyVerificationReminders({ forceAll = false, trig
         <div style="width: 75px; height: 75px; background: #ffffff; border-radius: 50%; margin: 0 auto 12px; overflow: hidden; border: 3px solid #fbbf24; box-shadow: 0 4px 14px rgba(0,0,0,0.25);">
           <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
         </div>
-        <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #fbbf24; letter-spacing: 0.5px;">St. John de Britto's Church</h1>
+        <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #fbbf24; letter-spacing: 0.5px;">St. John de britto Church</h1>
         <p style="margin: 4px 0 0 0; font-size: 13px; color: #e2e8f0; font-weight: 500;">புனித அருளானந்தர் தேவாலயம்</p>
         <div style="display: inline-block; margin-top: 12px; padding: 4px 14px; background: #dc2626; border-radius: 999px; font-size: 11px; font-weight: 800; color: #ffffff; text-transform: uppercase; letter-spacing: 0.8px;">
           Action Required • Re-verification Pending
@@ -184,7 +184,7 @@ async function checkAndSendMonthlyVerificationReminders({ forceAll = false, trig
 
       <!-- FOOTER -->
       <div style="background-color: #0f172a; padding: 16px 18px; text-align: center; color: #94a3b8; font-size: 11.5px;">
-        <p style="margin: 0; font-weight: 700; color: #f8fafc;">St. John de Britto's Church, Kalayarkoil</p>
+        <p style="margin: 0; font-weight: 700; color: #f8fafc;">St. John de britto Church, Kalayarkoil</p>
         <p style="margin: 4px 0 0; color: #64748b;">Parish Security & Verification System</p>
       </div>
 
@@ -196,16 +196,16 @@ async function checkAndSendMonthlyVerificationReminders({ forceAll = false, trig
 
         await sendMail({
           to: user.email,
-          subject: `Action Required: Complete Your Account Re-verification — St. John de Britto's Church`,
+          subject: `Action Required: Complete Your Account Re-verification — St. John de britto Church`,
           html: userEmailHtml
         }).catch(e => console.warn(`[Verification] Email error to ${user.email}:`, e.message));
       }
 
       // ── D. WhatsApp Bot Message to User ─────────────────────────────────────
       if (user.phone) {
-        const userWaMsg = `*St. John de Britto's Church, Kalayarkoil*\n*Account Re-verification Pending*\n\nDear *${userName}* (ID: ${userMemberId}),\n\nYour parish account re-verification is *pending*. Please complete your OTP verification to use all features of the Church website freely without interruption.\n\n*Verify Account Now:*\n${clientUrl}/login?verify=true\n\n_புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்_`;
+        const userWaMsg = `*St. John de britto Church, Kalayarkoil*\n*Account Re-verification Pending*\n\nDear *${userName}* (ID: ${userMemberId}),\n\nYour parish account re-verification is *pending*. Please complete your OTP verification to use all features of the Church website freely without interruption.\n\n*Verify Account Now:*\n${clientUrl}/login?verify=true\n\n_புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்_`;
 
-        require('../bot/whatsapp').sendWhatsAppMessage(user.phone, userWaMsg).catch(() => {});
+        require('../bot/whatsapp').sendWhatsAppMessage(user.phone, userWaMsg).catch(() => { });
       }
 
       user.last_verification_reminder_at = now;
@@ -288,7 +288,7 @@ async function checkAndSendMonthlyVerificationReminders({ forceAll = false, trig
         <div style="width: 75px; height: 75px; background: #ffffff; border-radius: 50%; margin: 0 auto 12px; overflow: hidden; border: 3px solid #fbbf24; box-shadow: 0 4px 14px rgba(0,0,0,0.2);">
           <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
         </div>
-        <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #fbbf24;">St. John de Britto's Church — Administration</h1>
+        <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #fbbf24;">St. John de britto Church — Administration</h1>
         <p style="margin: 4px 0 0 0; font-size: 13px; color: #e2e8f0; font-weight: 600;">Parishioner Account Re-verification Status Report</p>
         <div style="display: inline-block; margin-top: 12px; padding: 4px 14px; background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); border-radius: 999px; font-size: 11.5px; font-weight: 800; color: #fca5a5;">
           ${pendingSummaryList.length} Parishioners Pending Re-verification
@@ -330,7 +330,7 @@ async function checkAndSendMonthlyVerificationReminders({ forceAll = false, trig
           if (admin.email) {
             await sendMail({
               to: admin.email,
-              subject: `Parishioner Re-verification Report (${pendingSummaryList.length} Pending) — St. John de Britto's Church`,
+              subject: `Parishioner Re-verification Report (${pendingSummaryList.length} Pending) — St. John de britto Church`,
               html: adminEmailHtml
             }).catch(e => console.warn(`[Admin Report] Email error to ${admin.email}:`, e.message));
           }
@@ -347,8 +347,8 @@ async function checkAndSendMonthlyVerificationReminders({ forceAll = false, trig
 
           // C. WhatsApp Alert to Admin Phone
           if (admin.phone) {
-            const adminWaText = `⛪ *St. John de Britto's Church — Admin Alert*\n\n📋 *Parishioner Re-verification Status Report*\n*${pendingSummaryList.length} parishioners* currently have pending OTP re-verifications exceeding 30 days.\n\n🔗 *Manage in Admin Dashboard:* ${clientUrl}/admin/users\n\n_புனித அருளானந்தர் தேவாலயம்_`;
-            require('../bot/whatsapp').sendWhatsAppMessage(admin.phone, adminWaText).catch(() => {});
+            const adminWaText = `⛪ *St. John de britto Church — Admin Alert*\n\n📋 *Parishioner Re-verification Status Report*\n*${pendingSummaryList.length} parishioners* currently have pending OTP re-verifications exceeding 30 days.\n\n🔗 *Manage in Admin Dashboard:* ${clientUrl}/admin/users\n\n_புனித அருளானந்தர் தேவாலயம்_`;
+            require('../bot/whatsapp').sendWhatsAppMessage(admin.phone, adminWaText).catch(() => { });
           }
         }
 
@@ -369,7 +369,7 @@ async function checkAndSendMonthlyVerificationReminders({ forceAll = false, trig
           type: 'SECURITY_ALERT',
           title: 'Pending Account Re-verifications Report',
           reason: `${pendingSummaryList.length} parishioners currently have pending OTP re-verifications. Full multi-channel report dispatched to church administrators.`
-        }).catch(() => {});
+        }).catch(() => { });
 
         adminReportSent = true;
       } catch (adminErr) {

@@ -33,12 +33,12 @@ const getUserById = async (req, res) => {
 // PUT /api/users/profile — self
 const updateProfile = async (req, res) => {
   try {
-    let { 
+    let {
       name, familyName, familyId, dob, gender, address, email, phone,
       preferredLanguage, subStation, familyRole, familyMembers, settings,
       parishMemberId, anbiyam, sccGroup, parishZone, weddingDate, bloodGroup, memberStatus, sacraments
     } = req.body;
-    
+
     if (email === "") email = undefined;
     if (gender === "" || gender === null) gender = undefined;
 
@@ -68,12 +68,12 @@ const updateProfile = async (req, res) => {
       }
     }
 
-    const updateData = { 
-      name, familyName, familyId, dob, gender, address, email, 
-      preferredLanguage, subStation, familyRole, 
-      anbiyam: anbiyam !== undefined ? anbiyam : sccGroup, 
+    const updateData = {
+      name, familyName, familyId, dob, gender, address, email,
+      preferredLanguage, subStation, familyRole,
+      anbiyam: anbiyam !== undefined ? anbiyam : sccGroup,
       parishZone, weddingDate, bloodGroup, memberStatus,
-      familyMembers: Array.isArray(familyMembers) ? familyMembers : [] 
+      familyMembers: Array.isArray(familyMembers) ? familyMembers : []
     };
 
     if (parishMemberId !== undefined && parishMemberId !== '') updateData.parishMemberId = parishMemberId;
@@ -104,7 +104,7 @@ const updateProfile = async (req, res) => {
         console.error('Error uploading profile photo to GridFS:', e.message);
       }
     }
-    
+
     const user = await User.findByIdAndUpdate(req.user._id, updateData, { new: true }).select('-passwordHash -otp -otpExpires');
     res.json({ success: true, user });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -113,10 +113,10 @@ const updateProfile = async (req, res) => {
 // PUT /api/users/:id — admin
 const updateUser = async (req, res) => {
   try {
-    const { 
-      role, isActive, isVerified, name, email, phone, parishMemberId, 
-      gender, dob, address, subStation, familyName, familyId, parishZone, 
-      anbiyam, sccGroup, weddingDate, bloodGroup, memberStatus, sacraments 
+    const {
+      role, isActive, isVerified, name, email, phone, parishMemberId,
+      gender, dob, address, subStation, familyName, familyId, parishZone,
+      anbiyam, sccGroup, weddingDate, bloodGroup, memberStatus, sacraments
     } = req.body;
 
     const updateData = {};
@@ -131,7 +131,7 @@ const updateUser = async (req, res) => {
     if (dob !== undefined) updateData.dob = dob;
     if (address !== undefined) updateData.address = address;
     if (subStation !== undefined) updateData.subStation = subStation;
-    
+
     // Automatic Family ID sync on familyName change:
     if (familyName !== undefined) {
       const trimmedFam = (familyName || '').trim();
@@ -154,7 +154,7 @@ const updateUser = async (req, res) => {
     if (bloodGroup !== undefined) updateData.bloodGroup = bloodGroup;
     if (memberStatus !== undefined) updateData.memberStatus = memberStatus;
     if (sacraments !== undefined) updateData.sacraments = sacraments;
-    
+
     const user = await User.findByIdAndUpdate(req.params.id, updateData, { new: true }).select('-passwordHash');
     res.json({ success: true, user });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -240,9 +240,9 @@ const updateSettings = async (req, res) => {
       updates.settings = settings;
     }
 
-    const lang = mass_reflection_language || 
-                 settings?.notifications?.mass_reflection_language || 
-                 settings?.mass_reflection_language;
+    const lang = mass_reflection_language ||
+      settings?.notifications?.mass_reflection_language ||
+      settings?.mass_reflection_language;
 
     if (lang && ['ta', 'en', 'both'].includes(lang)) {
       updates.mass_reflection_language = lang;
@@ -325,7 +325,7 @@ const generateComprehensiveUserPdfStream = async (user, res, isDownload = false)
   doc.rect(margin, 36, contentWidth, 5).fill('#1e3a8a');
 
   // Title & Subtitle
-  doc.fillColor('#1e3a8a').fontSize(22).font('Helvetica-Bold').text("St. John de Britto's Church", margin, 48, { width: contentWidth - 95, align: 'left' });
+  doc.fillColor('#1e3a8a').fontSize(22).font('Helvetica-Bold').text("St. John de britto Church", margin, 48, { width: contentWidth - 95, align: 'left' });
   doc.fillColor('#b45309').fontSize(10).font('Helvetica-Bold').text("Kalayarkoil, Sivagangai District, Tamil Nadu - 630551", margin, 74, { width: contentWidth - 95, align: 'left' });
 
   // QR Code top right inside frame
@@ -394,7 +394,7 @@ const generateComprehensiveUserPdfStream = async (user, res, isDownload = false)
 
   // 2. PARISH & ECCLESIAL MEMBERSHIP
   drawSectionHeader('PARISH & ECCLESIAL MEMBERSHIP');
-  renderFieldLine('Primary Parish:', "St. John de Britto's Church, Kalayarkoil");
+  renderFieldLine('Primary Parish:', "St. John de britto Church, Kalayarkoil");
   // renderFieldLine('Parish Zone / Ward:', user.parishZone || 'N/A');
   renderFieldLine('Anbiyam Name:', user.anbiyam || user.sccGroup || 'N/A');
   renderFieldLine('Member Status:', user.memberStatus || (user.isSuspended ? 'Suspended' : (user.isActive ? 'Active' : 'Inactive')));
@@ -483,7 +483,7 @@ const generateComprehensiveUserPdfStream = async (user, res, isDownload = false)
     doc.switchToPage(i);
     doc.strokeColor('#cbd5e1').lineWidth(0.5).moveTo(margin, 765).lineTo(pageWidth - margin, 765).stroke();
     doc.fillColor('#64748b').fontSize(8.5).font('Helvetica').text(
-      `St. John de Britto's Church, Kalayarkoil — Official Member Record | Page ${i + 1} of ${range.count}`,
+      `St. John de britto Church, Kalayarkoil — Official Member Record | Page ${i + 1} of ${range.count}`,
       margin,
       774,
       { align: 'center', width: contentWidth }
@@ -531,7 +531,7 @@ const getAllUsersPdfReport = async (req, res) => {
     doc.rect(margin, 30, contentWidth, 5).fill('#1e3a8a');
 
     // Title / Header Banner
-    doc.fillColor('#1e3a8a').fontSize(20).font('Helvetica-Bold').text("St. John de Britto's Church", margin, 42, { align: 'center', width: contentWidth });
+    doc.fillColor('#1e3a8a').fontSize(20).font('Helvetica-Bold').text("St. John de britto Church", margin, 42, { align: 'center', width: contentWidth });
     doc.fillColor('#b45309').fontSize(10).font('Helvetica-Bold').text("Kalayarkoil — All Registered Members Master Report", margin, 66, { align: 'center', width: contentWidth });
     doc.fillColor('#64748b').fontSize(8.5).font('Helvetica').text(`Total Members: ${users.length} | Generated On: ${new Date().toLocaleString('en-GB')}`, margin, 80, { align: 'center', width: contentWidth });
 
@@ -591,7 +591,7 @@ const getAllUsersPdfReport = async (req, res) => {
       doc.switchToPage(i);
       doc.strokeColor('#e2e8f0').lineWidth(0.5).moveTo(margin, 775).lineTo(pageWidth - margin, 775).stroke();
       doc.fillColor('#64748b').fontSize(8.5).font('Helvetica').text(
-        `St. John de Britto's Church, Kalayarkoil — All Registered Members Master Report | Page ${i + 1} of ${range.count}`,
+        `St. John de britto Church, Kalayarkoil — All Registered Members Master Report | Page ${i + 1} of ${range.count}`,
         margin,
         782,
         { align: 'center', width: contentWidth }
@@ -625,15 +625,15 @@ const updateMemberIdFormat = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Member ID prefix is required (e.g. SJDB_M)' });
     }
     const result = await regenerateAllMemberIds(
-      prefix, 
-      padLength || 2, 
-      familyPrefix || 'SJDB_FAM-', 
+      prefix,
+      padLength || 2,
+      familyPrefix || 'SJDB_FAM-',
       familyPadLength || 2
     );
-    res.json({ 
-      success: true, 
-      message: `Successfully updated format (Member: "${result.newFormat}", Family: "${result.newFamilyFormat}") for all users`, 
-      ...result 
+    res.json({
+      success: true,
+      message: `Successfully updated format (Member: "${result.newFormat}", Family: "${result.newFamilyFormat}") for all users`,
+      ...result
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

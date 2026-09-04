@@ -422,7 +422,7 @@ export default function Team() {
                               )}
                               {member.badge && (
                                 <span className="absolute top-2 right-2 bg-blue-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-blue-300/40">
-                                   {member.badge}
+                                  {member.badge}
                                 </span>
                               )}
                             </div>
@@ -535,7 +535,7 @@ export default function Team() {
                 <div className="lg:col-span-4 flex flex-col items-center justify-center text-center p-6 bg-church-cream rounded-2xl border border-gold-300/50">
                   <GiChurch className="text-5xl text-church-gold mb-3" />
                   <h3 className="font-bold text-church-royal-blue text-base">Visit Our Parish</h3>
-                  <p className="text-gray-500 text-xs my-2">St. John de Britto's Church, Kalayarkoil, Sivagangai District</p>
+                  <p className="text-gray-500 text-xs my-2">St. John de britto Church, Kalayarkoil, Sivagangai District</p>
                   <Link to="/contact" className="btn-gold w-full justify-center text-center py-2.5 text-xs font-bold shadow-md mt-2">
                     Contact us
                   </Link>

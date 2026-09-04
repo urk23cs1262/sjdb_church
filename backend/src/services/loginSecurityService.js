@@ -102,7 +102,7 @@ async function sendLoginAlertEmail({ user, req, loginMethod = 'Password' }) {
         <span style="color:#fbbf24; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Security Alert</span>
       </div>
       <h1 style="margin:4px 0 0; color:#ffffff; font-size:22px; font-weight:800; line-height:1.3;">New Login Detected</h1>
-      <p style="margin:4px 0 0; color:#e2e8f0; opacity:0.9; font-size:13px;">St. John de Britto's Church</p>
+      <p style="margin:4px 0 0; color:#e2e8f0; opacity:0.9; font-size:13px;">St. John de britto Church</p>
     </div>
 
     <!-- Body Content -->
@@ -172,7 +172,7 @@ async function sendLoginAlertEmail({ user, req, loginMethod = 'Password' }) {
 
     <!-- Footer -->
     <div style="background-color:#0f172a; padding:18px 22px; text-align:center; color:#94a3b8; font-size:12px;">
-      <p style="margin:0; font-weight:700; color:#f8fafc;">St. John de Britto's Church, Kalayarkoil</p>
+      <p style="margin:0; font-weight:700; color:#f8fafc;">St. John de britto Church, Kalayarkoil</p>
       <p style="margin:4px 0 0; color:#64748b; font-size:11px;">Parish Management System • <a href="${clientUrl}" style="color:#fbbf24; text-decoration:none;">Website</a></p>
     </div>
 
@@ -182,7 +182,7 @@ async function sendLoginAlertEmail({ user, req, loginMethod = 'Password' }) {
 
     sendMail({
       to: user.email,
-      subject: `Security Alert: New Login Detected — St. John de Britto's Church`,
+      subject: `Security Alert: New Login Detected — St. John de britto Church`,
       html: emailHtml
     }).then(res => {
       if (res.success) console.log(` Login alert email sent to ${user.email}`);
@@ -214,7 +214,7 @@ async function sendPasswordUpdatedEmail({ user }) {
         <span style="color:#6ee7b7; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Security Confirmation</span>
       </div>
       <h1 style="margin:4px 0 0; color:#ffffff; font-size:22px; font-weight:800; line-height:1.3;">Password Updated Successfully</h1>
-      <p style="margin:4px 0 0; color:#e2e8f0; opacity:0.9; font-size:13px;">St. John de Britto's Church</p>
+      <p style="margin:4px 0 0; color:#e2e8f0; opacity:0.9; font-size:13px;">St. John de britto Church</p>
     </div>
 
     <!-- Body Content -->
@@ -253,7 +253,7 @@ async function sendPasswordUpdatedEmail({ user }) {
 
     <!-- Footer -->
     <div style="background-color:#0f172a; padding:18px 22px; text-align:center; color:#94a3b8; font-size:12px;">
-      <p style="margin:0; font-weight:700; color:#f8fafc;">St. John de Britto's Church, Kalayarkoil</p>
+      <p style="margin:0; font-weight:700; color:#f8fafc;">St. John de britto Church, Kalayarkoil</p>
       <p style="margin:4px 0 0; color:#64748b; font-size:11px;">Parish Management System • <a href="${clientUrl}" style="color:#fbbf24; text-decoration:none;">Website</a></p>
     </div>
 
@@ -263,7 +263,7 @@ async function sendPasswordUpdatedEmail({ user }) {
 
     sendMail({
       to: user.email,
-      subject: ` Security Confirmation: Your Password Has Been Updated Successfully — St. John de Britto's Church`,
+      subject: ` Security Confirmation: Your Password Has Been Updated Successfully — St. John de britto Church`,
       html: emailHtml
     }).then(res => {
       if (res.success) console.log(` Password updated email sent to ${user.email}`);
@@ -325,7 +325,7 @@ async function sendUserSuspensionEmail({ user, incident, ipDetails = {} }) {
         <span style="color:#fef08a; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Account Suspended</span>
       </div>
       <h1 style="margin:4px 0 0; color:#ffffff; font-size:22px; font-weight:900; line-height:1.3;">Security Alert – Your Account Has Been Suspended</h1>
-      <p style="margin:6px 0 0; color:#fca5a5; font-size:13px; font-weight:600;">St. John de Britto's Church Security System</p>
+      <p style="margin:6px 0 0; color:#fca5a5; font-size:13px; font-weight:600;">St. John de britto Church Security System</p>
     </div>
 
     <!-- Body -->
@@ -401,7 +401,7 @@ async function sendUserSuspensionEmail({ user, incident, ipDetails = {} }) {
 
     <!-- Footer -->
     <div style="background-color:#0f172a; padding:18px 22px; text-align:center; color:#64748b; font-size:12px; border-top:1px solid #334155;">
-      <p style="margin:0; font-weight:700; color:#cbd5e1;">St. John de Britto's Church, Kalayarkoil</p>
+      <p style="margin:0; font-weight:700; color:#cbd5e1;">St. John de britto Church, Kalayarkoil</p>
       <p style="margin:4px 0 0; color:#64748b; font-size:11px;">Parish Security System • Automated Protection Service</p>
     </div>
 
@@ -411,7 +411,7 @@ async function sendUserSuspensionEmail({ user, incident, ipDetails = {} }) {
 
     sendMail({
       to: user.email,
-      subject: `Security Alert – Your Account Has Been Suspended — St. John de Britto's Church`,
+      subject: `Security Alert – Your Account Has Been Suspended — St. John de britto Church`,
       html: emailHtml
     }).then(res => {
       if (res.success) console.log(` User suspension email sent to ${user.email}`);
@@ -474,7 +474,7 @@ async function sendAdminSuspensionIncidentEmail({ user, incident, ipDetails = {}
         <span style="color:#fef08a; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Brute-Force Protection Dispatch</span>
       </div>
       <h1 style="margin:4px 0 0; color:#ffffff; font-size:20px; font-weight:900; line-height:1.3;">Security Incident – User Account Automatically Suspended</h1>
-      <p style="margin:6px 0 0; color:#fca5a5; font-size:12px; font-weight:600;">St. John de Britto's Church — Administrative Security Monitor</p>
+      <p style="margin:6px 0 0; color:#fca5a5; font-size:12px; font-weight:600;">St. John de britto Church — Administrative Security Monitor</p>
     </div>
 
     <!-- Body -->
@@ -578,7 +578,7 @@ async function sendAdminSuspensionIncidentEmail({ user, incident, ipDetails = {}
 
     <!-- Footer -->
     <div style="background-color:#0f172a; padding:16px 20px; text-align:center; color:#94a3b8; font-size:12px; border-top:1px solid #334155;">
-      <p style="margin:0; font-weight:700; color:#cbd5e1;">St. John de Britto's Church, Kalayarkoil</p>
+      <p style="margin:0; font-weight:700; color:#cbd5e1;">St. John de britto Church, Kalayarkoil</p>
       <p style="margin:4px 0 0; color:#64748b; font-size:11px;">Parish Security System • Automated Brute-Force Monitor</p>
     </div>
 
@@ -592,7 +592,7 @@ async function sendAdminSuspensionIncidentEmail({ user, incident, ipDetails = {}
     adminEmails.forEach(adminEmail => {
       sendMail({
         to: adminEmail,
-        subject: ` Security Incident #${incidentCode}: User Account Automatically Suspended — St. John de Britto's Church`,
+        subject: ` Security Incident #${incidentCode}: User Account Automatically Suspended — St. John de britto Church`,
         html: emailHtml
       }).then(res => {
         if (res.success) console.log(` Admin suspension alert sent to ${adminEmail}`);
@@ -627,7 +627,7 @@ async function sendAccountReactivatedEmail({ user }) {
         <span style="color:#6ee7b7; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Access Restored</span>
       </div>
       <h1 style="margin:4px 0 0; color:#ffffff; font-size:22px; font-weight:800; line-height:1.3;">Your Account Has Been Reactivated</h1>
-      <p style="margin:4px 0 0; color:#e2e8f0; opacity:0.9; font-size:13px;">St. John de Britto's Church</p>
+      <p style="margin:4px 0 0; color:#e2e8f0; opacity:0.9; font-size:13px;">St. John de britto Church</p>
     </div>
 
     <!-- Body -->
@@ -666,7 +666,7 @@ async function sendAccountReactivatedEmail({ user }) {
 
     <!-- Footer -->
     <div style="background-color:#0f172a; padding:18px 22px; text-align:center; color:#94a3b8; font-size:12px;">
-      <p style="margin:0; font-weight:700; color:#f8fafc;">St. John de Britto's Church, Kalayarkoil</p>
+      <p style="margin:0; font-weight:700; color:#f8fafc;">St. John de britto Church, Kalayarkoil</p>
       <p style="margin:4px 0 0; color:#64748b; font-size:11px;">Parish Management System Security Service</p>
     </div>
 
@@ -676,7 +676,7 @@ async function sendAccountReactivatedEmail({ user }) {
 
     sendMail({
       to: user.email,
-      subject: `Your Account Has Been Reactivated — St. John de Britto's Church`,
+      subject: `Your Account Has Been Reactivated — St. John de britto Church`,
       html: emailHtml
     }).then(res => {
       if (res.success) console.log(` Account reactivated email sent to ${user.email}`);
@@ -703,7 +703,7 @@ async function sendUserTemporaryLockoutEmail({ user, lockMinutes = 15, ipDetails
         <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width:100%; height:100%; object-fit:cover; display:block;" />
       </div>
       <h1 style="margin:0; color:#ffffff; font-size:22px; font-weight:800;">Account Temporarily Locked</h1>
-      <p style="margin:6px 0 0; color:#fef3c7; font-size:13px;">St. John de Britto's Church — Security Notice</p>
+      <p style="margin:6px 0 0; color:#fef3c7; font-size:13px;">St. John de britto Church — Security Notice</p>
     </div>
 
     <div style="padding:30px 25px;">
@@ -735,7 +735,7 @@ async function sendUserTemporaryLockoutEmail({ user, lockMinutes = 15, ipDetails
     </div>
 
     <div style="background:#0f172a; padding:18px; text-align:center; color:#94a3b8; font-size:12px;">
-      <p style="margin:0 0 4px;">St. John de Britto's Church, Kalayarkoil</p>
+      <p style="margin:0 0 4px;">St. John de britto Church, Kalayarkoil</p>
       <p style="margin:0; color:#64748b;">Parish Management & Governance System</p>
     </div>
   </div>
@@ -744,7 +744,7 @@ async function sendUserTemporaryLockoutEmail({ user, lockMinutes = 15, ipDetails
 
     sendMail({
       to: user.email,
-      subject: `Security Alert: Account Temporarily Locked (15 Mins) — St. John de Britto's Church`,
+      subject: `Security Alert: Account Temporarily Locked (15 Mins) — St. John de britto Church`,
       html: emailHtml
     }).catch(err => console.error(' Lockout email dispatch error:', err.message));
 

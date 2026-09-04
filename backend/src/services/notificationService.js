@@ -44,7 +44,7 @@ const createNotification = async ({ userId, isBroadcast, title, message, type, c
     const shouldSendPush = channels.includes('push') || (!channels.length && notif.recipient === 'user') || notif.isBroadcast;
     if (shouldSendPush) {
       const pushPayload = {
-        title: title || "St. John de Britto's Church",
+        title: title || "St. John de britto Church",
         body: (message || '').replace(/\n+/g, ' ').slice(0, 140),
         notificationId: notif._id.toString(),
         url: `/notifications?notification=${notif._id.toString()}`,
@@ -91,7 +91,7 @@ const createNotification = async ({ userId, isBroadcast, title, message, type, c
         recipientEmails.forEach(toEmail => {
           sendMail({
             to: toEmail,
-            subject: `${title} — St. John de Britto's Church`,
+            subject: `${title} — St. John de britto Church`,
             attachments,
             html: `
 <div style="font-family:'Segoe UI',Arial,sans-serif;background:#f5f7fb;padding:40px 20px;">
@@ -101,7 +101,7 @@ const createNotification = async ({ userId, isBroadcast, title, message, type, c
       <div style="width:80px;height:80px;border-radius:50%;overflow:hidden;margin:0 auto 15px;border:3px solid #fbbf24;box-shadow:0 6px 16px rgba(0,0,0,0.25);background:#ffffff;">
         <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width:100%;height:100%;object-fit:cover;display:block;" />
       </div>
-      <h1 style="color:#fbbf24;margin:0;font-size:26px;font-weight:800;letter-spacing:0.5px;">St. John de Britto's Church</h1>
+      <h1 style="color:#fbbf24;margin:0;font-size:26px;font-weight:800;letter-spacing:0.5px;">St. John de britto Church</h1>
       <p style="color:#ffffff;margin:5px 0 0;font-size:14px;opacity:0.95;font-weight:500;">புனித அருளானந்தர் தேவாலயம்</p>
       <div style="width:80px;height:4px;background:#fbbf24;border-radius:999px;margin:15px auto 0;"></div>
     </div>
@@ -123,7 +123,7 @@ const createNotification = async ({ userId, isBroadcast, title, message, type, c
     </div>
     <!-- FOOTER -->
     <div style="background:#111827;padding:28px 20px;text-align:center;color:#d1d5db;font-size:13px;">
-      <p style="margin:0 0 8px;">St. John de Britto's Church, Kalayarkoil</p>
+      <p style="margin:0 0 8px;">St. John de britto Church, Kalayarkoil</p>
       <p style="margin:0 0 15px;">Tamil Nadu - 630551</p>
       <div style="width:100%;height:1px;background:rgba(255,255,255,0.08);margin:18px 0;"></div>
       <p style="margin:0;font-size:12px;color:#9ca3af;">"May the peace of Christ be with you always."</p>
@@ -199,7 +199,7 @@ const notifyAdmins = async ({ title, message, fileUrl }) => {
       <div style="width:75px; height:75px; margin:0 auto 12px; border-radius:50%; overflow:hidden; border:3px solid #fbbf24; background:#ffffff; box-shadow:0 4px 14px rgba(0,0,0,0.25);">
         <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width:100%; height:100%; object-fit:cover; display:block;" />
       </div>
-      <h1 style="color:#fbbf24; margin:0; font-size:20px; font-weight:800;">St. John de Britto's Church</h1>
+      <h1 style="color:#fbbf24; margin:0; font-size:20px; font-weight:800;">St. John de britto Church</h1>
       <p style="color:#e2e8f0; margin:4px 0 0; font-size:12.5px; font-weight:500;">Administrative Notification</p>
     </div>
     <div style="padding:24px 20px; color:#334155; line-height:1.6;">
@@ -211,7 +211,7 @@ const notifyAdmins = async ({ title, message, fileUrl }) => {
       <!-- DYNAMIC_BIBLE_VERSE -->
     </div>
     <div style="background:#0f172a; padding:16px 18px; text-align:center; color:#94a3b8; font-size:11px;">
-      <p style="margin:0;">St. John de Britto's Church, Kalayarkoil • Administrative System</p>
+      <p style="margin:0;">St. John de britto Church, Kalayarkoil • Administrative System</p>
     </div>
   </div>
 </div>`

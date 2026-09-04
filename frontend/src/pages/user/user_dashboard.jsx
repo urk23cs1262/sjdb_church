@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../context/context_auth_context';
 import { useNotifications } from '../../context/context_notification_context';
-import { FiUser, FiCalendar,FiBookOpen, FiFileText, FiMessageSquare, FiBell, FiEdit, FiSettings, FiDownload, FiCheckCircle, FiX, FiInfo, FiShield, FiCheck } from 'react-icons/fi';
+import { FiUser, FiCalendar, FiBookOpen, FiFileText, FiMessageSquare, FiBell, FiEdit, FiSettings, FiDownload, FiCheckCircle, FiX, FiInfo, FiShield, FiCheck } from 'react-icons/fi';
 
 import { FaDonate } from "react-icons/fa";
 import { GiChurch, GiCrucifix, GiPrayer, GiHeartBottle } from 'react-icons/gi';
@@ -96,7 +96,7 @@ export default function UserDashboard() {
           const match = reqs.find(req => req._id === targetReqId);
           if (match) setSelectedPendingRequest(match);
         }
-      }).catch(() => {}),
+      }).catch(() => { }),
     ]).finally(() => setLoading(false));
   }, [searchParams]);
 
@@ -212,7 +212,7 @@ export default function UserDashboard() {
   };
 
   const QUICK_ACTIONS = [
-    { icon: <FiBookOpen  />, label: 'Book a Mass', path: '/dashboard/booking', color: 'bg-blue-500' },
+    { icon: <FiBookOpen />, label: 'Book a Mass', path: '/dashboard/booking', color: 'bg-blue-500' },
     { icon: <FiFileText />, label: 'Request Document', path: '/dashboard/documents', color: 'bg-green-500' },
     { icon: <FiMessageSquare />, label: 'Raise a Ticket', path: '/dashboard/tickets', color: 'bg-purple-500' },
     { icon: <GiPrayer />, label: 'Prayer Request', path: '/prayer-requests', color: 'bg-amber-500' },
@@ -244,7 +244,7 @@ export default function UserDashboard() {
                 <h1 className="text-white font-display text-xl sm:text-2xl md:text-3xl lg:text-4xl font-extrabold tracking-tight my-0.5 leading-snug break-words">
                   {user?.name}
                 </h1>
-                
+
                 {/* ID Badges Row */}
                 <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1">
                   {user?.parishMemberId && (
@@ -274,11 +274,10 @@ export default function UserDashboard() {
             <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 flex-shrink-0 w-full lg:w-auto pt-2 lg:pt-0 border-t border-white/10 lg:border-t-0">
               <Link
                 to="/dashboard/settings"
-                className={`btn-outline-gold text-xs sm:text-sm py-2 px-3 sm:py-2.5 sm:px-4 shadow-md border rounded-xl whitespace-nowrap flex items-center justify-center gap-2.5 transition-all flex-1 sm:flex-initial group ${
-                  profileCompletion.isComplete
+                className={`btn-outline-gold text-xs sm:text-sm py-2 px-3 sm:py-2.5 sm:px-4 shadow-md border rounded-xl whitespace-nowrap flex items-center justify-center gap-2.5 transition-all flex-1 sm:flex-initial group ${profileCompletion.isComplete
                     ? 'border-emerald-500/50 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-900/40'
                     : 'border-church-gold/60 hover:bg-church-gold/10'
-                }`}
+                  }`}
                 title={profileCompletion.isComplete ? "Profile Complete (100%)" : `Profile ${profileCompletion.percentage}% Complete — Click to update`}
               >
                 <ProfileProgressRing percentage={profileCompletion.percentage} size={28} />
@@ -436,8 +435,8 @@ export default function UserDashboard() {
                           <p className="font-bold text-gray-800 text-base">₹{d.amount}</p>
                           <span className="text-[9px] bg-blue-50 text-church-royal-blue px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">{DONATION_TYPES.find(t => t.id === d.type)?.label || 'General'}</span>
                           <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${d.status === 'verified' ? 'bg-green-50 text-green-600' :
-                              d.status === 'rejected' ? 'bg-red-50 text-red-600' :
-                                'bg-gold-50 text-church-gold'
+                            d.status === 'rejected' ? 'bg-red-50 text-red-600' :
+                              'bg-gold-50 text-church-gold'
                             }`}>
                             {d.status || 'pending'}
                           </span>
@@ -583,7 +582,7 @@ export default function UserDashboard() {
                 <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
                   <img src={churchLogo} style={{ width: '70px', height: '70px', objectFit: 'contain' }} alt="Logo" />
                   <div style={{ textAlign: 'left' }}>
-                    <h1 style={{ margin: 0, fontSize: '30px', color: '#1e3a8a' }}>ST. JOHN DE BRITTO'S CHURCH</h1>
+                    <h1 style={{ margin: 0, fontSize: '30px', color: '#1e3a8a' }}>ST. JOHN DE britto CHURCH</h1>
                     <h2 style={{ margin: '5px 0', fontSize: '18px', color: '#b8860b', fontWeight: 'normal' }}>புனித அருளானந்தர் தேவாலயம்</h2>
                     <p style={{ margin: 0, fontSize: '13px', color: '#555' }}>Murthi Nagar, Kalayarkoil, Tamil Nadu 630551, India.</p>
                   </div>

@@ -115,18 +115,18 @@ async function dispatchTransitionNotificationsBackground(settings, event) {
 
     const formattedCompletion = settings.expectedCompletion
       ? new Date(settings.expectedCompletion).toLocaleString('en-IN', {
-          timeZone: 'Asia/Kolkata',
-          day: 'numeric',
-          month: 'short',
-          year: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true
-        }) + ' IST'
+        timeZone: 'Asia/Kolkata',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      }) + ' IST'
       : 'Shortly';
 
     if (isLive) {
-      emailSubject = `✅ SJDB Connect Services Restored — St. John de Britto's Church`;
+      emailSubject = `✅ SJDB Connect Services Restored — St. John de britto Church`;
       emailBody = `Dear Parishioner,\n\nMaintenance has been completed successfully.\n\nThe SJDB Connect website, WhatsApp Bot, and digital services are now available again.\n\nThank you for your patience.\n\nVisit Website: ${siteUrl}`;
       smsBody = `✅ SJDB Connect Services Restored: Maintenance completed successfully. All online services & WhatsApp Bot are available. ${siteUrl}`;
       waMsg = `✅ *SJDB Connect Services Restored*
@@ -137,10 +137,10 @@ The SJDB Connect website, WhatsApp Bot, and digital services are now available a
 
 Thank you for your patience.
 
-— *St. John de Britto's Church, Kalayarkoil*
+— *St. John de britto Church, Kalayarkoil*
 _SJDB Connect_`;
     } else if (isEmergency) {
-      emailSubject = `🚨 EMERGENCY NOTICE: St. John de Britto's Church Website Temporary Shutdown`;
+      emailSubject = `🚨 EMERGENCY NOTICE: St. John de britto Church Website Temporary Shutdown`;
       emailBody = `Dear Parishioner,\n\nOur church website and WhatsApp Bot have been temporarily locked by the Technical Team due to an emergency system event:\n${settings.emergencyReason || settings.message}\n\nWe are working swiftly to restore normal operation. We apologize for any inconvenience.`;
       smsBody = `🚨 Emergency Shutdown: Website and digital services temporarily locked due to emergency maintenance. We are restoring services.`;
       waMsg = `🚨 *SJDB Connect Emergency Lockdown*
@@ -151,10 +151,10 @@ Our church digital services and WhatsApp Bot are temporarily locked due to an em
 
 We are working swiftly to restore normal operation. Thank you for your prayers and understanding. 🙏
 
-— *St. John de Britto's Church, Kalayarkoil*
+— *St. John de britto Church, Kalayarkoil*
 _SJDB Connect_`;
     } else {
-      emailSubject = settings.notificationTemplate?.emailSubject || `🔧 Website Maintenance Started — St. John de Britto's Church`;
+      emailSubject = settings.notificationTemplate?.emailSubject || `🔧 Website Maintenance Started — St. John de britto Church`;
       emailBody = settings.notificationTemplate?.emailBody
         ? settings.notificationTemplate.emailBody.replace(/\{EXPECTED_COMPLETION\}/g, formattedCompletion)
         : `Dear Parishioner,\n\nOur church website and WhatsApp Bot are currently undergoing scheduled maintenance:\n${settings.message}\n\nExpected completion: ${formattedCompletion}. Some online services may be temporarily unavailable. We will notify you when the portal is back online.`;
@@ -169,7 +169,7 @@ Please try again later.
 
 We apologize for the inconvenience and thank you for your patience.
 
-— *St. John de Britto's Church, Kalayarkoil*
+— *St. John de britto Church, Kalayarkoil*
 _SJDB Connect_`;
     }
 
@@ -194,7 +194,7 @@ _SJDB Connect_`;
                   <div style="width: 75px; height: 75px; margin: 0 auto 12px; border-radius: 50%; overflow: hidden; border: 3px solid #fbbf24; background: #ffffff; box-shadow: 0 4px 14px rgba(0,0,0,0.25);">
                     <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
                   </div>
-                  <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #fbbf24;">St. John de Britto's Church</h1>
+                  <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #fbbf24;">St. John de britto Church</h1>
                   <p style="margin: 4px 0 0 0; color: #e2e8f0; font-size: 13px; font-weight: 500;">Kalayarkoil — System Status Update</p>
                 </div>
                 <div style="padding: 28px 24px; color: #1e293b; line-height: 1.6;">
@@ -205,11 +205,11 @@ _SJDB Connect_`;
                   </div>
                   <p style="font-size: 14px; margin: 0 0 16px 0;">Dear Parishioner,</p>
                   <p style="font-size: 14px; margin: 0 0 16px 0;">
-                    ${isLive 
-                      ? 'Our website maintenance has been completed successfully. All online features, mass readings, and parish services are fully available.' 
-                      : (isEmergency 
-                        ? 'Our church website and WhatsApp services have been temporarily restricted due to an emergency system event.' 
-                        : 'Our church website is currently undergoing scheduled maintenance.')}
+                    ${isLive
+                ? 'Our website maintenance has been completed successfully. All online features, mass readings, and parish services are fully available.'
+                : (isEmergency
+                  ? 'Our church website and WhatsApp services have been temporarily restricted due to an emergency system event.'
+                  : 'Our church website is currently undergoing scheduled maintenance.')}
                   </p>
                   <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; padding: 16px; margin-bottom: 24px; font-size: 13px;">
                     <p style="margin: 0 0 6px 0;"><strong>• Details:</strong> ${settings.emergencyReason || settings.message}</p>
@@ -242,7 +242,7 @@ _SJDB Connect_`;
           sentVia: ['email', 'inApp', 'push', 'whatsapp']
         });
         inAppCount++;
-      } catch (e) {}
+      } catch (e) { }
 
       // 3. Web Push Channel
       pushCount++;
@@ -260,7 +260,7 @@ _SJDB Connect_`;
             await wa.sendWhatsAppMessage(formattedPhone, waMsg);
             waCount++;
           }
-        } catch (waErr) {}
+        } catch (waErr) { }
       }
     }
 
@@ -357,8 +357,8 @@ async function setSystemState(targetStatus, options = {}) {
     notificationDispatch: 'QUEUED',
     settings,
     activeEvent: event,
-    message: isLive 
-      ? 'Maintenance Mode Disabled (Website is Live)' 
+    message: isLive
+      ? 'Maintenance Mode Disabled (Website is Live)'
       : (isEmergency ? 'Emergency Shutdown Activated' : 'Maintenance Mode Enabled')
   };
 }

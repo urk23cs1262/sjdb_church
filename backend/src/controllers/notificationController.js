@@ -89,11 +89,11 @@ const deleteOne = async (req, res) => {
     const notif = await Notification.findByIdAndDelete(req.params.id);
     if (notif && (notif.relatedId || notif.title)) {
       if (notif.relatedId && notif.relatedModel === 'Announcement') {
-        await Announcement.findByIdAndDelete(notif.relatedId).catch(() => {});
+        await Announcement.findByIdAndDelete(notif.relatedId).catch(() => { });
       } else if (notif.category === 'announcements' || notif.type === 'announcement') {
         const cleanTitle = notif.title ? notif.title.replace(/^\s*/, '').trim() : '';
         if (cleanTitle) {
-          await Announcement.deleteMany({ title: new RegExp(cleanTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }).catch(() => {});
+          await Announcement.deleteMany({ title: new RegExp(cleanTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }).catch(() => { });
         }
       }
     }
@@ -242,10 +242,10 @@ const broadcast = async (req, res) => {
     } else if (!targetActionUrl) {
       targetActionUrl = (
         selectedCategory === 'bookings' ? '/dashboard' :
-        selectedCategory === 'documents' ? '/dashboard/documents' :
-        selectedCategory === 'donations' ? '/donate' :
-        selectedCategory === 'prayer' ? '/prayers' :
-        '/dashboard'
+          selectedCategory === 'documents' ? '/dashboard/documents' :
+            selectedCategory === 'donations' ? '/donate' :
+              selectedCategory === 'prayer' ? '/prayers' :
+                '/dashboard'
       );
     }
 
@@ -265,7 +265,7 @@ const broadcast = async (req, res) => {
     // Unified Push Broadcast
     const { sendPushBroadcast } = require('../services/webPushService');
     sendPushBroadcast({
-      title: title || "St. John de Britto's Church",
+      title: title || "St. John de britto Church",
       body: (message || '').replace(/\n+/g, ' ').slice(0, 140),
       notificationId: notif._id.toString(),
       url: `/notifications?notification=${notif._id.toString()}`,

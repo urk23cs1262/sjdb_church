@@ -118,7 +118,7 @@ exports.sendAdminMessage = async (req, res) => {
         <div style="width: 75px; height: 75px; background: #ffffff; border-radius: 50%; margin: 0 auto 12px; overflow: hidden; border: 3px solid #fbbf24; box-shadow: 0 4px 14px rgba(0,0,0,0.25);">
           <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
         </div>
-        <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #fbbf24; letter-spacing: 0.5px;">St. John de Britto's Church</h1>
+        <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #fbbf24; letter-spacing: 0.5px;">St. John de britto Church</h1>
         <p style="margin: 4px 0 0 0; font-size: 13px; color: #e2e8f0; font-weight: 500;">புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்</p>
         <div style="display: inline-block; margin-top: 12px; padding: 4px 14px; background: ${priorityBg}; color: ${priorityColor}; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px;">
           ${priorityLabel}
@@ -160,7 +160,7 @@ ${escapeHtml(message)}
 
       <!-- FOOTER -->
       <div style="background-color: #0f172a; padding: 16px 18px; text-align: center; color: #94a3b8; font-size: 11.5px;">
-        <p style="margin: 0; font-weight: 700; color: #f8fafc;">St. John de Britto's Church, Kalayarkoil</p>
+        <p style="margin: 0; font-weight: 700; color: #f8fafc;">St. John de britto Church, Kalayarkoil</p>
         <p style="margin: 4px 0 0; color: #64748b;">Official Parish Communication • <a href="${clientUrl}" style="color: #fbbf24; text-decoration: none;">Website</a></p>
       </div>
 
@@ -179,8 +179,8 @@ ${escapeHtml(message)}
 
     // 5. WhatsApp Notification (if selected)
     if (sendWhatsApp && recipient.phone) {
-      const waMsg = `*St. John de Britto's Church, Kalayarkoil*\n*Message from Administration*\n\nDear *${recipient.name}*,\n\n*Subject:* ${subject}\n\n${message}\n\n*View on Website:*\n${messagesUrl}\n\n_புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்_`;
-      require('../bot/whatsapp').sendWhatsAppMessage(recipient.phone, waMsg).catch(() => {});
+      const waMsg = `*St. John de britto Church, Kalayarkoil*\n*Message from Administration*\n\nDear *${recipient.name}*,\n\n*Subject:* ${subject}\n\n${message}\n\n*View on Website:*\n${messagesUrl}\n\n_புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்_`;
+      require('../bot/whatsapp').sendWhatsAppMessage(recipient.phone, waMsg).catch(() => { });
     }
 
     res.status(201).json({

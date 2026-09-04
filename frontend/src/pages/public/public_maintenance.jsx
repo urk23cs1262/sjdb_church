@@ -117,7 +117,7 @@ export default function Maintenance({ isPreview = false }) {
             <img src={churchLogo} alt="Church Logo" className="w-full h-full object-cover object-[center_15%] rounded-full" />
           </div>
           <div>
-            <h1 className="font-bold text-base sm:text-lg text-church-royal-blue tracking-wide">St. John de Britto's Church</h1>
+            <h1 className="font-bold text-base sm:text-lg text-church-royal-blue tracking-wide">St. John de britto Church</h1>
             <p className="text-[11px] text-amber-700 font-semibold">Kalayarkoil — Official Portal</p>
           </div>
         </div>

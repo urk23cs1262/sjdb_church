@@ -104,7 +104,7 @@ const sendDonationReceiptEmails = async (donation, { force = false } = {}) => {
           <tr>
             <td align="left" style="vertical-align:middle;">
               <h1 style="margin:0;font-size:18px;line-height:22px;color:#1e3a8a;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">
-                ST. JOHN DE BRITTO'S CHURCH
+                ST. JOHN DE britto CHURCH
               </h1>
               <p style="margin:3px 0 0;font-size:13px;color:#b8860b;font-weight:normal;">
                 புனித அருளானந்தர் தேவாலயம்
@@ -202,7 +202,7 @@ const sendDonationReceiptEmails = async (donation, { force = false } = {}) => {
       <td align="center" style="padding:12px 20px;text-align:center;line-height:20px;font-size:12px;color:#333333;">
         <p style="margin:0;">Thank you for your generous contribution</p>
         <p style="margin:0;">towards the ministry and mission of</p>
-        <p style="margin:0;font-weight:bold;color:#1e3a8a;">St. John de Britto's Church.</p>
+        <p style="margin:0;font-weight:bold;color:#1e3a8a;">St. John de britto Church.</p>
         <p style="margin:8px 0 0;color:#b8860b;font-weight:bold;">May God bless you abundantly.</p>
       </td>
     </tr>
@@ -240,7 +240,7 @@ const sendDonationReceiptEmails = async (donation, { force = false } = {}) => {
       emailJobs.push(
         sendMail({
           to: donorEmail,
-          subject: `Donation Receipt ${receiptNumber} — St. John de Britto's Church`,
+          subject: `Donation Receipt ${receiptNumber} — St. John de britto Church`,
           html: emailTemplate,
           attachments,
         })
@@ -271,7 +271,7 @@ const sendDonationReceiptEmails = async (donation, { force = false } = {}) => {
         userId: donation.userId,
         recipient: 'user',
         title: 'Thank You for Your Donation',
-        message: `Dear ${donorName}, thank you for your generous offering of ₹${donation.amount} towards ${categoryLabel} of St. John de Britto's Church.\nReceipt No: ${receiptNumber}\nPayment ID: ${paymentRef}\nMay God bless you and your family abundantly!`,
+        message: `Dear ${donorName}, thank you for your generous offering of ₹${donation.amount} towards ${categoryLabel} of St. John de britto Church.\nReceipt No: ${receiptNumber}\nPayment ID: ${paymentRef}\nMay God bless you and your family abundantly!`,
         type: 'donation',
         category: 'donations',
         priority: 'medium',
@@ -288,8 +288,8 @@ const sendDonationReceiptEmails = async (donation, { force = false } = {}) => {
     if (donorPhone) {
       try {
         const { sendWhatsAppMedia, sendWhatsAppMessage } = require('../bot/whatsapp');
-        const waCaption = `*ST. JOHN DE BRITTO'S CHURCH*\n*புனித அருளானந்தர் தேவாலயம்*\n\nDear *${donorName}*,\n\nThank you for your generous donation of *₹${donation.amount}* towards *${categoryLabel}*.\n\n*Receipt No:* ${receiptNumber}\n*Payment ID:* ${paymentRef}\n*Date:* ${paymentDateStr}\n\n_“God loves a cheerful giver.” — 2 Corinthians 9:7_\n\nMay Lord Jesus and St. John de Britto bless you abundantly.`;
-        
+        const waCaption = `*ST. JOHN DE britto CHURCH*\n*புனித அருளானந்தர் தேவாலயம்*\n\nDear *${donorName}*,\n\nThank you for your generous donation of *₹${donation.amount}* towards *${categoryLabel}*.\n\n*Receipt No:* ${receiptNumber}\n*Payment ID:* ${paymentRef}\n*Date:* ${paymentDateStr}\n\n_“God loves a cheerful giver.” — 2 Corinthians 9:7_\n\nMay Lord Jesus and St. John de Britto bless you abundantly.`;
+
         if (fs.existsSync(fullPath)) {
           sendWhatsAppMedia(donorPhone, {
             url: fullPath,
@@ -477,8 +477,8 @@ const verifyRazorpayPayment = async (req, res) => {
     const clientMessage = error.statusCode === 503
       ? error.message
       : (error?.error?.description || error.message || 'Payment verification failed.');
-    return res.status(error.statusCode || 500).json({ 
-      success: false, 
+    return res.status(error.statusCode || 500).json({
+      success: false,
       message: clientMessage,
       error: error?.error?.description || error.message
     });
@@ -583,28 +583,28 @@ const getAll = async (req, res) => {
 const create = async (req, res) => {
   try {
     const { amount, type, paymentMethod, transactionId, donorName, note, isAnonymous, email, phone } = req.body;
-    const donation = await Donation.create({ 
-      userId: req.user?._id, 
-      amount, 
-      type, 
-      paymentMethod: paymentMethod || 'upi', 
-      transactionId, 
-      donorName: isAnonymous ? 'Anonymous' : (donorName || req.user?.name), 
+    const donation = await Donation.create({
+      userId: req.user?._id,
+      amount,
+      type,
+      paymentMethod: paymentMethod || 'upi',
+      transactionId,
+      donorName: isAnonymous ? 'Anonymous' : (donorName || req.user?.name),
       email: email || req.user?.email,
       phone: phone || req.user?.phone,
-      note, 
+      note,
       isAnonymous,
       status: 'pending'
     });
-    
+
     res.status(201).json({ success: true, donation });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
 const verify = async (req, res) => {
   try {
-    const donation = await Donation.findByIdAndUpdate(req.params.id, { 
-      isVerified: true, 
+    const donation = await Donation.findByIdAndUpdate(req.params.id, {
+      isVerified: true,
       status: 'verified',
       verifiedBy: req.user._id,
       paidAt: new Date()
@@ -654,7 +654,7 @@ const getDonationConfig = async (req, res) => {
     const merchantSetting = await SiteSettings.findOne({ key: 'merchant_name' }).lean();
 
     const upiId = upiSetting?.value || process.env.DONATION_UPI_ID || '112520120';
-    const merchantName = merchantSetting?.value || process.env.MERCHANT_NAME || "St. John de Britto's Church";
+    const merchantName = merchantSetting?.value || process.env.MERCHANT_NAME || "St. John de britto Church";
     const keyId = process.env.RAZORPAY_KEY_ID || null;
 
     res.json({
@@ -724,16 +724,16 @@ const resendReceiptEmail = async (req, res) => {
   }
 };
 
-module.exports = { 
-  createDonationOrder, 
-  verifyRazorpayPayment, 
-  razorpayWebhook, 
-  getAll, 
-  create, 
-  verify, 
-  rejectDonation, 
-  getStats, 
-  getMyDonations, 
+module.exports = {
+  createDonationOrder,
+  verifyRazorpayPayment,
+  razorpayWebhook,
+  getAll,
+  create,
+  verify,
+  rejectDonation,
+  getStats,
+  getMyDonations,
   getDonationConfig,
   getDonationReceipt,
   resendReceiptEmail

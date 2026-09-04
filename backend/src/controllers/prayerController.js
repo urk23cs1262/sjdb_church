@@ -4,7 +4,7 @@ const { notifyAdmins, createNotification } = require('../services/notificationSe
 const { sendMail } = require('../config/mailer');
 
 function sendWA(phone, text) {
-  return require('../bot/whatsapp').sendWhatsAppMessage(phone, text).catch(() => {});
+  return require('../bot/whatsapp').sendWhatsAppMessage(phone, text).catch(() => { });
 }
 
 const getPublic = async (req, res) => {
@@ -71,8 +71,8 @@ const create = async (req, res) => {
     const finalIntention = (intention && String(intention).trim())
       ? String(intention).trim()
       : (isConfession
-          ? `Confession Request (Sacrament of Reconciliation)`
-          : 'Prayer Intention');
+        ? `Confession Request (Sacrament of Reconciliation)`
+        : 'Prayer Intention');
 
     const prayer = await PrayerRequest.create({
       userId: req.user?._id,
@@ -140,21 +140,21 @@ const create = async (req, res) => {
         sendWA(userPhone, ` *${isConfession ? 'Confession Request Received' : 'Prayer Request Received'}*
 
 Dear ${applicantName},
-Your ${isConfession ? 'confidential confession request' : 'prayer intention'} has been submitted successfully to St. John de Britto's Church.
+Your ${isConfession ? 'confidential confession request' : 'prayer intention'} has been submitted successfully to St. John de britto Church.
 
  *Type:* ${type}
  *Intention:* "${finalIntention.slice(0, 100)}${finalIntention.length > 100 ? '...' : ''}"
 
  *View Prayer Wall:* ${clientBaseUrl}${userActionUrl}
 
- _St. John de Britto's Church, Kalayarkoil_`);
+ _St. John de britto Church, Kalayarkoil_`);
       }
     }
 
     res.status(201).json({ success: true, prayer });
-  } catch (err) { 
+  } catch (err) {
     console.error('Prayer creation error:', err);
-    res.status(500).json({ success: false, message: err.message }); 
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
@@ -162,7 +162,7 @@ const updateStatus = async (req, res) => {
   try {
     const { status } = req.body;
     const prayer = await PrayerRequest.findByIdAndUpdate(req.params.id, { status }, { new: true }).populate('userId', 'name email phone');
-    
+
     if (prayer) {
       const userObj = prayer.userId;
       const userEmail = userObj?.email || prayer.email;
@@ -182,11 +182,11 @@ const updateStatus = async (req, res) => {
             : (isConfession ? 'Confession Request Updated' : 'Prayer Request Update'),
           message: isApproved
             ? (isConfession
-                ? 'Your confession request has been accepted by the Parish Priest.'
-                : 'Your prayer intention has been approved and placed on the Prayer Wall / Mass Intentions.')
+              ? 'Your confession request has been accepted by the Parish Priest.'
+              : 'Your prayer intention has been approved and placed on the Prayer Wall / Mass Intentions.')
             : (isConfession
-                ? 'Your confession request was reviewed by the Parish Priest. Please contact the parish office for alternative timing.'
-                : 'Your prayer request update: Thank you for sharing your intention with our parish.'),
+              ? 'Your confession request was reviewed by the Parish Priest. Please contact the parish office for alternative timing.'
+              : 'Your prayer request update: Thank you for sharing your intention with our parish.'),
           type: 'prayer',
           category: 'prayer',
           priority: 'medium',
@@ -208,7 +208,7 @@ ${isApproved ? 'May God bless you and grant your prayer intentions.' : 'Thank yo
 
 *View Prayer Wall:* ${clientBaseUrl}${userActionUrl}
 
-_St. John de Britto's Church, Kalayarkoil_`);
+_St. John de britto Church, Kalayarkoil_`);
       }
     }
 

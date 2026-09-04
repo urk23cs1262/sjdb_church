@@ -1,7 +1,9 @@
 const {
   sendDailyChurchNotifications,
   getDailyNotificationStatus,
-  getUserNotificationHistory
+  getUserNotificationHistory,
+  getSchedulerStatus,
+  recoverMissedRun
 } = require('../services/dailyNotificationService');
 
 /**
@@ -10,6 +12,8 @@ const {
 const getStatus = async (req, res) => {
   try {
     const status = await getDailyNotificationStatus();
+    // Append live scheduler status
+    status.scheduler = getSchedulerStatus();
     res.json(status);
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -69,6 +73,20 @@ const triggerBroadcast = async (req, res) => {
 };
 
 /**
+ * Recover a missed midnight broadcast — checks if today's job ran; if not, runs it safely (Admin)
+ * Safe to call multiple times — idempotency prevents duplicate sends.
+ */
+const recoverMissed = async (req, res) => {
+  try {
+    console.log(`[DAILY-CATHOLIC] Manual recovery triggered by ${req.user?.email || 'admin'}`);
+    const result = await recoverMissedRun();
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
  * Get notification history for the current logged in user
  */
 const getMyHistory = async (req, res) => {
@@ -89,5 +107,7 @@ module.exports = {
   getStatus,
   sendTestEmail,
   triggerBroadcast,
+  recoverMissed,
   getMyHistory
 };
+

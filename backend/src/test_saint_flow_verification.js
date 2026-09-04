@@ -47,7 +47,7 @@ async function runTests() {
   assert(saintInfoEn.includes('✝️ *Saint of the Day*'), 'English Saint Info has correct header');
   assert(saintInfoEn.includes('👑 *'), 'English Saint Info has saint crown/name block');
   assert(saintInfoEn.includes('/bible-verse#saint-of-the-day'), 'English Saint Info has exact canonical read more link');
-  assert(saintInfoEn.includes("St. John de Britto's Church, Kalayarkoil"), 'English Saint Info has parish signature');
+  assert(saintInfoEn.includes("St. John de britto Church, Kalayarkoil"), 'English Saint Info has parish signature');
 
   // Test 3: generateSaintInfoMessage (Tamil)
   const saintInfoTa = generateSaintInfoMessage({ dailyContent, language: 'ta' });

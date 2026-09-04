@@ -162,7 +162,7 @@ function generateDailyNotificationHtml({
               <div style="width: 75px; height: 75px; border-radius: 50%; overflow: hidden; margin: 0 auto 14px; border: 3px solid #C5A059; box-shadow: 0 4px 14px rgba(0,0,0,0.3); background: #ffffff;">
                 <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
               </div>
-              <h1 style="margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.5px; color: #FFFFFF;">ST. JOHN DE BRITTO'S CHURCH</h1>
+              <h1 style="margin: 0; font-size: 20px; font-weight: 700; letter-spacing: 0.5px; color: #FFFFFF;">ST. JOHN DE britto CHURCH</h1>
               <p style="margin: 4px 0 0 0; font-size: 13px; color: #C5A059; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px;">SJDB Connect — Daily Liturgy & Faith</p>
               
               <div style="margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.12);">
@@ -291,7 +291,7 @@ function generateDailyNotificationHtml({
           <tr>
             <td style="padding: 24px 28px; background-color: #F8FAFC; border-top: 1px solid #E2E8F0; text-align: center; color: #64748B; font-size: 13px; line-height: 1.5;">
               <p style="margin: 0 0 8px 0; color: #0F172A; font-weight: 600; font-size: 14px;">May God bless you and have a blessed day.</p>
-              <p style="margin: 0 0 6px 0;">St. John de Britto's Church • Connecting Faith & Community</p>
+              <p style="margin: 0 0 6px 0;">St. John de britto Church • Connecting Faith & Community</p>
               <p style="margin: 0; font-size: 11px; color: #94A3B8;">You received this daily reflection because you are a registered member of SJDB Church. To update notification settings, visit your Profile Settings on the church portal.</p>
             </td>
           </tr>

@@ -100,7 +100,7 @@ export default function MemberReport() {
         iframe.src = `${API_URL}/users/member-report/${token}/pdf?token=${encodeURIComponent(authToken)}`;
         document.body.appendChild(iframe);
         setTimeout(() => iframe.remove(), 6000);
-      } catch (err) {}
+      } catch (err) { }
     } finally {
       setDownloadingPdf(false);
     }
@@ -116,7 +116,7 @@ export default function MemberReport() {
     <div className="min-h-screen bg-church-cream pt-6 pb-20">
       <PageHero
         title={<>Member Report Verification</>}
-        subtitle={<>St. John de Britto's Church • Kalayarkoil</>}
+        subtitle={<>St. John de britto Church • Kalayarkoil</>}
       />
 
       <div className="max-w-2xl mx-auto px-4 -mt-8 relative z-10">
@@ -191,14 +191,13 @@ export default function MemberReport() {
                     Official Parish Document
                   </span>
                   <h1 className="font-display text-xl sm:text-2xl font-bold text-white mt-1.5">
-                    St. John de Britto's Church
+                    St. John de britto Church
                   </h1>
                   <p className="text-white/70 text-xs mt-0.5">MEMBER PROFILE & ACTIVITY REPORT</p>
                 </div>
                 <div className="text-right">
-                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                    memberData.isSuspended ? 'bg-red-500/20 text-red-300 border border-red-400/40' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
-                  }`}>
+                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${memberData.isSuspended ? 'bg-red-500/20 text-red-300 border border-red-400/40' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
+                    }`}>
                     {memberData.statusText}
                   </span>
                 </div>
@@ -274,7 +273,7 @@ export default function MemberReport() {
                   {downloadingPdf ? 'Downloading PDF Report...' : ' Download PDF Report'}
                 </button>
                 <p className="text-[11px] text-gray-400 text-center mt-2">
-                   This confidential report is verified by St. John de Britto's Church Digital Registry.
+                  This confidential report is verified by St. John de britto Church Digital Registry.
                 </p>
               </div>
             </div>

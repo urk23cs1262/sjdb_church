@@ -4,10 +4,10 @@ const auditLogSchema = new mongoose.Schema({
   enabledBy: { type: String, default: 'System Admin' },
   enabledById: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   reason: { type: String, default: 'Scheduled System Maintenance' },
-  category: { 
-    type: String, 
-    enum: ['Scheduled Update', 'Security Patch', 'Database Upgrade', 'Server Migration', 'Emergency Fix', 'General Maintenance'], 
-    default: 'Scheduled Update' 
+  category: {
+    type: String,
+    enum: ['Scheduled Update', 'Security Patch', 'Database Upgrade', 'Server Migration', 'Emergency Fix', 'General Maintenance'],
+    default: 'Scheduled Update'
   },
   startTime: { type: Date, default: Date.now },
   endTime: { type: Date },
@@ -25,26 +25,26 @@ const maintenanceSettingSchema = new mongoose.Schema({
   isEnabled: { type: Boolean, default: false },
   isEmergency: { type: Boolean, default: false },
   emergencyReason: { type: String, default: '' },
-  
+
   title: { type: String, default: 'Website Under Maintenance' },
-  message: { 
-    type: String, 
-    default: 'We are making improvements to serve you better. Please visit again shortly.' 
+  message: {
+    type: String,
+    default: 'We are making improvements to serve you better. Please visit again shortly.'
   },
-  category: { 
-    type: String, 
-    enum: ['Scheduled Update', 'Security Patch', 'Database Upgrade', 'Server Migration', 'Emergency Fix', 'General Maintenance'], 
-    default: 'Scheduled Update' 
+  category: {
+    type: String,
+    enum: ['Scheduled Update', 'Security Patch', 'Database Upgrade', 'Server Migration', 'Emergency Fix', 'General Maintenance'],
+    default: 'Scheduled Update'
   },
   expectedCompletion: { type: Date, default: () => new Date(Date.now() + 2 * 60 * 60 * 1000) },
   showCountdown: { type: Boolean, default: true },
-  
+
   // Access Permission Controls
   allowAdminLogin: { type: Boolean, default: true },
   allowTechTeam: { type: Boolean, default: true },
   allowContentEditors: { type: Boolean, default: false },
   allowPublic: { type: Boolean, default: false },
-  
+
   // Contact & Social Details
   contactPhone: { type: String, default: '+91 94431 00000' },
   contactEmail: { type: String, default: 'support@stjohndebrittochurch.org' },
@@ -80,14 +80,14 @@ const maintenanceSettingSchema = new mongoose.Schema({
 
   // Notification Template Defaults
   notificationTemplate: {
-    emailSubject: { type: String, default: "St. John de Britto's Church Website Maintenance Notice" },
-    emailBody: { 
-      type: String, 
-      default: "Dear Parishioner,\n\nOur church website is currently undergoing scheduled maintenance to improve performance and add new features.\n\nDuring this time, the website will be temporarily unavailable.\n\nThank you for your patience.\n\nChurch Technical Team" 
+    emailSubject: { type: String, default: "St. John de britto Church Website Maintenance Notice" },
+    emailBody: {
+      type: String,
+      default: "Dear Parishioner,\n\nOur church website is currently undergoing scheduled maintenance to improve performance and add new features.\n\nDuring this time, the website will be temporarily unavailable.\n\nThank you for your patience.\n\nChurch Technical Team"
     },
     smsBody: {
       type: String,
-      default: "St. John de Britto's Church website is under maintenance. We will be back online shortly. Thank you."
+      default: "St. John de britto Church website is under maintenance. We will be back online shortly. Thank you."
     }
   },
 
