@@ -3,7 +3,9 @@ const {
   getDailyNotificationStatus,
   getUserNotificationHistory,
   getSchedulerStatus,
-  recoverMissedRun
+  recoverMissedRun,
+  claimDailyNotificationJob,
+  executeDailyNotificationDispatch
 } = require('../services/dailyNotificationService');
 const DailyNotificationJob = require('../models/DailyNotificationJob');
 
@@ -96,6 +98,10 @@ const triggerBroadcast = async (req, res) => {
  * Allows external scheduling systems (cron-job.org, Render Cron Job, GitHub Actions, AWS EventBridge)
  * to independently trigger the 04:00 AM IST Catholic daily job without relying on browser activity.
  * 
+ * Acknowledges immediately with HTTP 200 after claiming the job (< 50ms), preventing any
+ * 30-second webhook timeout (e.g. cron-job.org limits). The actual notification delivery
+ * proceeds asynchronously in the backend worker.
+ * 
  * Protected by secret key: x-cron-secret header, Bearer token, or ?secret= query.
  */
 const triggerSchedulerCron = async (req, res) => {
@@ -113,19 +119,52 @@ const triggerSchedulerCron = async (req, res) => {
       });
     }
 
-    console.log('[DAILY-CATHOLIC] 🔐 Authenticated External Webhook trigger received at 04:00 AM IST.');
-    
-    // Non-blocking acknowledgement or synchronous response
-    const result = await sendDailyChurchNotifications({
+    console.log('[DAILY-CATHOLIC] External scheduler trigger received');
+
+    // Claim today's DailyNotificationJob with atomic locking (< 50ms)
+    const claimResult = await claimDailyNotificationJob({
       triggerType: 'external_webhook',
       force: req.body?.force === true
     });
 
-    res.json({
+    if (!claimResult.claimed) {
+      console.log(`[DAILY-CATHOLIC] Daily job already completed or running for today (${claimResult.reason}). Returning idempotent response.`);
+      return res.status(200).json({
+        success: true,
+        message: 'Daily Catholic notification job already claimed or completed for today.',
+        skipped: true,
+        jobId: claimResult.jobId,
+        dateKey: claimResult.dateKey,
+        status: claimResult.status || 'already_processed',
+        reason: claimResult.reason
+      });
+    }
+
+    console.log('[DAILY-CATHOLIC] Daily job claimed/created');
+
+    // Acknowledge HTTP request immediately (< 50ms) to ensure external schedulers never time out
+    res.status(200).json({
       success: true,
-      message: '04:00 AM Daily Catholic notification job executed via external trigger.',
-      result
+      message: '04:00 AM Daily Catholic notification job claimed and acknowledged. Background delivery started.',
+      jobId: claimResult.jobId,
+      dateKey: claimResult.dateKey,
+      status: 'accepted'
     });
+
+    console.log('[DAILY-CATHOLIC] Scheduler trigger acknowledged');
+
+    console.log('[DAILY-CATHOLIC] Background delivery started');
+
+    // Execute heavy delivery (WhatsApp Baileys socket + Brevo Email + Push) asynchronously in the backend
+    setImmediate(() => {
+      executeDailyNotificationDispatch(claimResult, {
+        triggerType: 'external_webhook',
+        force: req.body?.force === true
+      }).catch(err => {
+        console.error('[DAILY-CATHOLIC] Background delivery worker error:', err);
+      });
+    });
+
   } catch (err) {
     console.error('[DAILY-CATHOLIC] External webhook trigger error:', err.message);
     res.status(500).json({ success: false, message: err.message });

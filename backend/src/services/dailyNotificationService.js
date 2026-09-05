@@ -134,199 +134,151 @@ async function retryOperation(fn, maxRetries = 3, delayBaseMs = 1000) {
 // ─── Core Notification Dispatcher ───────────────────────────────────────────
 
 /**
- * Dispatch daily church notification across all enabled channels.
- * Uses DailyNotificationJob for atomic distributed locking and
- * NotificationDelivery for recipient-level idempotency and retries.
+ * Atomically claim or create today's DailyNotificationJob using distributed locking.
+ * Returns immediately (< 50ms) without waiting for delivery loops.
+ * 
+ * If the job is already completed or actively running (lock age < 30min),
+ * returns { claimed: false, success: true, skipped: true, reason: 'already_completed'|'already_running', jobId, dateKey, status }.
+ * 
+ * If successfully claimed, sets status to 'running' with a fresh distributed lock,
+ * and returns { claimed: true, jobId, dateKey, job, workerId, dailyContent, today, emailAttachments, hasSaintImage }.
  */
-async function sendDailyChurchNotifications({
-  isTest = false,
-  isManualTest = false,
-  testEmail = null,
-  targetEmail = null,
-  testPhone = null,
-  targetPhone = null,
-  testLang = 'ta',
-  testName = 'Parishioner',
+async function claimDailyNotificationJob({
   force = false,
-  triggerType = 'cron_scheduler'
+  triggerType = 'cron_scheduler',
+  targetDate = null
 } = {}) {
-  const manualTest = isTest || isManualTest;
-  const toEmail = testEmail || targetEmail;
-  const toPhone = testPhone || targetPhone;
+  const today = targetDate || new Date();
+  const dailyContent = await getTodayDailyContent(today);
+  const dateKey = dailyContent.dateKey; // YYYY-MM-DD in Asia/Kolkata
+  const jobId = `daily_catholic_job_${dateKey.replace(/-/g, '_')}`;
+  const workerId = `worker-${process.pid}-${Date.now()}`;
 
-  try {
-    const today = new Date();
-    const dailyContent = await getTodayDailyContent(today);
-    const dateKey = dailyContent.dateKey; // YYYY-MM-DD in Asia/Kolkata
+  // Prepare email attachments (Saint portrait)
+  const emailAttachments = [];
+  if (dailyContent.saint?.imageAttachment) {
+    emailAttachments.push(dailyContent.saint.imageAttachment);
+  }
+  const hasSaintImage = Boolean(dailyContent.saint?.imageAttachment);
 
-    // Prepare email attachments (Saint portrait)
-    const emailAttachments = [];
-    if (dailyContent.saint.imageAttachment) {
-      emailAttachments.push(dailyContent.saint.imageAttachment);
-    }
-    const hasSaintImage = Boolean(dailyContent.saint.imageAttachment);
+  // A. Distributed Lock & Atomic Job Check
+  let job = await DailyNotificationJob.findOne({ notificationDate: dateKey });
 
-    // ── 1. SINGLE MANUAL TEST SEND (Non-Job) ──────────────────────────────────
-    if (manualTest && (toEmail || toPhone)) {
-      console.log(`[Daily Notification Service] Sending single manual test notification (Lang: ${testLang})...`);
-      const testResults = { email: null, inApp: null, push: null, whatsapp: null };
+  if (job && job.status === 'completed' && !force) {
+    console.log(`[DAILY-CATHOLIC] ✅ Job ${job.jobId} for ${dateKey} is already COMPLETED. Skipping duplicate execution.`);
+    return {
+      claimed: false,
+      success: true,
+      skipped: true,
+      reason: 'already_completed',
+      jobId: job.jobId,
+      dateKey,
+      status: 'completed',
+      job
+    };
+  }
 
-      // Email Test
-      if (toEmail) {
-        const html = generateDailyNotificationHtml({
-          userName: testName || 'Parishioner',
-          dailyContent,
-          userLanguage: testLang,
-          hasSaintImageAttachment: hasSaintImage
-        });
-
-        const subject = testLang === 'en'
-          ? `✝️ Good Morning — Daily Catholic Readings & Living Word — ${dailyContent.formattedDate}`
-          : `✝️ காலை வணக்கம் — இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள் — ${dailyContent.formattedDateTa || dailyContent.formattedDate}`;
-
-        const emailRes = await sendMail({
-          to: toEmail,
-          subject,
-          html,
-          attachments: emailAttachments
-        });
-        testResults.email = emailRes;
-      }
-
-      // WhatsApp Test
-      if (toPhone) {
-        const waService = getWhatsApp();
-        if (waService && typeof waService.sendWhatsAppMessage === 'function') {
-          const cleanPhone = toPhone.replace(/\D/g, '');
-          const waMsg1 = generateDailyCatholicMessage({
-            dailyContent,
-            language: testLang,
-            readingPreference: 'full'
-          });
-          const waRes1 = await waService.sendWhatsAppMessage(cleanPhone, waMsg1);
-
-          const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
-          if (saintImageUrl && typeof waService.sendWhatsAppMedia === 'function') {
-            try {
-              await new Promise(r => setTimeout(r, 450));
-              await waService.sendWhatsAppMedia(cleanPhone, { url: saintImageUrl, mimetype: 'image/jpeg' });
-            } catch (mediaErr) {
-              console.warn('[Daily Notification] Test Saint media send warning:', mediaErr.message);
-            }
-          }
-
-          try {
-            await new Promise(r => setTimeout(r, 450));
-            const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: testLang });
-            await waService.sendWhatsAppMessage(cleanPhone, saintInfoMsg);
-          } catch (saintInfoErr) {
-            console.warn('[Daily Notification] Test Saint info send warning:', saintInfoErr.message);
-          }
-
-          try {
-            await new Promise(r => setTimeout(r, 450));
-            const linksMsg = generateDailyLinksMessage({ dailyContent, language: testLang });
-            if (linksMsg) {
-              await waService.sendWhatsAppMessage(cleanPhone, linksMsg);
-            }
-          } catch (e) {
-            console.warn('[Daily Notification] Test links send warning:', e.message);
-          }
-
-          testResults.whatsapp = { success: Boolean(waRes1) };
-        } else {
-          testResults.whatsapp = { success: false, error: 'WhatsApp socket offline' };
-        }
-      }
-
+  if (job && job.status === 'running' && !force) {
+    const lockAgeMs = Date.now() - new Date(job.lockedAt || job.startedAt || job.createdAt).getTime();
+    // If locked less than 30 minutes ago, consider it actively running on another instance
+    if (lockAgeMs < 30 * 60 * 1000) {
+      console.warn(`[DAILY-CATHOLIC] ⚠️ Job ${job.jobId} currently RUNNING on another worker (lock age: ${Math.round(lockAgeMs / 1000)}s). Aborting duplicate run.`);
       return {
-        success: true,
-        message: 'Test notification processed',
-        dateKey,
-        results: testResults
-      };
-    }
-
-    // ── 2. FULL AUTOMATED BROADCAST JOB ─────────────────────────────────────
-    const jobId = `daily_catholic_job_${dateKey.replace(/-/g, '_')}`;
-    const workerId = `worker-${process.pid}-${Date.now()}`;
-
-    // A. Distributed Lock & Atomic Job Check
-    let job = await DailyNotificationJob.findOne({ notificationDate: dateKey });
-
-    if (job && job.status === 'completed' && !force) {
-      console.log(`[DAILY-CATHOLIC] ✅ Job ${job.jobId} for ${dateKey} is already COMPLETED. Skipping duplicate execution.`);
-      return {
+        claimed: false,
         success: true,
         skipped: true,
-        reason: 'already_completed',
+        reason: 'already_running',
         jobId: job.jobId,
-        dateKey
+        dateKey,
+        status: 'running',
+        job
       };
     }
+    console.warn(`[DAILY-CATHOLIC] ⚠️ Stale lock detected for ${job.jobId} (age: ${Math.round(lockAgeMs / 1000)}s). Re-acquiring lock...`);
+  }
 
-    if (job && job.status === 'running' && !force) {
-      const lockAgeMs = Date.now() - new Date(job.lockedAt || job.startedAt || job.createdAt).getTime();
-      // If locked less than 30 minutes ago, consider it actively running on another instance
-      if (lockAgeMs < 30 * 60 * 1000) {
-        console.warn(`[DAILY-CATHOLIC] ⚠️ Job ${job.jobId} currently RUNNING on another worker (lock age: ${Math.round(lockAgeMs / 1000)}s). Aborting duplicate run.`);
-        return {
-          success: true,
-          skipped: true,
-          reason: 'already_running',
-          jobId: job.jobId,
-          dateKey
-        };
-      }
-      console.warn(`[DAILY-CATHOLIC] ⚠️ Stale lock detected for ${job.jobId} (age: ${Math.round(lockAgeMs / 1000)}s). Re-acquiring lock...`);
-    }
-
-    if (!job) {
-      try {
-        job = await DailyNotificationJob.create({
-          jobId,
-          notificationDate: dateKey,
-          scheduledAt: new Date(),
-          startedAt: new Date(),
-          status: 'running',
-          triggerType,
-          lockedBy: workerId,
-          lockedAt: new Date(),
-          summary: {
-            bibleRef: dailyContent.bible.ref,
-            saintName: dailyContent.saint.nameEnglish,
-            massTitle: dailyContent.massReadings?.tamil?.title || dailyContent.massReadings?.english?.title || 'Daily Mass Readings',
-            saintImageUrl: dailyContent?.saintImage || dailyContent?.saint?.image || null
-          },
-          logs: [
-            { timestamp: new Date(), message: `Job ${jobId} initiated at 04:00 AM IST via ${triggerType} (Worker: ${workerId})` }
-          ]
-        });
-      } catch (createErr) {
-        if (createErr.code === 11000) {
-          // Concurrency race: another worker created the job milliseconds ago
-          job = await DailyNotificationJob.findOne({ notificationDate: dateKey });
-          if (job.status === 'completed' || (job.status === 'running' && !force)) {
-            console.log(`[DAILY-CATHOLIC] Concurrent job creation detected. Already handled by another instance.`);
-            return { success: true, skipped: true, reason: 'concurrency_race_resolved', jobId, dateKey };
-          }
-        } else {
-          throw createErr;
+  if (!job) {
+    try {
+      job = await DailyNotificationJob.create({
+        jobId,
+        notificationDate: dateKey,
+        scheduledAt: new Date(),
+        startedAt: new Date(),
+        status: 'running',
+        triggerType,
+        lockedBy: workerId,
+        lockedAt: new Date(),
+        summary: {
+          bibleRef: dailyContent.bible?.ref,
+          saintName: dailyContent.saint?.nameEnglish,
+          massTitle: dailyContent.massReadings?.tamil?.title || dailyContent.massReadings?.english?.title || 'Daily Mass Readings',
+          saintImageUrl: dailyContent?.saintImage || dailyContent?.saint?.image || null
+        },
+        logs: [
+          { timestamp: new Date(), message: `Job ${jobId} initiated at 04:00 AM IST via ${triggerType} (Worker: ${workerId})` }
+        ]
+      });
+    } catch (createErr) {
+      if (createErr.code === 11000) {
+        // Concurrency race: another worker created the job milliseconds ago
+        job = await DailyNotificationJob.findOne({ notificationDate: dateKey });
+        if (job.status === 'completed' || (job.status === 'running' && !force)) {
+          console.log(`[DAILY-CATHOLIC] Concurrent job creation detected. Already handled by another instance.`);
+          return {
+            claimed: false,
+            success: true,
+            skipped: true,
+            reason: 'concurrency_race_resolved',
+            jobId,
+            dateKey,
+            status: job.status,
+            job
+          };
         }
+      } else {
+        throw createErr;
       }
-    } else {
-      job.status = 'running';
-      job.startedAt = job.startedAt || new Date();
-      job.lockedBy = workerId;
-      job.lockedAt = new Date();
-      job.logs.push({ timestamp: new Date(), message: `Job resumed / re-locked by ${workerId}` });
-      await job.save();
     }
+  } else {
+    job.status = 'running';
+    job.startedAt = job.startedAt || new Date();
+    job.lockedBy = workerId;
+    job.lockedAt = new Date();
+    job.logs.push({ timestamp: new Date(), message: `Job resumed / re-locked by ${workerId}` });
+    await job.save();
+  }
 
+  return {
+    claimed: true,
+    jobId,
+    dateKey,
+    job,
+    workerId,
+    dailyContent,
+    today,
+    emailAttachments,
+    hasSaintImage
+  };
+}
+
+/**
+ * Execute actual WhatsApp Baileys and Brevo email delivery asynchronously in the background.
+ * Updates DailyNotificationJob status to 'completed' / 'partial' / 'failed' upon completion.
+ */
+async function executeDailyNotificationDispatch(claimResult, options = {}) {
+  const { force = false, triggerType = 'cron_scheduler' } = options;
+  const { jobId, dateKey, dailyContent, today, emailAttachments, hasSaintImage } = claimResult;
+  let job = claimResult.job;
+
+  try {
     console.log(`\n================================================================`);
-    console.log(`[DAILY-CATHOLIC] 🚀 04:00 AM IST Daily Catholic Job Started: ${jobId}`);
-    console.log(`[DAILY-CATHOLIC] Date: ${dateKey} | Timezone: Asia/Kolkata`);
+    console.log(`[DAILY-CATHOLIC] 🚀 04:00 AM IST Daily Catholic Job Dispatching: ${jobId}`);
+    console.log(`[DAILY-CATHOLIC] Date: ${dateKey} | Timezone: Asia/Kolkata | Trigger: ${triggerType}`);
     console.log(`================================================================\n`);
+
+    if (!job || typeof job.save !== 'function') {
+      job = await DailyNotificationJob.findOne({ notificationDate: dateKey });
+    }
 
     // B. Pre-broadcast sync: ensure readings, translation, saint, verse are loaded
     try {
@@ -889,11 +841,142 @@ async function sendDailyChurchNotifications({
     };
   } catch (err) {
     console.error('[DAILY-CATHOLIC] ❌ Fatal broadcast error:', err.message);
+    try {
+      if (job && typeof job.save === 'function') {
+        job.status = 'failed';
+        job.completedAt = new Date();
+        job.logs.push({ timestamp: new Date(), message: `Fatal error: ${err.message}` });
+        await job.save();
+      }
+    } catch (saveErr) {
+      console.error('[DAILY-CATHOLIC] Error saving failed job status:', saveErr.message);
+    }
     return {
       success: false,
       error: err.message
     };
   }
+}
+
+/**
+ * Dispatch daily church notification across all enabled channels.
+ * Uses DailyNotificationJob for atomic distributed locking and
+ * NotificationDelivery for recipient-level idempotency and retries.
+ */
+async function sendDailyChurchNotifications({
+  isTest = false,
+  isManualTest = false,
+  testEmail = null,
+  targetEmail = null,
+  testPhone = null,
+  targetPhone = null,
+  testLang = 'ta',
+  testName = 'Parishioner',
+  force = false,
+  triggerType = 'cron_scheduler',
+  targetDate = null
+} = {}) {
+  const manualTest = isTest || isManualTest;
+  const toEmail = testEmail || targetEmail;
+  const toPhone = testPhone || targetPhone;
+
+  // ── 1. SINGLE MANUAL TEST SEND (Non-Job) ──────────────────────────────────
+  if (manualTest && (toEmail || toPhone)) {
+    const today = targetDate || new Date();
+    const dailyContent = await getTodayDailyContent(today);
+    const dateKey = dailyContent.dateKey;
+
+    const emailAttachments = [];
+    if (dailyContent.saint?.imageAttachment) {
+      emailAttachments.push(dailyContent.saint.imageAttachment);
+    }
+    const hasSaintImage = Boolean(dailyContent.saint?.imageAttachment);
+
+    console.log(`[Daily Notification Service] Sending single manual test notification (Lang: ${testLang})...`);
+    const testResults = { email: null, inApp: null, push: null, whatsapp: null };
+
+    // Email Test
+    if (toEmail) {
+      const html = generateDailyNotificationHtml({
+        userName: testName || 'Parishioner',
+        dailyContent,
+        userLanguage: testLang,
+        hasSaintImageAttachment: hasSaintImage
+      });
+
+      const subject = testLang === 'en'
+        ? `✝️ Good Morning — Daily Catholic Readings & Living Word — ${dailyContent.formattedDate}`
+        : `✝️ காலை வணக்கம் — இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள் — ${dailyContent.formattedDateTa || dailyContent.formattedDate}`;
+
+      const emailRes = await sendMail({
+        to: toEmail,
+        subject,
+        html,
+        attachments: emailAttachments
+      });
+      testResults.email = emailRes;
+    }
+
+    // WhatsApp Test
+    if (toPhone) {
+      const waService = getWhatsApp();
+      if (waService && typeof waService.sendWhatsAppMessage === 'function') {
+        const cleanPhone = toPhone.replace(/\D/g, '');
+        const waMsg1 = generateDailyCatholicMessage({
+          dailyContent,
+          language: testLang,
+          readingPreference: 'full'
+        });
+        const waRes1 = await waService.sendWhatsAppMessage(cleanPhone, waMsg1);
+
+        const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
+        if (saintImageUrl && typeof waService.sendWhatsAppMedia === 'function') {
+          try {
+            await new Promise(r => setTimeout(r, 450));
+            await waService.sendWhatsAppMedia(cleanPhone, { url: saintImageUrl, mimetype: 'image/jpeg' });
+          } catch (mediaErr) {
+            console.warn('[Daily Notification] Test Saint media send warning:', mediaErr.message);
+          }
+        }
+
+        try {
+          await new Promise(r => setTimeout(r, 450));
+          const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: testLang });
+          await waService.sendWhatsAppMessage(cleanPhone, saintInfoMsg);
+        } catch (saintInfoErr) {
+          console.warn('[Daily Notification] Test Saint info send warning:', saintInfoErr.message);
+        }
+
+        try {
+          await new Promise(r => setTimeout(r, 450));
+          const linksMsg = generateDailyLinksMessage({ dailyContent, language: testLang });
+          if (linksMsg) {
+            await waService.sendWhatsAppMessage(cleanPhone, linksMsg);
+          }
+        } catch (e) {
+          console.warn('[Daily Notification] Test links send warning:', e.message);
+        }
+
+        testResults.whatsapp = { success: Boolean(waRes1) };
+      } else {
+        testResults.whatsapp = { success: false, error: 'WhatsApp socket offline' };
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Test notification processed',
+      dateKey,
+      results: testResults
+    };
+  }
+
+  // ── 2. FULL AUTOMATED BROADCAST JOB ─────────────────────────────────────
+  const claimResult = await claimDailyNotificationJob({ force, triggerType, targetDate });
+  if (!claimResult.claimed) {
+    return claimResult;
+  }
+  return await executeDailyNotificationDispatch(claimResult, { force, triggerType });
 }
 
 // ─── Scheduler State & Tracking ─────────────────────────────────────────────
@@ -1195,5 +1278,7 @@ module.exports = {
   getUserNotificationHistory,
   getSchedulerStatus,
   recoverMissedRun,
-  checkAndRecoverMissedJobAutonomous
+  checkAndRecoverMissedJobAutonomous,
+  claimDailyNotificationJob,
+  executeDailyNotificationDispatch
 };
