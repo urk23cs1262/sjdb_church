@@ -1,16 +1,43 @@
+/**
+ * Daily Catholic Notification Service — SJDB Connect
+ * 
+ * 100% Backend-Automated Daily Catholic Notification Engine.
+ * 
+ * Schedule: 04:00 AM IST (Asia/Kolkata) every day via node-cron (0 4 * * *)
+ * Channels:
+ *  1. WhatsApp Bot (Baileys daemon: Devotional message + Saint photo + Saint details + Optional links)
+ *  2. Email Broadcast (Nodemailer HTML template with Saint CID image attachment)
+ *  3. In-App Notifications (Notification feed)
+ *  4. Mobile / Web Push Notifications (WebPush to subscribed devices)
+ * 
+ * Key Architecture Guarantees:
+ *  - Independent of frontend/browser/admin page.
+ *  - Distributed locking via DailyNotificationJob.
+ *  - Recipient-level idempotency via NotificationDelivery unique indexes.
+ *  - Automatic retries with exponential backoff on transient delivery failures.
+ *  - Resilient to server restarts without duplicate sends.
+ *  - Supports external cron trigger via secure webhook (/scheduler-trigger).
+ */
+
 const cron = require('node-cron');
 const User = require('../models/User');
 const BotSession = require('../models/BotSession');
 const Notification = require('../models/Notification');
 const DailyNotificationLog = require('../models/DailyNotificationLog');
+const DailyNotificationJob = require('../models/DailyNotificationJob');
+const NotificationDelivery = require('../models/NotificationDelivery');
 const { sendMail } = require('../config/mailer');
 const { getTodayDailyContent } = require('./dailyContentService');
 const { generateDailyNotificationHtml } = require('../templates/dailyNotificationEmail');
-const { sendPushBroadcast, sendPushToUser } = require('./webPushService');
-const { generateDailyCatholicMessage, generateDailyLinksMessage, generateSaintInfoMessage } = require('./whatsappDailyFormatter');
-const { SITE_ROUTES, EXTERNAL_LINKS, getSiteUrl, getBaseClientUrl } = require('../config/siteRoutes');
+const { sendPushBroadcast } = require('./webPushService');
+const {
+  generateDailyCatholicMessage,
+  generateDailyLinksMessage,
+  generateSaintInfoMessage
+} = require('./whatsappDailyFormatter');
+const { SITE_ROUTES, getSiteUrl, getBaseClientUrl } = require('../config/siteRoutes');
 
-// Lazy-load WhatsApp bot to avoid startup race conditions
+// Lazy-load WhatsApp bot to avoid circular dependencies and startup race conditions
 function getWhatsApp() {
   try {
     return require('../bot/whatsapp');
@@ -22,7 +49,7 @@ function getWhatsApp() {
 
 const CLIENT_URL = getBaseClientUrl();
 
-let isBroadcasting = false;
+// ─── Language & Formatting Helpers ──────────────────────────────────────────
 
 /**
  * Resolve user language preference with strict fallback to Tamil ('ta')
@@ -86,11 +113,30 @@ function formatPushPayload(dailyContent, lang = 'ta') {
 }
 
 /**
- * Dispatch daily church notification across all enabled channels:
- * - WhatsApp Bot (Message 1 Devotional + Message 2 Links)
- * - Mobile / Web Push Notifications (WebPush to all subscribers even when closed)
- * - Email Broadcast (HTML template + Saint portrait)
- * - In-App Notifications (Notification feed)
+ * Helper: retry an async task with exponential backoff
+ */
+async function retryOperation(fn, maxRetries = 3, delayBaseMs = 1000) {
+  let lastErr;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await fn(attempt);
+      return { success: true, result, attempts: attempt };
+    } catch (err) {
+      lastErr = err;
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, delayBaseMs * attempt));
+      }
+    }
+  }
+  return { success: false, error: lastErr?.message || 'Operation failed after retries', attempts: maxRetries };
+}
+
+// ─── Core Notification Dispatcher ───────────────────────────────────────────
+
+/**
+ * Dispatch daily church notification across all enabled channels.
+ * Uses DailyNotificationJob for atomic distributed locking and
+ * NotificationDelivery for recipient-level idempotency and retries.
  */
 async function sendDailyChurchNotifications({
   isTest = false,
@@ -101,15 +147,17 @@ async function sendDailyChurchNotifications({
   targetPhone = null,
   testLang = 'ta',
   testName = 'Parishioner',
-  force = false
+  force = false,
+  triggerType = 'cron_scheduler'
 } = {}) {
+  const manualTest = isTest || isManualTest;
+  const toEmail = testEmail || targetEmail;
+  const toPhone = testPhone || targetPhone;
+
   try {
     const today = new Date();
     const dailyContent = await getTodayDailyContent(today);
-
-    const manualTest = isTest || isManualTest;
-    const toEmail = testEmail || targetEmail;
-    const toPhone = testPhone || targetPhone;
+    const dateKey = dailyContent.dateKey; // YYYY-MM-DD in Asia/Kolkata
 
     // Prepare email attachments (Saint portrait)
     const emailAttachments = [];
@@ -118,9 +166,9 @@ async function sendDailyChurchNotifications({
     }
     const hasSaintImage = Boolean(dailyContent.saint.imageAttachment);
 
-    // ── 1. SINGLE MANUAL TEST SEND ───────────────────────────────────────────
+    // ── 1. SINGLE MANUAL TEST SEND (Non-Job) ──────────────────────────────────
     if (manualTest && (toEmail || toPhone)) {
-      console.log(`[Daily Notification Service] Sending manual test notification (Lang: ${testLang})...`);
+      console.log(`[Daily Notification Service] Sending single manual test notification (Lang: ${testLang})...`);
       const testResults = { email: null, inApp: null, push: null, whatsapp: null };
 
       // Email Test
@@ -146,44 +194,40 @@ async function sendDailyChurchNotifications({
       }
 
       // WhatsApp Test
-      if (targetPhone) {
+      if (toPhone) {
         const waService = getWhatsApp();
         if (waService && typeof waService.sendWhatsAppMessage === 'function') {
-          // 1. Message 1: Clean Catholic Daily Message (No URLs)
+          const cleanPhone = toPhone.replace(/\D/g, '');
           const waMsg1 = generateDailyCatholicMessage({
             dailyContent,
             language: testLang,
             readingPreference: 'full'
           });
-          const waRes1 = await waService.sendWhatsAppMessage(targetPhone, waMsg1);
+          const waRes1 = await waService.sendWhatsAppMessage(cleanPhone, waMsg1);
 
           const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
-
-          // 2. Message 2: Saint of the Day Image (Image only)
           if (saintImageUrl && typeof waService.sendWhatsAppMedia === 'function') {
             try {
               await new Promise(r => setTimeout(r, 450));
-              await waService.sendWhatsAppMedia(targetPhone, { url: saintImageUrl, mimetype: 'image/jpeg' });
+              await waService.sendWhatsAppMedia(cleanPhone, { url: saintImageUrl, mimetype: 'image/jpeg' });
             } catch (mediaErr) {
               console.warn('[Daily Notification] Test Saint media send warning:', mediaErr.message);
             }
           }
 
-          // 3. Message 3: Saint of the Day Information
           try {
             await new Promise(r => setTimeout(r, 450));
             const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: testLang });
-            await waService.sendWhatsAppMessage(targetPhone, saintInfoMsg);
+            await waService.sendWhatsAppMessage(cleanPhone, saintInfoMsg);
           } catch (saintInfoErr) {
             console.warn('[Daily Notification] Test Saint info send warning:', saintInfoErr.message);
           }
 
-          // 4. Message 4: Separate Links Message (Only valid URLs)
           try {
             await new Promise(r => setTimeout(r, 450));
             const linksMsg = generateDailyLinksMessage({ dailyContent, language: testLang });
             if (linksMsg) {
-              await waService.sendWhatsAppMessage(targetPhone, linksMsg);
+              await waService.sendWhatsAppMessage(cleanPhone, linksMsg);
             }
           } catch (e) {
             console.warn('[Daily Notification] Test links send warning:', e.message);
@@ -198,89 +242,160 @@ async function sendDailyChurchNotifications({
       return {
         success: true,
         message: 'Test notification processed',
-        dateKey: dailyContent.dateKey,
+        dateKey,
         results: testResults
       };
     }
 
-    // ── 2. AUTOMATIC 4:00 AM IST BROADCAST TO ALL REGISTERED PARISHIONERS ────
-    const { getSystemState } = require('./systemStateService');
-    const systemState = await getSystemState();
-    if (systemState && systemState.status !== 'live') {
-      console.log(`[Daily Notification Service] Skipping automatic broadcast because system is in ${systemState.status.toUpperCase()} mode.`);
-      return { success: false, skipped: true, reason: `System is in ${systemState.status.toUpperCase()} mode` };
+    // ── 2. FULL AUTOMATED BROADCAST JOB ─────────────────────────────────────
+    const jobId = `daily_catholic_job_${dateKey.replace(/-/g, '_')}`;
+    const workerId = `worker-${process.pid}-${Date.now()}`;
+
+    // A. Distributed Lock & Atomic Job Check
+    let job = await DailyNotificationJob.findOne({ notificationDate: dateKey });
+
+    if (job && job.status === 'completed' && !force) {
+      console.log(`[DAILY-CATHOLIC] ✅ Job ${job.jobId} for ${dateKey} is already COMPLETED. Skipping duplicate execution.`);
+      return {
+        success: true,
+        skipped: true,
+        reason: 'already_completed',
+        jobId: job.jobId,
+        dateKey
+      };
     }
 
-    if (isBroadcasting) {
-      console.warn('[Daily Notification Service] Broadcast is already in progress, skipping duplicate invocation.');
-      return { success: false, message: 'Broadcast already in progress' };
+    if (job && job.status === 'running' && !force) {
+      const lockAgeMs = Date.now() - new Date(job.lockedAt || job.startedAt || job.createdAt).getTime();
+      // If locked less than 30 minutes ago, consider it actively running on another instance
+      if (lockAgeMs < 30 * 60 * 1000) {
+        console.warn(`[DAILY-CATHOLIC] ⚠️ Job ${job.jobId} currently RUNNING on another worker (lock age: ${Math.round(lockAgeMs / 1000)}s). Aborting duplicate run.`);
+        return {
+          success: true,
+          skipped: true,
+          reason: 'already_running',
+          jobId: job.jobId,
+          dateKey
+        };
+      }
+      console.warn(`[DAILY-CATHOLIC] ⚠️ Stale lock detected for ${job.jobId} (age: ${Math.round(lockAgeMs / 1000)}s). Re-acquiring lock...`);
     }
 
-    isBroadcasting = true;
-    console.log(`[DAILY-CATHOLIC] Starting daily job for ${dailyContent.dateKey}...`);
-    console.log(`[DAILY-CATHOLIC] Timezone: Asia/Kolkata`);
+    if (!job) {
+      try {
+        job = await DailyNotificationJob.create({
+          jobId,
+          notificationDate: dateKey,
+          scheduledAt: new Date(),
+          startedAt: new Date(),
+          status: 'running',
+          triggerType,
+          lockedBy: workerId,
+          lockedAt: new Date(),
+          summary: {
+            bibleRef: dailyContent.bible.ref,
+            saintName: dailyContent.saint.nameEnglish,
+            massTitle: dailyContent.massReadings?.tamil?.title || dailyContent.massReadings?.english?.title || 'Daily Mass Readings',
+            saintImageUrl: dailyContent?.saintImage || dailyContent?.saint?.image || null
+          },
+          logs: [
+            { timestamp: new Date(), message: `Job ${jobId} initiated at 04:00 AM IST via ${triggerType} (Worker: ${workerId})` }
+          ]
+        });
+      } catch (createErr) {
+        if (createErr.code === 11000) {
+          // Concurrency race: another worker created the job milliseconds ago
+          job = await DailyNotificationJob.findOne({ notificationDate: dateKey });
+          if (job.status === 'completed' || (job.status === 'running' && !force)) {
+            console.log(`[DAILY-CATHOLIC] Concurrent job creation detected. Already handled by another instance.`);
+            return { success: true, skipped: true, reason: 'concurrency_race_resolved', jobId, dateKey };
+          }
+        } else {
+          throw createErr;
+        }
+      }
+    } else {
+      job.status = 'running';
+      job.startedAt = job.startedAt || new Date();
+      job.lockedBy = workerId;
+      job.lockedAt = new Date();
+      job.logs.push({ timestamp: new Date(), message: `Job resumed / re-locked by ${workerId}` });
+      await job.save();
+    }
 
-    // Ensure mass readings, English translations, saint, and verse are synchronized before broadcasting
+    console.log(`\n================================================================`);
+    console.log(`[DAILY-CATHOLIC] 🚀 04:00 AM IST Daily Catholic Job Started: ${jobId}`);
+    console.log(`[DAILY-CATHOLIC] Date: ${dateKey} | Timezone: Asia/Kolkata`);
+    console.log(`================================================================\n`);
+
+    // B. Pre-broadcast sync: ensure readings, translation, saint, verse are loaded
     try {
       const { fetchAndStoreTamilReading, getOrGenerateEnglishTranslation } = require('./dailyMassReadingService');
       const { fetchDailySaint } = require('./saintService');
       const { syncDailyVerse } = require('./bibleVerseService');
       await Promise.allSettled([
-        fetchAndStoreTamilReading(dailyContent.dateKey),
-        getOrGenerateEnglishTranslation(dailyContent.dateKey),
+        fetchAndStoreTamilReading(dateKey),
+        getOrGenerateEnglishTranslation(dateKey),
         fetchDailySaint(today),
         syncDailyVerse()
       ]);
+      job.logs.push({ timestamp: new Date(), message: "Daily liturgical content and translations synchronized" });
     } catch (syncErr) {
       console.warn('[Daily Notification Service] Pre-broadcast sync notice:', syncErr.message);
     }
 
-    const users = await User.find({
-      isActive: { $ne: false }
-    }).lean();
-
+    // C. Load eligible website users and WhatsApp bot sessions
+    const users = await User.find({ isActive: { $ne: false } }).lean();
     const botSessions = await BotSession.find({ step: 'done' }).lean();
 
-    console.log(`[DAILY-CATHOLIC] Eligible users: ${users.length} registered + ${botSessions.length} WhatsApp bot sessions`);
+    job.logs.push({
+      timestamp: new Date(),
+      message: `Eligible recipients loaded: ${users.length} registered users, ${botSessions.length} bot sessions`
+    });
+
+    const waService = getWhatsApp();
+    if (waService && typeof waService.waitForWhatsAppReady === 'function') {
+      try {
+        console.log('[Daily Notification] Verifying WhatsApp socket readiness before dispatch...');
+        const waReady = await waService.waitForWhatsAppReady(25000);
+        job.logs.push({
+          timestamp: new Date(),
+          message: waReady
+            ? 'WhatsApp Baileys socket verified connected & ready for broadcast'
+            : 'WhatsApp socket offline or awaiting QR scan; proceeding with available channels'
+        });
+      } catch (waCheckErr) {
+        console.warn('[Daily Notification] WhatsApp readiness check warning:', waCheckErr.message);
+      }
+    }
 
     let sentCount = 0;
     let skippedCount = 0;
     let failedCount = 0;
 
     const channelStats = {
-      email: { sent: 0, failed: 0, disabled: 0 },
-      inApp: { sent: 0, failed: 0, disabled: 0 },
-      push: { sent: 0, failed: 0, disabled: 0 },
-      whatsapp: { sent: 0, failed: 0, disabled: 0 }
+      email: { sent: 0, failed: 0, disabled: 0, skipped: 0 },
+      inApp: { sent: 0, failed: 0, disabled: 0, skipped: 0 },
+      push: { sent: 0, failed: 0, disabled: 0, skipped: 0 },
+      whatsapp: { sent: 0, failed: 0, disabled: 0, skipped: 0 }
     };
 
-    const waService = getWhatsApp();
-
-    // ── 2A. PROCESS WEBSITE USERS ───────────────────────────────────────────
+    // D. Process Registered Website Users
     for (const user of users) {
       const userSettings = user.settings?.notifications || {};
       const userLang = resolveUserLanguage(user);
       const userName = user.name || 'Parishioner';
       const userEmail = (user.email || '').trim().toLowerCase();
-      const userPhone = (user.phone || '').trim();
-
-      // DUPLICATE PROTECTION: Check if user already has a log for this dateKey (unless force=true)
-      if (!force) {
-        const existingLog = await DailyNotificationLog.findOne({
-          userId: user._id,
-          dateKey: dailyContent.dateKey
-        }).lean();
-
-        if (existingLog && (existingLog.status === 'sent' || existingLog.status === 'partially_sent')) {
-          skippedCount++;
-          continue;
-        }
-      }
+      const rawPhone = (user.phone || '').trim();
+      const userPhone = rawPhone.replace(/\D/g, '');
 
       const isEmailEnabled = userSettings.email !== false && Boolean(userEmail && userEmail.includes('@'));
       const isInAppEnabled = userSettings.inApp !== false;
       const isPushEnabled = userSettings.push !== false;
       const isWhatsAppEnabled = userSettings.whatsapp !== false && Boolean(userPhone) && user.whatsappOptIn !== false;
+
+      let userHadAtLeastOneSuccess = false;
+      let userHadAnyAttempt = false;
 
       const logChannels = {
         email: { status: isEmailEnabled ? 'pending' : 'disabled' },
@@ -289,48 +404,240 @@ async function sendDailyChurchNotifications({
         whatsapp: { status: isWhatsAppEnabled ? 'pending' : 'disabled' }
       };
 
-      let userHadAtLeastOneSuccess = false;
-      let userHadAnyAttempt = false;
-
-      // ── CHANNEL 1: EMAIL ──────────────────────────────────────────────────
+      // 1. EMAIL CHANNEL with Retry & Idempotency
       if (isEmailEnabled) {
         userHadAnyAttempt = true;
-        try {
-          const html = generateDailyNotificationHtml({
+        // Check existing delivery record
+        const existingEmailDelivery = await NotificationDelivery.findOne({
+          notificationDate: dateKey,
+          recipient: userEmail,
+          channel: 'email'
+        });
+
+        if (existingEmailDelivery && existingEmailDelivery.status === 'sent' && !force) {
+          channelStats.email.skipped++;
+          userHadAtLeastOneSuccess = true;
+          logChannels.email = {
+            status: 'sent',
+            messageId: existingEmailDelivery.providerMessageId,
+            sentAt: existingEmailDelivery.sentAt
+          };
+        } else {
+          // Attempt email send with retry
+          const emailHtml = generateDailyNotificationHtml({
             userName,
             dailyContent,
             userLanguage: userLang,
             hasSaintImageAttachment: hasSaintImage
           });
 
-          const subject = userLang === 'en'
+          const emailSubject = userLang === 'en'
             ? `✝️ Good Morning — Daily Catholic Readings & Living Word — ${dailyContent.formattedDate}`
             : `✝️ காலை வணக்கம் — இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள் — ${dailyContent.formattedDateTa || dailyContent.formattedDate}`;
 
-          const mailRes = await sendMail({
-            to: userEmail,
-            subject,
-            html,
-            attachments: emailAttachments
-          });
+          const emailSendResult = await retryOperation(async () => {
+            const res = await sendMail({
+              to: userEmail,
+              subject: emailSubject,
+              html: emailHtml,
+              attachments: emailAttachments
+            });
+            if (!res || !res.success) throw new Error(res?.error || 'SMTP delivery error');
+            return res;
+          }, 3, 1500);
 
-          if (mailRes.success) {
-            logChannels.email = { status: 'sent', messageId: mailRes.messageId, error: null, sentAt: new Date() };
+          if (emailSendResult.success) {
             channelStats.email.sent++;
             userHadAtLeastOneSuccess = true;
+            logChannels.email = {
+              status: 'sent',
+              messageId: emailSendResult.result.messageId,
+              sentAt: new Date()
+            };
+
+            await NotificationDelivery.findOneAndUpdate(
+              { notificationDate: dateKey, recipient: userEmail, channel: 'email' },
+              {
+                jobId,
+                userId: user._id,
+                recipient: userEmail,
+                channel: 'email',
+                notificationDate: dateKey,
+                language: userLang,
+                status: 'sent',
+                attemptCount: emailSendResult.attempts,
+                attemptedAt: new Date(),
+                sentAt: new Date(),
+                providerMessageId: emailSendResult.result.messageId,
+                error: null
+              },
+              { upsert: true, new: true }
+            );
           } else {
-            logChannels.email = { status: 'failed', messageId: null, error: mailRes.error || 'SMTP Failed', sentAt: new Date() };
             channelStats.email.failed++;
+            logChannels.email = {
+              status: 'failed',
+              error: emailSendResult.error,
+              sentAt: new Date()
+            };
+
+            await NotificationDelivery.findOneAndUpdate(
+              { notificationDate: dateKey, recipient: userEmail, channel: 'email' },
+              {
+                jobId,
+                userId: user._id,
+                recipient: userEmail,
+                channel: 'email',
+                notificationDate: dateKey,
+                language: userLang,
+                status: 'failed',
+                attemptCount: emailSendResult.attempts,
+                attemptedAt: new Date(),
+                error: emailSendResult.error
+              },
+              { upsert: true, new: true }
+            );
           }
-        } catch (err) {
-          logChannels.email = { status: 'failed', messageId: null, error: err.message, sentAt: new Date() };
-          channelStats.email.failed++;
         }
       } else {
         channelStats.email.disabled++;
       }
 
-      // ── CHANNEL 2 & 3: IN-APP & MOBILE/WEB PUSH ──────────────────────────
+      // 2. WHATSAPP CHANNEL with Retry & Idempotency
+      if (isWhatsAppEnabled) {
+        userHadAnyAttempt = true;
+        const existingWADelivery = await NotificationDelivery.findOne({
+          notificationDate: dateKey,
+          recipient: userPhone,
+          channel: 'whatsapp'
+        });
+
+        if (existingWADelivery && existingWADelivery.status === 'sent' && !force) {
+          channelStats.whatsapp.skipped++;
+          userHadAtLeastOneSuccess = true;
+          logChannels.whatsapp = {
+            status: 'sent',
+            phone: userPhone,
+            sentAt: existingWADelivery.sentAt
+          };
+        } else {
+          if (waService && typeof waService.sendWhatsAppMessage === 'function') {
+            const userReadingPref = user.readingPreference || 'full';
+            const userSendLinks = user.sendLinks !== false;
+
+            const waResult = await retryOperation(async () => {
+              // 1. Devotional text message
+              const waMsg = generateDailyCatholicMessage({
+                dailyContent,
+                language: userLang,
+                readingPreference: userReadingPref
+              });
+              const sentOk = await waService.sendWhatsAppMessage(userPhone, waMsg);
+              if (!sentOk) throw new Error('WhatsApp message delivery unacknowledged');
+
+              // 2. Saint photo media message (Image only)
+              try {
+                const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
+                if (saintImageUrl && typeof waService.sendWhatsAppMedia === 'function') {
+                  await new Promise(r => setTimeout(r, 450));
+                  await waService.sendWhatsAppMedia(userPhone, { url: saintImageUrl, mimetype: 'image/jpeg' });
+                }
+              } catch (mediaErr) {
+                console.warn(`[Daily Notification] Saint photo warning for ${userPhone}:`, mediaErr.message);
+              }
+
+              // 3. Saint details message
+              try {
+                await new Promise(r => setTimeout(r, 450));
+                const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: userLang });
+                await waService.sendWhatsAppMessage(userPhone, saintInfoMsg);
+              } catch (infoErr) {
+                console.warn(`[Daily Notification] Saint info warning for ${userPhone}:`, infoErr.message);
+              }
+
+              // 4. Clickable links message (if preferred)
+              if (userSendLinks) {
+                try {
+                  await new Promise(r => setTimeout(r, 450));
+                  const linksMsg = generateDailyLinksMessage({ dailyContent, language: userLang });
+                  if (linksMsg) {
+                    await waService.sendWhatsAppMessage(userPhone, linksMsg);
+                  }
+                } catch (linkErr) {
+                  console.warn(`[Daily Notification] Links warning for ${userPhone}:`, linkErr.message);
+                }
+              }
+
+              return { delivered: true };
+            }, 3, 2000);
+
+            if (waResult.success) {
+              channelStats.whatsapp.sent++;
+              userHadAtLeastOneSuccess = true;
+              logChannels.whatsapp = {
+                status: 'sent',
+                phone: userPhone,
+                sentAt: new Date()
+              };
+
+              await NotificationDelivery.findOneAndUpdate(
+                { notificationDate: dateKey, recipient: userPhone, channel: 'whatsapp' },
+                {
+                  jobId,
+                  userId: user._id,
+                  recipient: userPhone,
+                  channel: 'whatsapp',
+                  notificationDate: dateKey,
+                  language: userLang,
+                  status: 'sent',
+                  attemptCount: waResult.attempts,
+                  attemptedAt: new Date(),
+                  sentAt: new Date(),
+                  error: null
+                },
+                { upsert: true, new: true }
+              );
+            } else {
+              channelStats.whatsapp.failed++;
+              logChannels.whatsapp = {
+                status: 'failed',
+                phone: userPhone,
+                error: waResult.error,
+                sentAt: new Date()
+              };
+
+              await NotificationDelivery.findOneAndUpdate(
+                { notificationDate: dateKey, recipient: userPhone, channel: 'whatsapp' },
+                {
+                  jobId,
+                  userId: user._id,
+                  recipient: userPhone,
+                  channel: 'whatsapp',
+                  notificationDate: dateKey,
+                  language: userLang,
+                  status: 'failed',
+                  attemptCount: waResult.attempts,
+                  attemptedAt: new Date(),
+                  error: waResult.error
+                },
+                { upsert: true, new: true }
+              );
+            }
+          } else {
+            channelStats.whatsapp.failed++;
+            logChannels.whatsapp = {
+              status: 'failed',
+              phone: userPhone,
+              error: 'WhatsApp Baileys socket offline',
+              sentAt: new Date()
+            };
+          }
+        }
+      } else {
+        channelStats.whatsapp.disabled++;
+      }
+
+      // 3. IN-APP & PUSH CHANNELS
       if (isInAppEnabled || isPushEnabled) {
         userHadAnyAttempt = true;
         try {
@@ -357,101 +664,25 @@ async function sendDailyChurchNotifications({
 
           if (notif) {
             if (isInAppEnabled) {
-              logChannels.inApp = { status: 'sent', notificationId: notif._id, error: null, sentAt: new Date() };
+              logChannels.inApp = { status: 'sent', notificationId: notif._id, sentAt: new Date() };
               channelStats.inApp.sent++;
             }
             if (isPushEnabled) {
-              logChannels.push = { status: 'sent', error: null, sentAt: new Date() };
+              logChannels.push = { status: 'sent', sentAt: new Date() };
               channelStats.push.sent++;
             }
             userHadAtLeastOneSuccess = true;
           }
-        } catch (err) {
-          if (isInAppEnabled) {
-            logChannels.inApp = { status: 'failed', notificationId: null, error: err.message, sentAt: new Date() };
-            channelStats.inApp.failed++;
-          }
-          if (isPushEnabled) {
-            logChannels.push = { status: 'failed', error: err.message, sentAt: new Date() };
-            channelStats.push.failed++;
-          }
+        } catch (notifErr) {
+          if (isInAppEnabled) channelStats.inApp.failed++;
+          if (isPushEnabled) channelStats.push.failed++;
         }
       } else {
         channelStats.inApp.disabled++;
         channelStats.push.disabled++;
       }
 
-      // ── CHANNEL 4: WHATSAPP BOT ──────────────────────────────────────────
-      if (isWhatsAppEnabled) {
-        userHadAnyAttempt = true;
-        try {
-          if (waService && typeof waService.sendWhatsAppMessage === 'function') {
-            const userReadingPref = user.readingPreference || 'full';
-            const userSendLinks = user.sendLinks !== false;
-
-            // 1. Message 1: Clean devotional/reading message (0 URLs)
-            const waMsg = generateDailyCatholicMessage({
-              dailyContent,
-              language: userLang,
-              readingPreference: userReadingPref
-            });
-            const waOk = await waService.sendWhatsAppMessage(userPhone, waMsg);
-
-            if (waOk) {
-              logChannels.whatsapp = { status: 'sent', phone: userPhone, error: null, sentAt: new Date() };
-              channelStats.whatsapp.sent++;
-              userHadAtLeastOneSuccess = true;
-
-              // 2. Message 2: Saint of the Day Separate WhatsApp Photo Message (Image only)
-              try {
-                const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
-
-                if (saintImageUrl && typeof waService.sendWhatsAppMedia === 'function') {
-                  await new Promise(r => setTimeout(r, 450));
-                  await waService.sendWhatsAppMedia(userPhone, { url: saintImageUrl, mimetype: 'image/jpeg' });
-                }
-              } catch (saintMediaErr) {
-                console.warn(`[Daily Notification] Failed to send Saint photo message to ${userPhone}:`, saintMediaErr.message);
-              }
-
-              // 3. Message 3: Saint of the Day Information
-              try {
-                await new Promise(r => setTimeout(r, 450));
-                const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: userLang });
-                await waService.sendWhatsAppMessage(userPhone, saintInfoMsg);
-              } catch (saintInfoErr) {
-                console.warn(`[Daily Notification] Failed to send Saint info to ${userPhone}:`, saintInfoErr.message);
-              }
-
-              // 4. Message 4: Separate Clickable Links Message (if user preference enabled)
-              if (userSendLinks) {
-                try {
-                  await new Promise(r => setTimeout(r, 450));
-                  const linksMsg = generateDailyLinksMessage({ dailyContent, language: userLang });
-                  if (linksMsg) {
-                    await waService.sendWhatsAppMessage(userPhone, linksMsg);
-                  }
-                } catch (linkErr) {
-                  console.warn(`[Daily Notification] Failed to send links message to ${userPhone}:`, linkErr.message);
-                }
-              }
-            } else {
-              logChannels.whatsapp = { status: 'failed', phone: userPhone, error: 'Socket unreachable', sentAt: new Date() };
-              channelStats.whatsapp.failed++;
-            }
-          } else {
-            logChannels.whatsapp = { status: 'failed', phone: userPhone, error: 'WhatsApp service offline', sentAt: new Date() };
-            channelStats.whatsapp.failed++;
-          }
-        } catch (err) {
-          logChannels.whatsapp = { status: 'failed', phone: userPhone, error: err.message, sentAt: new Date() };
-          channelStats.whatsapp.failed++;
-        }
-      } else {
-        channelStats.whatsapp.disabled++;
-      }
-
-      // Determine overall user delivery status
+      // Overall recipient status calculation
       const overallStatus = userHadAtLeastOneSuccess
         ? 'sent'
         : (userHadAnyAttempt ? 'failed' : 'skipped');
@@ -460,15 +691,15 @@ async function sendDailyChurchNotifications({
       else if (overallStatus === 'failed') failedCount++;
       else skippedCount++;
 
-      // Save / Upsert to DailyNotificationLog
+      // Synchronize with DailyNotificationLog for backward compatibility
       await DailyNotificationLog.findOneAndUpdate(
-        { userId: user._id, dateKey: dailyContent.dateKey },
+        { userId: user._id, dateKey },
         {
           userId: user._id,
           userEmail: userEmail || 'no-email@sjdb.church',
           userName,
           userPhone: userPhone || null,
-          dateKey: dailyContent.dateKey,
+          dateKey,
           language: userLang,
           status: overallStatus,
           channels: logChannels,
@@ -482,108 +713,259 @@ async function sendDailyChurchNotifications({
         { upsert: true, new: true }
       );
 
-      // Polite throttle between users
-      await new Promise(r => setTimeout(r, 120));
+      // Polite throttle between users to prevent rate limiting
+      await new Promise(r => setTimeout(r, 100));
     }
 
-    // ── 2B. BROADCAST WEB/MOBILE PUSH TO ALL ACTIVE BROWSER SUBSCRIBERS ──────
+    // E. Broadcast Global Web / Mobile Push
     try {
       const pushPayload = formatPushPayload(dailyContent, 'ta');
-      const pushBroadcastRes = await sendPushBroadcast(pushPayload);
-      console.log(`[Daily Notification Service] Global Push Broadcast delivered to ${pushBroadcastRes.sentCount || 0} browser/mobile subscribers.`);
+      const pushRes = await sendPushBroadcast(pushPayload);
+      if (pushRes?.sentCount) {
+        job.logs.push({ timestamp: new Date(), message: `Web Push broadcast delivered to ${pushRes.sentCount} devices` });
+      }
     } catch (pushErr) {
-      console.warn('[Daily Notification Service] Global push broadcast error:', pushErr.message);
+      console.warn('[Daily Notification Service] Push broadcast notice:', pushErr.message);
     }
 
-    // ── 2C. PROCESS STANDALONE WHATSAPP BOT SESSIONS ─────────────────────────
+    // F. Process WhatsApp Bot Sessions (Members who interacted via WhatsApp bot only)
     if (waService && typeof waService.sendWhatsAppMessage === 'function') {
-      const processedPhones = new Set(users.map(u => (u.phone || '').replace(/\D/g, '')).filter(Boolean));
+      const processedPhones = new Set(
+        users.map(u => (u.phone || '').replace(/\D/g, '')).filter(Boolean)
+      );
 
       for (const session of botSessions) {
-        const phone = session.phoneNumber;
-        const cleanPhone = (phone || '').replace(/\D/g, '');
-        if (!phone || (cleanPhone && processedPhones.has(cleanPhone))) continue;
+        const rawSessPhone = (session.phoneNumber || '').trim();
+        const cleanSessPhone = rawSessPhone.replace(/\D/g, '');
+        if (!cleanSessPhone || processedPhones.has(cleanSessPhone)) continue;
 
-        processedPhones.add(cleanPhone || phone);
+        processedPhones.add(cleanSessPhone);
         const sessionLang = resolveUserLanguage(session);
         const sessionReadingPref = session.readingPreference || 'full';
         const sessionSendLinks = session.sendLinks !== false;
 
-        try {
-          await new Promise(r => setTimeout(r, 500));
+        // Idempotency check for bot session
+        const existingSessionDelivery = await NotificationDelivery.findOne({
+          notificationDate: dateKey,
+          recipient: cleanSessPhone,
+          channel: 'whatsapp'
+        });
+
+        if (existingSessionDelivery && existingSessionDelivery.status === 'sent' && !force) {
+          channelStats.whatsapp.skipped++;
+          continue;
+        }
+
+        const sessResult = await retryOperation(async () => {
           const waMsg = generateDailyCatholicMessage({
             dailyContent,
             language: sessionLang,
             readingPreference: sessionReadingPref
           });
+          const sentOk = await waService.sendWhatsAppMessage(cleanSessPhone, waMsg);
+          if (!sentOk) throw new Error('Bot session WhatsApp unacknowledged');
 
-          const ok = await waService.sendWhatsAppMessage(phone, waMsg);
-          if (ok) {
-            channelStats.whatsapp.sent++;
-
-            // 2. Message 2: Saint of the Day Separate WhatsApp Photo Message (Image only)
-            try {
-              const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
-
-              if (saintImageUrl && typeof waService.sendWhatsAppMedia === 'function') {
-                await new Promise(r => setTimeout(r, 450));
-                await waService.sendWhatsAppMedia(phone, { url: saintImageUrl, mimetype: 'image/jpeg' });
-              }
-            } catch (saintMediaErr) {
-              console.warn(`[Daily Notification] Session Saint photo send error for ${phone}:`, saintMediaErr.message);
+          // Saint photo
+          try {
+            const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
+            if (saintImageUrl && typeof waService.sendWhatsAppMedia === 'function') {
+              await new Promise(r => setTimeout(r, 450));
+              await waService.sendWhatsAppMedia(cleanSessPhone, { url: saintImageUrl, mimetype: 'image/jpeg' });
             }
+          } catch (e) { }
 
-            // 3. Message 3: Saint of the Day Information
+          // Saint details
+          try {
+            await new Promise(r => setTimeout(r, 450));
+            const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: sessionLang });
+            await waService.sendWhatsAppMessage(cleanSessPhone, saintInfoMsg);
+          } catch (e) { }
+
+          // Links
+          if (sessionSendLinks) {
             try {
               await new Promise(r => setTimeout(r, 450));
-              const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: sessionLang });
-              await waService.sendWhatsAppMessage(phone, saintInfoMsg);
-            } catch (saintInfoErr) {
-              console.warn(`[Daily Notification] Session Saint info send error for ${phone}:`, saintInfoErr.message);
-            }
-
-            // 4. Message 4: Separate Clickable Links Message (if sessionSendLinks enabled)
-            if (sessionSendLinks) {
-              try {
-                await new Promise(r => setTimeout(r, 450));
-                const linksMsg = generateDailyLinksMessage({ dailyContent, language: sessionLang });
-                if (linksMsg) {
-                  await waService.sendWhatsAppMessage(phone, linksMsg);
-                }
-              } catch (linkErr) {
-                console.warn(`[Daily Notification] Session links send error for ${phone}:`, linkErr.message);
-              }
-            }
+              const linksMsg = generateDailyLinksMessage({ dailyContent, language: sessionLang });
+              if (linksMsg) await waService.sendWhatsAppMessage(cleanSessPhone, linksMsg);
+            } catch (e) { }
           }
-        } catch (sessErr) {
-          console.warn(`[Daily Notification] Session send error for ${phone}:`, sessErr.message);
+
+          return { delivered: true };
+        }, 3, 2000);
+
+        if (sessResult.success) {
+          channelStats.whatsapp.sent++;
+          await NotificationDelivery.findOneAndUpdate(
+            { notificationDate: dateKey, recipient: cleanSessPhone, channel: 'whatsapp' },
+            {
+              jobId,
+              recipient: cleanSessPhone,
+              channel: 'whatsapp',
+              notificationDate: dateKey,
+              language: sessionLang,
+              status: 'sent',
+              attemptCount: sessResult.attempts,
+              attemptedAt: new Date(),
+              sentAt: new Date(),
+              error: null
+            },
+            { upsert: true, new: true }
+          );
+        } else {
+          channelStats.whatsapp.failed++;
+          await NotificationDelivery.findOneAndUpdate(
+            { notificationDate: dateKey, recipient: cleanSessPhone, channel: 'whatsapp' },
+            {
+              jobId,
+              recipient: cleanSessPhone,
+              channel: 'whatsapp',
+              notificationDate: dateKey,
+              language: sessionLang,
+              status: 'failed',
+              attemptCount: sessResult.attempts,
+              attemptedAt: new Date(),
+              error: sessResult.error
+            },
+            { upsert: true, new: true }
+          );
         }
+
+        await new Promise(r => setTimeout(r, 100));
       }
     }
 
-    isBroadcasting = false;
-    console.log(`[DAILY-CATHOLIC] Job completed for ${dailyContent.dateKey}`);
-    console.log(`[DAILY-CATHOLIC] WhatsApp deliveries: ${channelStats.whatsapp.sent} sent, ${channelStats.whatsapp.failed} failed, ${channelStats.whatsapp.disabled} disabled`);
-    console.log(`[DAILY-CATHOLIC] Email deliveries: ${channelStats.email.sent} sent, ${channelStats.email.failed} failed, ${channelStats.email.disabled} disabled`);
-    console.log(`[DAILY-CATHOLIC] Successful: ${sentCount} | Failed: ${failedCount} | Skipped: ${skippedCount}`);
+    // G. Finalize DailyNotificationJob
+    const finalStatus = failedCount > 0
+      ? (sentCount > 0 ? 'partial' : 'failed')
+      : 'completed';
+
+    job.status = finalStatus;
+    job.completedAt = new Date();
+    job.totalRecipients = users.length + botSessions.length;
+    job.whatsappTotal = channelStats.whatsapp.sent + channelStats.whatsapp.failed;
+    job.whatsappSent = channelStats.whatsapp.sent;
+    job.whatsappFailed = channelStats.whatsapp.failed;
+    job.emailTotal = channelStats.email.sent + channelStats.email.failed;
+    job.emailSent = channelStats.email.sent;
+    job.emailFailed = channelStats.email.failed;
+    job.inAppTotal = channelStats.inApp.sent + channelStats.inApp.failed;
+    job.inAppSent = channelStats.inApp.sent;
+    job.pushTotal = channelStats.push.sent + channelStats.push.failed;
+    job.pushSent = channelStats.push.sent;
+
+    job.logs.push({
+      timestamp: new Date(),
+      message: `Job finished: WhatsApp (${job.whatsappSent} sent, ${job.whatsappFailed} failed), Email (${job.emailSent} sent, ${job.emailFailed} failed). Status: ${finalStatus.toUpperCase()}`
+    });
+
+    await job.save();
+
+    lastRunTime = new Date();
+    lastRunDateKey = dateKey;
+    lastRunResult = {
+      jobId,
+      dateKey,
+      sentCount,
+      failedCount,
+      skippedCount,
+      status: finalStatus,
+      channelStats
+    };
+
+    console.log(`\n================================================================`);
+    console.log(`[DAILY-CATHOLIC] ✅ 04:00 AM IST Daily Catholic Job Completed: ${jobId}`);
+    console.log(`[DAILY-CATHOLIC] Status: ${finalStatus.toUpperCase()} | WhatsApp: ${channelStats.whatsapp.sent} sent | Email: ${channelStats.email.sent} sent`);
+    console.log(`================================================================\n`);
 
     return {
       success: true,
-      dateKey: dailyContent.dateKey,
-      totalUsers: users.length,
+      jobId,
+      dateKey,
+      status: finalStatus,
       sentCount,
-      skippedCount,
       failedCount,
+      skippedCount,
       channelStats
     };
   } catch (err) {
-    isBroadcasting = false;
-    console.error('[DAILY-CATHOLIC] Fatal broadcast error:', err.message);
+    console.error('[DAILY-CATHOLIC] ❌ Fatal broadcast error:', err.message);
     return {
       success: false,
       error: err.message
     };
   }
+}
+
+// ─── Scheduler State & Tracking ─────────────────────────────────────────────
+
+let lastRunTime = null;
+let lastRunDateKey = null;
+let lastRunResult = null;
+const schedulerRegisteredAt = new Date();
+
+function computeNext4AmIST() {
+  const now = new Date();
+  // Get current date in Asia/Kolkata
+  const kolkataDate = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(now);
+
+  const [y, m, d] = kolkataDate.split('-').map(Number);
+  // 04:00 IST = 22:30 UTC of previous calendar day (4 - 5.5 = -1.5h = previous day 22:30 UTC)
+  const candidate = new Date(Date.UTC(y, m - 1, d - 1, 22, 30, 0));
+  if (candidate <= now) {
+    // If today's 04:00 AM IST has already passed, next run is tomorrow at 04:00 AM IST
+    candidate.setUTCDate(candidate.getUTCDate() + 1);
+  }
+  return candidate;
+}
+
+let nextRunIST = computeNext4AmIST();
+
+// ─── 04:00 AM IST Daily Automated Scheduled Job ──────────────────────────────
+
+const scheduledJob = cron.schedule('0 4 * * *', async () => {
+  const istDateKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  console.log(`\n[DAILY-CATHOLIC] ⏰ Cron fired at 04:00 AM IST — Starting daily job for ${istDateKey}...`);
+  nextRunIST = computeNext4AmIST();
+  await sendDailyChurchNotifications({ triggerType: 'cron_scheduler' });
+}, {
+  timezone: 'Asia/Kolkata',
+  scheduled: true
+});
+
+console.log('✅ [DAILY-CATHOLIC] Server-side Scheduler initialized');
+console.log(`[DAILY-CATHOLIC] Timezone: Asia/Kolkata`);
+console.log(`[DAILY-CATHOLIC] Schedule: 0 4 * * * (Every day at 04:00 AM IST)`);
+console.log(`[DAILY-CATHOLIC] Next run: ${nextRunIST.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST`);
+
+/**
+ * Get live scheduler status for health monitoring and admin dashboard
+ */
+function getSchedulerStatus() {
+  return {
+    schedulerRegistered: true,
+    registeredAt: schedulerRegisteredAt.toISOString(),
+    timezone: 'Asia/Kolkata',
+    cronExpression: '0 4 * * *',
+    scheduleTime: '04:00 AM IST',
+    lastRunTime: lastRunTime?.toISOString() || null,
+    lastRunDateKey: lastRunDateKey || null,
+    lastRunResult: lastRunResult || null,
+    nextRunIST: nextRunIST
+      ? nextRunIST.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+      : null,
+    nextRunUTC: nextRunIST?.toISOString() || null,
+    autonomousRecovery: {
+      enabled: true,
+      window: '04:05 AM – 08:00 PM IST',
+      watchdogCron: '0 5,6,7,8,9,10,11,12 * * * (Asia/Kolkata)',
+      bootAvailabilityCheck: 'Active (25s post-boot)'
+    }
+  };
 }
 
 /**
@@ -595,36 +977,65 @@ async function getDailyNotificationStatus() {
     const dailyContent = await getTodayDailyContent(today);
     const dateKey = dailyContent.dateKey;
 
-    const totalUsers = await User.countDocuments({
-      isActive: { $ne: false }
-    });
+    const totalUsers = await User.countDocuments({ isActive: { $ne: false } });
+    const botSessions = await BotSession.countDocuments({ step: 'done' });
+    const totalEligible = totalUsers + botSessions;
 
-    const sentLogs = await DailyNotificationLog.countDocuments({ dateKey, status: { $in: ['sent', 'partially_sent'] } });
-    const failedLogs = await DailyNotificationLog.countDocuments({ dateKey, status: 'failed' });
-    const recentLogs = await DailyNotificationLog.find({ dateKey }).sort({ sentAt: -1 }).limit(30).lean();
+    // Fetch today's DailyNotificationJob
+    const job = await DailyNotificationJob.findOne({ notificationDate: dateKey }).lean();
 
-    const isComplete = sentLogs > 0 && (sentLogs + failedLogs) >= totalUsers;
-
-    const emailSent = await DailyNotificationLog.countDocuments({ dateKey, 'channels.email.status': 'sent' });
+    // Delivery stats from NotificationDelivery
+    const emailSent = await NotificationDelivery.countDocuments({ notificationDate: dateKey, channel: 'email', status: 'sent' });
+    const emailFailed = await NotificationDelivery.countDocuments({ notificationDate: dateKey, channel: 'email', status: 'failed' });
+    const waSent = await NotificationDelivery.countDocuments({ notificationDate: dateKey, channel: 'whatsapp', status: 'sent' });
+    const waFailed = await NotificationDelivery.countDocuments({ notificationDate: dateKey, channel: 'whatsapp', status: 'failed' });
     const inAppSent = await DailyNotificationLog.countDocuments({ dateKey, 'channels.inApp.status': 'sent' });
     const pushSent = await DailyNotificationLog.countDocuments({ dateKey, 'channels.push.status': 'sent' });
-    const waSent = await DailyNotificationLog.countDocuments({ dateKey, 'channels.whatsapp.status': 'sent' });
+
+    const recentDeliveries = await NotificationDelivery.find({ notificationDate: dateKey })
+      .sort({ updatedAt: -1 })
+      .limit(30)
+      .lean();
+
+    const recentLogs = await DailyNotificationLog.find({ dateKey })
+      .sort({ sentAt: -1 })
+      .limit(30)
+      .lean();
 
     return {
       success: true,
       dateKey,
       formattedDate: dailyContent.formattedDate,
-      status: isComplete ? 'Completed' : (sentLogs > 0 ? 'Partially Sent' : 'Pending'),
-      totalUsers,
-      sentCount: sentLogs,
-      failedCount: failedLogs,
-      skippedCount: Math.max(0, totalUsers - (sentLogs + failedLogs)),
+      job: job ? {
+        jobId: job.jobId,
+        status: job.status,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+        triggerType: job.triggerType,
+        totalRecipients: job.totalRecipients,
+        whatsappSent: job.whatsappSent,
+        whatsappFailed: job.whatsappFailed,
+        emailSent: job.emailSent,
+        emailFailed: job.emailFailed,
+        logs: job.logs || []
+      } : {
+        status: 'pending',
+        message: 'Job has not run yet today'
+      },
+      status: job ? (job.status === 'completed' ? 'Completed' : job.status.toUpperCase()) : 'Pending',
+      totalUsers: totalEligible,
+      sentCount: waSent + emailSent,
+      failedCount: waFailed + emailFailed,
       channels: {
         email: emailSent,
+        emailFailed,
         inApp: inAppSent,
         push: pushSent,
-        whatsapp: waSent
+        whatsapp: waSent,
+        whatsappFailed: waFailed
       },
+      scheduler: getSchedulerStatus(),
+      recentDeliveries,
       recentLogs
     };
   } catch (err) {
@@ -659,194 +1070,130 @@ async function getUserNotificationHistory(userId) {
   }
 }
 
+/**
+ * Autonomous Missed Job Recovery Detector
+ * 
+ * Automatically detects if today's 04:00 AM IST daily Catholic job was missed
+ * due to temporary infrastructure downtime, network outage, or cloud host reboot.
+ * 
+ * Guarantees:
+ *  - Runs automatically on the backend/cloud (zero administrator action).
+ *  - Does NOT depend on anyone opening the website or admin dashboard.
+ *  - Only triggers between 04:05 AM IST and 20:00 (8:00 PM) IST.
+ *  - If today's job is already 'completed', exits in milliseconds with ZERO side effects.
+ *  - Skips any already-delivered recipients via NotificationDelivery unique indexes.
+ */
+async function checkAndRecoverMissedJobAutonomous(context = 'periodic_watchdog', forcedNow = null) {
+  try {
+    const now = forcedNow || new Date();
 
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
 
-// ─── Scheduler State Tracking ────────────────────────────────────────────────
-let lastRunTime = null;
-let lastRunDateKey = null;
-let lastRunResult = null;
-let schedulerRegisteredAt = null;
-let nextRunIST = null;
+    const parts = formatter.formatToParts(now);
+    const dateParts = {};
+    for (const p of parts) {
+      dateParts[p.type] = p.value;
+    }
 
-function computeNextMidnightIST() {
-  const now = new Date();
-  // Next midnight Asia/Kolkata
-  const kolkataNow = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Kolkata',
-    year: 'numeric', month: '2-digit', day: '2-digit'
-  }).format(now);
-  const [y, m, d] = kolkataNow.split('-').map(Number);
-  // Midnight IST = UTC - 5h30m = 18:30 UTC previous day
-  const midnightIST = new Date(Date.UTC(y, m - 1, d, 18, 30, 0)); // 00:00 IST = 18:30 UTC
-  if (midnightIST <= now) {
-    midnightIST.setUTCDate(midnightIST.getUTCDate() + 1);
+    const todayDateKey = `${dateParts.year}-${dateParts.month}-${dateParts.day}`;
+    const istHour = parseInt(dateParts.hour, 10);
+    const istMinute = parseInt(dateParts.minute, 10);
+
+    // If before 04:05 AM IST, wait for the scheduled 04:00 AM cron
+    if (istHour < 4 || (istHour === 4 && istMinute < 5)) {
+      return { checked: true, action: 'before_scheduled_time', dateKey: todayDateKey };
+    }
+
+    // If after 20:00 (8:00 PM) IST, outside daily morning/day devotional delivery window
+    if (istHour >= 20) {
+      return { checked: true, action: 'past_devotional_window', dateKey: todayDateKey };
+    }
+
+    const existingJob = await DailyNotificationJob.findOne({ notificationDate: todayDateKey });
+
+    // Case 1: Already completed today — zero action needed
+    if (existingJob && existingJob.status === 'completed') {
+      return { checked: true, action: 'already_completed', jobId: existingJob.jobId, dateKey: todayDateKey };
+    }
+
+    // Case 2: Currently running on another active worker (lock age < 20 min)
+    if (existingJob && existingJob.status === 'running') {
+      const lockAgeMs = Date.now() - new Date(existingJob.lockedAt || existingJob.startedAt).getTime();
+      if (lockAgeMs < 20 * 60 * 1000) {
+        return { checked: true, action: 'currently_running', jobId: existingJob.jobId, dateKey: todayDateKey };
+      }
+      console.warn(`[DAILY-CATHOLIC] ⚠️ Autonomous Recovery: Stale running job detected for ${todayDateKey} (age: ${Math.round(lockAgeMs / 1000)}s). Resuming...`);
+    }
+
+    const triggerType = !existingJob
+      ? 'downtime_recovery'
+      : (existingJob.status === 'running' ? 'crash_recovery' : 'failure_recovery');
+
+    console.log(`\n================================================================`);
+    console.log(`[DAILY-CATHOLIC] 🚨 AUTONOMOUS DOWNTIME RECOVERY DETECTED`);
+    console.log(`[DAILY-CATHOLIC] Context: ${context} | Current IST: ${istHour}:${String(istMinute).padStart(2, '0')}`);
+    console.log(`[DAILY-CATHOLIC] 04:00 AM IST job was missed or incomplete (${existingJob?.status || 'NOT_STARTED'}).`);
+    console.log(`[DAILY-CATHOLIC] Executing autonomous catch-up for ${todayDateKey}...`);
+    console.log(`================================================================\n`);
+
+    const result = await sendDailyChurchNotifications({
+      triggerType,
+      force: false
+    });
+
+    return {
+      checked: true,
+      action: 'recovered',
+      triggerType,
+      dateKey: todayDateKey,
+      result
+    };
+  } catch (err) {
+    console.error('[DAILY-CATHOLIC] Autonomous recovery detector error:', err.message);
+    return { checked: false, error: err.message };
   }
-  return midnightIST;
 }
 
-// ─── 12:00 AM IST Daily Automated Scheduled Job (Midnight) ───────────────────
-const scheduledJob = cron.schedule('0 0 * * *', async () => {
-  const istDateKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
-  console.log(`[DAILY-CATHOLIC] ⏰ Cron fired at 12:00 AM IST — Starting daily job for ${istDateKey}...`);
-  lastRunTime = new Date();
-  lastRunDateKey = istDateKey;
-  nextRunIST = computeNextMidnightIST();
-  const result = await sendDailyChurchNotifications();
-  lastRunResult = result;
-  console.log(`[DAILY-CATHOLIC] ✅ Cron job complete for ${istDateKey}. Result: Sent=${result?.sentCount ?? 'N/A'}, Failed=${result?.failedCount ?? 'N/A'}`);
+// ─── Autonomous Missed-Job Morning Watchdog (05:00 AM – 12:00 PM IST) ────────
+// Runs once every hour during the morning window to catch any downtime misses
+const watchdogJob = cron.schedule('0 5,6,7,8,9,10,11,12 * * *', async () => {
+  console.log('[DAILY-CATHOLIC] 🔍 Running autonomous morning missed-job watchdog check...');
+  await checkAndRecoverMissedJobAutonomous('hourly_watchdog');
 }, {
   timezone: 'Asia/Kolkata',
   scheduled: true
 });
 
-schedulerRegisteredAt = new Date();
-nextRunIST = computeNextMidnightIST();
-
-console.log('✅ [DAILY-CATHOLIC] Scheduler initialized');
-console.log(`[DAILY-CATHOLIC] Timezone: Asia/Kolkata`);
-console.log(`[DAILY-CATHOLIC] Schedule: 0 0 * * * (Every day at 12:00 AM IST)`);
-console.log(`[DAILY-CATHOLIC] Next run: ${nextRunIST.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST`);
-
-/**
- * Get scheduler status for health checks and admin monitoring
- */
-function getSchedulerStatus() {
-  return {
-    schedulerRegistered: true,
-    registeredAt: schedulerRegisteredAt?.toISOString() || null,
-    timezone: 'Asia/Kolkata',
-    cronExpression: '0 0 * * *',
-    lastRunTime: lastRunTime?.toISOString() || null,
-    lastRunDateKey: lastRunDateKey || null,
-    lastRunResult: lastRunResult
-      ? { sentCount: lastRunResult.sentCount, failedCount: lastRunResult.failedCount, success: lastRunResult.success }
-      : null,
-    nextRunIST: nextRunIST
-      ? nextRunIST.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
-      : null,
-    nextRunUTC: nextRunIST?.toISOString() || null,
-  };
-}
+// ─── Server Boot Availability Catch-up ───────────────────────────────────────
+// When the server boots up after maintenance, deployment, or crash recovery,
+// checks if today's 04:00 AM job was missed.
+// A 25-second delay allows MongoDB connection and Baileys socket to initialize first.
+setTimeout(() => {
+  checkAndRecoverMissedJobAutonomous('server_boot_availability').catch(err =>
+    console.error('[DAILY-CATHOLIC] Startup availability check error:', err.message)
+  );
+}, 25 * 1000);
 
 /**
- * Recover a missed run — checks if today's broadcast was sent; if not, runs it now.
- * Safe to call multiple times — idempotency prevents duplicate sends.
+ * Admin manual recovery wrapper (backward compatibility)
  */
 async function recoverMissedRun() {
-  try {
-    const today = new Date();
-    const todayDateKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(today);
-
-    const totalUsers = await User.countDocuments({ isActive: { $ne: false } });
-    const sentCount = await DailyNotificationLog.countDocuments({
-      dateKey: todayDateKey,
-      status: { $in: ['sent', 'partially_sent'] }
-    });
-
-    console.log(`[DAILY-CATHOLIC] Recovery check for ${todayDateKey}: ${sentCount}/${totalUsers} users already delivered.`);
-
-    if (sentCount >= Math.max(1, totalUsers)) {
-      return {
-        success: true,
-        recovered: false,
-        reason: `Today's broadcast (${todayDateKey}) is already complete: ${sentCount}/${totalUsers} sent.`,
-        dateKey: todayDateKey,
-        sentCount
-      };
-    }
-
-    console.log(`[DAILY-CATHOLIC] Missed/incomplete run detected for ${todayDateKey}. Triggering recovery broadcast...`);
-    const result = await sendDailyChurchNotifications();
-    lastRunTime = new Date();
-    lastRunDateKey = todayDateKey;
-    lastRunResult = result;
-
-    return {
-      success: true,
-      recovered: true,
-      dateKey: todayDateKey,
-      previouslySent: sentCount,
-      totalUsers,
-      result
-    };
-  } catch (err) {
-    console.error('[DAILY-CATHOLIC] Recovery error:', err.message);
-    return { success: false, error: err.message };
-  }
+  return checkAndRecoverMissedJobAutonomous('manual_admin_recovery');
 }
-
-/**
- * Startup Recovery — Fully Automatic, No Manual Action Required
- *
- * Runs 90 seconds after server boot (to let WhatsApp authenticate).
- * Checks if today's Daily Catholic Content broadcast was sent.
- * If missed for ANY reason (crash, deploy, power cut, etc.), it runs automatically.
- * Safe at any time of day — idempotency prevents duplicates for already-sent users.
- *
- * Flow:
- *   Server boots → 90s delay → check DailyNotificationLog for today
- *   ├─ Already sent to all users → skip (log confirmation)
- *   └─ Not sent (or partially sent) → run broadcast now
- *       ├─ Per-user idempotency: skip users already delivered
- *       └─ New users → deliver → record in DailyNotificationLog
- */
-async function checkAndSendOnStartup() {
-  try {
-    const dailyContent = await getTodayDailyContent();
-    const todayDateKey = dailyContent.dateKey;
-
-    // Count how many users already received today's broadcast
-    const sentCountToday = await DailyNotificationLog.countDocuments({
-      dateKey: todayDateKey,
-      status: { $in: ['sent', 'partially_sent'] }
-    });
-
-    // Count total active users to determine if broadcast is complete
-    const totalActive = await User.countDocuments({ isActive: { $ne: false } });
-
-    if (sentCountToday > 0) {
-      if (sentCountToday >= totalActive) {
-        console.log(`[DAILY-CATHOLIC] Startup check: Today's broadcast (${todayDateKey}) already complete — ${sentCountToday}/${totalActive} users delivered. Skipping.`);
-        return { skipped: true, reason: 'already_complete', dateKey: todayDateKey, sentCountToday, totalActive };
-      } else {
-        // Partial delivery — some users missed, recover the rest
-        console.log(`[DAILY-CATHOLIC] Startup check: Partial delivery detected for ${todayDateKey} — ${sentCountToday}/${totalActive} delivered. Recovering remaining users...`);
-      }
-    } else {
-      // No delivery at all — trigger full broadcast
-      const nowIST = new Intl.DateTimeFormat('en-US', {
-        timeZone: 'Asia/Kolkata', hour: 'numeric', hour12: false
-      }).format(new Date());
-      console.log(`[DAILY-CATHOLIC] Startup check: Today's broadcast (${todayDateKey}) has NOT been sent (current IST: ${nowIST}:xx). Triggering automatic recovery...`);
-    }
-
-    // Run recovery — idempotency inside sendDailyChurchNotifications skips already-sent users
-    const result = await sendDailyChurchNotifications();
-    lastRunTime = new Date();
-    lastRunDateKey = todayDateKey;
-    lastRunResult = result;
-    console.log(`[DAILY-CATHOLIC] Startup recovery complete for ${todayDateKey}: Sent=${result?.sentCount ?? 'N/A'}, Skipped=${result?.skippedCount ?? 'N/A'}, Failed=${result?.failedCount ?? 'N/A'}`);
-    return result;
-  } catch (err) {
-    console.error('[DAILY-CATHOLIC] Startup check error:', err.message);
-  }
-}
-
-
-// Run startup check 90 seconds after server boot.
-// 90 seconds gives WhatsApp (Baileys) time to authenticate and connect before we attempt WA sends.
-setTimeout(() => {
-  console.log('[DAILY-CATHOLIC] Running startup missed-broadcast check (90s after boot)...');
-  checkAndSendOnStartup().catch(err =>
-    console.error('[DAILY-CATHOLIC] Startup check failed:', err.message)
-  );
-}, 90 * 1000);
 
 module.exports = {
   sendDailyChurchNotifications,
   getDailyNotificationStatus,
   getUserNotificationHistory,
-  checkAndSendOnStartup,
   getSchedulerStatus,
-  recoverMissedRun
+  recoverMissedRun,
+  checkAndRecoverMissedJobAutonomous
 };

@@ -388,7 +388,7 @@ export default function SiteSettings() {
         </div>
       </div>
 
-      {/* ─── 2. 12:00 AM IST DAILY EMAIL NOTIFICATIONS MANAGER ─── */}
+      {/* ─── 2. 04:00 AM IST DAILY CATHOLIC NOTIFICATIONS MANAGER ─── */}
       <DailyNotificationManager />
 
       {/* ─── 3. DAILY SAINT SCRAPER SYNC MANAGER ─── */}

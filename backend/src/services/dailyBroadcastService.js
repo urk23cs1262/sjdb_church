@@ -2,7 +2,7 @@
  * Daily Broadcast Service — SJDB Connect
  * 
  * Provides unified broadcast triggers for Admin API and WhatsApp Birthday cron.
- * Scheduled daily Catholic broadcast is managed at 12:00 AM IST by dailyNotificationService.
+ * Scheduled daily Catholic broadcast is managed at 04:00 AM IST by dailyNotificationService.
  */
 const cron = require('node-cron');
 const User = require('../models/User');
@@ -31,7 +31,7 @@ _SJDB Connect — Connecting Faith & Community_`;
 
 async function triggerBroadcastNow() {
   console.log('📢 Manual broadcast triggered from admin panel...');
-  return sendDailyChurchNotifications({ force: true });
+  return sendDailyChurchNotifications({ force: true, triggerType: 'admin_manual' });
 }
 
 async function runDailyBroadcast() {

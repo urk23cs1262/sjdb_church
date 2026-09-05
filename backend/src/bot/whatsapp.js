@@ -569,6 +569,25 @@ function getQR() {
   return currentQr;
 }
 
+/**
+ * Wait for WhatsApp socket to be connected and ready.
+ * If connecting or offline, polls up to timeoutMs (default 25s).
+ */
+async function waitForWhatsAppReady(timeoutMs = 25000) {
+  if (isConnected && sock) return true;
+  if (!sock && !isConnecting && !shuttingDown) {
+    try {
+      connectToWhatsApp().catch(() => {});
+    } catch (e) {}
+  }
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (isConnected && sock) return true;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  return isConnected && Boolean(sock);
+}
+
 module.exports = {
   connectToWhatsApp,
   reconnectWhatsApp,
@@ -579,5 +598,6 @@ module.exports = {
   sendWhatsAppToUser,
   getConnectionStatus,
   getQR,
+  waitForWhatsAppReady,
   shutdownWhatsApp
 };

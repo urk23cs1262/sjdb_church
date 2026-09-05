@@ -5,6 +5,7 @@ const {
   getSchedulerStatus,
   recoverMissedRun
 } = require('../services/dailyNotificationService');
+const DailyNotificationJob = require('../models/DailyNotificationJob');
 
 /**
  * Get daily notification delivery status, stats, and content checks (Admin)
@@ -12,9 +13,22 @@ const {
 const getStatus = async (req, res) => {
   try {
     const status = await getDailyNotificationStatus();
-    // Append live scheduler status
-    status.scheduler = getSchedulerStatus();
     res.json(status);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * Get detailed job status and delivery breakdown for Admin Dashboard
+ */
+const getJobStatus = async (req, res) => {
+  try {
+    const status = await getDailyNotificationStatus();
+    res.json({
+      success: true,
+      ...status
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -60,12 +74,16 @@ const sendTestEmail = async (req, res) => {
 };
 
 /**
- * Manually trigger the daily 4-channel broadcast for today (Admin)
+ * Manually trigger the daily 4-channel broadcast for today (Admin Manual)
  */
 const triggerBroadcast = async (req, res) => {
   try {
     console.log(`[Daily Notification Controller] 4-Channel Manual broadcast triggered by ${req.user?.email || 'admin'}...`);
-    const result = await sendDailyChurchNotifications({ isManualTest: false });
+    const result = await sendDailyChurchNotifications({
+      isManualTest: false,
+      triggerType: 'admin_manual',
+      force: req.body?.force === true
+    });
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -73,8 +91,49 @@ const triggerBroadcast = async (req, res) => {
 };
 
 /**
- * Recover a missed midnight broadcast — checks if today's job ran; if not, runs it safely (Admin)
- * Safe to call multiple times — idempotency prevents duplicate sends.
+ * External Cron / Webhook Trigger (04:00 AM IST)
+ * 
+ * Allows external scheduling systems (cron-job.org, Render Cron Job, GitHub Actions, AWS EventBridge)
+ * to independently trigger the 04:00 AM IST Catholic daily job without relying on browser activity.
+ * 
+ * Protected by secret key: x-cron-secret header, Bearer token, or ?secret= query.
+ */
+const triggerSchedulerCron = async (req, res) => {
+  try {
+    const configuredSecret = process.env.CRON_SECRET || process.env.JWT_SECRET;
+    const providedSecret = req.headers['x-cron-secret'] ||
+      req.query?.secret ||
+      (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : null);
+
+    if (!configuredSecret || providedSecret !== configuredSecret) {
+      console.warn('[DAILY-CATHOLIC] Unauthorized scheduler webhook attempt.');
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized: Invalid or missing cron secret.'
+      });
+    }
+
+    console.log('[DAILY-CATHOLIC] 🔐 Authenticated External Webhook trigger received at 04:00 AM IST.');
+    
+    // Non-blocking acknowledgement or synchronous response
+    const result = await sendDailyChurchNotifications({
+      triggerType: 'external_webhook',
+      force: req.body?.force === true
+    });
+
+    res.json({
+      success: true,
+      message: '04:00 AM Daily Catholic notification job executed via external trigger.',
+      result
+    });
+  } catch (err) {
+    console.error('[DAILY-CATHOLIC] External webhook trigger error:', err.message);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * Recover a missed broadcast safely with idempotency (Admin)
  */
 const recoverMissed = async (req, res) => {
   try {
@@ -105,9 +164,10 @@ const getMyHistory = async (req, res) => {
 
 module.exports = {
   getStatus,
+  getJobStatus,
   sendTestEmail,
   triggerBroadcast,
+  triggerSchedulerCron,
   recoverMissed,
   getMyHistory
 };
-

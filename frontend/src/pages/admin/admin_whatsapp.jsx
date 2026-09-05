@@ -65,6 +65,7 @@ export default function AdminWhatsApp() {
   const [qrCode, setQrCode] = useState(null);
   const [todayPreview, setTodayPreview] = useState(null);
   const [broadcastHistory, setBroadcastHistory] = useState([]);
+  const [dailyJob, setDailyJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -135,19 +136,20 @@ export default function AdminWhatsApp() {
     return () => clearInterval(timer);
   }, [pairingCountdown]);
 
-  // Primary Data Fetcher
+  // Primary Data Fetcher (Dashboard Monitoring Only — Zero Side Effects)
   const fetchData = async (isBackground = false) => {
     if (!isBackground) setLoading(true);
     else setRefreshing(true);
 
     try {
-      const [statsRes, subsRes, statusRes, qrRes, previewRes, historyRes] = await Promise.all([
+      const [statsRes, subsRes, statusRes, qrRes, previewRes, historyRes, jobRes] = await Promise.all([
         api.get('/bot/stats').catch(() => ({ data: { stats: null } })),
         api.get('/bot/subscribers').catch(() => ({ data: { subscribers: [] } })),
         api.get('/bot/status').catch(() => ({ data: { connected: false, status: 'disconnected' } })),
         api.get('/bot/qr').catch(() => ({ data: { qr: null } })),
         api.get('/bot/preview-today').catch(() => ({ data: null })),
         api.get('/bot/history').catch(() => ({ data: { history: [] } })),
+        api.get('/daily-notifications/job-status').catch(() => ({ data: null })),
       ]);
 
       if (statsRes.data?.stats) setStats(statsRes.data.stats);
@@ -157,6 +159,7 @@ export default function AdminWhatsApp() {
       else if (statusRes.data?.connected) setQrCode(null);
       if (previewRes.data?.success) setTodayPreview(previewRes.data);
       if (historyRes.data?.history) setBroadcastHistory(historyRes.data.history);
+      if (jobRes.data?.job) setDailyJob(jobRes.data);
     } catch {
       if (!isBackground) toast.error('Failed to load WhatsApp bot data');
     } finally {
@@ -455,20 +458,20 @@ export default function AdminWhatsApp() {
     });
   }, [subscribers, subscriberSearch, subscriberFilter]);
 
-  // Format Next 12:00 AM IST Countdown
+  // Format Next 04:00 AM IST Countdown
   const nextBroadcastInfo = useMemo(() => {
     const now = new Date();
     // Convert to IST
     const istOffset = 5.5 * 60 * 60 * 1000;
     const istTime = new Date(now.getTime() + istOffset);
 
-    const nextMidnight = new Date(istTime);
-    nextMidnight.setUTCHours(0, 0, 0, 0);
-    if (istTime.getUTCHours() >= 0) {
-      nextMidnight.setUTCDate(nextMidnight.getUTCDate() + 1);
+    const next4Am = new Date(istTime);
+    next4Am.setUTCHours(4, 0, 0, 0);
+    if (istTime.getUTCHours() >= 4) {
+      next4Am.setUTCDate(next4Am.getUTCDate() + 1);
     }
 
-    const diffMs = nextMidnight.getTime() - istTime.getTime();
+    const diffMs = next4Am.getTime() - istTime.getTime();
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
     return `${diffHours}h ${diffMins}m remaining`;
@@ -512,7 +515,7 @@ export default function AdminWhatsApp() {
               </span>
             </div>
             <p className="text-xs text-gray-500 mt-0.5">
-              SJDB Connect • Baileys WhatsApp Engine & 12:00 AM Automated Spiritual Broadcast
+              SJDB Connect • Baileys WhatsApp Engine & 04:00 AM Automated Spiritual Broadcast
             </p>
           </div>
         </div>
@@ -693,7 +696,7 @@ export default function AdminWhatsApp() {
 
               <div className="bg-gray-50/80 rounded-xl p-3 border border-gray-100">
                 <span className="text-[11px] font-semibold text-gray-400 block mb-1">Daily Broadcast</span>
-                <span className="text-xs sm:text-sm font-bold text-church-gold">12:00 AM IST (Active)</span>
+                <span className="text-xs sm:text-sm font-bold text-church-gold">04:00 AM IST (Active)</span>
               </div>
             </div>
 
@@ -707,7 +710,7 @@ export default function AdminWhatsApp() {
                   <div>
                     <h3 className="font-bold text-sm text-emerald-950">WhatsApp Bot is Active</h3>
                     <p className="text-xs text-emerald-800">
-                      All daily 12:00 AM spiritual broadcasts, automatic birthday wishes, and on-demand reading commands are live.
+                      All daily 04:00 AM spiritual broadcasts, automatic birthday wishes, and on-demand reading commands are live.
                     </p>
                   </div>
                 </div>
@@ -915,6 +918,78 @@ export default function AdminWhatsApp() {
               </div>
             </div>
           )}
+
+          {/* Today's 04:00 AM IST Daily Catholic Notification Job Status */}
+          <div className="glass-card p-4 sm:p-6 border border-gray-100 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4 mb-4">
+              <div>
+                <h3 className="font-bold text-church-royal-blue text-sm sm:text-base flex items-center gap-2">
+                  <FiClock className="text-church-gold" /> Daily Catholic Notifications (04:00 AM IST)
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  100% backend automated delivery across WhatsApp & Email. Zero browser dependency.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                  dailyJob?.status === 'Completed' || dailyJob?.job?.status === 'completed'
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                    : dailyJob?.job?.status === 'running'
+                      ? 'bg-blue-50 text-blue-800 border-blue-300 animate-pulse'
+                      : dailyJob?.job?.status === 'partial'
+                        ? 'bg-amber-50 text-amber-800 border-amber-300'
+                        : 'bg-gray-50 text-gray-700 border-gray-200'
+                }`}>
+                  Job: {dailyJob?.status || (dailyJob?.job?.status ? dailyJob.job.status.toUpperCase() : 'PENDING')}
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              <div className="bg-gray-50/90 rounded-xl p-3 border border-gray-100">
+                <span className="text-[11px] font-semibold text-gray-500 block mb-1">WhatsApp Delivered</span>
+                <span className="text-base sm:text-lg font-black text-emerald-700">
+                  {dailyJob?.channels?.whatsapp ?? stats?.sentToday ?? 0}
+                </span>
+                {Boolean(dailyJob?.channels?.whatsappFailed) && (
+                  <span className="text-[10px] text-rose-600 block">({dailyJob.channels.whatsappFailed} failed)</span>
+                )}
+              </div>
+              <div className="bg-gray-50/90 rounded-xl p-3 border border-gray-100">
+                <span className="text-[11px] font-semibold text-gray-500 block mb-1">Email Delivered</span>
+                <span className="text-base sm:text-lg font-black text-blue-700">
+                  {dailyJob?.channels?.email ?? 0}
+                </span>
+                {Boolean(dailyJob?.channels?.emailFailed) && (
+                  <span className="text-[10px] text-rose-600 block">({dailyJob.channels.emailFailed} failed)</span>
+                )}
+              </div>
+              <div className="bg-gray-50/90 rounded-xl p-3 border border-gray-100">
+                <span className="text-[11px] font-semibold text-gray-500 block mb-1">Daily Schedule</span>
+                <span className="text-xs sm:text-sm font-bold text-church-royal-blue block">
+                  04:00 AM IST
+                </span>
+                <span className="text-[10px] text-gray-400">Asia/Kolkata</span>
+              </div>
+              <div className="bg-gray-50/90 rounded-xl p-3 border border-gray-100">
+                <span className="text-[11px] font-semibold text-gray-500 block mb-1">Next Run</span>
+                <span className="text-xs sm:text-sm font-bold text-church-gold block truncate">
+                  {nextBroadcastInfo}
+                </span>
+                <span className="text-[10px] text-gray-400">Server cron active</span>
+              </div>
+            </div>
+
+            <div className="bg-blue-50/60 rounded-xl p-3 border border-blue-100 text-xs text-blue-900 flex items-start gap-2.5">
+              <FiShield className="text-blue-600 text-base shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold block">Autonomous 24/7 Delivery Architecture</span>
+                <span className="text-[11px] text-blue-800">
+                  Daily Catholic notifications run independently on the backend server. Closing the browser, logging out, or keeping tabs closed will NOT affect delivery.
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1445,7 +1520,7 @@ export default function AdminWhatsApp() {
                   Dispatches today's Mass readings, Bible verse, and Saint of the Day to all active subscribers.
                 </p>
                 <div className="mt-2 text-xs font-mono font-bold text-church-gold">
-                  ⏰ 12:00 AM IST ({nextBroadcastInfo})
+                  ⏰ 04:00 AM IST ({nextBroadcastInfo})
                 </div>
               </div>
             </div>
@@ -1601,7 +1676,7 @@ export default function AdminWhatsApp() {
                       <div className="bg-white p-2.5 rounded-xl border border-gray-100">
                         <span className="text-[10px] text-gray-400 font-semibold block">Broadcast Schedule</span>
                         <span className="font-bold text-emerald-700 truncate block">
-                          ⏰ 12:00 AM IST Daily
+                          ⏰ 04:00 AM IST Daily
                         </span>
                       </div>
                     </div>

@@ -123,12 +123,12 @@ app.use('/api/bot', require('./routes/bot'));
 // Background Services
 require('./services/saintService');
 require('./services/birthdayService');
-require('./services/dailyBroadcastService'); // 12:00 AM spiritual content broadcast
+require('./services/dailyBroadcastService'); // Daily spiritual content broadcast helper
 require('./services/reminderSchedulerService'); // Automated Event & Announcement reminders via Email, WhatsApp bot & In-App
 require('./services/maintenanceSchedulerService'); // Automated Maintenance start/end scheduler
 require('./services/bibleVerseService'); // 12:00 AM Daily Bible Verse automated rotation scheduler
 require('./services/dailyMassReadingService').initMidnightCron(); // 12:00 AM IST Daily Tamil Mass Readings automated sync scheduler
-require('./services/dailyNotificationService'); // 12:00 AM IST Daily Automated Catholic Notification System (Email Broadcast)
+require('./services/dailyNotificationService'); // 04:00 AM IST Daily Automated Catholic Notification System (WhatsApp & Email Broadcast)
 require('./services/accountVerificationService'); // 8:00 AM IST Daily Account Verification & Admin Alert System
 
 // Background Monitor: Scan for expired/abandoned unverified OTPs every 60s
@@ -172,14 +172,15 @@ app.get(['/health', '/api/health', '/api/bot/health'], (req, res) => {
     dailyCatholicScheduler: {
       registered: schedulerStatus.schedulerRegistered,
       timezone: schedulerStatus.timezone || 'Asia/Kolkata',
-      cronExpression: schedulerStatus.cronExpression || '0 0 * * *',
+      cronExpression: schedulerStatus.cronExpression || '0 4 * * *',
+      scheduleTime: '04:00 AM IST',
       lastRunTime: schedulerStatus.lastRunTime || null,
       lastRunDateKey: schedulerStatus.lastRunDateKey || null,
       lastRunResult: schedulerStatus.lastRunResult || null,
       nextRunIST: schedulerStatus.nextRunIST || null,
     },
     backgroundWorkers: {
-      dailyBroadcast12AM: `${schedulerStatus.schedulerRegistered ? 'Active' : 'Registered'} (0 0 * * * Asia/Kolkata)`,
+      dailyBroadcast4AM: `${schedulerStatus.schedulerRegistered ? 'Active' : 'Registered'} (0 4 * * * Asia/Kolkata)`,
       reminderScheduler: 'Active (4:00 AM, 12:00 PM, Hourly)',
       dailyMassSync: 'Active (0 0 * * * Asia/Kolkata)',
       birthdayWishes: 'Active (0 9 * * * Asia/Kolkata)'

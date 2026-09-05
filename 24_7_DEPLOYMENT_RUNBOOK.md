@@ -1,70 +1,75 @@
-# SJDB Connect — 24/7 WhatsApp Production Runbook
+# SJDB Connect — 24/7 WhatsApp & 04:00 AM IST Daily Catholic Notification Runbook
 
 ## What was fixed
 
-The WhatsApp lifecycle is now owned by the Node.js backend, not the React Admin page.
+### 1. Root Cause of the 08:24 AM Delivery Bug
+- Previously, `dailyNotificationService.js` had a `setTimeout(checkAndSendOnStartup, 90 * 1000)`.
+- When the backend service woke up or restarted upon an admin opening the site in the morning (around 08:22 AM), 90 seconds later it ran the startup check, saw that today had 0 delivered logs, and triggered the full broadcast at **08:24 AM**.
+- **Fix**: The startup timer and legacy `checkAndSendOnStartup()` function have been **completely eliminated**. Server boot and page load never trigger broadcasts.
 
-- `backend/src/server.js` waits for MongoDB, then starts the API and WhatsApp daemon.
-- `backend/server.js` is a compatibility entry point that always delegates to `src/server.js`.
-- `backend/src/bot/whatsapp.js` restores authentication from MongoDB and automatically reconnects after transient failures.
-- Reconnects use backoff and are protected from stale socket events.
-- SIGTERM/SIGINT close the WhatsApp socket cleanly.
-- `backend/src/test_247_daemon_architecture.js` verifies the always-on lifecycle wiring.
-- The 12:00 AM IST daily notification scheduler remains server-side and does not depend on the website being open.
+### 2. Autonomous 04:00 AM IST Schedule (Asia/Kolkata)
+- The daily Catholic notification system is scheduled strictly at **04:00 AM IST** (`0 4 * * *` with timezone `Asia/Kolkata`).
+- Dispatches across 4 channels independently:
+  1. **WhatsApp Bot**: Clean devotional message (0 URLs) + Saint of the Day photo + Saint details + optional clickable links.
+  2. **Email Broadcast**: Personalized bilingual HTML email with inline Saint CID image attachment.
+  3. **In-App Notifications**: Notification feed items for parishioners.
+  4. **Mobile / Web Push**: WebPush broadcast to subscribed devices.
+
+### 3. Database Job System & Distributed Locking
+- **`DailyNotificationJob`**: Tracks the daily job with atomic locking (`lockedBy`, `lockedAt`), status (`pending`, `running`, `completed`, `partial`, `failed`), recipient counters, and timestamped audit logs.
+- **`NotificationDelivery`**: Records recipient-level deliveries with a compound unique index `{ notificationDate: 1, recipient: 1, channel: 1 }`. Ensures that even if the scheduler runs multiple times or multiple server instances boot concurrently, duplicate messages are mathematically impossible.
+- **Automatic Retries**: Implements 3 attempts with exponential backoff on transient delivery failures before marking status as failed.
+
+### 4. Complete Admin Dashboard Decoupling
+- Navigating to **Admin → WhatsApp Bot** is strictly a read-only monitoring view.
+- Page mount makes pure `GET` requests (`/bot/status`, `/bot/stats`, `/bot/history`, `/daily-notifications/job-status`).
+- It displays live connection health, QR/pairing code, and today's 04:00 AM job status without triggering any worker or broadcast.
+- The "Broadcast Now" button remains only as a manual emergency/test tool protected behind a confirmation modal.
+
+---
+
+## Autonomous Downtime Recovery & Morning Watchdog
+
+If the production backend experiences temporary infrastructure downtime during 04:00 AM IST (e.g., cloud host maintenance, network outage, or container reboot), the system **automatically recovers and delivers without administrator intervention**:
+
+1. **Server Boot Catch-up**:
+   - When the backend boots up after downtime, a 25-second stabilization timer runs.
+   - If current time in Asia/Kolkata is between **04:05 AM and 08:00 PM IST** and today's `DailyNotificationJob` is missing or incomplete, the backend autonomously executes a catch-up broadcast (`triggerType: 'downtime_recovery'`).
+   - If today's job was already `completed` on schedule, it exits in 2 milliseconds with zero side effects.
+
+2. **Hourly Morning Watchdog**:
+   - An autonomous watchdog runs every hour on the hour between **05:00 AM and 12:00 PM IST** (`0 5,6,7,8,9,10,11,12 * * *`).
+   - Checks if today's broadcast succeeded; if any disruption occurred at 04:00 AM, the very first watchdog tick after recovery dispatches the missed broadcast automatically.
+
+3. **Stale Crash Recovery**:
+   - If a crash occurred midway through a broadcast, jobs in `running` state with locks older than 20 minutes are resumed (`triggerType: 'crash_recovery'`).
+   - Thanks to `NotificationDelivery` compound unique indexes, recipients who already received messages are skipped — only pending or failed recipients are delivered.
+
+4. **Zero Administrator Dependency**:
+   - Does NOT require opening the website.
+   - Does NOT require opening Admin → WhatsApp Bot.
+   - Does NOT require clicking "Recover Missed" or "Broadcast Now".
+
+---
 
 ## One-time WhatsApp linking
 
-If MongoDB does not already contain the Baileys credentials, an administrator must link the WhatsApp account once using the Admin → WhatsApp Bot page (QR or pairing code).
+If MongoDB does not already contain the Baileys credentials, an administrator links the WhatsApp account once using the Admin → WhatsApp Bot page (QR scan or 8-digit Pairing Code).
 
 After the session is stored in MongoDB:
+- **Do not open the website for the bot to work.**
+- The backend daemon reconnects and maintains connection independently.
 
-**Do not open the website for the bot to work.**
+---
 
-The backend reconnects and runs independently.
-
-## Render
-
-Use an **always-on paid web service**. A sleeping/free service cannot provide a true 24/7 WhatsApp daemon or exact 12:00 AM scheduler.
-
-The included `render.yaml` configures:
-
-- Root directory: `backend`
-- Build: `npm ci --omit=dev`
-- Start: `npm start`
-- Health check: `/api/health`
-- Production Node environment
-- MongoDB/JWT/Client URL as provider-managed secrets
-
-Set `CLIENT_URL` to the real production frontend URL.
-
-## VM / VPS / Linux server
-
-```bash
-cd backend
-npm ci
-pm2 start ecosystem.config.js --env production
-pm2 save
-pm2 startup
-```
-
-Make sure the server itself has automatic restart enabled.
-
-## Health monitoring
+## Health Monitoring
 
 Monitor:
-
 `GET /api/health`
 
-A healthy response reports:
-
-- MongoDB state
-- WhatsApp live state
-- background-worker status
-- process uptime
-- memory usage
-
-Use an external uptime/monitoring service and alert when `whatsappBot.isLive` becomes false for an extended period.
-
-## Important operational limitation
-
-“24×7×365” cannot be guaranteed by application code alone. WhatsApp, the hosting provider, MongoDB, DNS, or the internet can fail. This implementation removes the admin-page dependency and adds automatic recovery, but the production host must remain online and be monitored.
+Reports:
+- `database`: MongoDB state
+- `whatsappBot`: live connection status and mode
+- `dailyCatholicScheduler`: 04:00 AM IST cron registration, last run time, next run IST
+- `backgroundWorkers`: active worker states
+- `uptimeSeconds`: process uptime

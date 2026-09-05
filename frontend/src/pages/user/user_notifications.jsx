@@ -596,7 +596,7 @@ export default function UserNotifications() {
                   <FiBell className="mx-auto text-3xl text-gray-300" />
                   <p className="text-sm font-bold text-gray-700">No Delivery Logs Yet</p>
                   <p className="text-xs text-gray-400 max-w-sm mx-auto">
-                    Daily 12:00 AM IST deliveries across Email, In-App, Push, and WhatsApp will be logged here.
+                    Daily 04:00 AM IST deliveries across Email, In-App, Push, and WhatsApp will be logged here.
                   </p>
                 </div>
               ) : (
