@@ -113,6 +113,7 @@ app.use('/api/mass-reading', require('./routes/dailyMassReading'));
 app.use('/api/daily-reading', require('./routes/dailyReading'));
 app.use('/api/daily-saint', require('./routes/saint'));
 app.use('/api/saint-of-the-day', require('./routes/saint'));
+app.use('/api/daily-content', require('./routes/dailyContentRoutes'));
 app.use('/api/daily-notifications', require('./routes/dailyNotificationRoutes'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/rosary-songs', require('./routes/rosarySongs'));
@@ -128,6 +129,7 @@ require('./services/reminderSchedulerService'); // Automated Event & Announcemen
 require('./services/maintenanceSchedulerService'); // Automated Maintenance start/end scheduler
 require('./services/bibleVerseService'); // 12:00 AM Daily Bible Verse automated rotation scheduler
 require('./services/dailyMassReadingService').initMidnightCron(); // 12:00 AM IST Daily Tamil Mass Readings automated sync scheduler
+require('./services/contentMonitoringService'); // Continuous Server-Side Content Sync & Monitoring Service (Vatican News, Catholic Gallery, Reflection, Verse)
 require('./services/dailyNotificationService'); // 04:00 AM IST Daily Automated Catholic Notification System (WhatsApp & Email Broadcast)
 require('./services/accountVerificationService'); // 8:00 AM IST Daily Account Verification & Admin Alert System
 

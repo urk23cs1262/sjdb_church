@@ -10,6 +10,7 @@ const {
   getDateKey 
 } = require('./dailyMassReadingService');
 
+const DailyCatholicContent = require('../models/DailyCatholicContent');
 const DEFAULT_BIBLE_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons/b/b6/Gutenberg_Bible%2C_Lenox_Copy%2C_New_York_Public_Library%2C_2009._Pic_01.jpg';
 
 /**
@@ -107,146 +108,159 @@ async function getTodayDailyContent(targetDate = new Date()) {
 
   console.log(`[DailyContentService] Aggregating daily content for ${dateKey}...`);
 
+  // Check canonical DailyCatholicContent collection first
+  let canonicalDoc = null;
+  try {
+    canonicalDoc = await DailyCatholicContent.findOne({ date: dateKey });
+  } catch (dbErr) {
+    console.warn('[DailyContentService] DB lookup notice:', dbErr.message);
+  }
+
+  // If canonical document is missing or not fully synchronized, trigger synchronization
+  if (!canonicalDoc || !canonicalDoc.syncStatus?.massReadings || !canonicalDoc.syncStatus?.saint) {
+    try {
+      const { checkAndSyncDailyContent } = require('./contentMonitoringService');
+      canonicalDoc = await checkAndSyncDailyContent(targetDate);
+    } catch (syncErr) {
+      console.warn('[DailyContentService] Autonomous monitoring sync notice:', syncErr.message);
+    }
+  }
+
   // 1. Bible Verse
-  let verseData = await fetchDailyVerse();
-  if (!verseData) {
-    verseData = {
-      verseTa: 'கர்த்தர் என் வெளிச்சமும் என் இரட்சிப்புமானவர், யாருக்கு அஞ்சுவேன்?',
-      verseEn: 'The Lord is my light and my salvation; whom shall I fear?',
-      ref: 'சங்கீதம் / Psalm 27:1',
-      image: DEFAULT_BIBLE_IMAGE
+  let bible = canonicalDoc?.bible;
+  if (!bible || !bible.ref) {
+    let verseData = await fetchDailyVerse();
+    if (!verseData) {
+      verseData = {
+        verseTa: 'கர்த்தர் என் வெளிச்சமும் என் இரட்சிப்புமானவர், யாருக்கு அஞ்சுவேன்?',
+        verseEn: 'The Lord is my light and my salvation; whom shall I fear?',
+        ref: 'சங்கீதம் / Psalm 27:1',
+        image: DEFAULT_BIBLE_IMAGE
+      };
+    }
+    bible = {
+      ref: verseData.ref || verseData.reference || 'சங்கீதம் / Psalm 27:1',
+      tamil: verseData.verseTa || verseData.verseTextTa || verseData.tamil || '',
+      english: verseData.verseEn || verseData.verseTextEn || verseData.english || '',
+      imageUrl: verseData.image || verseData.imageUrl || DEFAULT_BIBLE_IMAGE
     };
   }
 
-  const bibleImageUrl = verseData.image || verseData.imageUrl || DEFAULT_BIBLE_IMAGE;
+  const bibleImageUrl = bible.imageUrl || DEFAULT_BIBLE_IMAGE;
   const bibleImgBuffer = await fetchImageBuffer(bibleImageUrl);
 
-  // 2. Mass Readings & Reflection
-  let massReadingDoc = await getReadingForDate(dateKey);
-  if (!massReadingDoc) {
-    try {
-      massReadingDoc = await fetchAndStoreTamilReading(dateKey);
-    } catch (e) {
-      console.warn('[DailyContentService] Error fetching Tamil mass reading:', e.message);
+  // 2. Mass Readings
+  let massReadings = canonicalDoc?.massReadings;
+  if (!massReadings || !massReadings.tamil?.readings?.length) {
+    let massReadingDoc = await getReadingForDate(dateKey);
+    if (!massReadingDoc) {
+      try {
+        massReadingDoc = await fetchAndStoreTamilReading(dateKey);
+      } catch (e) {
+        console.warn('[DailyContentService] Error fetching Tamil mass reading:', e.message);
+      }
     }
-  }
 
-  // Ensure English translations exist
-  let englishDoc = null;
-  if (massReadingDoc) {
-    try {
-      englishDoc = await getOrGenerateEnglishTranslation(dateKey);
-    } catch (e) {
-      console.warn('[DailyContentService] Error getting English mass translation:', e.message);
+    let englishDoc = null;
+    if (massReadingDoc) {
+      try {
+        englishDoc = await getOrGenerateEnglishTranslation(dateKey);
+      } catch (e) {
+        console.warn('[DailyContentService] Error getting English mass translation:', e.message);
+      }
     }
-  }
 
-  // Map Tamil sections to readings array
-  let tamilReadingsList = [];
-  if (massReadingDoc?.sections && massReadingDoc.sections.length > 0) {
-    tamilReadingsList = massReadingDoc.sections.map(s => ({
-      type: s.heading || 'வாசகம்',
-      reference: s.reference || '',
-      text: (s.paragraphs && s.paragraphs.length > 0)
-        ? s.paragraphs.join('\n\n')
-        : (s.text || '')
-    }));
-  }
-
-  // Map English sections to readings array
-  let englishReadingsList = [];
-  if (englishDoc?.sections && englishDoc.sections.length > 0) {
-    englishReadingsList = englishDoc.sections.map(s => ({
-      type: s.heading || 'Reading',
-      reference: s.reference || '',
-      text: (s.paragraphs && s.paragraphs.length > 0)
-        ? s.paragraphs.join('\n\n')
-        : (s.text || '')
-    }));
-  }
-
-  const massReadings = {
-    tamil: {
-      title: massReadingDoc?.celebration || massReadingDoc?.title || massReadingDoc?.pageTitle || massReadingDoc?.liturgicalDay || 'இன்றைய திருப்பலி வாசகங்கள்',
-      readings: tamilReadingsList,
-      fullText: tamilReadingsList.map(r => `${r.type} ${r.reference ? `(${r.reference})` : ''}\n${r.text}`).join('\n\n')
-    },
-    english: {
-      title: englishDoc?.celebration || englishDoc?.title || englishDoc?.liturgicalDay || 'Daily Mass Readings',
-      readings: englishReadingsList,
-      fullText: englishReadingsList.map(r => `${r.type} ${r.reference ? `(${r.reference})` : ''}\n${r.text}`).join('\n\n')
+    let tamilReadingsList = [];
+    if (massReadingDoc?.sections && massReadingDoc.sections.length > 0) {
+      tamilReadingsList = massReadingDoc.sections.map(s => ({
+        type: s.heading || 'வாசகம்',
+        reference: s.reference || '',
+        text: (s.paragraphs && s.paragraphs.length > 0)
+          ? s.paragraphs.join('\n\n')
+          : (s.text || '')
+      }));
     }
-  };
 
-  // Format Tamil reflection text
-  let tamilReflectionText = '';
-  if (massReadingDoc?.reflection) {
-    const r = massReadingDoc.reflection;
-    const parts = [];
-    if (r.title && r.title.trim()) parts.push(`${r.title.trim()}`);
-    if (r.paragraphs && r.paragraphs.length > 0) {
-      parts.push(r.paragraphs.map(p => p.trim()).filter(Boolean).join('\n\n'));
-    } else if (r.content && r.content.trim()) {
-      parts.push(r.content.trim());
+    let englishReadingsList = [];
+    if (englishDoc?.sections && englishDoc.sections.length > 0) {
+      englishReadingsList = englishDoc.sections.map(s => ({
+        type: s.heading || 'Reading',
+        reference: s.reference || '',
+        text: (s.paragraphs && s.paragraphs.length > 0)
+          ? s.paragraphs.join('\n\n')
+          : (s.text || '')
+      }));
     }
-    if (r.prayer && r.prayer.trim()) {
-      parts.push(`மன்றாட்டு:\n${r.prayer.trim()}`);
-    }
-    tamilReflectionText = parts.join('\n\n');
-  }
-  if (!tamilReflectionText) {
-    tamilReflectionText = 'இறைவனின் வார்த்தை நம் வாழ்வின் வழிகாட்டி. இன்றைய நாளில் இறைவனின் அன்பிலும் இரக்கத்திலும் திளைப்போம்.';
-  }
 
-  // Format English reflection text
-  let englishReflectionText = '';
-  if (englishDoc?.reflection) {
-    const r = englishDoc.reflection;
-    const parts = [];
-    if (r.title && r.title.trim()) parts.push(`${r.title.trim()}`);
-    if (r.paragraphs && r.paragraphs.length > 0) {
-      parts.push(r.paragraphs.map(p => p.trim()).filter(Boolean).join('\n\n'));
-    } else if (r.content && r.content.trim()) {
-      parts.push(r.content.trim());
-    }
-    if (r.prayer && r.prayer.trim()) {
-      parts.push(`Prayer:\n${r.prayer.trim()}`);
-    }
-    englishReflectionText = parts.join('\n\n');
-  }
-  if (!englishReflectionText) {
-    englishReflectionText = 'The Word of God is a lamp to our feet and a light to our path. May God bless and guide you today.';
+    massReadings = {
+      tamil: {
+        title: massReadingDoc?.celebration || massReadingDoc?.title || massReadingDoc?.pageTitle || massReadingDoc?.liturgicalDay || 'இன்றைய திருப்பலி வாசகங்கள்',
+        readings: tamilReadingsList,
+        fullText: tamilReadingsList.map(r => `${r.type} ${r.reference ? `(${r.reference})` : ''}\n${r.text}`).join('\n\n')
+      },
+      english: {
+        title: englishDoc?.celebration || englishDoc?.title || englishDoc?.liturgicalDay || 'Daily Mass Readings',
+        readings: englishReadingsList,
+        fullText: englishReadingsList.map(r => `${r.type} ${r.reference ? `(${r.reference})` : ''}\n${r.text}`).join('\n\n')
+      }
+    };
   }
 
-  const reflection = {
-    tamil: tamilReflectionText,
-    english: englishReflectionText
-  };
-
-  // 3. Saint of the Day
-  let saintData = getDailySaint();
-  if (!saintData || saintData.date !== dateKey) {
-    try {
-      await fetchDailySaint(targetDate);
-      saintData = getDailySaint();
-    } catch (e) {
-      console.warn('[DailyContentService] Error fetching saint:', e.message);
+  // 3. Daily Reflection
+  let reflection = canonicalDoc?.reflection;
+  if (!reflection || !reflection.tamil) {
+    let massReadingDoc = await getReadingForDate(dateKey);
+    let tamilReflectionText = '';
+    if (massReadingDoc?.reflection) {
+      const r = massReadingDoc.reflection;
+      const parts = [];
+      if (r.title && r.title.trim()) parts.push(`${r.title.trim()}`);
+      if (r.paragraphs && r.paragraphs.length > 0) {
+        parts.push(r.paragraphs.map(p => p.trim()).filter(Boolean).join('\n\n'));
+      } else if (r.content && r.content.trim()) {
+        parts.push(r.content.trim());
+      }
+      if (r.prayer && r.prayer.trim()) {
+        parts.push(`மன்றாட்டு:\n${r.prayer.trim()}`);
+      }
+      tamilReflectionText = parts.join('\n\n');
     }
+    if (!tamilReflectionText) {
+      tamilReflectionText = 'இறைவனின் வார்த்தை நம் வாழ்வின் வழிகாட்டி. இன்றைய நாளில் இறைவனின் அன்பிலும் இரக்கத்திலும் திளைப்போம்.';
+    }
+
+    reflection = {
+      tamil: tamilReflectionText,
+      english: 'The Word of God is a lamp to our feet and a light to our path. May God bless and guide you today.'
+    };
   }
 
-  const saintImageUrl = saintData?.image || null;
+  // 4. Saint of the Day
+  let saintData = canonicalDoc?.saint;
+  if (!saintData || !saintData.nameEnglish) {
+    let rawSaint = getDailySaint();
+    if (!rawSaint || rawSaint.date !== dateKey) {
+      try {
+        await fetchDailySaint(targetDate);
+        rawSaint = getDailySaint();
+      } catch (e) {
+        console.warn('[DailyContentService] Error fetching saint:', e.message);
+      }
+    }
+    saintData = {
+      nameTamil: rawSaint?.tamilName || rawSaint?.nameTa || rawSaint?.saintName || 'இன்றைய புனிதர்',
+      nameEnglish: rawSaint?.englishName || rawSaint?.saintName || rawSaint?.name || 'Saint of the Day',
+      descriptionTamil: rawSaint?.descriptionTa || rawSaint?.description || '',
+      descriptionEnglish: rawSaint?.description || '',
+      feastDay: rawSaint?.feastDay || formattedEn,
+      image: rawSaint?.image || null,
+      imageSource: rawSaint?.imageSource || 'Vatican News',
+      sourceUrl: rawSaint?.sourceUrl || rawSaint?.link || 'https://www.vaticannews.va/en/saints.html'
+    };
+  }
+
+  const saintImageUrl = saintData.image || null;
   const saintImgBuffer = saintImageUrl ? await fetchImageBuffer(saintImageUrl) : null;
-
-  const saint = {
-    nameTamil: saintData?.tamilName || saintData?.nameTa || saintData?.saintName || 'இன்றைய புனிதர்',
-    nameEnglish: saintData?.englishName || saintData?.saintName || saintData?.name || 'Saint of the Day',
-    descriptionTamil: saintData?.descriptionTa || saintData?.description || '',
-    descriptionEnglish: saintData?.description || '',
-    feastDay: saintData?.feastDay || formattedEn,
-    image: saintImageUrl,
-    imageSource: saintData?.imageSource || 'Vatican News',
-    sourceUrl: saintData?.sourceUrl || saintData?.link || 'https://www.vaticannews.va/en/saints.html'
-  };
 
   const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173';
   const readingsUrl = `${frontendUrl.replace(/\/$/, '')}/bible-verse`;
@@ -256,9 +270,9 @@ async function getTodayDailyContent(targetDate = new Date()) {
     formattedDate: formattedEn,
     formattedDateTa: formattedTa,
     bible: {
-      tamil: verseData.verseTa || verseData.verseTextTa || verseData.tamil || '',
-      english: verseData.verseEn || verseData.verseTextEn || verseData.english || '',
-      ref: verseData.ref || verseData.verseRef || verseData.reference || '',
+      tamil: bible.tamil || '',
+      english: bible.english || '',
+      ref: bible.ref || '',
       imageUrl: bibleImageUrl,
       imageAttachment: bibleImgBuffer ? {
         filename: 'daily-bible.jpg',
@@ -270,7 +284,7 @@ async function getTodayDailyContent(targetDate = new Date()) {
     massReadings,
     reflection,
     saint: {
-      ...saint,
+      ...saintData,
       imageAttachment: saintImgBuffer ? {
         filename: 'saint-of-the-day.jpg',
         content: saintImgBuffer.buffer,
