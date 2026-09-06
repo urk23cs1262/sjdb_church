@@ -788,7 +788,7 @@ const sendVerificationOtp = async (req, res) => {
 
     // Generate and dispatch OTP via Email and SMS
     const { createAndSendOTP } = require('../services/otpService');
-    await createAndSendOTP({
+    const { otp } = await createAndSendOTP({
       userId: user._id,
       email: user.email,
       phone: user.phone,
@@ -802,7 +802,8 @@ const sendVerificationOtp = async (req, res) => {
       success: true,
       message: `Verification code sent to ${emailMasked || 'your registered contact'}`,
       userId: user._id,
-      emailMasked
+      emailMasked,
+      devOtp: otp
     });
   } catch (err) {
     console.error('sendVerificationOtp error:', err);

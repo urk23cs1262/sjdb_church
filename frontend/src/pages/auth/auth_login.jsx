@@ -197,6 +197,11 @@ export default function Login() {
       setVerifyStep('otp');
       setVerifyCooldown(60);
       toast.success(res.data.message || 'Verification code sent!');
+      if (res.data.devOtp) {
+        setDevOtp(res.data.devOtp);
+        setIsOtpLoading(true);
+        setTimeout(() => setIsOtpLoading(false), 5000);
+      }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to send verification OTP');
     } finally {
@@ -327,7 +332,7 @@ export default function Login() {
                 </p>
               )}
 
-              {/* <div className="pt-3 text-center border-t border-gray-100/80 mt-3">
+              <div className="pt-3 text-center border-t border-gray-100/80 mt-3">
                 <button
                   type="button"
                   onClick={() => { setStage('verifyAccount'); setVerifyStep('email'); }}
@@ -335,7 +340,7 @@ export default function Login() {
                 >
                   <FiShield className="text-amber-600" /> Verify Account
                 </button>
-              </div> */}
+              </div>
             </form>
           )}
 
@@ -684,6 +689,38 @@ export default function Login() {
                     </p>
                   </div>
 
+                  {devOtp && (
+                    <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 flex flex-col items-center justify-center gap-2 mb-4 min-h-[76px]">
+                      {isOtpLoading ? (
+                        <div className="flex flex-col items-center gap-2 w-full px-4 py-1">
+                          <p className="text-amber-800 text-xs font-semibold">Sending...</p>
+                          <div className="w-full bg-amber-200 h-1.5 rounded-full overflow-hidden">
+                            <motion.div
+                              className="bg-amber-500 h-full"
+                              initial={{ width: "0%" }}
+                              animate={{ width: "100%" }}
+                              transition={{ duration: 5, ease: "linear" }}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-amber-800 text-xs font-semibold text-center">OTP sent to your number/email</p>
+                          <div className="flex items-center gap-3">
+                            <span className="text-amber-900 font-mono font-bold text-xl tracking-widest">{devOtp.slice(0, 2)}xxxx</span>
+                            <button
+                              type="button"
+                              onClick={() => setVerifyOtpVal(devOtp)}
+                              className="bg-amber-400 hover:bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded transition-colors"
+                            >
+                              Auto Fill
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
                   <div>
                     <label className="church-label text-center">6-Digit OTP</label>
                     <input
@@ -717,7 +754,7 @@ export default function Login() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setVerifyStep('email'); setVerifyOtpVal(''); }}
+                      onClick={() => { setVerifyStep('email'); setVerifyOtpVal(''); setDevOtp(null); }}
                       className="text-gray-500 hover:text-gray-700 font-medium"
                     >
                       Change Email
@@ -726,7 +763,7 @@ export default function Login() {
 
                   <button
                     type="button"
-                    onClick={() => setStage('login')}
+                    onClick={() => { setStage('login'); setDevOtp(null); }}
                     className="btn-ghost w-full justify-center text-xs text-gray-500 pt-1"
                   >
                     ← Back to Login
