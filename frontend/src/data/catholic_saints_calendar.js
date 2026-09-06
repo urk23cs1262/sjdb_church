@@ -634,8 +634,31 @@ export const CATHOLIC_SAINTS_CALENDAR = {
  * Helper to get the Catholic Saint of the Day for any date object
  */
 export function getSaintForDate(date = new Date()) {
-  const monthStr = String(date.getMonth() + 1).padStart(2, '0');
-  const dayStr = String(date.getDate()).padStart(2, '0');
+  let monthStr, dayStr;
+  if (!date) {
+    const now = new Date();
+    monthStr = String(now.getMonth() + 1).padStart(2, '0');
+    dayStr = String(now.getDate()).padStart(2, '0');
+  } else if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const parts = date.split('-');
+    monthStr = parts[1];
+    dayStr = parts[2];
+  } else if (typeof date === 'string' && /^\d{2}-\d{2}$/.test(date)) {
+    const parts = date.split('-');
+    monthStr = parts[0];
+    dayStr = parts[1];
+  } else {
+    const dt = (date instanceof Date && !isNaN(date.getTime())) ? date : new Date(date);
+    if (!isNaN(dt.getTime())) {
+      monthStr = String(dt.getMonth() + 1).padStart(2, '0');
+      dayStr = String(dt.getDate()).padStart(2, '0');
+    } else {
+      const now = new Date();
+      monthStr = String(now.getMonth() + 1).padStart(2, '0');
+      dayStr = String(now.getDate()).padStart(2, '0');
+    }
+  }
+
   const key = `${monthStr}-${dayStr}`;
 
   // 1. Direct match for today's date
