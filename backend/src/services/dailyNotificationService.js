@@ -94,8 +94,9 @@ function formatPushPayload(dailyContent, lang = 'ta') {
   const isEn = lang === 'en';
   const saintName = isEn ? dailyContent.saint?.nameEnglish : (dailyContent.saint?.nameTamil || dailyContent.saint?.nameEnglish);
   const verseText = isEn ? dailyContent.bible?.english : dailyContent.bible?.tamil;
+  const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
 
-  const bibleUrl = getSiteUrl(SITE_ROUTES.BIBLE_VERSE);
+  const bibleUrl = getSiteUrl(SITE_ROUTES.SAINT_OF_THE_DAY || SITE_ROUTES.BIBLE_VERSE);
   return {
     title: isEn
       ? `✝️ Daily Catholic Word — ${dailyContent.bible.ref}`
@@ -105,9 +106,11 @@ function formatPushPayload(dailyContent, lang = 'ta') {
     tag: `sjdb-daily-${dailyContent.dateKey}`,
     icon: '/icons/icon-192x192.png',
     badge: '/icons/icon-72x72.png',
+    image: saintImageUrl || undefined,
     data: {
       url: bibleUrl,
-      dateKey: dailyContent.dateKey
+      dateKey: dailyContent.dateKey,
+      image: saintImageUrl || undefined
     }
   };
 }
@@ -602,6 +605,7 @@ async function executeDailyNotificationDispatch(claimResult, options = {}) {
           const { createNotification } = require('./notificationService');
           const inAppMsg = formatInAppMessage(dailyContent, userLang);
 
+          const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
           const notif = await createNotification({
             userId: user._id,
             isBroadcast: false,
@@ -613,7 +617,13 @@ async function executeDailyNotificationDispatch(claimResult, options = {}) {
             category: 'spiritual',
             priority: 'normal',
             recipient: 'user',
-            actionUrl: `/notifications`,
+            actionUrl: `/bible-verse#saint-of-the-day`,
+            fileUrl: saintImageUrl || undefined,
+            metadata: {
+              saintImage: saintImageUrl,
+              saintName: userLang === 'en' ? dailyContent.saint?.nameEnglish : (dailyContent.saint?.nameTamil || dailyContent.saint?.nameEnglish),
+              dateKey: dailyContent.dateKey
+            },
             channels: [
               ...(isInAppEnabled ? ['inApp'] : []),
               ...(isPushEnabled ? ['push'] : [])

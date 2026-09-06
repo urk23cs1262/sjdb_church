@@ -207,6 +207,17 @@ function NotifCard({ notif, onMarkRead, onDelete, onTogglePin, onAction, isHighl
 
         <p className="text-gray-500 text-xs mt-1 leading-relaxed line-clamp-2">{notif.message}</p>
 
+        {(notif.fileUrl || notif.metadata?.saintImage || notif.metadata?.image) && (
+          <div className="mt-2 mb-1 w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden border border-amber-200/80 shadow-xs flex-shrink-0 bg-slate-900">
+            <img
+              src={notif.fileUrl || notif.metadata?.saintImage || notif.metadata?.image}
+              alt={notif.metadata?.saintName || notif.title}
+              className="w-full h-full object-cover object-top hover:scale-105 transition-transform"
+              onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            />
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-3 mt-3 pt-2 border-t border-gray-100 flex-wrap">
           <div className="flex items-center gap-2">
             <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${

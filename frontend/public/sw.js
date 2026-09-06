@@ -40,6 +40,7 @@ self.addEventListener('push', (event) => {
     body: data.body || data.message || "New parish update received.",
     icon: data.icon || '/favicon.png',
     badge: data.badge || '/favicon.png',
+    image: data.image || (data.data && data.data.image) || undefined,
     tag: data.tag || (notificationId ? `sjdb-notif-${notificationId}` : `sjdb-${Date.now()}`),
     renotify: true,
     vibrate: [100, 50, 100],

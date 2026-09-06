@@ -109,7 +109,11 @@ async function checkAndSyncDailyContent(targetDate = new Date(), force = false) 
       const sFeast = saintData.feastDay || formattedEn;
 
       const saintHash = computeHash(`${sNameEn}|${sNameTa}|${sImage}|${sDescEn.slice(0, 50)}`);
-      if (force || canonicalDoc.sourceHashes.saint !== saintHash) {
+      const isOutdatedImage = !canonicalDoc.saint?.image || 
+        canonicalDoc.saint.image.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato') || 
+        canonicalDoc.saint.imageSource === 'placeholder';
+
+      if (force || canonicalDoc.sourceHashes.saint !== saintHash || isOutdatedImage) {
         canonicalDoc.saint = {
           nameEnglish: sNameEn,
           nameTamil: sNameTa,

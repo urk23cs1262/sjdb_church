@@ -85,6 +85,7 @@ export async function showNativeNotification({
   title,
   body,
   icon = '/favicon.png',
+  image = null,
   url = '/notifications',
   notificationId = null,
   tag = null
@@ -100,10 +101,12 @@ export async function showNativeNotification({
       body,
       icon,
       badge: icon,
+      ...(image ? { image } : {}),
       tag: tag || (notificationId ? `sjdb-notif-${notificationId}` : `sjdb-${Date.now()}`),
       data: {
         url: targetUrl,
-        notificationId
+        notificationId,
+        ...(image ? { image } : {})
       },
       renotify: true,
       vibrate: [100, 50, 100]
