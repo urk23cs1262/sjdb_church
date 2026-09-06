@@ -3,7 +3,14 @@ const BotSession = require('../models/BotSession');
 const User = require('../models/User');
 const DailyNotificationLog = require('../models/DailyNotificationLog');
 const { getTodayDailyContent } = require('../services/dailyContentService');
-const { generateDailyCatholicMessage, generateDailyLinksMessage, generateSaintInfoMessage } = require('../services/whatsappDailyFormatter');
+const {
+  generateDailyCatholicMessage,
+  generateDailyLinksMessage,
+  generateSaintInfoMessage,
+  generateVerseMessage,
+  generateReadingsMessage,
+  generateReflectionMessage
+} = require('../services/whatsappDailyFormatter');
 const { answerChurchQuestion } = require('../bot/churchRAGService');
 
 function sendWA(phone, text) {
@@ -645,7 +652,7 @@ Select your preferred language for Daily Bible Verse, Mass Readings, Reflection 
 3️⃣ Both (Tamil + English)
 
 👉 Reply with *1*, *2*, or *3*.`;
-      } else if (text === '1' || /\b(READINGS?|TODAY READINGS|MASS READINGS|DAILY BIBLE)\b/i.test(text)) {
+      } else if (/\b(DAILY DEVOTIONS|ALL DAILY DEVOTIONS|FULL DEVOTIONS)\b/i.test(text)) {
         const dailyContent = await getTodayDailyContent(new Date());
         const msg1 = generateDailyCatholicMessage({
           dailyContent,
@@ -653,7 +660,16 @@ Select your preferred language for Daily Bible Verse, Mass Readings, Reflection 
           readingPreference: 'full'
         });
         botReply = msg1;
-      } else if (text === '7' || text === '6' || /\b(SAINTS?|TODAY SAINT|SAINT OF THE DAY|WHO IS TODAY SAINT)\b/i.test(text) || /(இன்றைய புனிதர்|புனிதர் யார்)/.test(rawText)) {
+      } else if (text === '1' || text === '4' || /\b(DAILY BIBLE|BIBLE VERSE|VERSE)\b/i.test(text) || /(விவிலியம்|இறைவார்த்தை|வசனம்)/.test(rawText)) {
+        const dailyContent = await getTodayDailyContent(new Date());
+        botReply = generateVerseMessage({ dailyContent, language: newLanguage });
+      } else if (text === '5' || /\b(READINGS?|TODAY READINGS|MASS READINGS)\b/i.test(text) || /(வாசகம்|வாசகங்கள்|திருப்பலி வாசகங்கள்)/.test(rawText)) {
+        const dailyContent = await getTodayDailyContent(new Date());
+        botReply = generateReadingsMessage({ dailyContent, language: newLanguage });
+      } else if (/\b(REFLECTION|DAILY REFLECTION|TODAY REFLECTION)\b/i.test(text) || /(தியானம்|சிந்தனை)/.test(rawText)) {
+        const dailyContent = await getTodayDailyContent(new Date());
+        botReply = generateReflectionMessage({ dailyContent, language: newLanguage });
+      } else if (text === '7' || text === '6' || /\b(SAINTS?|TODAY SAINT|SAINT OF THE DAY|WHO IS TODAY SAINT)\b/i.test(text) || /(இன்றைய புனிதர்|புனிதர் யார்|புனிதர்)/.test(rawText)) {
         const dailyContent = await getTodayDailyContent(new Date());
         const saintInfo = generateSaintInfoMessage({ dailyContent, language: newLanguage });
         botReply = saintInfo;
@@ -694,7 +710,7 @@ How can I help you today?
 
 👉 *You can reply with a number or ask your question naturally.*`;
       } else {
-        const ragResult = await answerChurchQuestion(rawText, 'en');
+        const ragResult = await answerChurchQuestion(rawText, newLanguage);
         botReply = ragResult.reply;
       }
     }

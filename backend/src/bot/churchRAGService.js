@@ -1050,7 +1050,8 @@ async function answerChurchQuestion(rawText, userPreferredLang = null, userAuthC
     };
   }
 
-  const queryLang = userPreferredLang || detectQueryLanguage(rawText);
+  const detectedLang = detectQueryLanguage(rawText);
+  const queryLang = detectedLang === 'ta' ? 'ta' : (userPreferredLang || 'en');
   const isTamil = queryLang === 'ta';
 
   const intents = extractQueryIntents(rawText);

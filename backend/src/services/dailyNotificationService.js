@@ -363,7 +363,8 @@ async function executeDailyNotificationDispatch(claimResult, options = {}) {
         const existingEmailDelivery = await NotificationDelivery.findOne({
           notificationDate: dateKey,
           recipient: userEmail,
-          channel: 'email'
+          channel: 'email',
+          contentType: 'daily_catholic_content'
         });
 
         if (existingEmailDelivery && existingEmailDelivery.status === 'sent' && !force) {
@@ -408,13 +409,14 @@ async function executeDailyNotificationDispatch(claimResult, options = {}) {
             };
 
             await NotificationDelivery.findOneAndUpdate(
-              { notificationDate: dateKey, recipient: userEmail, channel: 'email' },
+              { notificationDate: dateKey, recipient: userEmail, channel: 'email', contentType: 'daily_catholic_content' },
               {
                 jobId,
                 userId: user._id,
                 recipient: userEmail,
                 channel: 'email',
                 notificationDate: dateKey,
+                contentType: 'daily_catholic_content',
                 language: userLang,
                 status: 'sent',
                 attemptCount: emailSendResult.attempts,
@@ -434,13 +436,14 @@ async function executeDailyNotificationDispatch(claimResult, options = {}) {
             };
 
             await NotificationDelivery.findOneAndUpdate(
-              { notificationDate: dateKey, recipient: userEmail, channel: 'email' },
+              { notificationDate: dateKey, recipient: userEmail, channel: 'email', contentType: 'daily_catholic_content' },
               {
                 jobId,
                 userId: user._id,
                 recipient: userEmail,
                 channel: 'email',
                 notificationDate: dateKey,
+                contentType: 'daily_catholic_content',
                 language: userLang,
                 status: 'failed',
                 attemptCount: emailSendResult.attempts,
@@ -461,7 +464,8 @@ async function executeDailyNotificationDispatch(claimResult, options = {}) {
         const existingWADelivery = await NotificationDelivery.findOne({
           notificationDate: dateKey,
           recipient: userPhone,
-          channel: 'whatsapp'
+          channel: 'whatsapp',
+          contentType: 'daily_catholic_content'
         });
 
         if (existingWADelivery && existingWADelivery.status === 'sent' && !force) {
@@ -533,13 +537,14 @@ async function executeDailyNotificationDispatch(claimResult, options = {}) {
               };
 
               await NotificationDelivery.findOneAndUpdate(
-                { notificationDate: dateKey, recipient: userPhone, channel: 'whatsapp' },
+                { notificationDate: dateKey, recipient: userPhone, channel: 'whatsapp', contentType: 'daily_catholic_content' },
                 {
                   jobId,
                   userId: user._id,
                   recipient: userPhone,
                   channel: 'whatsapp',
                   notificationDate: dateKey,
+                  contentType: 'daily_catholic_content',
                   language: userLang,
                   status: 'sent',
                   attemptCount: waResult.attempts,
@@ -559,13 +564,14 @@ async function executeDailyNotificationDispatch(claimResult, options = {}) {
               };
 
               await NotificationDelivery.findOneAndUpdate(
-                { notificationDate: dateKey, recipient: userPhone, channel: 'whatsapp' },
+                { notificationDate: dateKey, recipient: userPhone, channel: 'whatsapp', contentType: 'daily_catholic_content' },
                 {
                   jobId,
                   userId: user._id,
                   recipient: userPhone,
                   channel: 'whatsapp',
                   notificationDate: dateKey,
+                  contentType: 'daily_catholic_content',
                   language: userLang,
                   status: 'failed',
                   attemptCount: waResult.attempts,
@@ -700,7 +706,8 @@ async function executeDailyNotificationDispatch(claimResult, options = {}) {
         const existingSessionDelivery = await NotificationDelivery.findOne({
           notificationDate: dateKey,
           recipient: cleanSessPhone,
-          channel: 'whatsapp'
+          channel: 'whatsapp',
+          contentType: 'daily_catholic_content'
         });
 
         if (existingSessionDelivery && existingSessionDelivery.status === 'sent' && !force) {
@@ -748,12 +755,13 @@ async function executeDailyNotificationDispatch(claimResult, options = {}) {
         if (sessResult.success) {
           channelStats.whatsapp.sent++;
           await NotificationDelivery.findOneAndUpdate(
-            { notificationDate: dateKey, recipient: cleanSessPhone, channel: 'whatsapp' },
+            { notificationDate: dateKey, recipient: cleanSessPhone, channel: 'whatsapp', contentType: 'daily_catholic_content' },
             {
               jobId,
               recipient: cleanSessPhone,
               channel: 'whatsapp',
               notificationDate: dateKey,
+              contentType: 'daily_catholic_content',
               language: sessionLang,
               status: 'sent',
               attemptCount: sessResult.attempts,
@@ -766,12 +774,13 @@ async function executeDailyNotificationDispatch(claimResult, options = {}) {
         } else {
           channelStats.whatsapp.failed++;
           await NotificationDelivery.findOneAndUpdate(
-            { notificationDate: dateKey, recipient: cleanSessPhone, channel: 'whatsapp' },
+            { notificationDate: dateKey, recipient: cleanSessPhone, channel: 'whatsapp', contentType: 'daily_catholic_content' },
             {
               jobId,
               recipient: cleanSessPhone,
               channel: 'whatsapp',
               notificationDate: dateKey,
+              contentType: 'daily_catholic_content',
               language: sessionLang,
               status: 'failed',
               attemptCount: sessResult.attempts,
@@ -1068,10 +1077,10 @@ async function getDailyNotificationStatus() {
     const job = await DailyNotificationJob.findOne({ notificationDate: dateKey }).lean();
 
     // Delivery stats from NotificationDelivery
-    const emailSent = await NotificationDelivery.countDocuments({ notificationDate: dateKey, channel: 'email', status: 'sent' });
-    const emailFailed = await NotificationDelivery.countDocuments({ notificationDate: dateKey, channel: 'email', status: 'failed' });
-    const waSent = await NotificationDelivery.countDocuments({ notificationDate: dateKey, channel: 'whatsapp', status: 'sent' });
-    const waFailed = await NotificationDelivery.countDocuments({ notificationDate: dateKey, channel: 'whatsapp', status: 'failed' });
+    const emailSent = await NotificationDelivery.countDocuments({ notificationDate: dateKey, channel: 'email', status: 'sent', contentType: 'daily_catholic_content' });
+    const emailFailed = await NotificationDelivery.countDocuments({ notificationDate: dateKey, channel: 'email', status: 'failed', contentType: 'daily_catholic_content' });
+    const waSent = await NotificationDelivery.countDocuments({ notificationDate: dateKey, channel: 'whatsapp', status: 'sent', contentType: 'daily_catholic_content' });
+    const waFailed = await NotificationDelivery.countDocuments({ notificationDate: dateKey, channel: 'whatsapp', status: 'failed', contentType: 'daily_catholic_content' });
     const inAppSent = await DailyNotificationLog.countDocuments({ dateKey, 'channels.inApp.status': 'sent' });
     const pushSent = await DailyNotificationLog.countDocuments({ dateKey, 'channels.push.status': 'sent' });
 

@@ -35,6 +35,12 @@ const notificationDeliverySchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  contentType: {
+    type: String,
+    enum: ['daily_catholic_content', 'event', 'announcement', 'custom'],
+    default: 'daily_catholic_content',
+    index: true
+  },
   language: {
     type: String,
     enum: ['ta', 'en', 'both'],
@@ -70,11 +76,11 @@ const notificationDeliverySchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Compound unique index: Only 1 delivery per recipient, channel, and notification date
-notificationDeliverySchema.index({ notificationDate: 1, recipient: 1, channel: 1 }, { unique: true });
+// Compound unique index: Only 1 delivery per recipient, channel, notification date, and contentType
+notificationDeliverySchema.index({ notificationDate: 1, recipient: 1, channel: 1, contentType: 1 }, { unique: true });
 
 // Secondary queries
 notificationDeliverySchema.index({ jobId: 1, channel: 1, status: 1 });
-notificationDeliverySchema.index({ userId: 1, notificationDate: 1 });
+notificationDeliverySchema.index({ userId: 1, notificationDate: 1, contentType: 1 });
 
 module.exports = mongoose.model('NotificationDelivery', notificationDeliverySchema);

@@ -44,7 +44,8 @@ const botSessionSchema = new mongoose.Schema({
   processedMessageIds: [{ type: String }],
   lastProcessedMessageId: { type: String, default: '' },
   lastSentResponseHash: { type: String, default: '' },
-  lastSentAt: { type: Date }
+  lastSentAt: { type: Date },
+  currentMenu: { type: String, default: 'main' }
 }, { timestamps: true });
 
 module.exports = mongoose.model('BotSession', botSessionSchema);

@@ -245,6 +245,16 @@ async function connectToWhatsApp() {
         const messageId = msg.key?.id || null;
         const messageTimestamp = msg.messageTimestamp || null;
 
+        // Drop stale replayed historical messages (e.g. emitted on reconnect or chat reopen > 5 min old)
+        if (messageTimestamp) {
+          const nowSeconds = Math.floor(Date.now() / 1000);
+          const rawTs = typeof messageTimestamp === 'object' && messageTimestamp?.low ? messageTimestamp.low : Number(messageTimestamp);
+          if (rawTs && (nowSeconds - rawTs > 300)) {
+            console.log(`⚡ [WhatsApp] Dropping stale replayed message ID ${messageId} (${nowSeconds - rawTs}s old)`);
+            continue;
+          }
+        }
+
         try {
           await handleIncomingMessage(
             phone,

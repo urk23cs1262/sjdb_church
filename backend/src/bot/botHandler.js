@@ -24,7 +24,14 @@ const Event = require('../models/Event');
 const Announcement = require('../models/Announcement');
 const Priest = require('../models/Priest');
 const { getTodayDailyContent } = require('../services/dailyContentService');
-const { generateDailyCatholicMessage, generateSaintCaption, generateSaintInfoMessage } = require('../services/whatsappDailyFormatter');
+const {
+  generateDailyCatholicMessage,
+  generateSaintCaption,
+  generateSaintInfoMessage,
+  generateVerseMessage,
+  generateReadingsMessage,
+  generateReflectionMessage
+} = require('../services/whatsappDailyFormatter');
 const { scanInappropriateContent } = require('./moderation');
 const { answerChurchQuestion } = require('./churchRAGService');
 const { notifyAdmin } = require('../services/adminNotificationService');
@@ -244,14 +251,76 @@ function isUnsupportedLanguage(text) {
   return foreignScriptsRegex.test(text);
 }
 
-async function sendTodayDevotionsToUser(replyTarget, session, wa) {
+async function sendTodayVerseToUser(replyTarget, session, wa, isTamil = false) {
   try {
     const dailyContent = await getCachedDailyContent();
-    const userLang = session.language || 'en';
+    const lang = isTamil ? 'ta' : (session.language || 'en');
+    const msg = generateVerseMessage({ dailyContent, language: lang });
+    await wa.sendWhatsAppMessage(replyTarget, msg);
+  } catch (err) {
+    console.error('[BotHandler] Error delivering verse:', err.message);
+    await wa.sendWhatsAppMessage(replyTarget, `📖 *Daily Bible Verse*\n\nView today's Bible verse online:\n${getSiteUrl(SITE_ROUTES.DAILY_VERSE)}`);
+  }
+}
+
+async function sendTodayReadingsToUser(replyTarget, session, wa, isTamil = false) {
+  try {
+    const dailyContent = await getCachedDailyContent();
+    const lang = isTamil ? 'ta' : (session.language || 'en');
+    const msg = generateReadingsMessage({ dailyContent, language: lang });
+    await wa.sendWhatsAppMessage(replyTarget, msg);
+  } catch (err) {
+    console.error('[BotHandler] Error delivering readings:', err.message);
+    await wa.sendWhatsAppMessage(replyTarget, `📖 *Daily Mass Readings*\n\nRead complete readings online:\n${getSiteUrl(SITE_ROUTES.DAILY_READINGS)}`);
+  }
+}
+
+async function sendTodayReflectionToUser(replyTarget, session, wa, isTamil = false) {
+  try {
+    const dailyContent = await getCachedDailyContent();
+    const lang = isTamil ? 'ta' : (session.language || 'en');
+    const msg = generateReflectionMessage({ dailyContent, language: lang });
+    await wa.sendWhatsAppMessage(replyTarget, msg);
+  } catch (err) {
+    console.error('[BotHandler] Error delivering reflection:', err.message);
+    await wa.sendWhatsAppMessage(replyTarget, `🕊️ *Daily Reflection*\n\nRead today's reflection online:\n${getSiteUrl(SITE_ROUTES.DAILY_REFLECTION)}`);
+  }
+}
+
+async function sendTodaySaintToUser(replyTarget, session, wa, isTamil = false) {
+  try {
+    const dailyContent = await getCachedDailyContent();
+    const lang = isTamil ? 'ta' : (session.language || 'en');
+    const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
+    const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: lang });
+
+    let sentMedia = false;
+    if (saintImageUrl && typeof wa.sendWhatsAppMedia === 'function') {
+      try {
+        sentMedia = await wa.sendWhatsAppMedia(replyTarget, { url: saintImageUrl, caption: saintInfoMsg, mimetype: 'image/jpeg' });
+      } catch (mErr) {
+        console.warn('[BotHandler] Saint media send fallback:', mErr.message);
+        sentMedia = false;
+      }
+    }
+
+    if (!sentMedia) {
+      await wa.sendWhatsAppMessage(replyTarget, saintInfoMsg);
+    }
+  } catch (err) {
+    console.error('[BotHandler] Error delivering saint info:', err.message);
+    await wa.sendWhatsAppMessage(replyTarget, `✝️ *Saint of the Day*\n\nRead about today's saint online:\n${getSiteUrl(SITE_ROUTES.SAINT_OF_THE_DAY)}`);
+  }
+}
+
+async function sendFullDevotionsToUser(replyTarget, session, wa, isTamil = false) {
+  try {
+    const dailyContent = await getCachedDailyContent();
+    const lang = isTamil ? 'ta' : (session.language || 'en');
 
     const msg1 = generateDailyCatholicMessage({
       dailyContent,
-      language: userLang,
+      language: lang,
       readingPreference: 'full'
     });
     const readingsLink = `\n\n🌐 *Read complete Mass Readings online:* ${getSiteUrl(SITE_ROUTES.DAILY_READINGS)}`;
@@ -672,6 +741,8 @@ To start chatting and access church services, please enter your **10-digit mobil
       normalizedText.includes('என்னென்ன சேவைகள்');
 
     if (isServicesTrigger) {
+      session.currentMenu = 'services';
+      await session.save();
       const servicesMsg = getServicesMenuMessage();
       await wa.sendWhatsAppMessage(replyTarget, servicesMsg);
       return;
@@ -684,6 +755,8 @@ To start chatting and access church services, please enter your **10-digit mobil
       normalizedText.includes('sjdb connect');
 
     if (isMenuTrigger) {
+      session.currentMenu = 'main';
+      await session.save();
       let linkedUser = null;
       if (session.linkedUserId) {
         linkedUser = await User.findById(session.linkedUserId);
@@ -733,17 +806,58 @@ To start chatting and access church services, please enter your **10-digit mobil
 
     // ── 3. NUMBERED MENU & DIRECT INTENT ROUTING ────────────────────────────────
 
-    // Option 1: Daily Bible (Main Menu 1) OR Mass Timings (Services 1)
-    const isDailyBibleQuery = /^(daily bible|bible|today bible|readings|verse)$/i.test(normalizedText) ||
-      /(தினசரி விவிலியம்|விவிலியம்|இறைவார்த்தை|தினசரி வாசகம்)/.test(rawText);
-
-    if (normalizedText === '1' || isDailyBibleQuery) {
-      await sendTodayDevotionsToUser(replyTarget, session, wa);
+    // 3.0 Explicit Full Devotions Request (Conversational ONLY — Never triggers proactive notification job)
+    const isFullDevotionsQuery = /^(daily devotions|daily catholic devotions|all daily devotions|full devotions|today devotions|all daily content|தினசரி கத்தோலிக்க வாசகங்கள்|முழு வாசகங்கள்)$/i.test(normalizedText);
+    if (isFullDevotionsQuery) {
+      await sendFullDevotionsToUser(replyTarget, session, wa, isTamilQuery);
       return;
     }
 
-    // Option 2: Mass Timings (Main Menu 2 & Services 1)
-    const isMassTimingsQuery = normalizedText === '2' ||
+    // 3.1 Daily Bible Verse (Option 1 & Verse Keywords)
+    const isVerseQuery =
+      normalizedText === '1' ||
+      /^(verse|bible verse|today verse|daily verse|daily bible|today bible|bible|scripture|word of god|what is today\'?s? verse|give me today\'?s? verse|tell me today\'?s? verse)$/i.test(normalizedText) ||
+      /(தினசரி விவிலியம்|விவிலியம்|இறைவார்த்தை|வேத வசனம்|வசனம்)/.test(rawText);
+
+    if (isVerseQuery) {
+      await sendTodayVerseToUser(replyTarget, session, wa, isTamilQuery);
+      return;
+    }
+
+    // 3.2 Daily Mass Readings (Readings Keywords)
+    const isReadingsQuery =
+      /\b(readings|mass readings|today readings|daily mass readings|what are today\'?s? readings|give me today\'?s? readings|gospel|today gospel|mass reading)\b/i.test(normalizedText) ||
+      /(திருப்பலி வாசகங்கள்|இன்றைய வாசகங்கள்|வாசகங்கள்|வாசகம்|நற்செய்தி|திருப்பாடல்|பதிலுரை பாடல்)/.test(rawText);
+
+    if (isReadingsQuery) {
+      await sendTodayReadingsToUser(replyTarget, session, wa, isTamilQuery);
+      return;
+    }
+
+    // 3.3 Daily Reflection (Reflection Keywords)
+    const isReflectionQuery =
+      /\b(reflection|today reflection|daily reflection|give me today\'?s? reflection|what is today\'?s? reflection|spiritual reflection)\b/i.test(normalizedText) ||
+      /(தியானம்|இன்றைய தியானம்|சிந்தனை|இன்றைய சிந்தனை)/.test(rawText);
+
+    if (isReflectionQuery) {
+      await sendTodayReflectionToUser(replyTarget, session, wa, isTamilQuery);
+      return;
+    }
+
+    // 3.4 Saint of the Day (Option 7 & Saint Keywords)
+    const isSaintQuery =
+      normalizedText === '7' ||
+      /\b(saint|today saint|saint of the day|who is today saint|who is the saint today|today\'?s saint|saints)\b/i.test(normalizedText) ||
+      /(இன்றைய புனிதர்|புனிதர் யார்|புனிதர்)/.test(rawText);
+
+    if (isSaintQuery) {
+      await sendTodaySaintToUser(replyTarget, session, wa, isTamilQuery);
+      return;
+    }
+
+    // 3.5 Mass Timings (Option 2 & Mass Keywords)
+    const isMassTimingsQuery =
+      normalizedText === '2' ||
       /\b(mass timings|mass time|mass schedule|when is mass|what time is mass|morning mass|evening mass|sunday mass|today mass)\b/i.test(normalizedText) ||
       /(திருப்பலி நேரம்|பூசை நேரம்|திருப்பலி நேரங்கள்|ஞாயிறு திருப்பலி)/.test(rawText);
 
@@ -773,15 +887,77 @@ _Kalayarkoil, Sivagangai Diocese_
       return;
     }
 
-    // Option 3: Services Menu (Main Menu 3)
+    // 3.6 Services Menu (Option 3)
     if (normalizedText === '3') {
       const servicesMsg = getServicesMenuMessage();
       await wa.sendWhatsAppMessage(replyTarget, servicesMsg);
       return;
     }
 
-    // Option 4: Church Events (Main Menu 4) OR Verse (Services 4)
-    const isEventsChoice = normalizedText === '4' ||
+    // 3.7 Confession Timings
+    const isConfessionQuery =
+      /\b(confession|confession timings?|reconciliation)\b/i.test(normalizedText) ||
+      /(ஒப்புரவு|பாவசங்கீர்த்தனம்)/.test(rawText);
+
+    if (isConfessionQuery) {
+      const confMsg = `🕊️ *Sacrament of Reconciliation (Confession)*
+_St. John de britto Church, Kalayarkoil_
+
+• Every Saturday from 5:30 PM to 6:30 PM
+• Daily before morning Holy Mass (5:30 AM)
+• Available anytime upon personal request to the Parish Priests.
+
+_"Though your sins are like scarlet, they shall be as white as snow." (Isaiah 1:18)_
+
+🌐 ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}`;
+      await wa.sendWhatsAppMessage(replyTarget, confMsg);
+      return;
+    }
+
+    // 3.8 Other Sacraments
+    const isSacramentQuery =
+      /\b(sacraments?|baptism|matrimony|holy communion|confirmation|anointing)\b/i.test(normalizedText) ||
+      /(திருவருட்சாதனம்|திருவருட்சாதனங்கள்|ஞானஸ்நானம்|திருமணம்)/.test(rawText);
+
+    if (isSacramentQuery) {
+      const sacMsg = `✝️ *Sacraments & Spiritual Guidance*
+_St. John de britto Church, Kalayarkoil_
+
+1. *Baptism:* Prior registration with parish office
+2. *Holy Communion & Confirmation:* Sunday Catechism formation
+3. *Holy Matrimony:* Registration 1 month prior + Pre-Cana course
+4. *Anointing of Sick:* Available anytime for elderly and ill
+5. *Reconciliation:* Saturdays 5:30 PM & daily before morning Mass
+
+🌐 ${getSiteUrl(SITE_ROUTES.ABOUT)}`;
+      await wa.sendWhatsAppMessage(replyTarget, sacMsg);
+      return;
+    }
+
+    // 3.9 Catholic Prayers
+    const isPrayersQuery =
+      /\b(prayers?|rosary|our father|hail mary)\b/i.test(normalizedText) ||
+      /(ஜெபம்|செபம்|ஜெபங்கள்|செபங்கள்|ஜெபமாலை)/.test(rawText);
+
+    if (isPrayersQuery) {
+      const prayersMsg = `🙏 *Catholic Prayers & Prayer Guidance*
+_St. John de britto Church, Kalayarkoil_
+
+• *The Lord's Prayer (Our Father)*
+• *Hail Mary (Angelic Salutation)*
+• *Glory Be (Doxology)*
+• *The Holy Rosary & Mysteries*
+• *Prayer Before Holy Mass & After Communion*
+
+🌐 *Audio Rosary & Prayers:* ${getSiteUrl(SITE_ROUTES.ROSARY)}`;
+      await wa.sendWhatsAppMessage(replyTarget, prayersMsg);
+      return;
+    }
+
+    // 3.10 Church Events (Main Menu 4 & Services Menu 8 & Keywords)
+    const isEventsChoice =
+      (session.currentMenu !== 'services' && normalizedText === '4') ||
+      (session.currentMenu === 'services' && normalizedText === '8') ||
       /\b(events|upcoming events|church events)\b/i.test(normalizedText) ||
       /(நிகழ்வுகள்|நிகழ்ச்சிகள்)/.test(rawText);
 
@@ -806,8 +982,10 @@ _Kalayarkoil, Sivagangai Diocese_
       }
     }
 
-    // Option 5: Parish Announcements (Main Menu 5 & Services 9)
-    const isAnnouncementsChoice = normalizedText === '5' || normalizedText === '9' ||
+    // 3.11 Parish Announcements (Main Menu 5 & Services Menu 9 & Keywords)
+    const isAnnouncementsChoice =
+      (session.currentMenu !== 'services' && normalizedText === '5') ||
+      (session.currentMenu === 'services' && normalizedText === '9') ||
       /\b(announcements?|notices?|parish announcements?)\b/i.test(normalizedText) ||
       /(அறிவிப்புகள்|பங்கு அறிவிப்பு)/.test(rawText);
 
@@ -829,8 +1007,10 @@ _Kalayarkoil, Sivagangai Diocese_
       }
     }
 
-    // Option 6: Church Information & History (Main Menu 6 & Services 13)
-    const isChurchInfoChoice = normalizedText === '6' || normalizedText === '13' ||
+    // 3.12 Church Information & History (Main Menu 6 & Services Menu 13 & Keywords)
+    const isChurchInfoChoice =
+      (session.currentMenu !== 'services' && normalizedText === '6') ||
+      normalizedText === '13' ||
       /\b(church information|church info|about church|history|patron saint)\b/i.test(normalizedText) ||
       /(ஆலய விபரம்|பங்கு வரலாறு|புனிதர் வரலாறு|வரலாறு)/.test(rawText);
 
@@ -851,38 +1031,9 @@ Our parish in Kalayarkoil stands as a historic sanctuary of faith, vibrant Anbiy
       return;
     }
 
-    // Option 7: Saint of the Day (Main Menu 7 & Services 6)
-    const isSaintChoice = normalizedText === '7' ||
-      /\b(saint|today saint|saint of the day|who is today saint|who is the saint today|today\'?s saint|saints)\b/i.test(normalizedText) ||
-      /(இன்றைய புனிதர்|புனிதர் யார்|புனிதர்)/.test(rawText);
-
-    if (isSaintChoice) {
-      try {
-        const dailyContent = await getCachedDailyContent();
-        const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
-        const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: session.language || 'en' });
-
-        let sentMedia = false;
-        if (saintImageUrl && typeof wa.sendWhatsAppMedia === 'function') {
-          try {
-            sentMedia = await wa.sendWhatsAppMedia(replyTarget, { url: saintImageUrl, caption: saintInfoMsg, mimetype: 'image/jpeg' });
-          } catch (mErr) {
-            console.warn('[BotHandler] Saint media send fallback:', mErr.message);
-            sentMedia = false;
-          }
-        }
-
-        if (!sentMedia) {
-          await wa.sendWhatsAppMessage(replyTarget, saintInfoMsg);
-        }
-        return;
-      } catch (sErr) {
-        console.error('[BotHandler] Saint fetch error:', sErr.message);
-      }
-    }
-
-    // Option 8: Help (Main Menu 8)
-    const isHelpChoice = normalizedText === '8' ||
+    // 3.13 Help (Main Menu 8)
+    const isHelpChoice =
+      (session.currentMenu !== 'services' && normalizedText === '8') ||
       /\b(help|commands|how to use|guide|options)\b/i.test(normalizedText) ||
       /(உதவி|வழிகாட்டி)/.test(rawText);
 
@@ -902,7 +1053,6 @@ _St. John de britto Church, Kalayarkoil_
 💡 You can reply with numbers 1 to 8 or type your questions naturally in English or Tamil!`;
 
       await wa.sendWhatsAppMessage(replyTarget, helpMsg);
-      return;
     }
 
     // Option 10: Church Location & Google Maps
@@ -1034,8 +1184,8 @@ ${EXTERNAL_LINKS.GOOGLE_MAPS}
         linkedUser = await User.findOne({ phone: { $regex: new RegExp(searchPhone + '$') } }).lean();
       }
 
-      const userAuthContext = { user: linkedUser, session };
-      const ragResult = await answerChurchQuestion(rawText, 'en', userAuthContext);
+      const userLang = isTamilQuery ? 'ta' : (session.language || 'en');
+      const ragResult = await answerChurchQuestion(rawText, userLang, userAuthContext);
 
       if (ragResult && ragResult.reply) {
         let sentMedia = false;
