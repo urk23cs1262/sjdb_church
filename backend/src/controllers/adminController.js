@@ -197,7 +197,8 @@ const getDashboardStats = async (req, res) => {
       });
     });
 
-    activities.sort((a, b) => new Date(b.time) - new Date(a.time));
+    const completedReverification = Math.max(0, totalUsers - otpPendingCount);
+    const reverificationPercentage = totalUsers > 0 ? parseFloat(((completedReverification / totalUsers) * 100).toFixed(1)) : 100.0;
 
     res.json({
       success: true,
@@ -208,6 +209,12 @@ const getDashboardStats = async (req, res) => {
         newMembersToday,
         newMembersThisMonth,
         otpPendingCount,
+        reverification: {
+          totalUsers,
+          completed: completedReverification,
+          pending: otpPendingCount,
+          completionPercentage: reverificationPercentage
+        },
         loginAttemptsTodayCount,
         todayBookings,
         totalEvents,

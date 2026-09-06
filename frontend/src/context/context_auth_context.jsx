@@ -50,9 +50,19 @@ export const AuthProvider = ({ children }) => {
 
   const isAdmin = user?.role === 'admin';
   const isAuthenticated = !!user;
+  const isReverificationRequired = Boolean(user && user.role !== 'admin' && user.requiresReverification);
+
+  const markReverified = (updatedUser) => {
+    setUser(prev => ({
+      ...(prev || {}),
+      ...(updatedUser || {}),
+      requiresReverification: false,
+      account_verified: true
+    }));
+  };
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, isAdmin, isAuthenticated, fetchMe }}>
+    <AuthContext.Provider value={{ user, setUser, token, loading, login, logout, isAdmin, isAuthenticated, isReverificationRequired, markReverified, fetchMe }}>
       {children}
     </AuthContext.Provider>
   );

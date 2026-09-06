@@ -40,6 +40,7 @@ import AdminLayout from './components/admin/admin_layout';
 // Auth & Security pages
 const Login = lazy(() => import('./pages/auth/auth_login'));
 const Register = lazy(() => import('./pages/auth/auth_register'));
+const UserVerifyAccount = lazy(() => import('./pages/auth/user_verify_account'));
 const ReportUnauthorized = lazy(() => import('./pages/security/security_report_unauthorized'));
 
 // User dashboard
@@ -71,13 +72,16 @@ const AdminAnbiyam = lazy(() => import('./pages/admin/admin_anbiyams'));
 
 // Route guards
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, isReverificationRequired } = useAuth();
   const location = useLocation();
   if (loading) return <PageLoader />;
   if (!isAuthenticated) {
     const fullPath = location.pathname + location.search + location.hash;
     sessionStorage.setItem("redirectAfterLogin", fullPath);
     return <Navigate to={`/login?redirect=${encodeURIComponent(fullPath)}`} replace />;
+  }
+  if (isReverificationRequired && location.pathname !== '/verify-account') {
+    return <Navigate to="/verify-account" replace />;
   }
   return children;
 };
@@ -162,6 +166,7 @@ function AppRoutes() {
             {/* Auth & Security routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/verify-account" element={<UserVerifyAccount />} />
             <Route path="/security/report-unauthorized" element={<ReportUnauthorized />} />
 
             {/* Admin dashboard routes */}

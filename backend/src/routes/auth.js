@@ -9,9 +9,10 @@ const {
   getMe,
   lookupFamily,
   sendVerificationOtp,
-  verifyAccountOtp
+  verifyAccountOtp,
+  getVerificationStatus
 } = require('../controllers/authController');
-const { protect } = require('../middleware/auth');
+const { protect, optionalAuth } = require('../middleware/auth');
 
 router.post('/register', register);
 router.post('/verify-otp', verifyOtp);
@@ -23,6 +24,7 @@ router.get('/family-lookup', lookupFamily);
 router.get('/me', protect, getMe);
 
 // ── Monthly Account Verification Routes ──────────────────────────────────────
+router.get('/verify-account/status', optionalAuth, getVerificationStatus);
 router.post('/verify-account/send-otp', sendVerificationOtp);
 router.post('/verify-account/verify-otp', verifyAccountOtp);
 

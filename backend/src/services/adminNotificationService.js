@@ -176,6 +176,18 @@ const notifyAdmin = async (event) => {
         break;
       }
 
+      case 'USER_REVERIFIED': {
+        const remainingCount = extra.remainingCount !== undefined ? extra.remainingCount : 0;
+        const maskedContact = extra.maskedContact || (userEmail !== 'None' ? userEmail : userPhone);
+        title = `User Re-Verification Completed`;
+        message = `A user has successfully completed account re-verification.\nUser: ${userName} (ID: ${memberId || 'N/A'}, Contact: ${maskedContact})\n\nRemaining users: ${remainingCount} users have not yet completed re-verification.`;
+        category = 'account';
+        priority = 'normal';
+        sendEmailAlert = true;
+        emailSubject = `User Re-Verification Completed — ${remainingCount} Users Pending`;
+        break;
+      }
+
       case 'OTP_EXPIRED': {
         title = ` OTP Verification Abandoned: ${userName}`;
         message = `Verification code for ${userName} (${userEmail} / ${userPhone}) expired without being verified.\nMember ID: ${memberId}\nTime: ${formattedTime}\nStatus: Not Verified (OTP Expired)`;

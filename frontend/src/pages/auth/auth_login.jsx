@@ -332,7 +332,7 @@ export default function Login() {
                 </p>
               )}
 
-              <div className="pt-3 text-center border-t border-gray-100/80 mt-3">
+              {/* <div className="pt-3 text-center border-t border-gray-100/80 mt-3">
                 <button
                   type="button"
                   onClick={() => { setStage('verifyAccount'); setVerifyStep('email'); }}
@@ -340,7 +340,7 @@ export default function Login() {
                 >
                   <FiShield className="text-amber-600" /> Verify Account
                 </button>
-              </div>
+              </div> */}
             </form>
           )}
 
@@ -642,7 +642,7 @@ export default function Login() {
                           }}
                           className="text-[11px] font-bold text-amber-700 hover:text-amber-800 underline cursor-pointer"
                         >
-                          ⚡ Auto-fill saved
+
                         </button>
                       )}
                     </div>
