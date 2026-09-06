@@ -18,6 +18,17 @@ const {
 const QRCode = require('qrcode');
 const { handleIncomingMessage } = require('./botHandler');
 const { useMongoDBAuthState, clearMongoDBAuthState } = require('./mongoAuthState');
+const {
+  isSignalDecryptionError,
+  isDecryptionFailureMessage,
+  isProtocolOrRetryMessage,
+  signalSessionTracker,
+  installLibsignalErrorFilter,
+  createCustomBaileysLogger
+} = require('./signalSessionRecovery');
+
+// Install console.error interceptor to catch and rate-limit libsignal internal stack traces
+installLibsignalErrorFilter(signalSessionTracker);
 
 let sock = null; // Active socket instance
 let isConnected = false;
@@ -126,9 +137,12 @@ async function connectToWhatsApp() {
 
     console.log(`\n📡 SJDB Connect — Connecting to WhatsApp Web (Baileys v${version.join('.')})`);
 
+    const customLogger = createCustomBaileysLogger(signalSessionTracker);
+
     newSock = makeWASocket({
       version,
       auth: state,
+      logger: customLogger,
       printQRInTerminal: false,
       browser: Browsers.windows('Desktop'),
       syncFullHistory: false,
@@ -200,15 +214,33 @@ async function connectToWhatsApp() {
       if (generation !== connectionGeneration || newSock !== sock || type !== 'notify') return;
 
       for (const msg of messages) {
-        if (msg.key.remoteJid === 'status@broadcast') continue;
+        if (msg.key?.remoteJid === 'status@broadcast') continue;
 
-        if (msg.key.fromMe) {
+        const from = msg.key?.remoteJid || '';
+        const messageId = msg.key?.id || null;
+        const messageTimestamp = msg.messageTimestamp || null;
+
+        // ── 1. SIGNAL DECRYPTION FAILURE & CIPHERTEXT STUB CHECK ──
+        if (isDecryptionFailureMessage(msg)) {
+          const stubParam = msg.messageStubParameters?.[0] || 'CIPHERTEXT';
+          signalSessionTracker.recordDecryptFailure(from, stubParam);
+          // CRITICAL ARCHITECTURAL RULE:
+          // Drop event immediately. NO botHandler, NO RAG, NO reply, NO notifications, NO jobs.
+          continue;
+        }
+
+        // ── 2. PROTOCOL & RETRY RECEIPT CHECK ──
+        if (isProtocolOrRetryMessage(msg)) {
+          // Internal protocol message or receipt — never treat as user input
+          continue;
+        }
+
+        // ── 3. FROM-ME REPLAY & OUTGOING ECHO FILTER ──
+        if (msg.key?.fromMe) {
           const myJid = newSock?.user?.id
             ? newSock.user.id.split(':')[0].replace(/\D/g, '')
             : '';
-          const remoteJidNum = msg.key.remoteJid
-            ? msg.key.remoteJid.replace(/\D/g, '')
-            : '';
+          const remoteJidNum = from ? from.replace(/\D/g, '') : '';
 
           if (!myJid || myJid.slice(-10) !== remoteJidNum.slice(-10)) continue;
 
@@ -231,7 +263,6 @@ async function connectToWhatsApp() {
           ) continue;
         }
 
-        const from = msg.key.remoteJid;
         const body =
           msg.message?.conversation ||
           msg.message?.extendedTextMessage?.text ||
@@ -239,11 +270,18 @@ async function connectToWhatsApp() {
           msg.message?.videoMessage?.caption ||
           '';
 
-        if (!body) continue;
+        if (!body || !body.trim()) continue;
+
+        // ── 4. SAFETY GUARD: TEXT CONTENT DECRYPTION ERROR CHECK ──
+        if (isSignalDecryptionError(body)) {
+          signalSessionTracker.recordDecryptFailure(from, body);
+          continue;
+        }
+
+        // ── 5. RECORD SUCCESSFUL DECRYPTION ──
+        signalSessionTracker.recordSuccessfulDecrypt(from);
 
         const phone = from.replace('@s.whatsapp.net', '').replace('@g.us', '');
-        const messageId = msg.key?.id || null;
-        const messageTimestamp = msg.messageTimestamp || null;
 
         // Drop stale replayed historical messages (e.g. emitted on reconnect or chat reopen > 5 min old)
         if (messageTimestamp) {
@@ -367,7 +405,11 @@ async function sendWhatsAppMessage(phone, text) {
     console.log(`✉️ WhatsApp sent to ${jid}`);
     return true;
   } catch (err) {
-    console.error(`❌ Failed to send WhatsApp to ${jid}:`, err.message);
+    if (isSignalDecryptionError(err)) {
+      signalSessionTracker.recordDecryptFailure(jid, err.message);
+    } else {
+      console.error(`❌ Failed to send WhatsApp to ${jid}:`, err.message);
+    }
     return false;
   }
 }
@@ -413,7 +455,11 @@ async function sendWhatsAppMedia(phone, mediaArg, optionalCaption) {
     console.log(`📎 WhatsApp media sent to ${jid}`);
     return true;
   } catch (err) {
-    console.error(`❌ Failed to send media to ${jid}:`, err.message);
+    if (isSignalDecryptionError(err)) {
+      signalSessionTracker.recordDecryptFailure(jid, err.message);
+    } else {
+      console.error(`❌ Failed to send media to ${jid}:`, err.message);
+    }
     return false;
   }
 }
@@ -571,7 +617,8 @@ function getConnectionStatus() {
     lastConnectedAt: lastConnectedTime,
     uptimeSeconds: isConnected && lastConnectedTime ? Math.floor((Date.now() - lastConnectedTime) / 1000) : 0,
     hasQr: !!currentQr,
-    sock: !!sock
+    sock: !!sock,
+    sessionHealth: signalSessionTracker.getDiagnostics()
   };
 }
 
@@ -609,5 +656,7 @@ module.exports = {
   getConnectionStatus,
   getQR,
   waitForWhatsAppReady,
-  shutdownWhatsApp
+  shutdownWhatsApp,
+  signalSessionTracker,
+  isSignalDecryptionError
 };

@@ -336,6 +336,15 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
   if (!rawText) return;
 
   const replyTarget = rawJid || fromNumber;
+
+  // 0. Signal Session Decryption Error Guard (Never process decryption errors / Bad MAC as user commands)
+  const { isSignalDecryptionError, signalSessionTracker } = require('./signalSessionRecovery');
+  if (isSignalDecryptionError(rawText)) {
+    signalSessionTracker.recordDecryptFailure(replyTarget, rawText);
+    console.warn(`[WHATSAPP-SESSION] Signal decryption error text intercepted — dropping message for ${fromNumber}`);
+    return;
+  }
+
   const phone = (fromNumber || '').replace('whatsapp:', '').replace(/\D/g, '');
   const sessionKey = (fromNumber && fromNumber.includes('@lid')) ? fromNumber : (phone || fromNumber);
 
