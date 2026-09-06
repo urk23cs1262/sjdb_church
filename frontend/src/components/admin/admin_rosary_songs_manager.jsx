@@ -143,21 +143,38 @@ export default function RosarySongsManager() {
       return toast.error('Please upload a valid .zip archive');
     }
 
+    const MAX_ZIP_SIZE = 500 * 1024 * 1024; // 500MB
+    if (file.size > MAX_ZIP_SIZE) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+      return toast.error(`ZIP archive is too large (${sizeMB}MB). Maximum allowed size is 500MB.`);
+    }
+
     setUploadingZip(true);
-    const toastId = toast.loading('Extracting audio files from ZIP archive...');
+    const toastId = toast.loading('Uploading ZIP archive (0%)...');
     try {
       const fd = new FormData();
       fd.append('file', file);
 
       const res = await api.post('/rosary-songs/zip', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            if (percent < 100) {
+              toast.loading(`Uploading ZIP archive (${percent}%)...`, { id: toastId });
+            } else {
+              toast.loading('Server extracting and saving songs...', { id: toastId });
+            }
+          }
+        }
       });
 
       toast.success(res.data.message || 'Songs extracted and saved!', { id: toastId });
       fetchSongs();
       if (zipInputRef.current) zipInputRef.current.value = '';
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to extract ZIP archive', { id: toastId });
+      const msg = err.response?.data?.message || err.message || 'Failed to extract ZIP archive';
+      toast.error(msg, { id: toastId });
     } finally {
       setUploadingZip(false);
     }
@@ -168,21 +185,38 @@ export default function RosarySongsManager() {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
+    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB per individual file
+    const oversized = files.filter(f => f.size > MAX_FILE_SIZE);
+    if (oversized.length > 0) {
+      return toast.error(`Some files exceed the 100MB limit: ${oversized.map(f => f.name).slice(0, 3).join(', ')}`);
+    }
+
     setUploadingIndividual(true);
-    const toastId = toast.loading(`Uploading ${files.length} audio file(s)...`);
+    const toastId = toast.loading(`Uploading ${files.length} audio file(s) (0%)...`);
     try {
       const fd = new FormData();
       files.forEach(f => fd.append('files', f));
 
       const res = await api.post('/rosary-songs/individual', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            if (percent < 100) {
+              toast.loading(`Uploading ${files.length} file(s) (${percent}%)...`, { id: toastId });
+            } else {
+              toast.loading('Saving audio files to church database...', { id: toastId });
+            }
+          }
+        }
       });
 
       toast.success(res.data.message || 'Songs uploaded successfully!', { id: toastId });
       fetchSongs();
       if (individualInputRef.current) individualInputRef.current.value = '';
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to upload songs', { id: toastId });
+      const msg = err.response?.data?.message || err.message || 'Failed to upload songs';
+      toast.error(msg, { id: toastId });
     } finally {
       setUploadingIndividual(false);
     }

@@ -41,36 +41,8 @@ async function runDailyBroadcast() {
 // ─── Birthday Wishes via WhatsApp ────────────────────────────────────────────
 
 async function runWhatsAppBirthdayWishes() {
-  try {
-    const today = new Date();
-    const month = today.getMonth() + 1;
-    const day = today.getDate();
-
-    const birthdayUsers = await User.find({
-      whatsappOptIn: { $ne: false },
-      isActive: { $ne: false },
-      phone: { $exists: true, $ne: '' },
-      $expr: {
-        $and: [
-          { $eq: [{ $month: '$dob' }, month] },
-          { $eq: [{ $dayOfMonth: '$dob' }, day] }
-        ]
-      }
-    });
-
-    for (const user of birthdayUsers) {
-      const phone = user.phone?.replace(/\D/g, '');
-      if (!phone) continue;
-      try {
-        await sendWA(phone, formatBirthdayMessage(user));
-        console.log(`🎂 Birthday WhatsApp sent to ${user.name}`);
-      } catch (err) {
-        console.error(`❌ Birthday WhatsApp failed for ${user.name}:`, err.message);
-      }
-    }
-  } catch (err) {
-    console.error('❌ WhatsApp Birthday Service Error:', err.message);
-  }
+  const { sendBirthdayWishes } = require('./birthdayService');
+  return sendBirthdayWishes();
 }
 
 // NOTE: Birthday cron is managed by birthdayService.js — do NOT add a duplicate cron here.

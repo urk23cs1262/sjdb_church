@@ -261,13 +261,15 @@ const forceGlobalOtpReverification = async (req, res) => {
     const { sendPushBroadcast } = require('../services/webPushService');
     const { sendMail } = require('../config/mailer');
 
-    // 1. Update all users and admins: set otpVerified: false, otpVerifiedAt: null, increment authVersion & tokenVersion
+    // 1. Update all users: set otpVerified: false, account_verified: false, otpVerifiedAt: null, verificationExpiresAt: new Date(0), increment authVersion & tokenVersion
     const result = await User.updateMany(
       {},
       {
         $set: {
           otpVerified: false,
-          otpVerifiedAt: null
+          account_verified: false,
+          otpVerifiedAt: null,
+          verificationExpiresAt: new Date(0)
         },
         $inc: {
           tokenVersion: 1,

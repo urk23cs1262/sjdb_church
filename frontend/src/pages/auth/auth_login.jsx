@@ -98,6 +98,14 @@ export default function Login() {
         localStorage.setItem('last_login_identifier', data.login.trim());
       }
       const res = await api.post('/auth/login', { login: data.login, password: data.password });
+      if (res.data?.requiresReverification) {
+        const target = getRedirectDestination(res.data.user);
+        sessionStorage.setItem('redirectAfterLogin', target);
+        toast(res.data.message || 'Account re-verification required (30-day security cycle).', { icon: '🔐' });
+        navigate(`/verify-account?identifier=${encodeURIComponent(data.login)}&userId=${res.data.userId || ''}&redirect=${encodeURIComponent(target)}`);
+        return;
+      }
+
       if (res.data?.requiresOTP || (res.data?.userId && !res.data?.token)) {
         setUserId(res.data.userId);
         setStage('otp');
@@ -117,6 +125,13 @@ export default function Login() {
       navigate(target);
     } catch (e) {
       const resData = e.response?.data;
+      if (resData?.requiresReverification) {
+        const target = getRedirectDestination(null);
+        sessionStorage.setItem('redirectAfterLogin', target);
+        toast(resData.message || 'Account re-verification required.', { icon: '🔐' });
+        navigate(`/verify-account?identifier=${encodeURIComponent(data.login)}&userId=${resData.userId || ''}&redirect=${encodeURIComponent(target)}`);
+        return;
+      }
       if (resData?.requiresOTP || resData?.userId) {
         setUserId(resData.userId);
         setStage('otp');

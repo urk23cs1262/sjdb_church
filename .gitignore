@@ -45,3 +45,11 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+
+# Media & Archives
+*.zip
+*.tar.gz
+*.rar
+*.7z
+backend/uploads/
+uploads/

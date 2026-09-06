@@ -9,6 +9,8 @@ const { sendLoginAlertEmail, sendPasswordUpdatedEmail } = require('../services/l
 
 const { generateNextMemberId, generateNextFamilyId } = require('../services/memberIdService');
 
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
 // @POST /api/auth/register
 const register = async (req, res) => {
   try {
@@ -706,7 +708,7 @@ const resetPassword = async (req, res) => {
  * Determines whether a user requires mandatory account re-verification.
  * - Church admins are exempt from routine parishioner verification.
  * - Checks account_verified, isVerified, otpVerified.
- * - Checks 30-day security cycle expiration against last_verified_at or otpVerifiedAt.
+ * - Checks 30-day security cycle expiration individually starting from latest successful verification date.
  */
 const checkReverificationRequired = (user) => {
   if (!user) return false;
@@ -714,8 +716,15 @@ const checkReverificationRequired = (user) => {
   if (user.account_verified === false) return true;
   if (user.isVerified === false) return true;
   if (user.otpVerified === false) return true;
+
+  // 1. Check explicit verification expiry date if present
+  if (user.verificationExpiresAt) {
+    return Date.now() >= new Date(user.verificationExpiresAt).getTime();
+  }
+
+  // 2. Individual 30-day cycle calculated from latest successful verification date (or registration)
   const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-  const refDate = user.last_verified_at || user.otpVerifiedAt;
+  const refDate = user.last_verified_at || user.otpVerifiedAt || user.createdAt;
   if (!refDate) return true;
   if ((Date.now() - new Date(refDate).getTime()) >= THIRTY_DAYS_MS) return true;
   return false;
@@ -725,13 +734,15 @@ const checkReverificationRequired = (user) => {
  * Calculates remaining active parishioners requiring re-verification dynamically from database.
  */
 const getPendingReverificationCount = async () => {
+  const now = new Date();
   const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-  const thirtyDaysAgo = new Date(Date.now() - THIRTY_DAYS_MS);
+  const thirtyDaysAgo = new Date(now.getTime() - THIRTY_DAYS_MS);
   return await User.countDocuments({
     $or: [
       { otpVerified: false },
       { isVerified: false },
       { account_verified: false },
+      { verificationExpiresAt: { $lte: now } },
       { otpVerifiedAt: null },
       { otpVerifiedAt: { $lte: thirtyDaysAgo } }
     ],
@@ -837,6 +848,34 @@ const sendVerificationOtp = async (req, res) => {
       return res.status(404).json({ success: false, message: 'No registered account found with that email or identifier' });
     }
 
+    // User Isolation Check: Authenticated users can only verify their own account
+    if (req.user && req.user.role !== 'admin') {
+      const authUserId = req.user._id ? req.user._id.toString() : '';
+      const targetUserId = user._id ? user._id.toString() : '';
+      if (authUserId !== targetUserId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Security protection: You can only request verification for your own registered account.'
+        });
+      }
+    }
+
+    // Edge Case: Inactive or suspended accounts cannot receive verification OTP
+    if (user.isActive === false || user.isSuspended) {
+      return res.status(403).json({
+        success: false,
+        message: 'This account is suspended or inactive. OTP verification cannot restore access. Please contact the church administrator.'
+      });
+    }
+
+    // Edge Case: No registered email or phone on file
+    if (!user.email && !user.phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'No registered email address or phone number found for this account. Please contact the parish office to update your contact information.'
+      });
+    }
+
     // Check if user is already verified
     if (!checkReverificationRequired(user)) {
       return res.json({
@@ -859,10 +898,11 @@ const sendVerificationOtp = async (req, res) => {
 
     const emailMasked = user.email ? user.email.replace(/^(.{2})(.*)(@.*)$/, '$1***$3') : null;
     const phoneMasked = user.phone ? user.phone.slice(0, 2) + '******' + user.phone.slice(-2) : null;
+    const targetDisplay = [emailMasked, phoneMasked].filter(Boolean).join(' and ');
 
     res.json({
       success: true,
-      message: `Verification code sent to ${emailMasked || phoneMasked || 'your registered contact'}`,
+      message: `Verification code sent to ${targetDisplay || 'your registered contact'}`,
       userId: user._id,
       emailMasked,
       phoneMasked,
@@ -900,6 +940,26 @@ const verifyAccountOtp = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User account not found' });
     }
 
+    // User Isolation Check: Authenticated user cannot verify someone else's account
+    if (req.user && req.user.role !== 'admin') {
+      const authUserId = req.user._id ? req.user._id.toString() : '';
+      const targetUserId = user._id ? user._id.toString() : '';
+      if (authUserId !== targetUserId) {
+        return res.status(403).json({
+          success: false,
+          message: 'Security protection: You cannot verify another user\'s account.'
+        });
+      }
+    }
+
+    // Inactive or suspended accounts cannot restore access via OTP
+    if (user.isActive === false || user.isSuspended) {
+      return res.status(403).json({
+        success: false,
+        message: 'This account is suspended or inactive. OTP verification cannot restore access.'
+      });
+    }
+
     const { verifyOTPSession } = require('../services/otpService');
     const result = await verifyOTPSession({
       userId: user._id,
@@ -913,14 +973,17 @@ const verifyAccountOtp = async (req, res) => {
     }
 
     const now = new Date();
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const verificationExpiresAt = new Date(now.getTime() + THIRTY_DAYS_MS);
     const wasRecentlyVerified = user.reverificationNotifiedAt && (now.getTime() - new Date(user.reverificationNotifiedAt).getTime() < 60000);
 
-    // Reset 30-day verification cycle in database
+    // Restart individual 30-day verification cycle from latest successful verification date
     user.account_verified = true;
     user.isVerified = true;
     user.otpVerified = true;
     user.last_verified_at = now;
     user.otpVerifiedAt = now;
+    user.verificationExpiresAt = verificationExpiresAt;
     user.last_verification_stage = null;
     user.last_verification_reminder_at = null;
     user.reverificationNotifiedAt = now;
@@ -1061,13 +1124,14 @@ const verifyAccountOtp = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Account verified successfully! You can now use all church features freely.',
+      message: 'Your account has been successfully verified. You can now continue using your account.',
       token,
       user: {
         ...updatedUser.toObject(),
         requiresReverification: false,
         account_verified: true,
-        last_verified_at: user.last_verified_at
+        last_verified_at: user.last_verified_at,
+        verificationExpiresAt: user.verificationExpiresAt
       },
       remainingPendingUsers: remainingCount
     });
@@ -1112,7 +1176,8 @@ const getVerificationStatus = async (req, res) => {
       phoneMasked,
       isVerified: Boolean(user.isVerified && user.account_verified),
       requiresReverification,
-      lastVerifiedAt: user.last_verified_at || user.otpVerifiedAt
+      lastVerifiedAt: user.last_verified_at || user.otpVerifiedAt,
+      verificationExpiresAt: user.verificationExpiresAt
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

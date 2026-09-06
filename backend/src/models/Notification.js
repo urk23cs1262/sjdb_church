@@ -18,7 +18,7 @@ const notificationSchema = new mongoose.Schema({
       'donation', 'donations', 'prayer', 'prayers', 'family', 'account',
       'profile', 'system', 'ai', 'feedback', 'general', 'permission',
       'security', 'activity', 'auth', 'account_verification', 'spiritual',
-      'daily_spiritual', 'verse', 'saint', 'mass'
+      'daily_spiritual', 'verse', 'saint', 'mass', 'birthday'
     ],
     default: 'general'
   },
@@ -29,7 +29,7 @@ const notificationSchema = new mongoose.Schema({
       'family', 'prayer', 'prayers', 'account', 'profile', 'system', 'ai',
       'feedback', 'general', 'bookings', 'booking', 'documents', 'document',
       'tickets', 'ticket', 'permission', 'security', 'activity', 'auth',
-      'account_verification', 'spiritual', 'daily_spiritual'
+      'account_verification', 'spiritual', 'daily_spiritual', 'birthday'
     ],
     default: 'general'
   },

@@ -142,7 +142,7 @@ function extractQueryIntents(rawText) {
 
   // 1. User Own Account Queries
   const isProfileQuery = /\b(my profile|who am i|my account|my details|my family id|my parish id|my member id)\b/i.test(norm) ||
-    /(என் சுயவிவரம்|என் கணக்கு|என் விபரம்|நான் யார்)/.test(rawText);
+    /(சுயவிவர|என் சுயவிவரம்|என் கணக்கு|என் விபரம்|நான் யார்)/.test(rawText);
   if (isProfileQuery) intents.push('user_profile');
 
   const isUserLanguageQuery = /\b(what language|my language|my saved language|current language|saved language)\b/i.test(norm) ||
@@ -1051,7 +1051,9 @@ async function answerChurchQuestion(rawText, userPreferredLang = null, userAuthC
   }
 
   const detectedLang = detectQueryLanguage(rawText);
-  const queryLang = detectedLang === 'ta' ? 'ta' : (userPreferredLang || 'en');
+  const queryLang = (userPreferredLang === 'ta' || userPreferredLang === 'en')
+    ? userPreferredLang
+    : (detectedLang === 'ta' ? 'ta' : 'en');
   const isTamil = queryLang === 'ta';
 
   const intents = extractQueryIntents(rawText);

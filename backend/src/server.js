@@ -185,7 +185,7 @@ app.get(['/health', '/api/health', '/api/bot/health'], (req, res) => {
       dailyBroadcast4AM: `${schedulerStatus.schedulerRegistered ? 'Active' : 'Registered'} (0 4 * * * Asia/Kolkata)`,
       reminderScheduler: 'Active (4:00 AM, 12:00 PM, Hourly)',
       dailyMassSync: 'Active (0 0 * * * Asia/Kolkata)',
-      birthdayWishes: 'Active (0 9 * * * Asia/Kolkata)'
+      birthdayWishes: 'Active (12:00 AM IST | 0 0 * * * Asia/Kolkata)'
     },
     cache: getCacheDiagnostics(),
     memory: {
@@ -208,6 +208,25 @@ app.use((req, res) => res.status(404).json({ success: false, message: 'Route not
 
 // Error handler
 app.use((err, req, res, next) => {
+  if (err.name === 'MulterError') {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({
+        success: false,
+        message: 'File too large. Maximum allowed size is 500MB.'
+      });
+    }
+    if (err.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({
+        success: false,
+        message: 'Too many files uploaded at once. Maximum allowed is 100 files.'
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      message: `Upload error: ${err.message}`
+    });
+  }
+
   console.error(err.stack);
   res.status(err.status || 500).json({ success: false, message: err.message || 'Internal Server Error' });
 });

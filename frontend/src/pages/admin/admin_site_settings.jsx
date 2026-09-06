@@ -8,7 +8,6 @@ import api, { UPLOADS_URL, getMediaUrl } from '../../services/api';
 import DailyVersesManager from '../../components/admin/admin_daily_verses_manager';
 import DailySaintManager from '../../components/admin/admin_daily_saint_manager';
 import RosarySongsManager from '../../components/admin/admin_rosary_songs_manager';
-import DailyNotificationManager from '../../components/admin/admin_daily_notification_manager';
 
 const SETTING_CARDS = [
   {
@@ -388,10 +387,7 @@ export default function SiteSettings() {
         </div>
       </div>
 
-      {/* ─── 2. 04:00 AM IST DAILY CATHOLIC NOTIFICATIONS MANAGER ─── */}
-      <DailyNotificationManager />
-
-      {/* ─── 3. DAILY SAINT SCRAPER SYNC MANAGER ─── */}
+      {/* ─── 2. DAILY SAINT SCRAPER SYNC MANAGER ─── */}
       <DailySaintManager />
 
       {/* ─── 4. ROSARY & DEVOTIONAL SONGS MANAGEMENT (ZIP & MULTI-AUDIO) ─── */}

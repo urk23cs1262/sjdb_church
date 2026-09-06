@@ -38,10 +38,6 @@ export default function AdminDashboard() {
   const [changingVerse, setChangingVerse] = useState(false);
   const [resettingOtp, setResettingOtp] = useState(false);
   const [showOtpResetModal, setShowOtpResetModal] = useState(false);
-  const [showPendingOtpModal, setShowPendingOtpModal] = useState(false);
-  const [pendingUsersList, setPendingUsersList] = useState([]);
-  const [loadingPendingUsers, setLoadingPendingUsers] = useState(false);
-  const [remindingPendingUsers, setRemindingPendingUsers] = useState(false);
   const { adminUnreadCount } = useNotifications();
 
   const fetchDashboardData = () => {
@@ -50,40 +46,6 @@ export default function AdminDashboard() {
       .then(r => setStats(r.data))
       .catch(() => { })
       .finally(() => setLoading(false));
-  };
-
-  const handleOpenPendingOtpModal = async () => {
-    setShowPendingOtpModal(true);
-    setLoadingPendingUsers(true);
-    try {
-      const res = await api.get('/admin/pending-otp-users');
-      if (res.data.success) {
-        setPendingUsersList(res.data.users || []);
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to fetch pending users');
-    } finally {
-      setLoadingPendingUsers(false);
-    }
-  };
-
-  const handleRemindPendingUsers = async () => {
-    setRemindingPendingUsers(true);
-    try {
-      const res = await api.post('/admin/remind-pending-otp');
-      if (res.data.success) {
-        toast.success(res.data.message || 'Re-verification reminders sent to all pending parishioners and report delivered to Admin!');
-        fetchDashboardData();
-        const refreshRes = await api.get('/admin/pending-otp-users');
-        if (refreshRes.data.success) {
-          setPendingUsersList(refreshRes.data.users || []);
-        }
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to dispatch reminders');
-    } finally {
-      setRemindingPendingUsers(false);
-    }
   };
 
   const handleForceGlobalOtpReset = async () => {
@@ -469,223 +431,22 @@ export default function AdminDashboard() {
                   <p className="text-xs text-amber-600/80 font-semibold mt-0.5 truncate">Security events today</p>
                 </div>
 
-                <div
-                  onClick={handleOpenPendingOtpModal}
-                  className="bg-gradient-to-br from-purple-50 to-pink-50/40 p-4 rounded-2xl border border-purple-100 min-w-0 cursor-pointer hover:shadow-md transition-all hover:border-purple-300 group relative"
-                  title="Click to view all parishioners with pending re-verification and send multi-channel reminders"
+                <Link
+                  to="/admin/notifications?category=security"
+                  className="bg-gradient-to-br from-purple-50 to-pink-50/40 p-4 rounded-2xl border border-purple-100 min-w-0 cursor-pointer hover:shadow-md transition-all hover:border-purple-300 group relative block"
+                  title="View Security & User Audit Notifications"
                 >
                   <div className="flex items-center justify-between mb-1.5 gap-1">
-                    <span className="text-xs uppercase font-black tracking-wider text-purple-700 truncate">OTP PENDING</span>
-                    <span className="p-1.5 bg-purple-600 text-white rounded-lg text-sm flex-shrink-0 group-hover:scale-110 transition-transform"><FiClock /></span>
+                    <span className="text-xs uppercase font-black tracking-wider text-purple-700 truncate">SECURITY ALERTS</span>
+                    <span className="p-1.5 bg-purple-600 text-white rounded-lg text-sm flex-shrink-0 group-hover:scale-110 transition-transform"><FiShield /></span>
                   </div>
-                  <p className="text-2xl sm:text-3xl font-black text-purple-900 leading-none my-1">{stats?.stats?.otpPendingCount || 0}</p>
+                  <p className="text-2xl sm:text-3xl font-black text-purple-900 leading-none my-1">{stats?.stats?.recentSecurityAlerts?.length || 0}</p>
                   <div className="flex items-center justify-between mt-1">
-                    <p className="text-xs text-purple-600/80 font-semibold truncate">Awaiting verification</p>
-                    <span className="text-xs font-bold text-purple-700 underline group-hover:text-purple-900 whitespace-nowrap">View List →</span>
+                    <p className="text-xs text-purple-600/80 font-semibold truncate">Active audit logs</p>
+                    <span className="text-xs font-bold text-purple-700 underline group-hover:text-purple-900 whitespace-nowrap">View All →</span>
                   </div>
-                </div>
+                </Link>
               </div>
-
-              {/* Live Re-Verification Status Section */}
-              {(() => {
-                const total = stats?.stats?.reverification?.totalUsers ?? (stats?.stats?.totalUsers || 0);
-                const pending = stats?.stats?.reverification?.pending ?? (stats?.stats?.otpPendingCount || 0);
-                const completed = stats?.stats?.reverification?.completed ?? Math.max(0, total - pending);
-                const percentage = stats?.stats?.reverification?.completionPercentage ?? (total > 0 ? parseFloat(((completed / total) * 100).toFixed(1)) : 100.0);
-
-                return (
-                  <div className="bg-white rounded-3xl p-5 sm:p-6 border border-purple-200/80 shadow-sm relative overflow-hidden my-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-gray-100">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-500 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-purple-500/20 flex-shrink-0">
-                          <FiShield className="text-xl" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-base font-extrabold text-gray-900 tracking-tight">
-                              Re-Verification Status
-                            </h3>
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                              Live Dynamic
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-500">
-                            Parishioner 30-day security cycle status and remaining pending accounts
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={fetchDashboardData}
-                          className="px-3 py-1.5 text-xs font-bold text-gray-600 hover:text-purple-700 bg-gray-50 hover:bg-purple-50 rounded-xl border border-gray-200 transition-colors flex items-center gap-1.5 cursor-pointer"
-                          title="Refresh live re-verification counts"
-                        >
-                          <FiRefreshCw className="text-xs" /> Refresh Live
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* 4 Metrics Grid */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-4">
-                      {/* Total Users */}
-                      <div className="p-3.5 rounded-2xl bg-gray-50/80 border border-gray-100">
-                        <span className="text-[11px] font-extrabold text-gray-500 uppercase tracking-wider block mb-1">
-                          Total Users
-                        </span>
-                        <p className="text-xl sm:text-2xl font-black text-gray-900 font-mono leading-tight">
-                          {total.toLocaleString()}
-                        </p>
-                        <p className="text-[10px] text-gray-400 font-medium mt-0.5">Active accounts</p>
-                      </div>
-
-                      {/* Completed */}
-                      <div className="p-3.5 rounded-2xl bg-emerald-50/80 border border-emerald-100">
-                        <span className="text-[11px] font-extrabold text-emerald-800 uppercase tracking-wider block mb-1 flex items-center gap-1">
-                          <span>✅ Completed</span>
-                        </span>
-                        <p className="text-xl sm:text-2xl font-black text-emerald-700 font-mono leading-tight">
-                          {completed.toLocaleString()}
-                        </p>
-                        <p className="text-[10px] text-emerald-600 font-medium mt-0.5">Verified & active</p>
-                      </div>
-
-                      {/* Pending */}
-                      <div
-                        onClick={handleOpenPendingOtpModal}
-                        className="p-3.5 rounded-2xl bg-purple-50/80 border border-purple-200/80 cursor-pointer hover:bg-purple-100/70 hover:shadow-xs transition-all group"
-                        title="Click to view pending accounts list"
-                      >
-                        <span className="text-[11px] font-extrabold text-purple-800 uppercase tracking-wider block mb-1 flex items-center justify-between">
-                          <span>⏳ Pending</span>
-                          <span className="text-[10px] text-purple-600 underline font-normal group-hover:text-purple-900">View →</span>
-                        </span>
-                        <p className="text-xl sm:text-2xl font-black text-purple-900 font-mono leading-tight">
-                          {pending.toLocaleString()}
-                        </p>
-                        <p className="text-[10px] text-purple-600 font-medium mt-0.5">Awaiting verification</p>
-                      </div>
-
-                      {/* Completion Rate */}
-                      <div className="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-100">
-                        <span className="text-[11px] font-extrabold text-blue-800 uppercase tracking-wider block mb-1">
-                          Completion
-                        </span>
-                        <p className="text-xl sm:text-2xl font-black text-blue-900 font-mono leading-tight">
-                          {percentage}%
-                        </p>
-                        <p className="text-[10px] text-blue-600 font-medium mt-0.5">Parish renewal rate</p>
-                      </div>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-xs font-bold">
-                        <span className="text-gray-600">Verification Progress</span>
-                        <span className="text-purple-900 font-mono">{percentage}% Complete</span>
-                      </div>
-                      <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden p-0.5 border border-gray-200">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-purple-600 via-indigo-600 to-emerald-500 transition-all duration-700 ease-out"
-                          style={{ width: `${Math.min(100, Math.max(0, percentage))}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Pending OTP Parishioners List & Multi-Channel Reminder Modal */}
-              {showPendingOtpModal && (
-                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-                  <div className="bg-white rounded-3xl p-5 sm:p-6 max-w-2xl w-full shadow-2xl border border-gray-200 animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col">
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-4 flex-shrink-0">
-                      <div className="flex items-center gap-3 text-purple-700">
-                        <div className="p-2.5 bg-purple-100 rounded-2xl">
-                          <FiClock size={22} />
-                        </div>
-                        <div>
-                          <h4 className="text-base font-extrabold text-gray-900">Parishioners Pending OTP Re-verification</h4>
-                          <p className="text-xs text-gray-500">Awaiting 30-day cycle renewal or initial account verification</p>
-                        </div>
-                      </div>
-                      <span className="bg-purple-100 text-purple-800 font-extrabold text-xs px-3 py-1 rounded-full">
-                        {pendingUsersList.length} Pending
-                      </span>
-                    </div>
-
-                    {loadingPendingUsers ? (
-                      <div className="py-12 text-center text-gray-400 text-xs flex items-center justify-center gap-2">
-                        <span className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
-                        Loading pending parishioners list...
-                      </div>
-                    ) : pendingUsersList.length === 0 ? (
-                      <div className="py-10 text-center text-gray-400 text-xs italic bg-gray-50 rounded-2xl border border-gray-100">
-                        All parishioners are currently fully verified. No pending OTP re-verifications.
-                      </div>
-                    ) : (
-                      <div className="overflow-y-auto flex-1 pr-1 space-y-2 max-h-[360px] custom-scrollbar">
-                        {pendingUsersList.map((u) => (
-                          <div key={u._id} className="p-3 bg-gray-50/80 hover:bg-purple-50/50 rounded-2xl border border-gray-100 transition-colors flex items-center justify-between gap-3 text-xs">
-                            <div className="min-w-0 flex-1">
-                              <p className="font-bold text-gray-900 text-xs truncate flex items-center gap-1.5">
-                                <span>{u.name}</span>
-                                <span className="font-mono text-[10px] text-gray-400 font-normal">({u.parishMemberId})</span>
-                              </p>
-                              <p className="text-gray-500 text-[11px] truncate mt-0.5">
-                                {u.email} • {u.phone}
-                              </p>
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                u.status === 'Initial Verification Pending' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
-                              }`}>
-                                {u.status}
-                              </span>
-                              <p className="text-[10px] text-gray-400 mt-0.5">{u.daysPending} days pending</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="border-t border-gray-100 pt-4 mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 flex-shrink-0">
-                      <p className="text-[11px] text-gray-500 text-center sm:text-left">
-                        Reminders will be sent via <strong>Email</strong>, <strong>Push</strong>, <strong>In-App</strong>, &amp; <strong>WhatsApp</strong>. Full report will also be emailed to Admin.
-                      </p>
-                      <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                        <button
-                          type="button"
-                          onClick={() => setShowPendingOtpModal(false)}
-                          disabled={remindingPendingUsers}
-                          className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition-all cursor-pointer"
-                        >
-                          Close
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleRemindPendingUsers}
-                          disabled={remindingPendingUsers || pendingUsersList.length === 0}
-                          className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-purple-600 hover:bg-purple-700 transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50 whitespace-nowrap"
-                        >
-                          {remindingPendingUsers ? (
-                            <>
-                              <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                              Dispatching Reminders...
-                            </>
-                          ) : (
-                            <>
-                              <FiBell size={13} /> Send Reminders to All ({pendingUsersList.length})
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Middle Section: Recent Activity Timeline & Calendar Overview */}

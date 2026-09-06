@@ -1,9 +1,13 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  FiX, FiArrowRight, FiBookOpen, FiMusic, 
-  FiRotateCcw, FiRotateCw, FiPlay, FiPause, 
-  FiList, FiVolume2, FiVolumeX, FiLoader 
+  FiX as IconX, FiArrowRight as IconArrowRight, 
+  FiBookOpen as IconBookOpen, FiMusic as IconMusic, 
+  FiRotateCcw as IconRotateCcw, FiRotateCw as IconRotateCw, 
+  FiPlay as IconPlay, FiPause as IconPause, 
+  FiList as IconList, FiVolume2 as IconVolume2, 
+  FiVolumeX as IconVolumeX, FiLoader as IconLoader,
+  FiClock as IconClock
 } from 'react-icons/fi';
 import { GiPrayerBeads, GiDove } from 'react-icons/gi';
 import { Link } from 'react-router-dom';
@@ -12,6 +16,7 @@ import useRosaryAudio from '../../hooks/useRosaryAudio';
 import RosaryAudioPlayer from './common_rosary_audio_player';
 import { MYSTERIES } from '../../data/rosary_prayers';
 import api, { getMediaUrl } from '../../services/api';
+import { useAuth } from '../../context/context_auth_context';
 
 function formatTime(seconds) {
   if (!seconds || isNaN(seconds) || seconds === Infinity) return '0:00';
@@ -25,7 +30,62 @@ function formatTime(seconds) {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
+/**
+ * Resolves the target song based on user's saved progress.
+ * Requirement: Start from the beginning (0:00) of the current song where user closed the rosary,
+ * or advance to the next song if previously completed.
+ */
+function resolveResumePosition(songs, progress) {
+  if (!songs || songs.length === 0) {
+    return { targetIndex: 0, targetTime: 0, resumeSong: null, wasCompleted: false };
+  }
+  if (!progress) {
+    return { targetIndex: 0, targetTime: 0, resumeSong: songs[0], wasCompleted: false };
+  }
+
+  // 1. If previous song was completely finished: start from NEXT song from beginning (0:00)
+  if (progress.isCompleted) {
+    let baseIndex = 0;
+    if (progress.songId) {
+      const sId = typeof progress.songId === 'object' ? progress.songId._id : progress.songId;
+      const foundIdx = songs.findIndex(s => s._id?.toString() === sId?.toString());
+      if (foundIdx !== -1) baseIndex = foundIdx;
+      else if (typeof progress.songIndex === 'number') baseIndex = progress.songIndex;
+    } else if (typeof progress.songIndex === 'number') {
+      baseIndex = progress.songIndex;
+    }
+    const nextIndex = (baseIndex + 1) % songs.length;
+    return {
+      targetIndex: nextIndex,
+      targetTime: 0,
+      resumeSong: songs[nextIndex],
+      wasCompleted: true
+    };
+  }
+
+  // 2. If user closed/stopped mid-song: start from the FIRST / BEGINNING (0:00) of that current song
+  let targetIndex = -1;
+  if (progress.songId) {
+    const sId = typeof progress.songId === 'object' ? progress.songId._id : progress.songId;
+    targetIndex = songs.findIndex(s => s._id?.toString() === sId?.toString());
+  }
+  if (targetIndex === -1 && typeof progress.songIndex === 'number' && progress.songIndex < songs.length) {
+    targetIndex = progress.songIndex;
+  }
+  if (targetIndex === -1) {
+    targetIndex = 0;
+  }
+
+  return {
+    targetIndex,
+    targetTime: 0, // Starts from the first (0:00) of the current song
+    resumeSong: songs[targetIndex],
+    wasCompleted: false
+  };
+}
+
 export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' }) {
+  const { isAuthenticated } = useAuth();
   const { audioUrl: rosaryAudioUrl, isCustom } = useRosaryAudio();
   
   // Available Songs from Database
@@ -36,6 +96,17 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
   // Modal View Mode: 'rosary' | 'finished' | 'songs'
   const [viewMode, setViewMode] = useState('rosary');
   const [autoPlayRosary, setAutoPlayRosary] = useState(true);
+
+  // Dynamic Round Countdown Timer State (configured by Admin in Site Settings)
+  const [totalTimerDuration, setTotalTimerDuration] = useState(10);
+  const [countdown, setCountdown] = useState(10);
+  const totalDurationRef = useRef(10);
+
+  // Saved User Progress & Resume Notice
+  const [savedProgress, setSavedProgress] = useState(null);
+  const [resumeNotice, setResumeNotice] = useState(null);
+  const savedProgressRef = useRef(null);
+  const lastSavedTimeRef = useRef(0);
 
   // Devotional Playlist Audio State
   const devotionalAudioRef = useRef(null);
@@ -50,11 +121,6 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
   const [songPlaybackRate, setSongPlaybackRate] = useState(1);
   const [songIsBuffering, setSongIsBuffering] = useState(false);
   const [devotionalPlaylistStarted, setDevotionalPlaylistStarted] = useState(false);
-
-  // Dynamic Countdown Timer State (configurable by Admin in Site Settings)
-  const [totalTimerDuration, setTotalTimerDuration] = useState(10);
-  const [countdown, setCountdown] = useState(10);
-  const totalDurationRef = useRef(10);
 
   // Mutable refs to prevent effect re-triggers and stale closures
   const songsListRef = useRef([]);
@@ -74,9 +140,9 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
 
   // Preload next song in background for instant transition
   const preloadNextSong = useCallback((index, list = songsListRef.current) => {
-    const nextIndex = index + 1;
+    const nextIndex = (index + 1) % (list?.length || 1);
     const songs = list && list.length > 0 ? list : songsListRef.current;
-    if (!songs || nextIndex >= songs.length || !songs[nextIndex]) return;
+    if (!songs || !songs[nextIndex]) return;
     const nextSong = songs[nextIndex];
     if (preloadAudioRef.current && nextSong?.fileUrl) {
       try {
@@ -88,75 +154,6 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
       }
     }
   }, []);
-
-  // Core Play Devotional Song function
-  const playDevotionalSong = useCallback((index, list = songsListRef.current) => {
-    const songs = list && list.length > 0 ? list : songsListRef.current;
-    if (!songs || songs.length === 0 || !songs[index]) return;
-
-    setCurrentSongIndex(index);
-    setDevotionalPlaylistStarted(true);
-
-    const song = songs[index];
-    const audio = devotionalAudioRef.current;
-    if (audio) {
-      const songUrl = getMediaUrl(song.fileUrl);
-      if (audio.src !== songUrl) {
-        audio.src = songUrl;
-        audio.load();
-      }
-      setSongIsBuffering(true);
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            setIsPlayingSong(true);
-            setSongIsBuffering(false);
-            preloadNextSong(index, songs);
-          })
-          .catch((err) => {
-            console.warn('Playback initiation error, waiting for canplay:', err);
-            const onCanPlay = () => {
-              audio.play().then(() => {
-                setIsPlayingSong(true);
-                setSongIsBuffering(false);
-                preloadNextSong(index, songs);
-              }).catch(() => {
-                setSongIsBuffering(false);
-              });
-            };
-            audio.addEventListener('canplay', onCanPlay, { once: true });
-          });
-      }
-    }
-    preloadNextSong(index, songs);
-  }, [preloadNextSong]);
-
-  playDevotionalSongRef.current = playDevotionalSong;
-
-  // Fetch active songs from API
-  const fetchActiveSongs = useCallback(async (shouldAutoPlay = false) => {
-    try {
-      setLoadingSongs(true);
-      const res = await api.get('/rosary-songs');
-      const fetchedSongs = (res.data && res.data.songs && res.data.songs.length > 0) 
-        ? res.data.songs 
-        : [];
-      setSongsList(fetchedSongs);
-      songsListRef.current = fetchedSongs;
-
-      if (shouldAutoPlay && fetchedSongs.length > 0) {
-        playDevotionalSong(0, fetchedSongs);
-      }
-      return fetchedSongs;
-    } catch {
-      setSongsList([]);
-      songsListRef.current = [];
-      return [];
-    } finally {
-      setLoadingSongs(false);
-    }
-  }, [playDevotionalSong]);
 
   // Fetch Admin Configured Timer Duration
   const fetchTimerSetting = useCallback(async () => {
@@ -181,24 +178,240 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
     };
   }, [fetchTimerSetting]);
 
+  // Fetch user playback progress (authenticated from API or guest from localStorage)
+  const fetchProgress = useCallback(async () => {
+    try {
+      if (isAuthenticated) {
+        const res = await api.get('/rosary-songs/playback-progress');
+        if (res.data?.success && res.data.progress) {
+          setSavedProgress(res.data.progress);
+          savedProgressRef.current = res.data.progress;
+          return res.data.progress;
+        }
+      } else {
+        const guestData = localStorage.getItem('sjdb_devotional_playback_guest');
+        if (guestData) {
+          const parsed = JSON.parse(guestData);
+          setSavedProgress(parsed);
+          savedProgressRef.current = parsed;
+          return parsed;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch user devotional progress:', err);
+    }
+    return null;
+  }, [isAuthenticated]);
+
+  // Save user playback progress (authenticated to API, guest to localStorage)
+  const saveProgress = useCallback(async (songData) => {
+    if (!songData) return;
+    savedProgressRef.current = songData;
+    setSavedProgress(songData);
+
+    if (!isAuthenticated) {
+      try {
+        localStorage.setItem('sjdb_devotional_playback_guest', JSON.stringify({
+          ...songData,
+          lastUpdated: new Date().toISOString()
+        }));
+      } catch (_) {}
+      return;
+    }
+
+    try {
+      await api.put('/rosary-songs/playback-progress', songData);
+    } catch (err) {
+      console.warn('Failed to save devotional playback progress:', err);
+    }
+  }, [isAuthenticated]);
+
+  // Keepalive / Beacon save for unload & pagehide
+  const saveProgressBeacon = useCallback((songData) => {
+    if (!songData) return;
+    if (!isAuthenticated) {
+      try {
+        localStorage.setItem('sjdb_devotional_playback_guest', JSON.stringify({
+          ...songData,
+          lastUpdated: new Date().toISOString()
+        }));
+      } catch (_) {}
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    const payload = JSON.stringify(songData);
+    const url = '/api/rosary-songs/playback-progress';
+    try {
+      fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: payload,
+        keepalive: true
+      }).catch(() => {});
+    } catch (_) {}
+  }, [isAuthenticated]);
+
+  // Core Play Devotional Song function (starts from 0:00 by default)
+  const playDevotionalSong = useCallback((index, list = songsListRef.current, startTime = 0) => {
+    const songs = list && list.length > 0 ? list : songsListRef.current;
+    if (!songs || songs.length === 0 || !songs[index]) return;
+
+    setCurrentSongIndex(index);
+    setDevotionalPlaylistStarted(true);
+
+    const song = songs[index];
+    const audio = devotionalAudioRef.current;
+    if (audio) {
+      const songUrl = getMediaUrl(song.fileUrl);
+      const isNewSrc = audio.src !== songUrl;
+      if (isNewSrc) {
+        audio.src = songUrl;
+        audio.load();
+      }
+
+      const applySeekAndPlay = () => {
+        if (startTime > 0 && !isNaN(startTime)) {
+          try {
+            audio.currentTime = startTime;
+            setSongCurrentTime(startTime);
+            setSongSeekValue(startTime);
+          } catch (_) {}
+        } else {
+          try {
+            audio.currentTime = 0;
+            setSongCurrentTime(0);
+            setSongSeekValue(0);
+          } catch (_) {}
+        }
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlayingSong(true);
+              setSongIsBuffering(false);
+              preloadNextSong(index, songs);
+            })
+            .catch((err) => {
+              console.warn('Playback play error:', err);
+              setSongIsBuffering(false);
+            });
+        }
+      };
+
+      setSongIsBuffering(true);
+      if (!isNewSrc && audio.readyState >= 1) {
+        applySeekAndPlay();
+      } else {
+        const onCanPlay = () => {
+          audio.removeEventListener('loadedmetadata', onCanPlay);
+          audio.removeEventListener('canplay', onCanPlay);
+          applySeekAndPlay();
+        };
+        audio.addEventListener('loadedmetadata', onCanPlay, { once: true });
+        audio.addEventListener('canplay', onCanPlay, { once: true });
+      }
+    }
+    preloadNextSong(index, songs);
+  }, [preloadNextSong]);
+
+  playDevotionalSongRef.current = playDevotionalSong;
+
+  // Fetch active songs from API
+  const fetchActiveSongs = useCallback(async () => {
+    try {
+      setLoadingSongs(true);
+      const res = await api.get('/rosary-songs');
+      const fetchedSongs = (res.data && res.data.songs && res.data.songs.length > 0) 
+        ? res.data.songs 
+        : [];
+      setSongsList(fetchedSongs);
+      songsListRef.current = fetchedSongs;
+      return fetchedSongs;
+    } catch {
+      setSongsList([]);
+      songsListRef.current = [];
+      return [];
+    } finally {
+      setLoadingSongs(false);
+    }
+  }, []);
+
+  // Handler to start devotional songs from saved position (from 0:00 of the current song)
+  const handleStartDevotionalFromSaved = useCallback(() => {
+    setAutoPlayRosary(false);
+    setViewMode('songs');
+
+    const songs = songsListRef.current;
+    const progress = savedProgressRef.current;
+    const { targetIndex, resumeSong, wasCompleted } = resolveResumePosition(songs, progress);
+
+    if (resumeSong) {
+      if (wasCompleted) {
+        setResumeNotice(`Next in queue: ${resumeSong.title}`);
+      } else {
+        setResumeNotice(`Resumed: ${resumeSong.title}`);
+      }
+    }
+
+    if (playDevotionalSongRef.current) {
+      playDevotionalSongRef.current(targetIndex, songs, 0);
+    }
+  }, []);
+
   // When modal opens or initialMode changes
   useEffect(() => {
     if (isOpen) {
       fetchTimerSetting();
       if (initialMode === 'songs') {
+        // Direct Devotional Songs mode: resume saved position immediately
         setViewMode('songs');
         setAutoPlayRosary(false);
-        fetchActiveSongs(true);
+        Promise.all([fetchActiveSongs(), fetchProgress()]).then(([fetchedSongs, prog]) => {
+          if (fetchedSongs && fetchedSongs.length > 0) {
+            const { targetIndex, resumeSong, wasCompleted } = resolveResumePosition(fetchedSongs, prog);
+            if (resumeSong) {
+              if (wasCompleted) {
+                setResumeNotice(`Next in queue: ${resumeSong.title}`);
+              } else {
+                setResumeNotice(`Resumed: ${resumeSong.title}`);
+              }
+            }
+            playDevotionalSong(targetIndex, fetchedSongs, 0);
+          }
+        });
       } else {
+        // Rosary Mode: Devotional audio strictly paused. Rosary plays first.
         setViewMode('rosary');
         setAutoPlayRosary(true);
-        fetchActiveSongs(false);
+        if (devotionalAudioRef.current) {
+          devotionalAudioRef.current.pause();
+        }
+        setIsPlayingSong(false);
+        setDevotionalPlaylistStarted(false);
+        fetchActiveSongs();
+        fetchProgress();
       }
     } else {
-      // Modal Closed -> Pause and Reset All Audio
-      if (devotionalAudioRef.current) {
-        devotionalAudioRef.current.pause();
-        devotionalAudioRef.current.currentTime = 0;
+      // Modal Closed -> Pause and Save Current Song
+      const audio = devotionalAudioRef.current;
+      if (audio && (isPlayingSong || audio.currentTime > 0)) {
+        const songs = songsListRef.current;
+        const currentSong = songs[currentSongIndex];
+        if (currentSong) {
+          saveProgressBeacon({
+            songId: currentSong._id,
+            songIndex: currentSongIndex,
+            songTitle: currentSong.title,
+            positionSeconds: Math.floor(audio.currentTime),
+            isCompleted: false
+          });
+        }
+        audio.pause();
+        audio.currentTime = 0;
       }
       if (preloadAudioRef.current) {
         preloadAudioRef.current.src = '';
@@ -209,8 +422,36 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
       setSongCurrentTime(0);
       setSongSeekValue(0);
       setAutoPlayRosary(false);
+      setResumeNotice(null);
     }
-  }, [isOpen, initialMode]); // Stably dependent only on isOpen and initialMode
+  }, [isOpen, initialMode, fetchActiveSongs, fetchProgress, fetchTimerSetting, playDevotionalSong, saveProgressBeacon]);
+
+  // Window unload / pagehide listeners for persistent saving
+  useEffect(() => {
+    const handleUnload = () => {
+      const audio = devotionalAudioRef.current;
+      if (audio && (isPlayingSong || audio.currentTime > 0)) {
+        const songs = songsListRef.current;
+        const currentSong = songs[currentSongIndex];
+        if (currentSong) {
+          saveProgressBeacon({
+            songId: currentSong._id,
+            songIndex: currentSongIndex,
+            songTitle: currentSong.title,
+            positionSeconds: Math.floor(audio.currentTime),
+            isCompleted: false
+          });
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('pagehide', handleUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('pagehide', handleUnload);
+    };
+  }, [isPlayingSong, currentSongIndex, saveProgressBeacon]);
 
   // Devotional Audio Element Event Listeners
   useEffect(() => {
@@ -233,6 +474,23 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
         setSongDuration(audio.duration);
       }
       if (songIsBuffering) setSongIsBuffering(false);
+
+      // Throttled periodic progress save (every 3.5 seconds while playing)
+      const now = Date.now();
+      if (isPlayingSong && audio.currentTime > 0 && (now - lastSavedTimeRef.current >= 3500)) {
+        lastSavedTimeRef.current = now;
+        const songs = songsListRef.current;
+        const currentSong = songs[currentSongIndex];
+        if (currentSong) {
+          saveProgress({
+            songId: currentSong._id,
+            songIndex: currentSongIndex,
+            songTitle: currentSong.title,
+            positionSeconds: Math.floor(audio.currentTime),
+            isCompleted: false
+          });
+        }
+      }
     };
 
     const handlePlay = () => {
@@ -243,9 +501,21 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
     const handlePause = () => {
       setIsPlayingSong(false);
       setSongIsBuffering(false);
+      const songs = songsListRef.current;
+      const currentSong = songs[currentSongIndex];
+      if (currentSong && audio && audio.currentTime > 0) {
+        saveProgress({
+          songId: currentSong._id,
+          songIndex: currentSongIndex,
+          songTitle: currentSong.title,
+          positionSeconds: Math.floor(audio.currentTime),
+          isCompleted: false
+        });
+      }
     };
 
-    // Automatic continuous transition: When current song ends, immediately play next song
+    // Automatic continuous transition:
+    // When current song ends -> mark completed, advance to next song starting from first (0:00)
     const handleEnded = () => {
       setIsPlayingSong(false);
       setSongIsBuffering(false);
@@ -253,16 +523,37 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
       setSongSeekValue(0);
 
       const songs = songsListRef.current;
-      const nextIndex = currentSongIndex + 1;
-      if (nextIndex < songs.length) {
-        // Immediately start next song in continuous playlist
-        if (playDevotionalSongRef.current) {
-          playDevotionalSongRef.current(nextIndex, songs);
-        }
-      } else {
-        // All songs completed -> reset to beginning
-        setDevotionalPlaylistStarted(false);
-        setCurrentSongIndex(0);
+      if (!songs || songs.length === 0) return;
+
+      const currentSong = songs[currentSongIndex];
+
+      // 1. Mark finished song as completed
+      if (currentSong) {
+        saveProgress({
+          songId: currentSong._id,
+          songIndex: currentSongIndex,
+          songTitle: currentSong.title,
+          positionSeconds: Math.floor(audio.duration || songDuration || 0),
+          isCompleted: true
+        });
+      }
+
+      // 2. Automatically advance to next song in continuous playlist
+      const nextIndex = (currentSongIndex + 1) % songs.length;
+      if (playDevotionalSongRef.current) {
+        playDevotionalSongRef.current(nextIndex, songs, 0);
+      }
+
+      // 3. Save new song at 0 seconds
+      const nextSong = songs[nextIndex];
+      if (nextSong) {
+        saveProgress({
+          songId: nextSong._id,
+          songIndex: nextIndex,
+          songTitle: nextSong.title,
+          positionSeconds: 0,
+          isCompleted: false
+        });
       }
     };
 
@@ -305,7 +596,7 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
       audio.removeEventListener('canplaythrough', handleCanPlay);
       audio.removeEventListener('error', handleError);
     };
-  }, [currentSongIndex, songIsSeeking, songDuration, isPlayingSong]);
+  }, [currentSongIndex, songIsSeeking, songDuration, isPlayingSong, saveProgress]);
 
   // Current Song Metadata
   const currentSongTitle = useMemo(() => {
@@ -330,9 +621,21 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
 
   // Handle Modal Close
   const handleClose = () => {
-    if (devotionalAudioRef.current) {
-      devotionalAudioRef.current.pause();
-      devotionalAudioRef.current.currentTime = 0;
+    const audio = devotionalAudioRef.current;
+    if (audio && (isPlayingSong || audio.currentTime > 0)) {
+      const songs = songsListRef.current;
+      const currentSong = songs[currentSongIndex];
+      if (currentSong) {
+        saveProgressBeacon({
+          songId: currentSong._id,
+          songIndex: currentSongIndex,
+          songTitle: currentSong.title,
+          positionSeconds: Math.floor(audio.currentTime),
+          isCompleted: false
+        });
+      }
+      audio.pause();
+      audio.currentTime = 0;
     }
     if (preloadAudioRef.current) {
       preloadAudioRef.current.src = '';
@@ -342,31 +645,31 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
     setCurrentSongIndex(0);
     setViewMode('rosary');
     setAutoPlayRosary(false);
-    setCountdown(totalDurationRef.current || totalTimerDuration || 10);
+    setResumeNotice(null);
     onClose();
   };
 
-  // When Rosary Audio ends -> trigger finished view & start countdown timer
+  // When Rosary Audio finishes -> Run Post-Rosary Auto-Play Round Timer according to admin setting
   const handleRosaryEnded = () => {
     setAutoPlayRosary(false);
     const startDuration = totalDurationRef.current || totalTimerDuration || 10;
     setCountdown(startDuration);
     setViewMode('finished');
-    
-    // Preload Song 1 in background so it starts instantaneously when timer hits 0
-    if (songsListRef.current.length > 0 && songsListRef.current[0]) {
-      if (preloadAudioRef.current && songsListRef.current[0].fileUrl) {
-        try {
-          preloadAudioRef.current.preload = 'auto';
-          preloadAudioRef.current.src = getMediaUrl(songsListRef.current[0].fileUrl);
-          preloadAudioRef.current.load();
-        } catch (_) {}
-      }
+
+    // Preload next devotional song in background
+    const songs = songsListRef.current;
+    const progress = savedProgressRef.current;
+    const { targetIndex } = resolveResumePosition(songs, progress);
+    if (songs && songs[targetIndex] && preloadAudioRef.current) {
+      try {
+        preloadAudioRef.current.preload = 'auto';
+        preloadAudioRef.current.src = getMediaUrl(songs[targetIndex].fileUrl);
+        preloadAudioRef.current.load();
+      } catch (_) {}
     }
   };
 
-  // Dedicated, stable countdown timer effect on finished screen
-  // Counts down 10 -> 9 -> 8 -> ... -> 0, then automatically transitions and plays devotional songs
+  // Dedicated circular countdown timer effect for Post-Rosary Auto-Play
   useEffect(() => {
     if (viewMode !== 'finished' || !isOpen) return;
 
@@ -380,12 +683,7 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
       if (remaining <= 0) {
         clearInterval(intervalId);
         setCountdown(0);
-        // Timer reached 0: Automatically switch to devotional songs mode and play immediately!
-        setAutoPlayRosary(false);
-        setViewMode('songs');
-        if (playDevotionalSongRef.current) {
-          playDevotionalSongRef.current(0);
-        }
+        handleStartDevotionalFromSaved();
       } else {
         setCountdown(remaining);
       }
@@ -394,34 +692,46 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
     return () => {
       clearInterval(intervalId);
     };
-  }, [viewMode, isOpen]); // ONLY depend on viewMode and isOpen for stability
+  }, [viewMode, isOpen, totalTimerDuration, handleStartDevotionalFromSaved]);
 
-  // Replay Rosary: Stop devotional songs and switch back to Rosary
+  // Replay Rosary: Stop devotional songs, save current spot, and switch back to Rosary
   const handleReplayRosary = () => {
-    if (devotionalAudioRef.current) {
-      devotionalAudioRef.current.pause();
-      devotionalAudioRef.current.currentTime = 0;
+    const audio = devotionalAudioRef.current;
+    if (audio) {
+      const songs = songsListRef.current;
+      const currentSong = songs[currentSongIndex];
+      if (currentSong && audio.currentTime > 0) {
+        saveProgress({
+          songId: currentSong._id,
+          songIndex: currentSongIndex,
+          songTitle: currentSong.title,
+          positionSeconds: Math.floor(audio.currentTime),
+          isCompleted: false
+        });
+      }
+      audio.pause();
+      audio.currentTime = 0;
     }
     setIsPlayingSong(false);
     setDevotionalPlaylistStarted(false);
-    setCurrentSongIndex(0);
     setAutoPlayRosary(true);
-    setCountdown(totalDurationRef.current || totalTimerDuration || 10);
     setViewMode('rosary');
-  };
-
-  // Switch to Devotional Songs mode & start playing Song 1 immediately (skips remaining timer)
-  const handleSwitchToSongs = () => {
-    setAutoPlayRosary(false);
-    setViewMode('songs');
-    if (!isPlayingSong && playDevotionalSongRef.current) {
-      playDevotionalSongRef.current(0);
-    }
   };
 
   // User selects an individual song from playlist
   const handleSelectSong = (idx) => {
-    playDevotionalSong(idx);
+    const songs = songsListRef.current;
+    playDevotionalSong(idx, songs, 0);
+    const selectedSong = songs[idx];
+    if (selectedSong) {
+      saveProgress({
+        songId: selectedSong._id,
+        songIndex: idx,
+        songTitle: selectedSong.title,
+        positionSeconds: 0,
+        isCompleted: false
+      });
+    }
   };
 
   // Toggle Devotional Play / Pause
@@ -457,6 +767,18 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
     audio.currentTime = target;
     setSongCurrentTime(target);
     setSongSeekValue(target);
+
+    const songs = songsListRef.current;
+    const currentSong = songs[currentSongIndex];
+    if (currentSong) {
+      saveProgress({
+        songId: currentSong._id,
+        songIndex: currentSongIndex,
+        songTitle: currentSong.title,
+        positionSeconds: Math.floor(target),
+        isCompleted: false
+      });
+    }
   };
 
   const handleSeekChange = (e) => {
@@ -474,6 +796,18 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
     if (audio) {
       audio.currentTime = val;
       setSongCurrentTime(val);
+
+      const songs = songsListRef.current;
+      const currentSong = songs[currentSongIndex];
+      if (currentSong) {
+        saveProgress({
+          songId: currentSong._id,
+          songIndex: currentSongIndex,
+          songTitle: currentSong.title,
+          positionSeconds: Math.floor(val),
+          isCompleted: false
+        });
+      }
     }
     setSongIsSeeking(false);
   };
@@ -542,11 +876,11 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
               className="absolute top-3 right-3 text-white/70 hover:text-white p-1.5 rounded-full hover:bg-white/10 transition-all cursor-pointer"
               title="Close"
             >
-              <FiX className="text-lg" />
+              <IconX className="text-lg" />
             </button>
             <div className="w-10 h-10 bg-church-gold rounded-xl flex items-center justify-center mx-auto mb-1.5 shadow-md shadow-amber-950/30">
               {viewMode === 'songs' ? (
-                <FiMusic className="text-white text-2xl" />
+                <IconMusic className="text-white text-2xl" />
               ) : viewMode === 'finished' ? (
                 <GiDove className="text-white text-2xl" />
               ) : (
@@ -564,17 +898,15 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
               {viewMode === 'songs' 
                 ? 'பக்திப் பாடல்கள்' 
                 : viewMode === 'finished' 
-                ? 'ஜெபமாலை முடிந்தது ' 
+                ? 'ஜெபமாலை முடிந்தது' 
                 : 'புனித ஜெபமாலை ஆடியோ'}
             </p>
           </div>
 
-
-
           {/* 2. Dynamic Content Area */}
           <div className="p-3.5 sm:p-5 overflow-y-auto space-y-3 flex-1">
             
-            {/* VIEW MODE 1: Normal Rosary Player */}
+            {/* VIEW MODE 1: Normal Rosary Player (Devotional audio strictly waits until Rosary completes) */}
             {viewMode === 'rosary' && (
               <>
                 <div className="bg-amber-50/80 p-3 sm:p-3.5 rounded-2xl border border-amber-200/90 shadow-2xs">
@@ -612,7 +944,7 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
                 <div className="bg-gray-50 p-3 rounded-2xl border border-gray-200/80 text-xs">
                   <div className="flex items-center justify-between gap-1 mb-1.5 pb-1 border-b border-gray-200/60">
                     <p className="font-bold text-church-royal-blue uppercase tracking-wider flex items-center gap-1 text-[11px]">
-                      <FiBookOpen className="text-church-gold flex-shrink-0" /> {todayMystery.name.split('(')[0].trim()}
+                      <IconBookOpen className="text-church-gold flex-shrink-0" /> {todayMystery.name.split('(')[0].trim()}
                     </p>
                     <span className="text-[10px] text-gray-500 font-bold font-tamil">{todayMystery.days.split('(')[0].trim()}</span>
                   </div>
@@ -628,15 +960,15 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
               </>
             )}
 
-            {/* VIEW MODE 2: Rosary Finished Completion Screen with Animated Countdown */}
+            {/* VIEW MODE 2: Rosary Finished Completion Screen with Animated Round Timer */}
             {viewMode === 'finished' && (
               <motion.div 
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="text-center py-2 px-2 space-y-3.5"
+                className="text-center py-3 px-3 space-y-4"
               >
-                {/* Circular Animated Countdown Timer */}
-                <div className="relative w-24 h-24 mx-auto flex items-center justify-center my-1">
+                {/* Circular Animated Round Countdown Timer */}
+                <div className="relative w-28 h-28 mx-auto flex items-center justify-center my-2">
                   <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">
                     <circle
                       cx="40"
@@ -650,7 +982,7 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
                       cx="40"
                       cy="40"
                       r="33"
-                      className="stroke-amber-500 transition-all duration-1000 ease-linear"
+                      className="stroke-church-gold transition-all duration-1000 ease-linear"
                       strokeWidth="5"
                       strokeDasharray={2 * Math.PI * 33}
                       strokeDashoffset={2 * Math.PI * 33 * (1 - Math.max(0, countdown) / (totalTimerDuration || 10))}
@@ -659,10 +991,10 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
                     />
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                    <span className="font-mono text-base font-black text-amber-950 tracking-wider">
+                    <span className="font-mono text-xl font-black text-amber-950 tracking-wider">
                       00:{countdown < 10 ? `0${countdown}` : countdown}
                     </span>
-                    <span className="text-[9px] uppercase tracking-wider text-amber-700 font-bold -mt-0.5">
+                    <span className="text-[10px] uppercase tracking-wider text-amber-700 font-bold -mt-0.5">
                       Auto-play
                     </span>
                   </div>
@@ -673,30 +1005,30 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
                     Rosary Completed
                   </h3>
                   <p className="text-sm font-tamil text-church-royal-blue font-bold mt-0.5">
-                    ஜெபமாலை முடிந்தது 
+                    ஜெபமாலை முடிந்தது
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
-                    Songs will auto-play in <strong className="text-amber-800 font-mono">00:{countdown < 10 ? `0${countdown}` : countdown}</strong> / {totalTimerDuration} வினாடிகளில் பாடல்கள் தொடங்கும்
+                    Devotional songs will start in <strong className="text-amber-800 font-mono">00:{countdown < 10 ? `0${countdown}` : countdown}</strong> / {totalTimerDuration} வினாடிகளில் பாடல்கள் தொடங்கும்
                   </p>
                 </div>
 
                 {/* Action Buttons */}
-                <div className="space-y-2.5 pt-1">
+                <div className="space-y-2.5 pt-2">
                   <button
                     type="button"
-                    onClick={handleSwitchToSongs}
+                    onClick={handleStartDevotionalFromSaved}
                     className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-church-royal-blue to-indigo-900 hover:from-blue-900 hover:to-indigo-950 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all cursor-pointer active:scale-98"
                   >
-                    <FiMusic className="text-base text-church-gold" />
+                    <IconMusic className="text-base text-church-gold" />
                     <span>Play Songs Now / பாடல்கள் இசைக்க</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={handleReplayRosary}
-                    className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer active:scale-98 border border-gray-200"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer active:scale-98 border border-gray-200"
                   >
-                    <FiRotateCcw className="text-base text-church-royal-blue" />
+                    <IconRotateCcw className="text-base text-church-royal-blue" />
                     <span>Replay Rosary / மீண்டும் ஜெபமாலை</span>
                   </button>
                 </div>
@@ -712,6 +1044,28 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
               >
                 {/* Active Song Player Card */}
                 <div className="bg-indigo-50/80 p-3 sm:p-3.5 rounded-2xl border border-indigo-200/90 shadow-2xs">
+                  
+                  {/* Resume Notice Badge */}
+                  {resumeNotice && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mb-2 px-2.5 py-1 bg-amber-100/90 border border-amber-300/80 rounded-lg flex items-center justify-between text-[11px] text-amber-950 font-bold"
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <IconClock className="text-amber-700 flex-shrink-0 text-xs" />
+                        <span className="truncate">{resumeNotice}</span>
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => setResumeNotice(null)}
+                        className="text-amber-800 hover:text-amber-950 font-bold ml-1 text-xs"
+                      >
+                        ✕
+                      </button>
+                    </motion.div>
+                  )}
+
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="flex items-center gap-1.5 min-w-0">
                       <span className={`w-2 h-2 rounded-full ${isPlayingSong ? 'bg-indigo-600 animate-pulse' : 'bg-gray-400'} flex-shrink-0`} />
@@ -770,7 +1124,7 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
                           className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold transition-all cursor-pointer active:scale-90"
                           title="Rewind 10 seconds"
                         >
-                          <FiRotateCcw className="text-xs sm:text-sm" />
+                          <IconRotateCcw className="text-xs sm:text-sm" />
                         </button>
 
                         {/* Primary Play / Pause Button */}
@@ -781,11 +1135,11 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
                           title={isPlayingSong ? 'Pause' : 'Play'}
                         >
                           {songIsBuffering ? (
-                            <FiLoader className="animate-spin text-sm" />
+                            <IconLoader className="animate-spin text-sm" />
                           ) : isPlayingSong ? (
-                            <FiPause className="text-sm sm:text-base" />
+                            <IconPause className="text-sm sm:text-base" />
                           ) : (
-                            <FiPlay className="text-sm sm:text-base translate-x-0.5" />
+                            <IconPlay className="text-sm sm:text-base translate-x-0.5" />
                           )}
                         </button>
 
@@ -796,7 +1150,7 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
                           className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold transition-all cursor-pointer active:scale-90"
                           title="Fast forward 10 seconds"
                         >
-                          <FiRotateCw className="text-xs sm:text-sm" />
+                          <IconRotateCw className="text-xs sm:text-sm" />
                         </button>
                       </div>
 
@@ -820,7 +1174,7 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
                             className="text-gray-600 hover:text-gray-900 p-0.5 transition-colors cursor-pointer"
                             title={songIsMuted ? 'Unmute' : 'Mute'}
                           >
-                            {songIsMuted || songVolume === 0 ? <FiVolumeX className="text-xs sm:text-sm" /> : <FiVolume2 className="text-xs sm:text-sm" />}
+                            {songIsMuted || songVolume === 0 ? <IconVolumeX className="text-xs sm:text-sm" /> : <IconVolume2 className="text-xs sm:text-sm" />}
                           </button>
                           <input
                             type="range"
@@ -843,14 +1197,14 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
                 <div className="bg-gray-50 p-3 rounded-2xl border border-gray-200 text-xs space-y-2">
                   <div className="flex items-center justify-between pb-1 border-b border-gray-200">
                     <p className="font-bold text-church-royal-blue uppercase tracking-wider flex items-center gap-1.5 text-[11px]">
-                      <FiList className="text-church-gold" /> SELECT A SONG / பாடலைத் தேர்வு செய்க
+                      <IconList className="text-church-gold" /> SELECT A SONG / பாடலைத் தேர்வு செய்க
                     </p>
                     <span className="text-[10px] text-gray-500 font-bold">{songsList.length} Songs</span>
                   </div>
 
                   {loadingSongs ? (
                     <div className="py-4 flex items-center justify-center gap-2 text-xs text-gray-500">
-                      <FiLoader className="animate-spin text-indigo-600" />
+                      <IconLoader className="animate-spin text-indigo-600" />
                       <span>Loading devotional songs...</span>
                     </div>
                   ) : songsList.length === 0 ? (
@@ -882,7 +1236,7 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
                               <span className="text-xs truncate">{song.title}</span>
                             </div>
                             <span className="text-xs flex-shrink-0">
-                              {isCurrentlyPlaying ? <FiPause /> : <FiPlay />}
+                              {isCurrentlyPlaying ? <IconPause /> : <IconPlay />}
                             </span>
                           </button>
                         );
@@ -897,7 +1251,7 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
                   onClick={handleReplayRosary}
                   className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-xs transition-all cursor-pointer border border-gray-200"
                 >
-                  <FiRotateCcw className="text-xs" />
+                  <IconRotateCcw className="text-xs" />
                   <span> Replay Rosary / மீண்டும் ஜெபமாலை</span>
                 </button>
               </motion.div>
@@ -913,7 +1267,7 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
               className="w-full flex items-center justify-center gap-2 py-2.5 sm:py-3 px-4 bg-church-royal-blue hover:bg-blue-900 text-white rounded-xl font-bold text-xs sm:text-sm shadow-md transition-all text-center cursor-pointer active:scale-98"
             >
               <span>View Full Tamil Rosary Prayers</span>
-              <FiArrowRight className="text-sm" />
+              <IconArrowRight className="text-sm" />
             </Link>
           </div>
 

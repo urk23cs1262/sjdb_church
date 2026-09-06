@@ -25,8 +25,8 @@ router.get('/me', protect, getMe);
 
 // ── Monthly Account Verification Routes ──────────────────────────────────────
 router.get('/verify-account/status', optionalAuth, getVerificationStatus);
-router.post('/verify-account/send-otp', sendVerificationOtp);
-router.post('/verify-account/verify-otp', verifyAccountOtp);
+router.post('/verify-account/send-otp', optionalAuth, sendVerificationOtp);
+router.post('/verify-account/verify-otp', optionalAuth, verifyAccountOtp);
 
 module.exports = router;
 

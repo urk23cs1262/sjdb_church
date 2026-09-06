@@ -81,7 +81,9 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to={`/login?redirect=${encodeURIComponent(fullPath)}`} replace />;
   }
   if (isReverificationRequired && location.pathname !== '/verify-account') {
-    return <Navigate to="/verify-account" replace />;
+    const fullPath = location.pathname + location.search + location.hash;
+    sessionStorage.setItem("redirectAfterLogin", fullPath);
+    return <Navigate to={`/verify-account?redirect=${encodeURIComponent(fullPath)}`} replace />;
   }
   return children;
 };
