@@ -6,7 +6,7 @@ import { registerServiceWorker, showNativeNotification } from '../services/servi
 const NotificationContext = createContext(null);
 
 export const NotificationProvider = ({ children }) => {
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, token } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [adminNotifications, setAdminNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -43,10 +43,10 @@ export const NotificationProvider = ({ children }) => {
       title = " St. John de britto Church — New Event";
       url = '/events';
     } else if (cat === 'announcements' || cat === 'announcement') {
-      title = " Church Announcement";
+      title = " St. John de britto Church — Announcement";
       url = '/announcements';
-    } else if (cat === 'donations' || cat === 'donation') {
-      title = " Donation Campaign";
+    } else if (cat === 'donation' || cat === 'donations') {
+      title = " Church Contribution Update";
       url = '/donate';
     } else if (cat === 'prayer' || cat === 'prayers') {
       title = " Community Prayer Request";
@@ -68,6 +68,7 @@ export const NotificationProvider = ({ children }) => {
   };
 
   const fetchUserNotifications = useCallback(async () => {
+    if (!isAuthenticated || !localStorage.getItem('token')) return;
     try {
       const res = await api.get('/notifications');
       const list = res.data.notifications || [];
@@ -86,9 +87,10 @@ export const NotificationProvider = ({ children }) => {
         }
       });
     } catch { /* silent */ }
-  }, []);
+  }, [isAuthenticated]);
 
   const fetchAdminNotifications = useCallback(async () => {
+    if (!isAuthenticated || !isAdmin || !localStorage.getItem('token')) return;
     try {
       const res = await api.get('/notifications/admin');
       const list = res.data.notifications || [];
@@ -106,10 +108,10 @@ export const NotificationProvider = ({ children }) => {
         }
       });
     } catch { /* silent */ }
-  }, []);
+  }, [isAuthenticated, isAdmin]);
 
   const refetch = useCallback(async () => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || !localStorage.getItem('token')) return;
     setLoading(true);
     try {
       await fetchUserNotifications();
@@ -122,7 +124,7 @@ export const NotificationProvider = ({ children }) => {
 
   // Initial load + 20-second polling interval for real-time notifications
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !token || !localStorage.getItem('token')) {
       setNotifications([]);
       setAdminNotifications([]);
       setUnreadCount(0);
@@ -136,7 +138,7 @@ export const NotificationProvider = ({ children }) => {
     refetch();
     pollInterval.current = setInterval(refetch, 20000);
     return () => clearInterval(pollInterval.current);
-  }, [isAuthenticated, refetch]);
+  }, [isAuthenticated, token, refetch]);
 
   const markRead = async (id) => {
     try {

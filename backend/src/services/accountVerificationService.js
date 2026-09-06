@@ -83,7 +83,7 @@ async function checkAndSendMonthlyVerificationReminders({ forceAll = false, trig
         type: 'account_verification',
         category: 'account',
         priority: 'high',
-        actionUrl: '/login?verify=true',
+        actionUrl: '/verify-account',
         channels: ['in_app']
       }).catch(e => console.warn('[Verification] in-app notification error:', e.message));
 
@@ -91,7 +91,7 @@ async function checkAndSendMonthlyVerificationReminders({ forceAll = false, trig
       sendPushToUser(user._id, {
         title: "⚡ Re-verification Pending — St. John de britto Church",
         body: "Your account re-verification is pending. Complete now to use all church features freely!",
-        url: "/login?verify=true",
+        url: "/verify-account",
         icon: "/favicon.png",
         badge: "/favicon.png",
         tag: `sjdb-pending-reverify-${user._id}`
@@ -160,7 +160,7 @@ async function checkAndSendMonthlyVerificationReminders({ forceAll = false, trig
           <p style="margin: 0 0 14px; font-size: 13.5px; font-weight: 700; color: #1e3a8a;">
             Click below to verify in less than 1 minute:
           </p>
-          <a href="${clientUrl}/login?verify=true" class="btn-responsive" style="display: inline-block; background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 800; padding: 13px 28px; border-radius: 10px; box-shadow: 0 4px 14px rgba(217, 119, 6, 0.35); text-align: center;">
+          <a href="${clientUrl}/verify-account" class="btn-responsive" style="display: inline-block; background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 800; padding: 13px 28px; border-radius: 10px; box-shadow: 0 4px 14px rgba(217, 119, 6, 0.35); text-align: center;">
             Verify Account Now / உடனே சரிபார்க்கவும் →
           </a>
         </div>
@@ -203,9 +203,14 @@ async function checkAndSendMonthlyVerificationReminders({ forceAll = false, trig
 
       // ── D. WhatsApp Bot Message to User ─────────────────────────────────────
       if (user.phone) {
-        const userWaMsg = `*St. John de britto Church, Kalayarkoil*\n*Account Re-verification Pending*\n\nDear *${userName}* (ID: ${userMemberId}),\n\nYour parish account re-verification is *pending*. Please complete your OTP verification to use all features of the Church website freely without interruption.\n\n*Verify Account Now:*\n${clientUrl}/login?verify=true\n\n_புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்_`;
+        const userWaMsg = `*St. John de britto Church, Kalayarkoil*\n*Account Re-verification Pending*\n\nDear *${userName}* (ID: ${userMemberId}),\n\nYour parish account re-verification is *pending*. Please complete your verification to use all features of the Church website freely without interruption.\n\n*Verify Account Now Direct Link:*\n${clientUrl}/verify-account\n\n_புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்_`;
 
-        require('../bot/whatsapp').sendWhatsAppMessage(user.phone, userWaMsg).catch(() => { });
+        const wa = require('../bot/whatsapp');
+        if (typeof wa.sendWhatsAppToUser === 'function') {
+          wa.sendWhatsAppToUser(user, userWaMsg).catch(() => { });
+        } else {
+          wa.sendWhatsAppMessage(user.phone, userWaMsg).catch(() => { });
+        }
       }
 
       user.last_verification_reminder_at = now;

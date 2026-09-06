@@ -113,6 +113,7 @@ export default function AdminAnalyticsSection() {
   const [mainChartMetric, setMainChartMetric] = useState('both');
 
   const fetchAnalytics = useCallback(async (isManualRefresh = false) => {
+    if (!localStorage.getItem('token')) return;
     if (isManualRefresh) setRefreshing(true);
     try {
       let url = `/analytics/stats?period=${period}`;
@@ -128,9 +129,11 @@ export default function AdminAnalyticsSection() {
         }
       }
     } catch (err) {
-      console.error('Failed to load analytics:', err);
-      if (isManualRefresh) {
-        toast.error('Could not refresh analytics');
+      if (err.response?.status !== 401) {
+        console.error('Failed to load analytics:', err);
+        if (isManualRefresh) {
+          toast.error('Could not refresh analytics');
+        }
       }
     } finally {
       setLoading(false);

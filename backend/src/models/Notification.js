@@ -49,7 +49,7 @@ const notificationSchema = new mongoose.Schema({
   actionUrl: { type: String },
 
   // Delivery channels
-  sentVia: [{ type: String, enum: ['email', 'sms', 'whatsapp', 'push', 'inApp', 'website'] }],
+  sentVia: [{ type: String, enum: ['email', 'sms', 'whatsapp', 'push', 'inApp', 'in_app', 'website'] }],
 
   // Related document
   relatedId: { type: mongoose.Schema.Types.ObjectId },

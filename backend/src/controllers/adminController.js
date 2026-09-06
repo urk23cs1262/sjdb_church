@@ -300,7 +300,7 @@ const forceGlobalOtpReverification = async (req, res) => {
         category: 'security',
         priority: 'high',
         recipient: 'user',
-        actionUrl: '/login',
+        actionUrl: '/verify-account',
         channels: ['in_app']
       });
     } catch (notifErr) {
@@ -313,7 +313,7 @@ const forceGlobalOtpReverification = async (req, res) => {
         title: 'Security Alert — Re-verification Required',
         body: 'All active sessions have been safely reset. Please log in with your password and verify your OTP.',
         notificationId: inAppNotif?._id ? inAppNotif._id.toString() : 'global-otp-reset',
-        url: '/login',
+        url: '/verify-account',
         icon: '/favicon.png',
         badge: '/favicon.png',
         tag: 'sjdb-global-otp-reset',
@@ -407,8 +407,8 @@ const forceGlobalOtpReverification = async (req, res) => {
           <p style="margin: 0 0 16px; font-size: 13px; color: #64748b; line-height: 1.5;">
             Click the button below to visit the church portal, sign in with your password, and enter the 6-digit OTP code sent to your registered contact.
           </p>
-          <a href="${clientUrl}/login" class="btn-responsive" style="display: inline-block; background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 800; padding: 13px 28px; border-radius: 10px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35); text-align: center;">
-            Log In & Verify Account →
+          <a href="${clientUrl}/verify-account" class="btn-responsive" style="display: inline-block; background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 800; padding: 13px 28px; border-radius: 10px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35); text-align: center;">
+            Verify Account Online →
           </a>
         </div>
 
@@ -431,7 +431,7 @@ const forceGlobalOtpReverification = async (req, res) => {
       <!-- FOOTER -->
       <div style="background-color: #0f172a; padding: 16px 18px; text-align: center; color: #94a3b8; font-size: 11.5px;">
         <p style="margin: 0; font-weight: 700; color: #f8fafc;">St. John de britto Church, Kalayarkoil</p>
-        <p style="margin: 4px 0 0; color: #64748b;">Automated Security Advisory • Do not reply</p>
+        <p style="margin: 4px 0 0; color: #64748b;">Parish Security & Verification System</p>
       </div>
 
     </div>
@@ -455,17 +455,52 @@ const forceGlobalOtpReverification = async (req, res) => {
       console.log(`[forceGlobalOtpReverification] Email broadcast completed: ${emailSuccessCount} sent, ${emailFailCount} failed.`);
     })().catch(e => console.error('[forceGlobalOtpReverification] Async email broadcast error:', e.message));
 
-    // 6. Notify Admin Activity Stream
+    // 6. Send WhatsApp Bot Broadcast to Parishioners with Registered Phone
+    const usersWithPhone = await User.find({
+      phone: { $exists: true, $ne: null, $ne: '' },
+      isActive: { $ne: false }
+    }).select('name phone parishMemberId preferredLanguage');
+
+    (async () => {
+      try {
+        const wa = require('../bot/whatsapp');
+        console.log(`[forceGlobalOtpReverification] Starting WhatsApp broadcast to ${usersWithPhone.length} users...`);
+        let waCount = 0;
+        for (const u of usersWithPhone) {
+          if (!u.phone) continue;
+          const uName = u.name || 'Parishioner';
+          const uMemberId = u.parishMemberId || 'Parish Member';
+          const isTamil = u.preferredLanguage === 'ta';
+
+          const waMsg = isTamil
+            ? `*புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்*\n🔐 *பாதுகாப்பு அறிவிப்பு: கணக்கு மறுசரிபார்ப்பு தேவை*\n\nஅன்பார்ந்த *${uName}* (பங்கு எண்: ${uMemberId}),\n\nதேவாலய பாதுகாப்பு காரணங்களுக்காக அனைத்து அமர்வுகளும் மீட்டமைக்கப்பட்டுள்ளன. தயவுசெய்து உங்கள் கணக்கை உடனே மறுசரிபார்க்கவும்.\n\n👉 *நேரடி சரிபார்ப்பு இணைப்பு:*\n${clientUrl}/verify-account\n\n_புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்_`
+            : `*St. John de britto Church, Kalayarkoil*\n🔐 *Security Alert: Account Re-verification Required*\n\nDear *${uName}* (ID: ${uMemberId}),\n\nFor parish records safety and enhanced security, all active sessions have been safely reset. Please complete your account re-verification to continue accessing all church features freely.\n\n👉 *Direct Re-verification Link:*\n${clientUrl}/verify-account\n\n_St. John de britto Church, Kalayarkoil_`;
+
+          if (typeof wa.sendWhatsAppToUser === 'function') {
+            await wa.sendWhatsAppToUser(u, waMsg).catch(() => {});
+          } else if (typeof wa.sendWhatsAppMessage === 'function') {
+            await wa.sendWhatsAppMessage(u.phone, waMsg).catch(() => {});
+          }
+          waCount++;
+          await new Promise(r => setTimeout(r, 150));
+        }
+        console.log(`[forceGlobalOtpReverification] WhatsApp broadcast finished: ${waCount} processed.`);
+      } catch (waErr) {
+        console.warn('[forceGlobalOtpReverification] WhatsApp broadcast error:', waErr.message);
+      }
+    })().catch(e => console.error('[forceGlobalOtpReverification] Async WA broadcast error:', e.message));
+
+    // 7. Notify Admin Activity Stream
     notifyAdmin({
       type: 'SECURITY_ALERT',
       req,
-      title: 'Global OTP Re-verification & Broadcast Sent',
-      reason: `Admin triggered global OTP reset. ${result.modifiedCount} accounts reset. In-app notifications, web push broadcast, and ${usersWithEmail.length} security advisory emails dispatched to all users.`
+      title: 'Global OTP Re-verification & Multi-Channel Broadcast Sent',
+      reason: `Admin triggered global OTP reset. ${result.modifiedCount} accounts reset. In-app notifications, web push broadcast, ${usersWithEmail.length} security advisory emails, and ${usersWithPhone.length} WhatsApp Bot alerts dispatched to all users.`
     }).catch(e => console.warn('Admin notification error:', e.message));
 
     res.json({
       success: true,
-      message: `Global OTP Re-verification successfully activated. ${result.modifiedCount} accounts have been reset, in-app notifications created, web push broadcast sent, and security advisory emails are being dispatched to ${usersWithEmail.length} registered users.`,
+      message: `Global OTP Re-verification successfully activated. ${result.modifiedCount} accounts have been reset. Multi-channel alerts (WhatsApp bot, in-app notifications, web push, and security emails) are being dispatched to all registered parishioners.`,
       modifiedCount: result.modifiedCount,
       emailRecipientsCount: usersWithEmail.length
     });

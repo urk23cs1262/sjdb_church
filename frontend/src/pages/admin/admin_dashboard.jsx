@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { SectionLoader } from '../../components/common/common_loader';
 import { useNotifications } from '../../context/context_notification_context';
+import { useAuth } from '../../context/context_auth_context';
 import AdminAnalyticsSection from '../../components/admin/admin_analytics_section';
 
 const COLORS = ['#d4a017', '#1e3a8a', '#800020', '#059669', '#7c3aed'];
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
 ];
 
 export default function AdminDashboard() {
+  const { isAuthenticated } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [changingVerse, setChangingVerse] = useState(false);
@@ -43,6 +45,7 @@ export default function AdminDashboard() {
   const { adminUnreadCount } = useNotifications();
 
   const fetchDashboardData = () => {
+    if (!isAuthenticated || !localStorage.getItem('token')) return;
     api.get('/admin/dashboard')
       .then(r => setStats(r.data))
       .catch(() => { })
@@ -118,10 +121,11 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     fetchDashboardData();
     const interval = setInterval(fetchDashboardData, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isAuthenticated]);
 
   const currentMonthYear = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
   const s = stats?.stats || {};

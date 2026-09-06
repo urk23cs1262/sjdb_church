@@ -133,10 +133,20 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
   }
 
   // 7. Send OTP via Email
+  const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app').replace(/\/$/, '');
   if (targetEmail) {
+    const isReverification = purpose === 'account_verification';
+    const actionButtonHtml = isReverification ? `
+      <div style="margin: 20px 0 10px;">
+        <a href="${clientUrl}/verify-account" style="display:inline-block; background:linear-gradient(135deg, #d97706, #b45309); color:#ffffff; text-decoration:none; padding:12px 28px; border-radius:10px; font-weight:800; font-size:14px; box-shadow:0 4px 12px rgba(217, 119, 6, 0.3);">
+          Verify Account Direct Link →
+        </a>
+      </div>
+    ` : '';
+
     sendMail({
       to: targetEmail,
-      subject: 'Your Verification Code — St. John de Britto\'s Church',
+      subject: isReverification ? 'Action Required: Re-verification Code — St. John de Britto\'s Church' : 'Your Verification Code — St. John de Britto\'s Church',
       html: `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -171,14 +181,15 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
 
       <!-- Body -->
       <div class="email-content" style="padding:32px 24px; text-align:center;">
-        <h2 style="color:#1e3a8a; margin-top:0; font-size:22px; font-weight:800; margin-bottom:8px;">One-Time Verification Code</h2>
-        <p style="color:#4b5563; font-size:14px; line-height:1.6; margin-bottom:20px;">Use the following code to securely complete your ${purpose === 'registration' ? 'registration' : purpose === 'password_reset' ? 'password reset' : 'sign-in'}.</p>
+        <h2 style="color:#1e3a8a; margin-top:0; font-size:22px; font-weight:800; margin-bottom:8px;">${isReverification ? 'Account Re-verification Code' : 'One-Time Verification Code'}</h2>
+        <p style="color:#4b5563; font-size:14px; line-height:1.6; margin-bottom:20px;">Use the following code to securely complete your ${isReverification ? 'account re-verification' : purpose === 'registration' ? 'registration' : purpose === 'password_reset' ? 'password reset' : 'sign-in'}.</p>
         
         <div style="background:linear-gradient(135deg,#fef3c7,#fff7ed); border:2px dashed #f59e0b; border-radius:16px; padding:20px 16px; margin:20px 0;">
           <div class="otp-code" style="font-size:38px; font-weight:900; letter-spacing:10px; color:#92400e; font-family:Consolas, Monaco, monospace;">${otp}</div>
         </div>
 
         <p style="color:#dc2626; font-weight:700; margin-top:16px; font-size:13.5px;"> This OTP is valid for 5 minutes only.</p>
+        ${actionButtonHtml}
         <p style="color:#6b7280; font-size:12.5px; line-height:1.6; margin-top:8px;">Do not share this code with anyone for your account security.</p>
         
         <!-- DYNAMIC_BIBLE_VERSE -->
@@ -194,6 +205,63 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
 </body>
 </html>`
     }).catch(err => console.error(` Mail Error: ${err.message}`));
+  }
+
+  // 8. Send OTP via WhatsApp Bot Message
+  if (targetPhone || user) {
+    try {
+      const userLang = user?.preferredLanguage || 'en';
+      const userName = user?.name || 'Parishioner';
+      const isReverification = purpose === 'account_verification';
+
+      const waOtpMsg = isReverification
+        ? (userLang === 'ta'
+          ? `*புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்*\n🔐 *கணக்கு மறுசரிபார்ப்பு ஒருமுறை கடவுச்சொல் (OTP)*\n\nஅன்பார்ந்த *${userName}*,\n\nஉங்கள் பங்கு கணக்கு மறுசரிபார்ப்புக்கான 6-இலக்க கடவுச்சொல்:\n👉 *${otp}*\n\n⏳ இது *5 நிமிடங்கள்* மட்டுமே செல்லுபடியாகும். இணையதளத்தில் உள்ளிட்டு உடனே உங்கள் கணக்கை சரிபார்க்கவும்.\n\n🌐 *நேரடி இணைப்பு:*\n${clientUrl}/verify-account\n\n_புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்_`
+          : `*St. John de britto Church, Kalayarkoil*\n🔐 *Account Re-verification OTP*\n\nDear *${userName}*,\n\nYour 6-digit verification code to complete parish account re-verification is:\n👉 *${otp}*\n\n⏳ Valid for *5 minutes*. Enter this code on the church website to continue using all services freely without interruption.\n\n🌐 *Direct Verification Link:*\n${clientUrl}/verify-account\n\n_St. John de britto Church, Kalayarkoil_`)
+        : `*St. John de britto Church, Kalayarkoil*\n🔐 *Verification Code*\n\nYour 6-digit verification code is: *${otp}*\nValid for 5 minutes. Do not share this code.\n\n🌐 ${clientUrl}\n_St. John de britto Church_`;
+
+      const { sendWhatsAppToUser, sendWhatsAppMessage } = require('../bot/whatsapp');
+      if (user) {
+        sendWhatsAppToUser(user, waOtpMsg).catch(() => {});
+      } else if (targetPhone) {
+        sendWhatsAppMessage(targetPhone, waOtpMsg).catch(() => {});
+      }
+    } catch (waErr) {
+      console.warn('[OTP Service] WhatsApp send error:', waErr.message);
+    }
+  }
+
+  // 9. Send In-App & Web Push Notification for Account Re-verification
+  if (user && (purpose === 'account_verification' || purpose === 'login')) {
+    try {
+      const { createNotification } = require('./notificationService');
+      const { sendPushToUser } = require('./webPushService');
+
+      await createNotification({
+        userId: user._id,
+        recipient: 'user',
+        title: 'Re-verification Required — 6-Digit Code Sent',
+        message: `Your parish account re-verification is required. A 6-digit code has been dispatched to your registered contacts (WhatsApp, Email, SMS). Please verify to continue using all parish services without interruption.`,
+        type: 'account_verification',
+        category: 'account',
+        priority: 'high',
+        actionUrl: '/verify-account',
+        channels: ['in_app']
+      }).catch(err => console.warn('[OTP Service] In-app notification error:', err.message));
+
+      if (user.settings?.notifications?.push !== false) {
+        sendPushToUser(user._id, {
+          title: '⚡ Re-verification Required — St. John de britto Church',
+          body: 'Your account re-verification code has been sent. Click here to verify your account.',
+          url: '/verify-account',
+          icon: '/favicon.png',
+          badge: '/favicon.png',
+          tag: `sjdb-reverify-${user._id}`
+        }).catch(err => console.warn('[OTP Service] Web push error:', err.message));
+      }
+    } catch (notifErr) {
+      console.warn('[OTP Service] Multi-channel notification dispatch error:', notifErr.message);
+    }
   }
 
   // Dev log
