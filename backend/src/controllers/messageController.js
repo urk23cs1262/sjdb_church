@@ -54,7 +54,7 @@ exports.sendAdminMessage = async (req, res) => {
       sentViaWhatsApp: !!sendWhatsApp
     });
 
-    const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
+    const clientUrl = (process.env.CLIENT_URL || 'https://st-jb-church.vercel.app').replace('http://localhost:5173', 'https://st-jb-church.vercel.app');
     const messagesUrl = `${clientUrl}/dashboard?tab=messages`;
 
     // 2. In-App Notification

@@ -76,7 +76,7 @@ async function sendLoginAlertEmail({ user, req, loginMethod = 'Password' }) {
     const ipInfo = parseClientIpAndLocation(req);
     const securityToken = generateSecurityReportToken(user._id);
 
-    const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
+    const clientUrl = (process.env.CLIENT_URL || 'https://st-jb-church.vercel.app').replace('http://localhost:5173', 'https://st-jb-church.vercel.app');
     const reportUrl = `${clientUrl}/security/report-unauthorized?token=${securityToken}&userId=${user._id}`;
 
     const formattedTime = new Date().toLocaleString('en-IN', {
@@ -199,7 +199,7 @@ async function sendPasswordUpdatedEmail({ user }) {
   if (!user || !user.email) return;
 
   try {
-    const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
+    const clientUrl = (process.env.CLIENT_URL || 'https://st-jb-church.vercel.app').replace('http://localhost:5173', 'https://st-jb-church.vercel.app');
 
     const emailHtml = `
 <div style="background-color:#f1f5f9; padding:20px 10px; font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
@@ -279,7 +279,7 @@ async function sendUserSuspensionEmail({ user, incident, ipDetails = {} }) {
   try {
     if (!user?.email) return;
 
-    const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
+    const clientUrl = (process.env.CLIENT_URL || 'https://st-jb-church.vercel.app').replace('http://localhost:5173', 'https://st-jb-church.vercel.app');
     const contactUrl = `${clientUrl}/contact`;
 
     const formattedSuspensionTime = new Date(incident.createdAt || Date.now()).toLocaleString('en-IN', {
@@ -431,8 +431,8 @@ async function sendAdminSuspensionIncidentEmail({ user, incident, ipDetails = {}
 
     if (adminEmails.length === 0) return;
 
-    let clientUrl = process.env.CLIENT_URL || 'https://stjb-church.vercel.app';
-    if (clientUrl.includes('localhost')) clientUrl = 'https://stjb-church.vercel.app';
+    let clientUrl = process.env.CLIENT_URL || 'https://st-jb-church.vercel.app';
+    if (clientUrl.includes('localhost')) clientUrl = 'https://st-jb-church.vercel.app';
     clientUrl = clientUrl.replace(/\/$/, '');
 
     const deepLinkUrl = `${clientUrl}/admin/notifications?incidentId=${incident._id}`;
@@ -609,8 +609,8 @@ async function sendAccountReactivatedEmail({ user }) {
   try {
     if (!user?.email) return;
 
-    let clientUrl = process.env.CLIENT_URL || 'https://stjb-church.vercel.app';
-    if (clientUrl.includes('localhost')) clientUrl = 'https://stjb-church.vercel.app';
+    let clientUrl = process.env.CLIENT_URL || 'https://st-jb-church.vercel.app';
+    if (clientUrl.includes('localhost')) clientUrl = 'https://st-jb-church.vercel.app';
     clientUrl = clientUrl.replace(/\/$/, '');
     const loginUrl = `${clientUrl}/login`;
 
@@ -692,7 +692,7 @@ async function sendUserTemporaryLockoutEmail({ user, lockMinutes = 15, ipDetails
   if (!user || !user.email) return;
 
   try {
-    const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
+    const clientUrl = (process.env.CLIENT_URL || 'https://st-jb-church.vercel.app').replace('http://localhost:5173', 'https://st-jb-church.vercel.app');
     const resetUrl = `${clientUrl}/login`;
 
     const emailHtml = `

@@ -348,8 +348,8 @@ async function sendAdminSecurityIncidentEmail({ user, incident, decoded }) {
       hour12: true
     }) + ' IST' : formattedTime;
 
-    let clientUrl = process.env.CLIENT_URL || 'https://stjb-church.vercel.app';
-    if (clientUrl.includes('localhost')) clientUrl = 'https://stjb-church.vercel.app';
+    let clientUrl = process.env.CLIENT_URL || 'https://st-jb-church.vercel.app';
+    if (clientUrl.includes('localhost')) clientUrl = 'https://st-jb-church.vercel.app';
     clientUrl = clientUrl.replace(/\/$/, '');
 
     const deepLinkUrl = `${clientUrl}/admin/notifications?incidentId=${incident._id}`;

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  FiTool, FiAlertOctagon, FiClock, FiSend, FiList, 
+import {
+  FiTool, FiAlertOctagon, FiClock, FiSend, FiList,
   FiShield, FiRefreshCw, FiEye, FiCheck, FiX, FiSquare,
   FiPhone, FiMail, FiSettings, FiLock, FiInfo, FiCheckCircle
 } from 'react-icons/fi';
@@ -264,7 +264,7 @@ export default function MaintenanceAdmin() {
 
   return (
     <div className="w-full p-4 sm:p-6 lg:p-8 space-y-6 pb-16">
-      
+
       {/* Operational Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -347,30 +347,28 @@ export default function MaintenanceAdmin() {
       </div>
 
       {/* Real-time Status Alert Banner (Updates Instantly from Server State) */}
-      <div className={`p-4 sm:p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs transition-colors duration-300 ${
-        isEmergency 
+      <div className={`p-4 sm:p-5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs transition-colors duration-300 ${isEmergency
           ? 'bg-red-50 border-red-200 text-red-950'
-          : isMaintenance 
+          : isMaintenance
             ? 'bg-amber-50 border-amber-200 text-amber-950'
             : 'bg-emerald-50 border-emerald-200 text-emerald-950'
-      }`}>
+        }`}>
         <div className="flex items-start sm:items-center gap-3.5">
-          <div className={`w-3.5 h-3.5 rounded-full mt-1 sm:mt-0 animate-ping flex-shrink-0 ${
-            isEmergency ? 'bg-red-600' : isMaintenance ? 'bg-amber-500' : 'bg-emerald-500'
-          }`} />
+          <div className={`w-3.5 h-3.5 rounded-full mt-1 sm:mt-0 animate-ping flex-shrink-0 ${isEmergency ? 'bg-red-600' : isMaintenance ? 'bg-amber-500' : 'bg-emerald-500'
+            }`} />
           <div>
             <span className="font-extrabold text-sm sm:text-base tracking-wide flex items-center gap-2">
-              Status: {isEmergency 
-                ? 'EMERGENCY SHUTDOWN ACTIVE' 
-                : isMaintenance 
-                  ? 'WEBSITE UNDER MAINTENANCE' 
+              Status: {isEmergency
+                ? 'EMERGENCY SHUTDOWN ACTIVE'
+                : isMaintenance
+                  ? 'WEBSITE UNDER MAINTENANCE'
                   : 'WEBSITE ONLINE (LIVE)'}
             </span>
             <p className="text-xs opacity-90 mt-0.5 leading-relaxed">
-              {isEmergency 
-                ? '🚨 Emergency lockdown active. Public access and normal WhatsApp bot interactions are restricted.' 
-                : isMaintenance 
-                  ? `🛠️ Public access is currently restricted. Authorized users may bypass maintenance according to assigned permissions. ${analytics.accessAttemptsCount} blocked attempt(s).` 
+              {isEmergency
+                ? '🚨 Emergency lockdown active. Public access and normal WhatsApp bot interactions are restricted.'
+                : isMaintenance
+                  ? `🛠️ Public access is currently restricted. Authorized users may bypass maintenance according to assigned permissions. ${analytics.accessAttemptsCount} blocked attempt(s).`
                   : '✅ All parishioners and public visitors have full access to the portal and WhatsApp bot services.'}
             </p>
           </div>
@@ -393,9 +391,8 @@ export default function MaintenanceAdmin() {
             <span className="text-xs sm:text-sm font-bold text-gray-900 flex items-center gap-2">
               <FiSend className="text-church-royal-blue" /> Latest State Transition Notification Status ({(activeEvent.previousStatus || 'LIVE').toUpperCase()} → {(activeEvent.newStatus || activeEvent.eventType || 'MAINTENANCE').toUpperCase()})
             </span>
-            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1.5 ${
-              activeEvent.notificationSent ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
-            }`}>
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1.5 ${activeEvent.notificationSent ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+              }`}>
               {activeEvent.notificationSent ? (
                 <>
                   <FiCheckCircle className="text-xs" /> Dispatch Complete
@@ -452,33 +449,30 @@ export default function MaintenanceAdmin() {
       <div className="flex border-b border-gray-200 overflow-x-auto gap-2">
         <button
           onClick={() => setActiveTab('control')}
-          className={`pb-3 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
-            activeTab === 'control' 
-              ? 'border-church-royal-blue text-church-royal-blue' 
+          className={`pb-3 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-colors cursor-pointer whitespace-nowrap ${activeTab === 'control'
+              ? 'border-church-royal-blue text-church-royal-blue'
               : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
+            }`}
         >
           <FiSettings className="text-base" /> Settings & Content
         </button>
 
         <button
           onClick={() => setActiveTab('scheduler')}
-          className={`pb-3 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
-            activeTab === 'scheduler' 
-              ? 'border-church-royal-blue text-church-royal-blue' 
+          className={`pb-3 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-colors cursor-pointer whitespace-nowrap ${activeTab === 'scheduler'
+              ? 'border-church-royal-blue text-church-royal-blue'
               : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
+            }`}
         >
           <FiClock className="text-base" /> Maintenance Scheduler
         </button>
 
         <button
           onClick={() => setActiveTab('logs')}
-          className={`pb-3 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
-            activeTab === 'logs' 
-              ? 'border-church-royal-blue text-church-royal-blue' 
+          className={`pb-3 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-colors cursor-pointer whitespace-nowrap ${activeTab === 'logs'
+              ? 'border-church-royal-blue text-church-royal-blue'
               : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
+            }`}
         >
           <FiList className="text-base" /> Audit Logs & History
         </button>
@@ -487,10 +481,10 @@ export default function MaintenanceAdmin() {
       {/* Tab 1: Settings & Page Content */}
       {activeTab === 'control' && settings && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
+
           {/* Main Content Form */}
           <div className="lg:col-span-2 space-y-6">
-            
+
             <div className="bg-blue-50/80 border border-blue-200 p-4 rounded-2xl flex items-center gap-3 text-xs text-blue-900 font-medium">
               <FiInfo className="text-blue-600 text-lg flex-shrink-0" />
               <span>
@@ -593,7 +587,7 @@ export default function MaintenanceAdmin() {
                     value={settings.contactEmail || ''}
                     onChange={(e) => setSettings({ ...settings, contactEmail: e.target.value })}
                     className="church-input"
-                    placeholder="support@stjb-church.vercel.app"
+                    placeholder="support@st-jb-church.vercel.app"
                   />
                 </div>
               </div>
@@ -635,7 +629,7 @@ export default function MaintenanceAdmin() {
 
           {/* Sidebar Role Permissions & Pre-Notice Banner */}
           <div className="space-y-6">
-            
+
             {/* Access Permission Control */}
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
               <h2 className="text-base font-bold text-gray-900 flex items-center gap-2 border-b pb-3">
@@ -963,13 +957,12 @@ export default function MaintenanceAdmin() {
                   {history.map((log, idx) => (
                     <tr key={log._id || idx} className="hover:bg-gray-50/80 transition-colors">
                       <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          log.newStatus === 'emergency' || log.eventType === 'emergency'
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${log.newStatus === 'emergency' || log.eventType === 'emergency'
                             ? 'bg-red-100 text-red-800 border border-red-200'
                             : log.newStatus === 'live' || log.eventType === 'live'
                               ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                               : 'bg-amber-100 text-amber-800 border border-amber-200'
-                        }`}>
+                          }`}>
                           {(log.previousStatus || 'LIVE').toUpperCase()} → {(log.newStatus || log.eventType || 'MAINTENANCE').toUpperCase()}
                         </span>
                       </td>
@@ -1108,7 +1101,7 @@ export default function MaintenanceAdmin() {
                   onClick={handleEmergencyShutdown}
                   className="w-1/2 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors shadow-md cursor-pointer"
                 >
-                  Lock Website Now 
+                  Lock Website Now
                 </button>
               </div>
             </motion.div>

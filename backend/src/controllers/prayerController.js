@@ -91,7 +91,7 @@ const create = async (req, res) => {
     });
 
     const notifTitle = isConfession ? ' New Confession Request' : ' New Prayer Request';
-    const clientBaseUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
+    const clientBaseUrl = (process.env.CLIENT_URL || 'https://st-jb-church.vercel.app').replace('http://localhost:5173', 'https://st-jb-church.vercel.app');
     const userActionUrl = isConfession ? '/dashboard' : '/prayer-requests';
 
     // 1. Admin In-App Notification (ActionUrl: /admin/prayers)
@@ -169,7 +169,7 @@ const updateStatus = async (req, res) => {
       const userPhone = prayer.contactPhone || userObj?.phone;
       const isConfession = prayer.type === 'Confession Request';
       const isApproved = status === 'approved';
-      const clientBaseUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
+      const clientBaseUrl = (process.env.CLIENT_URL || 'https://st-jb-church.vercel.app').replace('http://localhost:5173', 'https://st-jb-church.vercel.app');
       const userActionUrl = isConfession ? '/dashboard' : '/prayer-requests';
 
       // 1. User In-App Notification

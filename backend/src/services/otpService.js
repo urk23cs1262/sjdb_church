@@ -133,7 +133,7 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
   }
 
   // 7. Send OTP via Email
-  const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app').replace(/\/$/, '');
+  const clientUrl = (process.env.CLIENT_URL || 'https://st-jb-church.vercel.app').replace('http://localhost:5173', 'https://st-jb-church.vercel.app').replace(/\/$/, '');
   if (targetEmail) {
     const isReverification = purpose === 'account_verification';
     const actionButtonHtml = isReverification ? `
@@ -222,9 +222,9 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
 
       const { sendWhatsAppToUser, sendWhatsAppMessage } = require('../bot/whatsapp');
       if (user) {
-        sendWhatsAppToUser(user, waOtpMsg).catch(() => {});
+        sendWhatsAppToUser(user, waOtpMsg).catch(() => { });
       } else if (targetPhone) {
-        sendWhatsAppMessage(targetPhone, waOtpMsg).catch(() => {});
+        sendWhatsAppMessage(targetPhone, waOtpMsg).catch(() => { });
       }
     } catch (waErr) {
       console.warn('[OTP Service] WhatsApp send error:', waErr.message);

@@ -85,7 +85,7 @@ const createNotification = async ({ userId, isBroadcast, title, message, type, c
           }
         }
 
-        const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
+        const clientUrl = (process.env.CLIENT_URL || 'https://st-jb-church.vercel.app').replace('http://localhost:5173', 'https://st-jb-church.vercel.app');
         const targetUrl = actionUrl ? (actionUrl.startsWith('http') ? actionUrl : `${clientUrl}${actionUrl}`) : `${clientUrl}/dashboard`;
 
         recipientEmails.forEach(toEmail => {

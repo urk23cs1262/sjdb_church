@@ -40,7 +40,7 @@ const SJDB_OFFICIAL_KNOWLEDGE = {
     email: "arndas777@gmail.com",
     mapUrl: "https://maps.google.com/?q=St.+John+de+Britto+Church+Kalayarkoil+Tamil+Nadu+630551",
     services: "Daily Mass, Family blessings, Anbiyam meetings, Catechism, Youth movement, Vincent de Paul Society",
-    website: process.env.CLIENT_URL || "https://stjb-church.vercel.app"
+    website: process.env.CLIENT_URL || "https://st-jb-church.vercel.app"
   },
 
   botUsage: `SJDB Connect WhatsApp Bot Commands:

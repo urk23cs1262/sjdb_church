@@ -18,7 +18,7 @@ let stateCache = {
   allowTechTeam: true,
   allowContentEditors: false,
   contactPhone: '+91 94431 00000',
-  contactEmail: 'support@stjb-church.vercel.app',
+  contactEmail: 'support@st-jb-church.vercel.app',
   noticeBanner: null,
   scheduler: null,
   activeEventId: null,
@@ -46,7 +46,7 @@ async function getOrCreateSettings() {
         allowContentEditors: false,
         allowPublic: false,
         contactPhone: '+91 94431 00000',
-        contactEmail: 'support@stjb-church.vercel.app',
+        contactEmail: 'support@st-jb-church.vercel.app',
         mediaUrl: '',
         mediaType: 'none',
         accessAttemptsCount: 0
@@ -79,7 +79,7 @@ function updateCacheFromSettings(settings) {
     allowTechTeam: settings.allowTechTeam !== false,
     allowContentEditors: Boolean(settings.allowContentEditors),
     contactPhone: settings.contactPhone || '+91 94431 00000',
-    contactEmail: settings.contactEmail || 'support@stjb-church.vercel.app',
+    contactEmail: settings.contactEmail || 'support@st-jb-church.vercel.app',
     noticeBanner: settings.noticeBanner || null,
     scheduler: settings.scheduler || null,
     activeEventId: settings.activeEventId,
@@ -104,7 +104,7 @@ async function dispatchTransitionNotificationsBackground(settings, event) {
   try {
     if (!event || event.notificationSent) return;
 
-    const siteUrl = 'https://stjb-church.vercel.app';
+    const siteUrl = 'https://st-jb-church.vercel.app';
     const isLive = event.newStatus === 'live';
     const isEmergency = event.newStatus === 'emergency';
 

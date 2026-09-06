@@ -24,7 +24,7 @@ async function checkAndSendMonthlyVerificationReminders({ forceAll = false, trig
     console.log(`[Account Verification Service] Running verification check (trigger: ${triggerSource})...`);
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
+    const clientUrl = (process.env.CLIENT_URL || 'https://st-jb-church.vercel.app').replace('http://localhost:5173', 'https://st-jb-church.vercel.app');
 
     // 1. Find all active parishioners whose re-verification / OTP is pending
     const pendingUsers = await User.find({

@@ -567,7 +567,7 @@ Detected words: ${detectedWords.map(w => `\`${w}\``).join(', ')}`;
     // ── Dedicated Account Re-Verification Request / Support ───────────────────────
     const isReverifyHelp = /(re-?verify(\s*account)?|account\s*re-?verification|verify\s*account|reverification|கணக்கு\s*சரிபார்ப்பு|மறுசரிபார்ப்பு)/i.test(normalizedText);
     if (isReverifyHelp) {
-      const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app').replace(/\/$/, '');
+      const clientUrl = (process.env.CLIENT_URL || 'https://st-jb-church.vercel.app').replace('http://localhost:5173', 'https://st-jb-church.vercel.app').replace(/\/$/, '');
       const reverifyInfoMsg = isTamilQuery
         ? `*புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்*\n🔐 *கணக்கு மறுசரிபார்ப்பு சேவை*\n\nஉங்கள் பங்கு இணையதளக் கணக்கை மறுசரிபார்க்க அல்லது 6-இலக்க OTP குறியீட்டைப் பெற்று சரிபார்க்க, கீழே உள்ள நேரடி இணைப்பைப் பயன்படுத்தவும்:\n\n👉 *நேரடி சரிபார்ப்பு இணைப்பு:*\n${clientUrl}/verify-account\n\nபதிவுசெய்த மின்னஞ்சல் அல்லது தொலைபேசி எண்ணை உள்ளிட்டு 1 நிமிடத்தில் சரிபார்க்கலாம்.\n\n_புனித அருளானந்தர் தேவாலயம்_`
         : `*St. John de britto Church, Kalayarkoil*\n🔐 *Parish Account Re-Verification*\n\nTo complete your mandatory account re-verification or verify your 6-digit OTP code, please visit the direct portal link:\n\n👉 *Direct Verification Link:*\n${clientUrl}/verify-account\n\nEnter your registered email or phone number to receive a 5-minute code and verify in under 1 minute.\n\n_St. John de britto Church, Kalayarkoil_`;

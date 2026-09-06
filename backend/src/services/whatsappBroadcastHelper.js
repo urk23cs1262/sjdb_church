@@ -7,8 +7,8 @@
  * WhatsApp subscribers and parish users.
  * 
  * Strict formatting rules:
- * 1. Announcement link is ALWAYS https://stjb-church.vercel.app/announcements
- * 2. Event link is ALWAYS https://stjb-church.vercel.app/events
+ * 1. Announcement link is ALWAYS https://st-jb-church.vercel.app/announcements
+ * 2. Event link is ALWAYS https://st-jb-church.vercel.app/events
  * 3. Dynamic registration message (Required vs Welcome)
  * 4. Zero "undefined" fields (missing organizer, venue, time, or date lines are cleanly omitted)
  * 5. Full, complete pastoral content without placeholder artifacts

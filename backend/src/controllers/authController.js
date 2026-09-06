@@ -1002,8 +1002,8 @@ const verifyAccountOtp = async (req, res) => {
       if (user.phone && user.whatsappOptIn !== false) {
         const { sendWhatsAppMessage } = require('../bot/whatsapp');
         const userWaText = userLang === 'ta'
-          ? `*புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்*\n\n✅ *கணக்கு மறுசரிபார்ப்பு வெற்றிகரமாக முடிந்தது*\n\nஅன்பார்ந்த *${user.name}* (பங்கு எண்: ${user.parishMemberId || 'N/A'}),\n\nஉங்கள் பங்கு இணையதளக் கணக்கு வெற்றிகரமாக மறுசரிபார்க்கப்பட்டது. தங்களின் தினசரி வாசிப்புகள், அறிவிப்புகள் மற்றும் தேவாலய சேவைகள் வழக்கம் போல் இயங்கும்.\n\n🌐 *இணையதளம்:* ${process.env.CLIENT_URL || 'https://stjb-church.vercel.app'}\n\n_புனித அருளானந்தர் தேவாலயம்_`
-          : `*St. John de britto Church, Kalayarkoil*\n\n✅ *Account Re-Verification Completed*\n\nDear *${user.name}* (ID: ${user.parishMemberId || 'N/A'}),\n\nYour parish account re-verification has been completed successfully. Your daily readings, announcements, and mass booking features remain fully active.\n\n🌐 *Website:* ${process.env.CLIENT_URL || 'https://stjb-church.vercel.app'}\n\n_St. John de britto Church_`;
+          ? `*புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்*\n\n✅ *கணக்கு மறுசரிபார்ப்பு வெற்றிகரமாக முடிந்தது*\n\nஅன்பார்ந்த *${user.name}* (பங்கு எண்: ${user.parishMemberId || 'N/A'}),\n\nஉங்கள் பங்கு இணையதளக் கணக்கு வெற்றிகரமாக மறுசரிபார்க்கப்பட்டது. தங்களின் தினசரி வாசிப்புகள், அறிவிப்புகள் மற்றும் தேவாலய சேவைகள் வழக்கம் போல் இயங்கும்.\n\n🌐 *இணையதளம்:* ${process.env.CLIENT_URL || 'https://st-jb-church.vercel.app'}\n\n_புனித அருளானந்தர் தேவாலயம்_`
+          : `*St. John de britto Church, Kalayarkoil*\n\n✅ *Account Re-Verification Completed*\n\nDear *${user.name}* (ID: ${user.parishMemberId || 'N/A'}),\n\nYour parish account re-verification has been completed successfully. Your daily readings, announcements, and mass booking features remain fully active.\n\n🌐 *Website:* ${process.env.CLIENT_URL || 'https://st-jb-church.vercel.app'}\n\n_St. John de britto Church_`;
 
         sendWhatsAppMessage(user.phone, userWaText).catch(err => console.warn('User re-verification WhatsApp error:', err.message));
       }
@@ -1048,10 +1048,10 @@ const verifyAccountOtp = async (req, res) => {
         const adminWaMsg = `⛪ *St. John de britto Church — Admin Alert*\n\n✅ *User Re-Verification Completed*\nA user has successfully completed account re-verification.\n\n👤 *User:* ${user.name} (ID: ${user.parishMemberId || 'N/A'})\n📱 *Contact:* ${maskedContact}\n\n⏳ *Remaining users:* *${remainingCount}* users have not yet completed re-verification.\n\n_புனித அருளானந்தர் தேவாலயம்_`;
         for (const adm of admins) {
           if (adm.phone) {
-            sendWhatsAppMessage(adm.phone, adminWaMsg).catch(() => {});
+            sendWhatsAppMessage(adm.phone, adminWaMsg).catch(() => { });
           }
         }
-      }).catch(() => {});
+      }).catch(() => { });
     } else {
       remainingCount = await getPendingReverificationCount();
     }

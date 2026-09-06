@@ -493,7 +493,7 @@ _புனித ஜான் டி பிரிட்டோ திருத்
  *
  * Rules:
  * - Direct individual links for: Bible Verse, Daily Mass Readings, Daily Reflection, Saint of the Day
- * - Strictly uses https://stjb-church.vercel.app
+ * - Strictly uses https://st-jb-church.vercel.app
  *
  * @param {Object} dailyContent - Structured daily content object
  * @param {String} language - 'ta' (default) | 'en' | 'ml' | 'both'

@@ -80,9 +80,9 @@ const create = async (req, res) => {
 
     // Notify all users in background
     if (ann.isPublished !== false) {
-      const publicUrl = 'https://stjb-church.vercel.app';
+      const publicUrl = 'https://st-jb-church.vercel.app';
       const { formatAnnouncementWhatsApp, broadcastAnnouncementCreated } = require('../services/whatsappBroadcastHelper');
-      
+
       const msg = formatAnnouncementWhatsApp(ann);
       broadcastAnnouncementCreated(ann).catch(err => console.error("Error auto-broadcasting announcement to WhatsApp:", err));
 

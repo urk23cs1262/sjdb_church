@@ -324,7 +324,7 @@ const forceGlobalOtpReverification = async (req, res) => {
     }
 
     // 5. Send Security Advisory Email to All Registered Users
-    const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
+    const clientUrl = (process.env.CLIENT_URL || 'https://st-jb-church.vercel.app').replace('http://localhost:5173', 'https://st-jb-church.vercel.app');
 
     // Fetch all users with valid email
     const usersWithEmail = await User.find({
@@ -477,9 +477,9 @@ const forceGlobalOtpReverification = async (req, res) => {
             : `*St. John de britto Church, Kalayarkoil*\n🔐 *Security Alert: Account Re-verification Required*\n\nDear *${uName}* (ID: ${uMemberId}),\n\nFor parish records safety and enhanced security, all active sessions have been safely reset. Please complete your account re-verification to continue accessing all church features freely.\n\n👉 *Direct Re-verification Link:*\n${clientUrl}/verify-account\n\n_St. John de britto Church, Kalayarkoil_`;
 
           if (typeof wa.sendWhatsAppToUser === 'function') {
-            await wa.sendWhatsAppToUser(u, waMsg).catch(() => {});
+            await wa.sendWhatsAppToUser(u, waMsg).catch(() => { });
           } else if (typeof wa.sendWhatsAppMessage === 'function') {
-            await wa.sendWhatsAppMessage(u.phone, waMsg).catch(() => {});
+            await wa.sendWhatsAppMessage(u.phone, waMsg).catch(() => { });
           }
           waCount++;
           await new Promise(r => setTimeout(r, 150));
