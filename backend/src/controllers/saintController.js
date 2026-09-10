@@ -1,4 +1,4 @@
-const { getDailySaint, fetchDailySaint } = require('../services/saintService');
+const { getDailySaint, fetchDailySaint, getISTDateParts } = require('../services/saintService');
 const { getSaintForDate } = require('../data/catholic_saints_calendar');
 
 const getSaint = async (req, res) => {
@@ -15,8 +15,9 @@ const getSaint = async (req, res) => {
         const yearNum = targetDate.getFullYear();
         const fallbackSaint = getSaintForDate(targetDate);
 
-        const today = new Date();
-        const isToday = targetDate.toDateString() === today.toDateString();
+        const currentIST = getISTDateParts().dateKey;
+        const requestedDateKey = `${yearNum}-${monthNum}-${dayNum}`;
+        const isToday = requestedDateKey === currentIST;
 
         if (isToday) {
           saint = getDailySaint();

@@ -26,6 +26,7 @@ const Priest = require('../models/Priest');
 const { getTodayDailyContent } = require('../services/dailyContentService');
 const { generateDailyCatholicMessage, generateSaintCaption, generateSaintInfoMessage } = require('../services/whatsappDailyFormatter');
 const { scanInappropriateContent } = require('./moderation');
+const { processIncomingMessage, isPhoneBlocked } = require('../services/userModerationService');
 const { answerChurchQuestion } = require('./churchRAGService');
 const { notifyAdmin } = require('../services/adminNotificationService');
 const { SITE_ROUTES, EXTERNAL_LINKS, getSiteUrl } = require('../config/siteRoutes');
@@ -332,6 +333,21 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
     }
 
     session.lastMessage = new Date();
+
+    // ── Centralized Abuse & Moderation Gate ─────────────────────────────────────
+    const modResult = await processIncomingMessage({
+      phoneNumber: phone || fromNumber,
+      displayName: pushName || sessionKey,
+      messageText: rawText,
+      messageId
+    });
+
+    if (modResult.isBlocked || modResult.isViolation) {
+      if (modResult.replyMessage) {
+        await wa.sendWhatsAppMessage(replyTarget, modResult.replyMessage);
+      }
+      return;
+    }
 
     // ── First-Time User Admin Email Notification ────────────────────────────────
     if (!session.firstInteractionEmailSent) {

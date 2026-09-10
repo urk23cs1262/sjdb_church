@@ -5,6 +5,31 @@ const { getSaintForDate } = require('../data/catholic_saints_calendar');
 const { resolveSaintImage } = require('./saintImageResolver');
 
 let dailySaint = null;
+
+function getISTDateParts(targetDate = new Date()) {
+  let dt;
+  if (typeof targetDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+    const [y, m, d] = targetDate.split('-').map(Number);
+    dt = new Date(Date.UTC(y, m - 1, d, 6, 0, 0));
+  } else {
+    dt = targetDate instanceof Date ? targetDate : new Date(targetDate);
+  }
+
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  }).formatToParts(dt);
+
+  const day = parts.find(p => p.type === 'day')?.value || '01';
+  const month = parts.find(p => p.type === 'month')?.value || '01';
+  const year = parts.find(p => p.type === 'year')?.value || '2026';
+  const dateKey = `${year}-${month}-${day}`;
+
+  return { dt, day, month, year, dateKey };
+}
+
 let retryTimeout = null;
 
 const ST_JOHN_DE_BRITTO = {
@@ -360,12 +385,22 @@ async function fetchDailySaint(targetDate = new Date()) {
 
 async function saveSaintToDatabase(saintObj) {
   try {
+    if (!saintObj || !saintObj.date) return;
     const SiteSettings = require('../models/SiteSettings');
     await SiteSettings.findOneAndUpdate(
       { key: 'daily_saint_cache' },
       {
         value: JSON.stringify(saintObj),
         label: 'Daily Saint Cache',
+        type: 'text'
+      },
+      { upsert: true, new: true }
+    );
+    await SiteSettings.findOneAndUpdate(
+      { key: `daily_saint_cache_${saintObj.date}` },
+      {
+        value: JSON.stringify(saintObj),
+        label: `Daily Saint Cache for ${saintObj.date}`,
         type: 'text'
       },
       { upsert: true, new: true }
@@ -378,11 +413,12 @@ async function saveSaintToDatabase(saintObj) {
 async function loadCachedSaint() {
   try {
     const SiteSettings = require('../models/SiteSettings');
-    const cacheSetting = await SiteSettings.findOne({ key: 'daily_saint_cache' }).lean();
-    const today = new Date();
-    const month = String(today.getMonth() + 1).padStart(2, "0");
-    const day = String(today.getDate()).padStart(2, "0");
-    const todayStr = `${today.getFullYear()}-${month}-${day}`;
+    const { dateKey, month, day, dt } = getISTDateParts();
+    const todayStr = dateKey;
+    let cacheSetting = await SiteSettings.findOne({ key: `daily_saint_cache_${dateKey}` }).lean();
+    if (!cacheSetting) {
+      cacheSetting = await SiteSettings.findOne({ key: 'daily_saint_cache' }).lean();
+    }
     
     if (cacheSetting && cacheSetting.value) {
       const parsed = JSON.parse(cacheSetting.value);
@@ -430,9 +466,11 @@ loadCachedSaint().then(() => {
 });
 
 // Midnight cron job (12:00 AM IST)
-cron.schedule('0 0 * * *', () => {
-  console.log(' Running midnight Vatican News saint update (12:00 AM IST)...');
-  fetchDailySaint();
+cron.schedule('0 0 * * *', async () => {
+  const { dateKey } = getISTDateParts();
+  console.log(`🔄 [CRON 12:00 AM IST] Updating Saint of the Day for new calendar date (${dateKey})...`);
+  dailySaint = null; // Invalidate previous day in memory immediately
+  await fetchDailySaint();
 }, {
   timezone: 'Asia/Kolkata'
 });
@@ -454,11 +492,9 @@ async function searchAndApplySaintImage(saintName) {
   return null;
 }
 
-const getDailySaint = () => {
-  const today = new Date();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const day = String(today.getDate()).padStart(2, "0");
-  const todayStr = `${today.getFullYear()}-${month}-${day}`;
+const getDailySaint = (targetDate = new Date()) => {
+  const { dateKey, month, day, dt } = getISTDateParts(targetDate);
+  const todayStr = dateKey;
 
   if (!dailySaint || dailySaint.date !== todayStr) {
     const fallbackSaint = getSaintForDate(today);
@@ -486,4 +522,4 @@ const getDailySaint = () => {
   return dailySaint;
 };
 
-module.exports = { getDailySaint, fetchDailySaint, searchAndApplySaintImage };
+module.exports = { getDailySaint, fetchDailySaint, searchAndApplySaintImage, getISTDateParts };

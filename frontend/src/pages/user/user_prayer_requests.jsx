@@ -384,7 +384,7 @@ export default function PrayerRequests() {
                       ) : (
                         CHURCH_MASS_INTENTION_CATEGORIES.map(cat => (
                           <option key={cat.id} value={cat.id}>
-                            {cat.isSubOption ? `\u00A0\u00A0\u00A0\u00A0• ${isTa ? cat.ta : cat.en}` : (isTa ? cat.ta : cat.en)}
+                            {isTa ? cat.ta : cat.en}
                           </option>
                         ))
                       )}

@@ -217,6 +217,40 @@ async function sendDailyChurchNotifications({
     }
 
     isBroadcasting = true;
+
+    // ── DISTRIBUTED DATABASE JOB LOCK (Zero Duplicate Sends Across Reboots) ────
+    const lockKey = `daily_broadcast_lock_${dailyContent.dateKey}`;
+    const SiteSettings = require('../models/SiteSettings');
+
+    if (!force && !manualTest) {
+      try {
+        const existingLock = await SiteSettings.findOne({ key: lockKey }).lean();
+        if (existingLock && existingLock.value) {
+          const lockData = JSON.parse(existingLock.value);
+          if (lockData.status === 'completed') {
+            console.log(`[Daily Notification Service] Broadcast for ${dailyContent.dateKey} is already COMPLETED in database lock. Skipping duplicate broadcast.`);
+            return { success: true, skipped: true, reason: 'Already completed for today', dateKey: dailyContent.dateKey };
+          }
+          if (lockData.status === 'in_progress' && (Date.now() - new Date(lockData.startedAt).getTime()) < 30 * 60 * 1000) {
+            console.log(`[Daily Notification Service] Broadcast for ${dailyContent.dateKey} is currently IN_PROGRESS by another worker. Skipping.`);
+            return { success: false, skipped: true, reason: 'In progress by another worker' };
+          }
+        }
+
+        await SiteSettings.findOneAndUpdate(
+          { key: lockKey },
+          {
+            value: JSON.stringify({ status: 'in_progress', startedAt: new Date() }),
+            label: `Daily Broadcast Lock for ${dailyContent.dateKey}`,
+            type: 'text'
+          },
+          { upsert: true }
+        );
+      } catch (lockErr) {
+        console.warn('[Daily Notification Service] Lock check notice:', lockErr.message);
+      }
+    }
+
     console.log(`[Daily Notification Service] 4:00 AM IST Multi-Channel Daily Broadcast started for ${dailyContent.dateKey}...`);
 
     const users = await User.find({
@@ -545,6 +579,28 @@ async function sendDailyChurchNotifications({
       }
     }
 
+    if (!manualTest) {
+      try {
+        await SiteSettings.findOneAndUpdate(
+          { key: lockKey },
+          {
+            value: JSON.stringify({
+              status: 'completed',
+              completedAt: new Date(),
+              sentCount,
+              failedCount,
+              skippedCount,
+              channelStats
+            }),
+            label: `Daily Broadcast Lock for ${dailyContent.dateKey}`,
+            type: 'text'
+          },
+          { upsert: true }
+        );
+      } catch (lockFinErr) {
+        console.warn('[Daily Notification Service] Lock finish update notice:', lockFinErr.message);
+      }
+    }
     isBroadcasting = false;
     console.log(`[Daily Notification Service] 4:00 AM Multi-Channel Broadcast complete for ${dailyContent.dateKey}: Sent=${sentCount}, Skipped=${skippedCount}, Failed=${failedCount}`);
     console.log('[Daily Notification Service] Channel breakdown:', JSON.stringify(channelStats));

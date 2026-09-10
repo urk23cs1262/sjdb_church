@@ -118,16 +118,17 @@ app.use('/api/rosary-songs', require('./routes/rosarySongs'));
 app.get('/api/daily-verse', require('./controllers/dailyVerseController').getTodayVerse);
 app.post('/api/daily-verse/change', require('./middleware/auth').protect, require('./middleware/auth').adminOnly, require('./controllers/dailyVerseController').changeTodayVerse);
 app.use('/api/bot', require('./routes/bot'));
+app.use('/api/moderation', require('./routes/moderationRoutes'));
 
 // Background Services
-require('./services/saintService');
+require('./services/saintService'); // 12:00 AM IST Daily Saint of the Day automated Vatican News sync
 require('./services/birthdayService');
-require('./services/dailyBroadcastService'); // 6:00 AM spiritual content broadcast
+require('./services/dailyBroadcastService'); // 12:00 AM Birthday & Unified Broadcast triggers
 require('./services/reminderSchedulerService'); // Automated Event & Announcement reminders via Email, WhatsApp bot & In-App
 require('./services/maintenanceSchedulerService'); // Automated Maintenance start/end scheduler
 require('./services/bibleVerseService'); // 12:00 AM Daily Bible Verse automated rotation scheduler
 require('./services/dailyMassReadingService').initMidnightCron(); // 12:00 AM IST Daily Tamil Mass Readings automated sync scheduler
-require('./services/dailyNotificationService'); // 12:00 AM IST Daily Automated Catholic Notification System (Email Broadcast)
+require('./services/dailyNotificationService'); // 4:00 AM IST Daily Automated Catholic Content Multi-Channel Broadcast
 require('./services/accountVerificationService'); // 8:00 AM IST Daily Account Verification & Admin Alert System
 
 // Background Monitor: Scan for expired/abandoned unverified OTPs every 60s
@@ -150,16 +151,18 @@ app.get(['/health', '/api/health', '/api/bot/health'], (req, res) => {
   res.json({
     success: true,
     status: 'healthy',
-    service: "SJDB Connect — St. John de Britto Church 24/7 Platform",
+    service: "SJDB Connect — St. John de Britto's Church 24/7 Platform",
     database: mongooseState,
     whatsappBot: {
       isLive: waConnected,
       mode: '24/7 Always-On Daemon'
     },
     backgroundWorkers: {
+      dailySaintMidnight: 'Active (0 0 * * * Asia/Kolkata)',
       dailyBroadcast4AM: 'Active (0 4 * * * Asia/Kolkata)',
       reminderScheduler: 'Active (4:00 AM, 12:00 PM, Hourly)',
       dailyMassSync: 'Active (0 0 * * * Asia/Kolkata)',
+      dailyBibleVerseRotation: 'Active (0 0 * * * Asia/Kolkata)',
       birthdayWishes: 'Active (0 0 * * * Asia/Kolkata)'
     },
     cache: getCacheDiagnostics(),
@@ -175,7 +178,7 @@ app.get(['/health', '/api/health', '/api/bot/health'], (req, res) => {
 // Root route (stops Render showing "Cannot GET /")
 app.get('/', (req, res) => res.json({
   success: true,
-  message: "St. John de Britto Church API & 24/7 Bot Daemon",
+  message: "St. John de Britto's Church API & 24/7 Bot Daemon",
 }));
 
 // 404
@@ -189,7 +192,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`\n St. John de Britto Church API & 24/7 WhatsApp Daemon`);
+  console.log(`\n St. John de Britto's Church API & 24/7 WhatsApp Daemon`);
   console.log(` Server running on port ${PORT}`);
   console.log(` Allowed origins: ${allowedOrigins.join(', ')}`);
   console.log(` Health: /api/health\n`);

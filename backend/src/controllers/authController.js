@@ -28,6 +28,15 @@ const register = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Name, phone, and password are required' });
     }
 
+    const { isPhoneBlocked } = require('../services/userModerationService');
+    if (await isPhoneBlocked(phone)) {
+      return res.status(403).json({
+        success: false,
+        isBlocked: true,
+        message: 'This mobile number is restricted from registration due to repeated policy violations. Please contact the church administrator.'
+      });
+    }
+
     // Sanitize empty strings for unique fields so they don't trigger E11000 duplicate key errors
     if (email === "") email = undefined;
 
@@ -285,6 +294,24 @@ const login = async (req, res) => {
     }
 
     const now = new Date();
+
+    // 0. Check if Account is Deactivated due to Moderation / Abuse
+    if (user.isActive === false && (user.deactivatedReason || '').includes('abuse')) {
+      return res.status(403).json({
+        success: false,
+        isDeactivated: true,
+        message: 'Your account has been deactivated due to policy violations on SJDB Connect. Please contact the church administrator to restore access.'
+      });
+    }
+
+    const { isPhoneBlocked: isLoginPhoneBlocked } = require('../services/userModerationService');
+    if (user.phone && await isLoginPhoneBlocked(user.phone)) {
+      return res.status(403).json({
+        success: false,
+        isBlocked: true,
+        message: 'Your account has been restricted due to policy violations. Please contact the church administrator to restore access.'
+      });
+    }
 
     // 1. Check if Account is Suspended
     if (user.isSuspended) {

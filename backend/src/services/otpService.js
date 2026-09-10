@@ -24,6 +24,13 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
   const targetPhone = (phone || user?.phone || '').trim();
   const targetEmail = (email || user?.email || '').trim().toLowerCase();
 
+  const { isPhoneBlocked } = require('./userModerationService');
+  if (targetPhone && await isPhoneBlocked(targetPhone)) {
+    const error = new Error('This mobile number is restricted due to policy violations. Please contact the church administrator.');
+    error.statusCode = 403;
+    throw error;
+  }
+
   // 0. Per-contact & Per-user Cooldown Check (60 seconds)
   const cooldownWindowMs = 60 * 1000;
   const orConditions = [];
@@ -275,6 +282,16 @@ const verifyOTPSession = async ({ userId, inputOtp, purpose, req }) => {
   session.verified = true;
   session.status = 'verified';
   await session.save();
+
+  const { isPhoneBlocked: isOtpUserBlocked } = require('./userModerationService');
+  const existingUser = await User.findById(userId);
+  if (existingUser && existingUser.phone && await isOtpUserBlocked(existingUser.phone)) {
+    return {
+      valid: false,
+      isBlocked: true,
+      message: 'Your account is restricted due to policy violations. Please contact the church administrator.'
+    };
+  }
 
   // Mark user as verified, active, unsuspended and clear all failure/lockout counters
   // Preserve all existing account records and profile details completely

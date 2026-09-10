@@ -1,18 +1,17 @@
 /**
- * useVoiceAssistant.js  v5 — Complete, Robust "Hey Connect" Voice Navigation Hook
+ * useVoiceAssistant.js — Production-Hardened Voice Assistant Hook (v6)
  *
- * Requirements fulfilled:
- *   1. Wake word ("Hey Connect") or Navbar Mic button activation
- *   2. Instant, clean listening without overlapping speech synthesis
- *   3. Compact bottom-center UI (website completely visible behind)
- *   4. Soft audio chime on listening activation
- *   5. Real-time transcript display + responsive waveform
- *   6. Robust speech recognition with retry on brief pauses (no-speech)
- *   7. Centralized natural language intent resolver (voice_intent_map.js) for all 28+ routes
- *   8. Connect speaks: "Going to [Page Name]" fully and clearly without getting cut off
- *   9. Navigates smoothly to requested page via router
- *  10. Disappears and slides down smoothly after page opens and speech finishes
- *  11. Window testing helper `window.heyConnect("show mass timings")`
+ * Designed specifically to eliminate intermittent production failures:
+ * 1. Single Authoritative State Machine (IDLE, ACTIVATING, WAKE, LISTENING, PROCESSING, CLARIFYING, NAVIGATING, CLOSING, ERROR)
+ * 2. Session ID Stale-Callback Immunity (Every activation gets a new sessionId; stale callbacks are ignored)
+ * 3. Safe, Idempotent Recognition Lifecycle (safeStartRecognition, safeStopRecognition, safeAbortRecognition)
+ * 4. Zero TTS <-> Microphone Conflict (Mic is suspended during TTS; TTS is flushed and buffered before mic opens)
+ * 5. Full Interruption Support (User speech or tap cancels TTS and transitions straight to LISTENING)
+ * 6. One-Step & Two-Step Wake Handling ("Hey Connect" or "Hey Connect show mass timings")
+ * 7. Atomic Navigation with Strict Route-Boundary Verification (matchesRoute)
+ * 8. Same-Page Navigation Handling ("You are already on the [Page Name] page.")
+ * 9. Idempotent Microphone, AudioContext & Timer Cleanup
+ * 10. Structured Production Debug Logging ([Connect][session:N])
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -27,21 +26,29 @@ import {
   matchesRoute,
 } from '../services/voice_intent_map';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const WAKE_PHRASES = ['hey connect', 'hey, connect', 'hey connected', 'connect', 'ஹே கனெக்ட்'];
-const COMMAND_TIMEOUT_MS = 8500;
-const WAKE_DEBOUNCE_MS = 1500;
+// ─── Authoritative States ──────────────────────────────────────────────────────
 
 export const VA_STATE = {
   IDLE: 'idle',
+  ACTIVATING: 'activating',
   WAKE: 'wake',
+  GREETING: 'wake', // Backwards-compatible alias for common_voice_orb
   LISTENING: 'listening',
   PROCESSING: 'processing',
+  CLARIFYING: 'clarifying',
   NAVIGATING: 'navigating',
+  CLOSING: 'closing',
+  ERROR: 'error'
 };
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const WAKE_PHRASES = ['hey connect', 'hey, connect', 'hey connected', 'connect', 'ஹே கனெக்ட்'];
+const COMMAND_TIMEOUT_MS = 9000;
+const WAKE_DEBOUNCE_MS = 1200;
+const MAX_ONEND_RESTARTS = 4;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function detectLang() {
   try {
@@ -62,10 +69,15 @@ function isSpeechAPISupported() {
   );
 }
 
+function stripWakePhrase(text) {
+  if (!text) return '';
+  return text
+    .replace(/^(hey\s+connect|hey,\s+connect|hey\s+connected|ஹே\s+கனெக்ட்|connect)\s*[,.:-]?\s*/i, '')
+    .trim();
+}
+
 /**
- * Select a crisp, energetic, loud, and pleasant lady/female voice.
- * Prioritizes modern neural voices (Jenny, Aria), followed by standard
- * high-quality female voices (Zira, Samantha, Google Female).
+ * Select a crisp, energetic, pleasant female voice across all browsers/platforms.
  */
 function findCatchyLadyVoice(lang) {
   if (typeof window === 'undefined' || !window.speechSynthesis) return null;
@@ -87,7 +99,6 @@ function findCatchyLadyVoice(lang) {
     if (taVoice) return taVoice;
   }
 
-  // Filter English-capable voices
   const enVoices = voices.filter(
     (v) =>
       v.lang.startsWith('en') ||
@@ -96,20 +107,9 @@ function findCatchyLadyVoice(lang) {
       v.lang.includes('IN')
   );
 
-  // Ranked high-fidelity catchy lady voices
   const preferredFemaleKeywords = [
-    'jenny',     // Microsoft Jenny Online (Natural) - ultra catchy and upbeat
-    'aria',      // Microsoft Aria Online (Natural) - vibrant and expressive
-    'zira',      // Microsoft Zira - universal clear Windows female voice
-    'samantha',  // Apple Samantha - clean natural female
-    'victoria',  // Apple Victoria
-    'karen',     // Australian / Global female
-    'neerja',    // Indian English female natural
-    'heera',     // Indian English female
-    'female',    // Explicitly labeled female (Google UK English Female, etc.)
-    'ava',
-    'emma',
-    'sara'
+    'jenny', 'aria', 'zira', 'samantha', 'victoria', 'karen',
+    'neerja', 'heera', 'female', 'ava', 'emma', 'sara'
   ];
 
   for (const kw of preferredFemaleKeywords) {
@@ -117,7 +117,6 @@ function findCatchyLadyVoice(lang) {
     if (found) return found;
   }
 
-  // Pick any non-male English voice
   const nonMale = enVoices.find((v) => {
     const n = v.name.toLowerCase();
     return (
@@ -149,33 +148,47 @@ export default function useVoiceAssistant() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isSupported] = useState(isSpeechAPISupported);
 
-  // Stable references
+  // ── Session & State Machine Refs ───────────────────────────────────────────
+  const sessionIdRef = useRef(0);
   const stateRef = useRef(VA_STATE.IDLE);
   const isAuthRef = useRef(isAuthenticated);
+  const isUnmountedRef = useRef(false);
+
+  // Recognition state tracking (strictly prevents duplicate sessions)
   const recognitionRef = useRef(null);
-  const currentUtteranceRef = useRef(null);
-  const wakeDebounceRef = useRef(false);
-  const isListeningLockRef = useRef(false);
+  const isRecognitionActiveRef = useRef(false);
+  const isStartingRecognitionRef = useRef(false);
+  const isStoppingRecognitionRef = useRef(false);
+  const restartCountRef = useRef(0);
+
+  // Processing & Navigation locks
   const isProcessingRef = useRef(false);
+  const isNavigatingRef = useRef(false);
   const speechFinishedRef = useRef(false);
-  const routeChangedRef = useRef(false);
+  const routeVerifiedRef = useRef(false);
+  const intendedRouteRef = useRef(null);
+  const pendingClarificationRef = useRef(null);
+  const latestTranscriptRef = useRef('');
+  const wakeDebounceRef = useRef(false);
+
+  // Timers
   const commandTimerRef = useRef(null);
   const navTimerRef = useRef(null);
   const interimTimerRef = useRef(null);
+  const ttsSafetyTimerRef = useRef(null);
+
+  // Audio Analyser & Mic
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
   const micStreamRef = useRef(null);
   const rafRef = useRef(null);
-  const isUnmountedRef = useRef(false);
-  const prevPathRef = useRef(location.pathname);
-  const pendingClarificationRef = useRef(null);
-  const intendedRouteRef = useRef(null);
-  const latestTranscriptRef = useRef('');
+  const currentUtteranceRef = useRef(null);
 
-  // Circular references
+  // Dynamic references to break circular dependencies
   const startCommandRecognitionRef = useRef(null);
   const processTranscriptRef = useRef(null);
 
+  // Synchronize state and auth refs immediately
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -184,18 +197,38 @@ export default function useVoiceAssistant() {
     isAuthRef.current = isAuthenticated;
   }, [isAuthenticated]);
 
-  // ── Dismiss Voice Assistant & Return Website to Normal ─────────────────────
-
-  const cancelSpeech = useCallback(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
+  // ── Production Logging Helper ──────────────────────────────────────────────
+  const log = useCallback((event, data = '') => {
+    if (process.env.NODE_ENV !== 'production' || window.__DEBUG_HEY_CONNECT__) {
+      console.log(`[Connect][session:${sessionIdRef.current}] ${event}`, data);
     }
-    currentUtteranceRef.current = null;
-    setIsSpeaking(false);
   }, []);
 
+  // ── Safe State Transition Helper ───────────────────────────────────────────
+  const transitionTo = useCallback((nextState, sessionId = null) => {
+    if (sessionId !== null && sessionId !== sessionIdRef.current) return false;
+    if (isUnmountedRef.current) return false;
+
+    const current = stateRef.current;
+    if (current === nextState) return true;
+
+    // Disallow illegal transitions from closing/navigating back to listening
+    if (current === VA_STATE.NAVIGATING && nextState === VA_STATE.LISTENING) return false;
+    if (current === VA_STATE.CLOSING && nextState !== VA_STATE.IDLE) return false;
+
+    log('STATE_TRANSITION', `${current} -> ${nextState}`);
+    stateRef.current = nextState;
+    setState(nextState);
+    return true;
+  }, [log]);
+
+  // ── Audio Analyser & Mic Stream Management ─────────────────────────────────
+
   const stopAudioAnalyser = useCallback(() => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach((t) => t.stop());
       micStreamRef.current = null;
@@ -208,161 +241,35 @@ export default function useVoiceAssistant() {
     setAudioLevel(0);
   }, []);
 
-  const dismiss = useCallback(() => {
-    isListeningLockRef.current = false;
-    isProcessingRef.current = false;
-    speechFinishedRef.current = false;
-    routeChangedRef.current = false;
-    pendingClarificationRef.current = null;
-    intendedRouteRef.current = null;
-    latestTranscriptRef.current = '';
-
-    clearTimeout(commandTimerRef.current);
-    clearTimeout(navTimerRef.current);
-    clearTimeout(interimTimerRef.current);
-    stopAudioAnalyser();
-
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.abort();
-      } catch {}
-      recognitionRef.current = null;
-    }
-
-    if (!isUnmountedRef.current) {
-      setState(VA_STATE.IDLE);
-      setTranscript('');
-      setDestination(null);
-    }
-  }, [stopAudioAnalyser]);
-
-  // ── Auto-dismiss once route changed AND confirmation speech completed ──────
-
-  const checkCompletionAndDismiss = useCallback(() => {
-    // If navigation has completed and speech has finished, close the assistant
-    if (stateRef.current === VA_STATE.NAVIGATING && routeChangedRef.current && speechFinishedRef.current) {
-      const timer = setTimeout(() => {
-        if (!isUnmountedRef.current) dismiss();
-      }, 350);
-      return () => clearTimeout(timer);
-    }
-  }, [dismiss]);
-
-  useEffect(() => {
-    if (prevPathRef.current !== location.pathname) {
-      prevPathRef.current = location.pathname;
-      if (stateRef.current === VA_STATE.NAVIGATING) {
-        const intended = intendedRouteRef.current;
-        const current = location.pathname;
-        const isMatched = matchesRoute(current, intended);
-
-        if (isMatched) {
-          routeChangedRef.current = true;
-          // IMPORTANT: Do NOT cancel speech synthesis here!
-          // Allow "Going to [Page]" to be heard completely.
-          // If speech already finished, dismiss now. Otherwise, speech onend will dismiss.
-          if (speechFinishedRef.current) {
-            const timer = setTimeout(() => {
-              if (!isUnmountedRef.current) dismiss();
-            }, 300);
-            return () => clearTimeout(timer);
-          }
-        } else {
-          // Route changed to unexpected or 404 destination
-          const failText = isTamilLang()
-            ? 'மன்னிக்கவும், அந்த பக்கத்தை திறக்க முடியவில்லை.'
-            : "Sorry, I couldn't open that page.";
-          speakText(failText, () => {
-            if (!isUnmountedRef.current) dismiss();
-          });
-        }
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname]);
-
-  // ── Text-to-Speech (with Voice Matching & Queue Unfreeze) ───────────────────
-
-  const speakText = useCallback((text, onEnd = null) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
-      onEnd?.();
-      return;
-    }
-
+  const startAudioAnalyser = useCallback(async (sessionId) => {
     try {
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
-      window.speechSynthesis.cancel();
-    } catch {}
-
-    const utt = new SpeechSynthesisUtterance(text);
-    const lang = detectLang();
-    utt.lang = lang;
-    utt.volume = 1.0; // Maximum loudness
-    utt.pitch = 1.15; // Bright, pleasant, feminine pitch
-    utt.rate = 1.02;  // Catchy, energetic, engaging delivery
-
-    // Select nice catchy lady voice
-    const ladyVoice = findCatchyLadyVoice(lang);
-    if (ladyVoice) {
-      utt.voice = ladyVoice;
-    }
-
-    currentUtteranceRef.current = utt; // Protect from Chrome GC bug
-    setIsSpeaking(true);
-
-    let finished = false;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      if (!isUnmountedRef.current) setIsSpeaking(false);
-      currentUtteranceRef.current = null;
-      onEnd?.();
-    };
-
-    utt.onend = finish;
-    utt.onerror = finish;
-
-    // Safety fallback timer so state machine never hangs waiting for onend
-    const safetyMs = Math.max(1400, Math.min(5000, text.length * 85 + 600));
-    setTimeout(() => {
-      if (!finished) finish();
-    }, safetyMs);
-
-    try {
-      window.speechSynthesis.speak(utt);
-    } catch {
-      finish();
-    }
-  }, []);
-
-  // ── Audio Waveform Analyser ────────────────────────────────────────────────
-
-  const startAudioAnalyser = useCallback(async () => {
-    try {
+      if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
       if (micStreamRef.current || !navigator.mediaDevices?.getUserMedia) return;
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      if (isUnmountedRef.current) {
+      if (sessionId !== sessionIdRef.current || isUnmountedRef.current) {
         stream.getTracks().forEach((t) => t.stop());
         return;
       }
       micStreamRef.current = stream;
+
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
       const ctx = new AudioCtx();
       audioContextRef.current = ctx;
+
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
       analyser.smoothingTimeConstant = 0.8;
       source.connect(analyser);
       analyserRef.current = analyser;
+
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
       const tick = () => {
-        if (isUnmountedRef.current || !analyserRef.current) return;
-        analyser.getByteFrequencyData(dataArray);
+        if (sessionId !== sessionIdRef.current || isUnmountedRef.current || !analyserRef.current) return;
+        analyserRef.current.getByteFrequencyData(dataArray);
         const mid = dataArray.slice(4, 60);
         const avg = mid.reduce((s, v) => s + v, 0) / mid.length;
         setAudioLevel(Math.min(100, Math.round((avg / 255) * 100)));
@@ -370,11 +277,107 @@ export default function useVoiceAssistant() {
       };
       rafRef.current = requestAnimationFrame(tick);
     } catch {
-      // Mic permission not granted or stream unavailable
+      // AudioContext / Mic permission denied or unavailable
     }
   }, []);
 
-  // ── Web Speech Recognition Factory ─────────────────────────────────────────
+  // ── Speech Synthesis (TTS) with Guaranteed Clean Release ───────────────────
+
+  const cancelSpeech = useCallback(() => {
+    clearTimeout(ttsSafetyTimerRef.current);
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
+    currentUtteranceRef.current = null;
+    setIsSpeaking(false);
+  }, []);
+
+  const speakText = useCallback((text, sessionId, onEnd = null) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      onEnd?.();
+      return;
+    }
+
+    if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+
+    cancelSpeech();
+
+    const utt = new SpeechSynthesisUtterance(text);
+    const lang = detectLang();
+    utt.lang = lang;
+    utt.volume = 1.0;
+    utt.pitch = 1.15;
+    utt.rate = 1.02;
+
+    const ladyVoice = findCatchyLadyVoice(lang);
+    if (ladyVoice) utt.voice = ladyVoice;
+
+    currentUtteranceRef.current = utt;
+    setIsSpeaking(true);
+    log('TTS_START', text);
+
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(ttsSafetyTimerRef.current);
+      if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
+        setIsSpeaking(false);
+      }
+      currentUtteranceRef.current = null;
+      log('TTS_END', text);
+      if (sessionId === sessionIdRef.current) {
+        onEnd?.();
+      }
+    };
+
+    utt.onend = finish;
+    utt.onerror = finish;
+
+    // Safety fallback timer so state machine never hangs waiting for onend
+    const safetyMs = Math.max(1500, Math.min(6000, text.length * 85 + 700));
+    ttsSafetyTimerRef.current = setTimeout(() => {
+      if (!finished) finish();
+    }, safetyMs);
+
+    try {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
+      window.speechSynthesis.speak(utt);
+    } catch {
+      finish();
+    }
+  }, [cancelSpeech, log]);
+
+  // ── Safe, Idempotent Speech Recognition Lifecycle ──────────────────────────
+
+  const safeAbortRecognition = useCallback(() => {
+    if (recognitionRef.current) {
+      log('RECOGNITION_ABORT');
+      try {
+        recognitionRef.current.abort();
+      } catch {}
+      recognitionRef.current = null;
+    }
+    isRecognitionActiveRef.current = false;
+    isStartingRecognitionRef.current = false;
+    isStoppingRecognitionRef.current = false;
+  }, [log]);
+
+  const safeStopRecognition = useCallback(() => {
+    if (recognitionRef.current && isRecognitionActiveRef.current) {
+      log('RECOGNITION_STOP');
+      isStoppingRecognitionRef.current = true;
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        safeAbortRecognition();
+      }
+    }
+  }, [log, safeAbortRecognition]);
 
   const buildRecognition = useCallback((lang, continuous, interimResults) => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -386,6 +389,80 @@ export default function useVoiceAssistant() {
     r.maxAlternatives = 1;
     return r;
   }, []);
+
+  // ── Dismiss Voice Assistant Completely ─────────────────────────────────────
+
+  const dismiss = useCallback(() => {
+    log('CLEANUP_DISMISS');
+    // Invalidate current session so any pending timers or callbacks die
+    sessionIdRef.current++;
+
+    clearTimeout(commandTimerRef.current);
+    clearTimeout(navTimerRef.current);
+    clearTimeout(interimTimerRef.current);
+    clearTimeout(ttsSafetyTimerRef.current);
+
+    cancelSpeech();
+    safeAbortRecognition();
+    stopAudioAnalyser();
+
+    isProcessingRef.current = false;
+    isNavigatingRef.current = false;
+    speechFinishedRef.current = false;
+    routeVerifiedRef.current = false;
+    pendingClarificationRef.current = null;
+    intendedRouteRef.current = null;
+    latestTranscriptRef.current = '';
+    restartCountRef.current = 0;
+
+    if (!isUnmountedRef.current) {
+      stateRef.current = VA_STATE.IDLE;
+      setState(VA_STATE.IDLE);
+      setTranscript('');
+      setDestination(null);
+    }
+  }, [cancelSpeech, log, safeAbortRecognition, stopAudioAnalyser]);
+
+  // ── Navigation Completion & Dismissal Check ────────────────────────────────
+
+  const checkCompletionAndDismiss = useCallback((sessionId) => {
+    if (sessionId !== sessionIdRef.current) return;
+    if (
+      stateRef.current === VA_STATE.NAVIGATING &&
+      routeVerifiedRef.current &&
+      speechFinishedRef.current
+    ) {
+      log('ROUTE_AND_SPEECH_COMPLETE_DISMISS');
+      setTimeout(() => {
+        if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
+          dismiss();
+        }
+      }, 350);
+    }
+  }, [dismiss, log]);
+
+  // ── Post-Navigation Route Verification (Route Change Listener) ─────────────
+
+  useEffect(() => {
+    if (stateRef.current === VA_STATE.NAVIGATING) {
+      const intended = intendedRouteRef.current;
+      const current = location.pathname;
+      const isMatched = matchesRoute(current, intended);
+      const sessionId = sessionIdRef.current;
+
+      if (isMatched) {
+        log('ROUTE_VERIFIED', `${current} matches ${intended}`);
+        routeVerifiedRef.current = true;
+        if (speechFinishedRef.current) {
+          setTimeout(() => {
+            if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
+              dismiss();
+            }
+          }, 300);
+        }
+      }
+    }
+  }, [location.pathname, dismiss, log]);
 
   // ── Control Command Actions ────────────────────────────────────────────────
 
@@ -414,28 +491,32 @@ export default function useVoiceAssistant() {
   // ── Process Spoken Command & Perform Navigation ────────────────────────────
 
   const processTranscript = useCallback(
-    (raw) => {
-      if (isUnmountedRef.current || isProcessingRef.current) return;
+    (raw, sessionId) => {
+      if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+      if (isProcessingRef.current || isNavigatingRef.current) return;
+
       isProcessingRef.current = true;
-      isListeningLockRef.current = false;
       clearTimeout(commandTimerRef.current);
       clearTimeout(interimTimerRef.current);
 
+      safeAbortRecognition();
+      stopAudioAnalyser();
+
       const isTamil = isTamilLang();
+      const cleanRaw = stripWakePhrase(raw);
 
-      // Stop recognition while processing
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch {}
-        recognitionRef.current = null;
-      }
+      log('PROCESSING_COMMAND', { raw, cleanRaw });
 
-      // ── Sub-routine: Execute Navigation with Spoken Confirmation & Clean Close
+      // ── Sub-routine: Execute Navigation with Spoken Confirmation & Verification
       const executeNavigation = (targetIntent) => {
+        if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+
+        isNavigatingRef.current = true;
+        transitionTo(VA_STATE.NAVIGATING, sessionId);
+
         const destLabel = isTamil ? targetIntent.labelTa : targetIntent.labelEn;
 
-        // Protected route when user is NOT logged in
+        // 1. Check Protected Route for unauthenticated users
         if (targetIntent.requiresAuth && !isAuthRef.current) {
           const authText = isTamil
             ? `${destLabel} பக்கத்திற்கு உள்நுழைவு தேவை. உள்நுழைவு பக்கத்திற்கு செல்கிறேன்.`
@@ -443,94 +524,116 @@ export default function useVoiceAssistant() {
 
           intendedRouteRef.current = '/login';
           setDestination({ id: 'LOGIN', route: '/login', labelEn: 'Login', labelTa: 'உள்நுழைவு' });
-          setState(VA_STATE.NAVIGATING);
-          stopAudioAnalyser();
 
-          speakText(authText, () => {
+          speakText(authText, sessionId, () => {
             speechFinishedRef.current = true;
-            checkCompletionAndDismiss();
+            checkCompletionAndDismiss(sessionId);
           });
 
           setTimeout(() => {
-            if (!isUnmountedRef.current) navigate('/login');
-          }, 400);
+            if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
+              navigate('/login');
+            }
+          }, 350);
           return;
         }
 
-        // Target navigation phrase: "Going to {users asked page}."
+        // 2. Check Same-Page Navigation (User is already on the requested page)
+        if (matchesRoute(location.pathname, targetIntent.route)) {
+          log('SAME_PAGE_DETECTED', targetIntent.route);
+          intendedRouteRef.current = targetIntent.route;
+          setDestination(targetIntent);
+          routeVerifiedRef.current = true;
+
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+
+          const alreadyHereText = isTamil
+            ? `நீங்கள் ஏற்கனவே ${destLabel} பக்கத்தில் உள்ளீர்கள்.`
+            : `You are already on the ${destLabel} page.`;
+
+          speakText(alreadyHereText, sessionId, () => {
+            speechFinishedRef.current = true;
+            setTimeout(() => {
+              if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
+                dismiss();
+              }
+            }, 400);
+          });
+          return;
+        }
+
+        // 3. Standard Navigation to requested page: "Going to [Page Name]."
         const navText = isTamil
           ? `${destLabel} பக்கத்திற்கு செல்கிறேன்.`
           : `Going to ${destLabel}.`;
 
         intendedRouteRef.current = targetIntent.route;
         setDestination(targetIntent);
-        setState(VA_STATE.NAVIGATING);
-        stopAudioAnalyser();
-
         speechFinishedRef.current = false;
-        routeChangedRef.current = false;
+        routeVerifiedRef.current = false;
 
-        // If user is already on destination page, smoothly scroll to top
-        if (location.pathname === targetIntent.route) {
-          routeChangedRef.current = true;
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
+        log('NAVIGATION_START', { target: targetIntent.route, label: destLabel });
 
-        // Speak the requested confirmation: "Going to [Page Name]."
-        speakText(navText, () => {
+        // Speak destination confirmation
+        speakText(navText, sessionId, () => {
           speechFinishedRef.current = true;
-          // Once speech finishes, if route has already changed (or was current), dismiss smoothly
-          if (routeChangedRef.current) {
-            const timer = setTimeout(() => {
-              if (!isUnmountedRef.current) dismiss();
-            }, 350);
-            return () => clearTimeout(timer);
+          log('NAVIGATION_SPEECH_FINISHED');
+          if (routeVerifiedRef.current) {
+            setTimeout(() => {
+              if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
+                dismiss();
+              }
+            }, 300);
           }
         });
 
-        // Trigger router navigation smoothly while confirmation starts speaking
+        // Trigger route transition
         navTimerRef.current = setTimeout(() => {
-          if (isUnmountedRef.current) return;
+          if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
           try {
-            if (location.pathname !== targetIntent.route) {
-              navigate(targetIntent.route);
-            }
+            navigate(targetIntent.route);
           } catch {
             const failText = isTamil
               ? 'மன்னிக்கவும், அந்த பக்கத்தை திறக்க முடியவில்லை.'
               : "Sorry, I couldn't open that page.";
-            speakText(failText, () => dismiss());
+            speakText(failText, sessionId, () => dismiss());
             return;
           }
 
-          // Safety fallback: ensure dismiss occurs within 3.5s even on slow devices
+          // Safety timeout: dismiss if route navigation or confirmation gets stuck
           setTimeout(() => {
-            if (!isUnmountedRef.current && stateRef.current === VA_STATE.NAVIGATING) {
-              dismiss();
+            if (sessionId === sessionIdRef.current && !isUnmountedRef.current && stateRef.current === VA_STATE.NAVIGATING) {
+              const current = location.pathname;
+              if (matchesRoute(current, intendedRouteRef.current)) {
+                dismiss();
+              } else {
+                log('NAVIGATION_TIMEOUT_FALLBACK_DISMISS');
+                dismiss();
+              }
             }
           }, 3500);
-        }, 200);
+        }, 150);
       };
 
-      // ── 1. Check for Pending Clarification Response ("Yes", "No", or new phrase)
+      // ── Step A: Check for Pending Clarification Response ("Yes", "No", or page name)
       if (pendingClarificationRef.current) {
         const pending = pendingClarificationRef.current;
-        if (isAffirmative(raw)) {
+        if (isAffirmative(cleanRaw)) {
           pendingClarificationRef.current = null;
           executeNavigation(pending);
           return;
         }
-        if (isNegative(raw)) {
+        if (isNegative(cleanRaw)) {
           pendingClarificationRef.current = null;
           const cancelText = isTamil ? 'சரி.' : 'Alright.';
-          speakText(cancelText, () => dismiss());
+          speakText(cancelText, sessionId, () => dismiss());
           return;
         }
         pendingClarificationRef.current = null;
       }
 
-      // ── 2. Check for Control Command (back, home, scroll, close)
-      const control = resolveControl(raw);
+      // ── Step B: Check for Control Command (back, home, scroll, close)
+      const control = resolveControl(cleanRaw);
       if (control) {
         if (control.action === 'close') {
           dismiss();
@@ -538,33 +641,35 @@ export default function useVoiceAssistant() {
         }
 
         const ctrlText = isTamil ? control.labelTa || control.labelEn : control.labelEn;
-        setState(VA_STATE.NAVIGATING);
-        stopAudioAnalyser();
+        transitionTo(VA_STATE.NAVIGATING, sessionId);
 
-        speakText(ctrlText, () => {
-          speechFinishedRef.current = true;
+        speakText(ctrlText, sessionId, () => {
           setTimeout(() => {
-            if (!isUnmountedRef.current) dismiss();
+            if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
+              dismiss();
+            }
           }, 300);
         });
 
         setTimeout(() => {
-          if (isUnmountedRef.current) return;
-          executeControl(control.action, control.route);
-        }, 200);
+          if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
+            executeControl(control.action, control.route);
+          }
+        }, 180);
         return;
       }
 
-      // ── 3. Resolve Navigation Intent with Confidence Scoring
-      const intent = resolveIntent(raw);
+      // ── Step C: Resolve Navigation Intent with Confidence Check
+      const intent = resolveIntent(cleanRaw);
 
-      // ── 3a. Ambiguous, Low-Confidence, or Informational Inquiries
+      // Ambiguous / Low-Confidence Intent -> Clarify
       if (
         intent &&
         (intent.needsClarification ||
           intent.confidence < CONFIDENCE_THRESHOLD ||
           intent.isAmbiguous)
       ) {
+        log('INTENT_NEEDS_CLARIFICATION', intent);
         if (intent.id && intent.id !== 'AMBIGUOUS') {
           pendingClarificationRef.current = intent;
         } else {
@@ -575,172 +680,230 @@ export default function useVoiceAssistant() {
           ? intent.clarifyPromptTa || 'எந்த பக்கத்திற்கு செல்ல வேண்டும்?'
           : intent.clarifyPromptEn || 'Which page would you like me to open?';
 
-        setTranscript(raw);
+        setTranscript(cleanRaw);
         isProcessingRef.current = false;
-        speakText(clarifyText, () => {
-          if (isUnmountedRef.current) return;
-          startCommandRecognitionRef.current?.();
+        transitionTo(VA_STATE.CLARIFYING, sessionId);
+
+        speakText(clarifyText, sessionId, () => {
+          if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
+            startCommandRecognitionRef.current?.(sessionId);
+          }
         });
         return;
       }
 
-      // ── 3b. Confident Navigation Intent
+      // Confident Navigation Intent -> Execute
       if (intent && !intent.needsClarification && intent.confidence >= CONFIDENCE_THRESHOLD) {
+        log('INTENT_RESOLVED_CONFIDENT', intent);
         pendingClarificationRef.current = null;
         executeNavigation(intent);
         return;
       }
 
-      // ── 3c. Unclear / Unknown request — guide user and re-listen
+      // Unrecognized Command -> Provide Helpful Prompt & Re-listen
+      log('INTENT_UNRECOGNIZED', cleanRaw);
       const unknownText = isTamil
         ? 'மன்னிக்கவும், புரியவில்லை. திருப்பலி நேரம், நிகழ்வுகள், வாசகங்கள் அல்லது அறிவிப்புகள் என்று கேளுங்கள்.'
         : "I'm not sure which page you mean. Try asking for Mass Timings, Events, Daily Readings, or Announcements.";
 
       isProcessingRef.current = false;
-      speakText(unknownText, () => {
-        if (isUnmountedRef.current) return;
-        startCommandRecognitionRef.current?.();
+      transitionTo(VA_STATE.CLARIFYING, sessionId);
+
+      speakText(unknownText, sessionId, () => {
+        if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
+          startCommandRecognitionRef.current?.(sessionId);
+        }
       });
     },
-    [checkCompletionAndDismiss, dismiss, executeControl, navigate, speakText, stopAudioAnalyser]
+    [checkCompletionAndDismiss, dismiss, executeControl, location.pathname, log, navigate, safeAbortRecognition, speakText, stopAudioAnalyser, transitionTo]
   );
 
   processTranscriptRef.current = processTranscript;
 
   // ── Start Command Recognition (Listening State) ─────────────────────────────
 
-  const startCommandRecognition = useCallback(() => {
-    if (isUnmountedRef.current || isListeningLockRef.current) return;
-    isListeningLockRef.current = true;
-    isProcessingRef.current = false;
-    latestTranscriptRef.current = '';
-
-    setState(VA_STATE.LISTENING);
-    setTranscript('');
-    startAudioAnalyser();
-
-    const lang = detectLang();
-    let r = null;
-    try {
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch {}
+  const startCommandRecognition = useCallback(
+    (sessionId) => {
+      if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+      if (isRecognitionActiveRef.current || isStartingRecognitionRef.current) {
+        log('RECOGNITION_ALREADY_ACTIVE_OR_STARTING');
+        return;
       }
-      r = buildRecognition(lang, false, true);
-    } catch {
-      dismiss();
-      return;
-    }
 
-    if (!r) {
-      dismiss();
-      return;
-    }
-    recognitionRef.current = r;
+      isStartingRecognitionRef.current = true;
+      isProcessingRef.current = false;
+      latestTranscriptRef.current = '';
 
-    // Command timeout: dismiss if user stays silent across full period
-    clearTimeout(commandTimerRef.current);
-    commandTimerRef.current = setTimeout(() => {
-      if (stateRef.current === VA_STATE.LISTENING) {
-        if (latestTranscriptRef.current.trim()) {
-          processTranscript(latestTranscriptRef.current);
-        } else {
+      transitionTo(VA_STATE.LISTENING, sessionId);
+      setTranscript('');
+      startAudioAnalyser(sessionId);
+
+      // Ensure any ongoing TTS is completely silent before listening
+      if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
+        cancelSpeech();
+      }
+
+      const lang = detectLang();
+      let r = null;
+      try {
+        safeAbortRecognition();
+        r = buildRecognition(lang, false, true);
+      } catch (err) {
+        log('RECOGNITION_BUILD_FAILED', err.message);
+        dismiss();
+        return;
+      }
+
+      if (!r) {
+        dismiss();
+        return;
+      }
+      recognitionRef.current = r;
+
+      // Command timeout: dismiss if user stays silent across full window
+      clearTimeout(commandTimerRef.current);
+      commandTimerRef.current = setTimeout(() => {
+        if (sessionId === sessionIdRef.current && stateRef.current === VA_STATE.LISTENING) {
+          if (latestTranscriptRef.current.trim()) {
+            processTranscript(latestTranscriptRef.current, sessionId);
+          } else {
+            log('COMMAND_SILENCE_TIMEOUT_DISMISS');
+            dismiss();
+          }
+        }
+      }, COMMAND_TIMEOUT_MS);
+
+      r.onstart = () => {
+        if (sessionId !== sessionIdRef.current) {
+          try { r.abort(); } catch {}
+          return;
+        }
+        isRecognitionActiveRef.current = true;
+        isStartingRecognitionRef.current = false;
+        log('RECOGNITION_START');
+      };
+
+      r.onresult = (e) => {
+        if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+        cancelSpeech();
+
+        const results = Array.from(e.results);
+        const raw = results.map((res) => res[0].transcript).join(' ');
+        latestTranscriptRef.current = raw;
+        setTranscript(raw);
+
+        const isFinal = results[results.length - 1].isFinal;
+
+        // Process immediately on final result
+        if (isFinal && raw.trim()) {
+          clearTimeout(interimTimerRef.current);
+          clearTimeout(commandTimerRef.current);
+          transitionTo(VA_STATE.PROCESSING, sessionId);
+          setTimeout(() => {
+            if (sessionId === sessionIdRef.current) {
+              processTranscript(raw, sessionId);
+            }
+          }, 120);
+          return;
+        }
+
+        // Fast-track: interim speech confidently matches an intent or control command
+        clearTimeout(interimTimerRef.current);
+        interimTimerRef.current = setTimeout(() => {
+          if (sessionId === sessionIdRef.current && stateRef.current === VA_STATE.LISTENING && raw.trim()) {
+            const clean = stripWakePhrase(raw);
+            const matchedIntent = resolveIntent(clean);
+            const matchedCtrl = resolveControl(clean);
+            if (
+              matchedCtrl ||
+              (matchedIntent &&
+                !matchedIntent.needsClarification &&
+                matchedIntent.confidence >= CONFIDENCE_THRESHOLD)
+            ) {
+              log('FAST_TRACK_INTERIM_MATCH', clean);
+              clearTimeout(commandTimerRef.current);
+              safeStopRecognition();
+              transitionTo(VA_STATE.PROCESSING, sessionId);
+              setTimeout(() => {
+                if (sessionId === sessionIdRef.current) {
+                  processTranscript(raw, sessionId);
+                }
+              }, 120);
+            }
+          }
+        }, 450);
+      };
+
+      r.onerror = (e) => {
+        if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+        log('RECOGNITION_ERROR', e.error);
+
+        if (e.error === 'no-speech') {
+          // Brief pause — let onend handle graceful restart if within command window
+          return;
+        }
+        if (e.error === 'not-allowed') {
+          setTranscript(
+            isTamilLang()
+              ? 'மைக் அனுமதி மறுக்கப்பட்டுள்ளது.'
+              : 'Microphone permission blocked.'
+          );
+          setTimeout(() => dismiss(), 2500);
+          return;
+        }
+        if (e.error === 'aborted') {
+          // Intentionally aborted
+          return;
+        }
+        dismiss();
+      };
+
+      r.onend = () => {
+        isRecognitionActiveRef.current = false;
+        isStartingRecognitionRef.current = false;
+        isStoppingRecognitionRef.current = false;
+        log('RECOGNITION_END');
+
+        if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+
+        // If user spoke something valid while listening, process it
+        if (stateRef.current === VA_STATE.LISTENING) {
+          if (latestTranscriptRef.current.trim() && !isProcessingRef.current) {
+            transitionTo(VA_STATE.PROCESSING, sessionId);
+            setTimeout(() => {
+              if (sessionId === sessionIdRef.current) {
+                processTranscript(latestTranscriptRef.current, sessionId);
+              }
+            }, 120);
+          } else if (!isProcessingRef.current && restartCountRef.current < MAX_ONEND_RESTARTS) {
+            // Graceful restart on silence/pause
+            restartCountRef.current++;
+            log('ONEND_GRACEFUL_RESTART', `attempt ${restartCountRef.current}`);
+            setTimeout(() => {
+              if (sessionId === sessionIdRef.current && stateRef.current === VA_STATE.LISTENING && !isProcessingRef.current) {
+                startCommandRecognition(sessionId);
+              }
+            }, 180);
+          }
+        }
+      };
+
+      try {
+        r.start();
+      } catch (err) {
+        log('RECOGNITION_START_EXCEPTION', err.message);
+        isStartingRecognitionRef.current = false;
+        if (err.name !== 'InvalidStateError') {
           dismiss();
         }
       }
-    }, COMMAND_TIMEOUT_MS);
-
-    r.onresult = (e) => {
-      cancelSpeech();
-
-      const results = Array.from(e.results);
-      const raw = results.map((res) => res[0].transcript).join(' ');
-      latestTranscriptRef.current = raw;
-      setTranscript(raw);
-
-      const isFinal = results[results.length - 1].isFinal;
-
-      // When speech API marks final utterance, process immediately
-      if (isFinal && raw.trim()) {
-        clearTimeout(interimTimerRef.current);
-        clearTimeout(commandTimerRef.current);
-        setState(VA_STATE.PROCESSING);
-        setTimeout(() => processTranscript(raw), 150);
-        return;
-      }
-
-      // Fast-track: if user's interim speech confidently matches an intent or control command,
-      // trigger processing after a short pause (500ms) without waiting for Chrome finalization
-      clearTimeout(interimTimerRef.current);
-      interimTimerRef.current = setTimeout(() => {
-        if (stateRef.current === VA_STATE.LISTENING && raw.trim()) {
-          const matchedIntent = resolveIntent(raw);
-          const matchedCtrl = resolveControl(raw);
-          if (
-            matchedCtrl ||
-            (matchedIntent &&
-              !matchedIntent.needsClarification &&
-              matchedIntent.confidence >= CONFIDENCE_THRESHOLD)
-          ) {
-            clearTimeout(commandTimerRef.current);
-            try { r.stop(); } catch {}
-            setState(VA_STATE.PROCESSING);
-            setTimeout(() => processTranscript(raw), 150);
-          }
-        }
-      }, 500);
-    };
-
-    r.onerror = (e) => {
-      if (e.error === 'no-speech') {
-        // Do NOT immediately dismiss on brief pause.
-        // If command timeout has not elapsed and assistant is still listening, allow user to continue speaking.
-        return;
-      }
-      if (e.error === 'not-allowed') {
-        setTranscript(
-          isTamilLang()
-            ? 'மைக் அனுமதி மறுக்கப்பட்டுள்ளது.'
-            : 'Microphone permission blocked.'
-        );
-        setTimeout(() => dismiss(), 2500);
-        return;
-      }
-      if (e.error === 'aborted') {
-        // Intentionally aborted during state transition
-        return;
-      }
-      dismiss();
-    };
-
-    r.onend = () => {
-      isListeningLockRef.current = false;
-      // If recognition ended and user spoke something valid, process it
-      if (stateRef.current === VA_STATE.LISTENING) {
-        if (latestTranscriptRef.current.trim() && !isProcessingRef.current) {
-          setState(VA_STATE.PROCESSING);
-          setTimeout(() => processTranscript(latestTranscriptRef.current), 150);
-        } else if (!isProcessingRef.current) {
-          // If silent and recognition ended, restart recognition until command timeout fires
-          setTimeout(() => {
-            if (stateRef.current === VA_STATE.LISTENING && !isProcessingRef.current) {
-              startCommandRecognition();
-            }
-          }, 200);
-        }
-      }
-    };
-
-    try {
-      r.start();
-    } catch {
-      isListeningLockRef.current = false;
-      dismiss();
-    }
-  }, [buildRecognition, cancelSpeech, dismiss, processTranscript, startAudioAnalyser]);
+    },
+    [buildRecognition, cancelSpeech, dismiss, log, processTranscript, safeAbortRecognition, safeStopRecognition, startAudioAnalyser, transitionTo]
+  );
 
   startCommandRecognitionRef.current = startCommandRecognition;
 
-  // ── Enter Wake / Listening State ───────────────────────────────────────────
+  // ── Enter Wake State ("Hey Connect" or Mic Button) ─────────────────────────
 
   const enterWake = useCallback(
     (immediateCommand = '') => {
@@ -750,23 +913,37 @@ export default function useVoiceAssistant() {
         wakeDebounceRef.current = false;
       }, WAKE_DEBOUNCE_MS);
 
-      // Cancel any ongoing speech or recognition
-      cancelSpeech();
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch {}
-        recognitionRef.current = null;
-      }
+      // Increment sessionId to invalidate any prior session callbacks
+      const currentSessionId = ++sessionIdRef.current;
+      log('NEW_SESSION_STARTED', { immediateCommand });
 
-      // Check if a command was spoken directly with wake word ("Hey Connect show mass timings")
-      if (immediateCommand && immediateCommand.trim()) {
-        setTranscript(immediateCommand);
-        setState(VA_STATE.PROCESSING);
-        setTimeout(() => processTranscriptRef.current?.(immediateCommand), 200);
+      cancelSpeech();
+      safeAbortRecognition();
+      stopAudioAnalyser();
+
+      isProcessingRef.current = false;
+      isNavigatingRef.current = false;
+      speechFinishedRef.current = false;
+      routeVerifiedRef.current = false;
+      restartCountRef.current = 0;
+      latestTranscriptRef.current = '';
+
+      // Check if command was spoken directly with wake word (one-step: "Hey Connect show events")
+      const cleanImmediate = stripWakePhrase(immediateCommand);
+      if (cleanImmediate && cleanImmediate.trim()) {
+        log('ONE_STEP_WAKE_DETECTED', cleanImmediate);
+        setTranscript(cleanImmediate);
+        transitionTo(VA_STATE.PROCESSING, currentSessionId);
+        setTimeout(() => {
+          if (currentSessionId === sessionIdRef.current) {
+            processTranscriptRef.current?.(cleanImmediate, currentSessionId);
+          }
+        }, 180);
         return;
       }
 
-      // Step 1: Connect greets in WAKE state: "Hello! I'm Connect. How can I help you?"
-      setState(VA_STATE.WAKE);
+      // Two-step flow: Greet in catchy lady voice, then start listening
+      transitionTo(VA_STATE.WAKE, currentSessionId);
       setTranscript('');
 
       const greeting = isTamilLang()
@@ -775,40 +952,41 @@ export default function useVoiceAssistant() {
 
       let hasTransitioned = false;
       const proceedToListening = () => {
-        if (hasTransitioned || isUnmountedRef.current) return;
+        if (hasTransitioned || isUnmountedRef.current || currentSessionId !== sessionIdRef.current) return;
         hasTransitioned = true;
         if (stateRef.current === VA_STATE.WAKE) {
-          // Step 2: Transition to LISTENING and listen for user command
-          startCommandRecognitionRef.current?.();
+          // Small safety buffer (120ms) before opening mic to avoid speaker echo
+          setTimeout(() => {
+            if (currentSessionId === sessionIdRef.current) {
+              startCommandRecognitionRef.current?.(currentSessionId);
+            }
+          }, 120);
         }
       };
 
-      // Speak greeting in catchy lady voice, then start listening on completion
-      speakText(greeting, () => {
+      speakText(greeting, currentSessionId, () => {
         proceedToListening();
       });
 
-      // Safety fallback timer: automatically transition to listening if speech onend is delayed
+      // Safety fallback: if speech onend is delayed by browser, proceed after timeout
       setTimeout(() => {
         proceedToListening();
       }, 2600);
     },
-    [cancelSpeech, speakText]
+    [cancelSpeech, log, safeAbortRecognition, speakText, stopAudioAnalyser, transitionTo]
   );
 
   // ── Manual Activate (Navbar Mic Button) ────────────────────────────────────
 
   const activate = useCallback(() => {
-    if (stateRef.current !== VA_STATE.IDLE) return;
     enterWake();
   }, [enterWake]);
 
-  // ── Mount / Unmount ────────────────────────────────────────────────────────
+  // ── Mount / Unmount Lifecycle ──────────────────────────────────────────────
 
   useEffect(() => {
     isUnmountedRef.current = false;
 
-    // Preload and cache speech synthesis voices immediately
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.getVoices?.();
       const onVoicesChanged = () => {
@@ -823,12 +1001,8 @@ export default function useVoiceAssistant() {
     // Global console testing helper: window.heyConnect("show mass timings")
     window.heyConnect = (commandText) => {
       if (commandText && typeof commandText === 'string') {
-        activate();
-        setTimeout(() => {
-          setTranscript(commandText);
-          setState(VA_STATE.PROCESSING);
-          setTimeout(() => processTranscriptRef.current?.(commandText), 200);
-        }, 300);
+        const clean = stripWakePhrase(commandText);
+        enterWake(clean || commandText);
       } else {
         activate();
       }
@@ -836,23 +1010,19 @@ export default function useVoiceAssistant() {
 
     return () => {
       isUnmountedRef.current = true;
-      isListeningLockRef.current = false;
-      isProcessingRef.current = false;
+      sessionIdRef.current++;
       clearTimeout(commandTimerRef.current);
       clearTimeout(navTimerRef.current);
       clearTimeout(interimTimerRef.current);
+      clearTimeout(ttsSafetyTimerRef.current);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       cancelSpeech();
       stopAudioAnalyser();
-      if (recognitionRef.current) {
-        try { recognitionRef.current.abort(); } catch {}
-        recognitionRef.current = null;
-      }
+      safeAbortRecognition();
       window.removeEventListener('hey-connect-activate', handleActivate);
       delete window.heyConnect;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [activate, cancelSpeech, enterWake, safeAbortRecognition, stopAudioAnalyser]);
 
   return {
     state,

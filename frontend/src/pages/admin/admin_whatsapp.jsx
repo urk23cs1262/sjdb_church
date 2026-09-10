@@ -27,7 +27,13 @@ import {
   FiRadio,
   FiCornerDownRight,
   FiChevronDown,
-  FiTrash2
+  FiTrash2,
+  FiUnlock,
+  FiLock,
+  FiFileText,
+  FiAlertOctagon,
+  FiUserCheck,
+  FiUserX
 } from 'react-icons/fi';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
@@ -68,8 +74,21 @@ export default function AdminWhatsApp() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Tab State: 'overview' | 'subscribers' | 'broadcast' | 'test-bot' | 'history'
+  // Tab State: 'overview' | 'subscribers' | 'broadcast' | 'test-bot' | 'history' | 'moderation'
   const [activeTab, setActiveTab] = useState('overview');
+
+  // Centralized Moderation & Abuse Control States
+  const [moderationStats, setModerationStats] = useState(null);
+  const [moderatedUsers, setModeratedUsers] = useState([]);
+  const [moderationFilter, setModerationFilter] = useState('all'); // 'all' | 'blocked' | 'warning' | 'active'
+  const [moderationSearch, setModerationSearch] = useState('');
+  const [loadingModeration, setLoadingModeration] = useState(false);
+  const [selectedUserAudit, setSelectedUserAudit] = useState(null);
+  const [auditModalOpen, setAuditModalOpen] = useState(false);
+  const [blockModalOpen, setBlockModalOpen] = useState(false);
+  const [userToBlock, setUserToBlock] = useState(null);
+  const [blockReasonInput, setBlockReasonInput] = useState('');
+  const [actionInProgress, setActionInProgress] = useState(false);
 
   // Connection Management States
   const [connectionMode, setConnectionMode] = useState('qr'); // 'qr' | 'phone'
@@ -286,6 +305,78 @@ export default function AdminWhatsApp() {
     setCopiedPairing(true);
     toast.success('Pairing code copied to clipboard!');
     setTimeout(() => setCopiedPairing(false), 2500);
+  };
+
+  // Centralized Moderation Data Fetcher
+  const fetchModerationData = async () => {
+    setLoadingModeration(true);
+    try {
+      const [statsRes, usersRes] = await Promise.all([
+        api.get('/moderation/stats').catch(() => ({ data: { success: false } })),
+        api.get('/moderation/users', {
+          params: {
+            status: moderationFilter !== 'all' ? moderationFilter : undefined,
+            search: moderationSearch ? moderationSearch.trim() : undefined,
+            limit: 100
+          }
+        }).catch(() => ({ data: { success: false, data: { users: [] } } }))
+      ]);
+
+      if (statsRes.data?.success) setModerationStats(statsRes.data.data);
+      if (usersRes.data?.success) setModeratedUsers(usersRes.data.data.users || []);
+    } catch (err) {
+      console.error('Error fetching moderation records:', err);
+    } finally {
+      setLoadingModeration(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'moderation') {
+      fetchModerationData();
+    }
+  }, [activeTab, moderationFilter]);
+
+  // Handle User Unblock (Restore Access)
+  const handleUnblockUser = async (phoneNumber) => {
+    if (!phoneNumber) return;
+    setActionInProgress(true);
+    try {
+      const res = await api.post('/moderation/unblock', { phoneNumber });
+      toast.success(res.data?.message || `Access restored for ${phoneNumber}`);
+      await fetchModerationData();
+      if (selectedUserAudit?.phoneNumber === phoneNumber) {
+        setAuditModalOpen(false);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to unblock user');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
+  // Handle User Block (Restrict Access)
+  const handleBlockUser = async () => {
+    if (!userToBlock?.phoneNumber) return;
+    setActionInProgress(true);
+    try {
+      const res = await api.post('/moderation/block', {
+        phoneNumber: userToBlock.phoneNumber,
+        reason: blockReasonInput || 'Manually restricted by administrator'
+      });
+      toast.success(res.data?.message || `User ${userToBlock.phoneNumber} blocked`);
+      setBlockModalOpen(false);
+      setUserToBlock(null);
+      setBlockReasonInput('');
+      await fetchModerationData();
+      if (selectedUserAudit?.phoneNumber === userToBlock.phoneNumber) {
+        setAuditModalOpen(false);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to block user');
+    } finally {
+      setActionInProgress(false);
+    }
   };
 
   // Trigger Instant Spiritual Broadcast
@@ -618,6 +709,7 @@ export default function AdminWhatsApp() {
           { id: 'broadcast', label: 'Broadcast & Send', icon: <FiSend /> },
           { id: 'test-bot', label: 'Playground & Test', icon: <FiPlay /> },
           { id: 'history', label: 'Automation & History', icon: <FiClock /> },
+          { id: 'moderation', label: `Abuse & Moderation ${moderationStats?.blockedCount ? `(${moderationStats.blockedCount} Blocked)` : ''}`, icon: <FiShield /> },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -1526,6 +1618,511 @@ export default function AdminWhatsApp() {
           </div>
         </div>
       )}
+
+      {/* ─── TAB 6: USER MODERATION & ABUSE CONTROL ─────────────────────────── */}
+      {activeTab === 'moderation' && (
+        <div className="space-y-6">
+          {/* Header Banner & Policy Overview */}
+          <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-blue-950 rounded-3xl p-6 sm:p-7 text-white shadow-xl relative overflow-hidden border border-slate-800">
+            <div className="absolute top-0 right-0 w-80 h-80 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 text-xs font-bold border border-rose-500/30 mb-2">
+                  <FiShield className="text-rose-400" /> Multi-Channel Abuse Protection
+                </div>
+                <h2 className="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
+                  Parishioner Moderation & Safety Center
+                </h2>
+                <p className="text-slate-300 text-xs sm:text-sm mt-1 max-w-2xl leading-relaxed">
+                  Automatic 3-strike abuse enforcement. Phone-number-based authoritative identity blocks abusive users across both the <strong>WhatsApp Bot</strong> and the <strong>Parish Website Portal</strong>, with full violation audit logs.
+                </p>
+              </div>
+
+              <button
+                onClick={fetchModerationData}
+                disabled={loadingModeration}
+                className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs sm:text-sm font-bold flex items-center gap-2 border border-white/10 transition-all cursor-pointer shrink-0"
+              >
+                <FiRefreshCw className={loadingModeration ? 'animate-spin' : ''} />
+                <span>Refresh Audit Logs</span>
+              </button>
+            </div>
+
+            {/* 3-Strike Policy Mini Flow */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 pt-5 border-t border-white/10 text-xs">
+              <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                <span className="font-bold text-amber-400">1️⃣ 1st Bad Message:</span>
+                <p className="text-slate-300 text-[11px] mt-0.5">Gentle warning sent to user. Bot commands continue.</p>
+              </div>
+              <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                <span className="font-bold text-orange-400">2️⃣ 2nd Bad Message:</span>
+                <p className="text-slate-300 text-[11px] mt-0.5">Firm final warning. User put on high-risk notice.</p>
+              </div>
+              <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                <span className="font-bold text-rose-400">3️⃣ 3rd Strike / Threat:</span>
+                <p className="text-slate-300 text-[11px] mt-0.5">Instant block. Linked website account locked & sessions revoked.</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 4 Stat Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
+            <div className="glass-card p-4 sm:p-5 border border-gray-100 shadow-sm rounded-2xl bg-white">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Monitored</span>
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-sm">
+                  <FiUsers />
+                </div>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-church-royal-blue mt-2">
+                {moderationStats?.totalMonitored ?? 0}
+              </div>
+              <span className="text-[11px] text-gray-400 font-medium">Logged phone contacts</span>
+            </div>
+
+            <div className="glass-card p-4 sm:p-5 border border-gray-100 shadow-sm rounded-2xl bg-white">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Warnings</span>
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-sm">
+                  <FiAlertTriangle />
+                </div>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-amber-600 mt-2">
+                {moderationStats?.warningCount ?? 0}
+              </div>
+              <span className="text-[11px] text-amber-600/80 font-medium">Strikes 1-2 within 24h</span>
+            </div>
+
+            <div className="glass-card p-4 sm:p-5 border border-gray-100 shadow-sm rounded-2xl bg-white">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Blocked</span>
+                <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center text-sm">
+                  <FiLock />
+                </div>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-rose-600 mt-2">
+                {moderationStats?.blockedCount ?? 0}
+              </div>
+              <span className="text-[11px] text-rose-600/80 font-medium">Restricted access</span>
+            </div>
+
+            <div className="glass-card p-4 sm:p-5 border border-gray-100 shadow-sm rounded-2xl bg-white">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Total Incidents</span>
+                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-sm">
+                  <FiShield />
+                </div>
+              </div>
+              <div className="text-2xl sm:text-3xl font-black text-purple-700 mt-2">
+                {moderationStats?.totalViolations ?? 0}
+              </div>
+              <span className="text-[11px] text-purple-600/80 font-medium">Offenses intercepted</span>
+            </div>
+          </div>
+
+          {/* Search, Filter Bar & User List Table */}
+          <div className="glass-card p-4 sm:p-6 border border-gray-100 shadow-sm rounded-3xl bg-white space-y-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              {/* Filter Pills */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+                {[
+                  { id: 'all', label: 'All Logged', icon: <FiUsers /> },
+                  { id: 'blocked', label: `Blocked (${moderationStats?.blockedCount ?? 0})`, icon: <FiLock /> },
+                  { id: 'warning', label: `Warnings (${moderationStats?.warningCount ?? 0})`, icon: <FiAlertTriangle /> },
+                  { id: 'active', label: 'Active', icon: <FiCheckCircle /> },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setModerationFilter(f.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all cursor-pointer ${
+                      moderationFilter === f.id
+                        ? 'bg-church-royal-blue text-white shadow-sm'
+                        : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200/60'
+                    }`}
+                  >
+                    <span>{f.icon}</span>
+                    <span>{f.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Search Box */}
+              <div className="relative min-w-[220px]">
+                <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
+                <input
+                  type="text"
+                  placeholder="Search phone, name..."
+                  value={moderationSearch}
+                  onChange={(e) => setModerationSearch(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && fetchModerationData()}
+                  className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:border-church-royal-blue"
+                />
+              </div>
+            </div>
+
+            {/* Moderated Users Table */}
+            <div className="overflow-x-auto rounded-2xl border border-gray-100">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-gray-50/80 border-b border-gray-100 text-[11px] uppercase tracking-wider text-gray-500 font-bold">
+                    <th className="py-3 px-4">WhatsApp Contact</th>
+                    <th className="py-3 px-4">Linked Website User</th>
+                    <th className="py-3 px-4">Status & Strikes</th>
+                    <th className="py-3 px-4">Last Violation</th>
+                    <th className="py-3 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-xs">
+                  {loadingModeration ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-gray-400">
+                        <FiRefreshCw className="animate-spin text-xl inline mb-2" />
+                        <p>Loading moderation records...</p>
+                      </td>
+                    </tr>
+                  ) : moderatedUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-gray-400">
+                        <FiShield className="text-3xl text-gray-300 inline mb-2" />
+                        <p className="font-semibold text-gray-600">No moderation records found</p>
+                        <p className="text-[11px] mt-0.5">When users send messages, they will appear here with automated safety checks.</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    moderatedUsers.map((item) => {
+                      const isBlocked = item.status === 'blocked';
+                      const isWarning = item.status === 'warning';
+                      const hasLinked = Boolean(item.userId);
+                      const linkedUser = item.userId;
+
+                      return (
+                        <tr key={item._id} className="hover:bg-gray-50/70 transition-colors">
+                          {/* WhatsApp Contact */}
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2.5">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${
+                                isBlocked ? 'bg-rose-100 text-rose-700' : isWarning ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                              }`}>
+                                {(item.whatsappDisplayName || item.phoneNumber || '?')[0].toUpperCase()}
+                              </div>
+                              <div>
+                                <p className="font-bold text-church-royal-blue text-xs">
+                                  {item.whatsappDisplayName || 'WhatsApp User'}
+                                </p>
+                                <div className="flex items-center gap-1 text-[11px] text-gray-500 font-mono">
+                                  <span>+{item.phoneNumber}</span>
+                                  <button
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(item.phoneNumber);
+                                      toast.success('Phone copied!');
+                                    }}
+                                    className="text-gray-400 hover:text-church-royal-blue"
+                                    title="Copy Phone"
+                                  >
+                                    <FiCopy className="text-[10px]" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Linked Website Account */}
+                          <td className="py-3 px-4">
+                            {hasLinked ? (
+                              <div>
+                                <p className="font-bold text-gray-800 text-xs flex items-center gap-1.5">
+                                  <FiUserCheck className="text-emerald-500" />
+                                  {linkedUser.name}
+                                </p>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] text-gray-400 font-mono">
+                                    {linkedUser.parishMemberId || linkedUser.email || 'Member'}
+                                  </span>
+                                  <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                                    linkedUser.isActive === false
+                                      ? 'bg-rose-100 text-rose-700 border border-rose-200'
+                                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  }`}>
+                                    {linkedUser.isActive === false ? 'Deactivated' : 'Active'}
+                                  </span>
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-[11px] italic">No linked account</span>
+                            )}
+                          </td>
+
+                          {/* Status & Strikes */}
+                          <td className="py-3 px-4">
+                            <div className="flex flex-col items-start gap-1">
+                              {isBlocked ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-200">
+                                  <FiLock className="text-xs" /> Blocked (Strike {item.violationCount}/3)
+                                </span>
+                              ) : isWarning ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200">
+                                  <FiAlertTriangle className="text-xs" /> Warning (Strike {item.violationCount}/3)
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <FiCheckCircle className="text-xs" /> Active (0 Strikes)
+                                </span>
+                              )}
+                              {item.blockedReason && (
+                                <span className="text-[10px] text-rose-600 font-medium max-w-xs truncate">
+                                  {item.blockedReason}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Last Violation */}
+                          <td className="py-3 px-4">
+                            {item.lastViolationAt ? (
+                              <div>
+                                <p className="text-[11px] font-medium text-gray-700">
+                                  {new Date(item.lastViolationAt).toLocaleDateString('en-IN', {
+                                    day: '2-digit',
+                                    month: 'short',
+                                    year: 'numeric'
+                                  })}
+                                </p>
+                                <p className="text-[10px] text-gray-400">
+                                  {new Date(item.lastViolationAt).toLocaleTimeString('en-IN', {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </p>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-[11px]">—</span>
+                            )}
+                          </td>
+
+                          {/* Actions */}
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {/* View Audit Trail */}
+                              <button
+                                onClick={() => {
+                                  setSelectedUserAudit(item);
+                                  setAuditModalOpen(true);
+                                }}
+                                className="px-2.5 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                                title="View Violation Audit Log"
+                              >
+                                <FiFileText className="text-xs" />
+                                <span className="hidden sm:inline">Audit Log ({item.violations?.length || 0})</span>
+                              </button>
+
+                              {/* Restore Access (Unblock) */}
+                              {isBlocked ? (
+                                <button
+                                  onClick={() => handleUnblockUser(item.phoneNumber)}
+                                  disabled={actionInProgress}
+                                  className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                                  title="Unblock User & Reactivate Website Account"
+                                >
+                                  <FiUnlock className="text-xs" />
+                                  <span>Restore</span>
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setUserToBlock(item);
+                                    setBlockReasonInput('');
+                                    setBlockModalOpen(true);
+                                  }}
+                                  disabled={actionInProgress}
+                                  className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold flex items-center gap-1 transition-all cursor-pointer"
+                                  title="Manually Restrict / Block User"
+                                >
+                                  <FiLock className="text-xs" />
+                                  <span className="hidden sm:inline">Block</span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: VIOLATION AUDIT TRAIL ─────────────────────────────────────── */}
+      <AnimatePresence>
+        {auditModalOpen && selectedUserAudit && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-gray-100 max-h-[85vh] flex flex-col overflow-hidden"
+            >
+              {/* Modal Header */}
+              <div className="p-5 sm:p-6 border-b border-gray-100 bg-slate-900 text-white flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-rose-500/20 text-rose-400 border border-rose-500/30 flex items-center justify-center text-lg">
+                    <FiShield />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-base sm:text-lg text-white">
+                      Violation Audit Trail
+                    </h3>
+                    <p className="text-xs text-slate-300 font-mono">
+                      +{selectedUserAudit.phoneNumber} • {selectedUserAudit.whatsappDisplayName || 'WhatsApp User'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setAuditModalOpen(false)}
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"
+                >
+                  <FiX />
+                </button>
+              </div>
+
+              {/* Modal Summary Bar */}
+              <div className="bg-slate-50 px-6 py-3 border-b border-gray-200/70 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-gray-700">Status:</span>
+                  {selectedUserAudit.status === 'blocked' ? (
+                    <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold">🚫 Blocked</span>
+                  ) : selectedUserAudit.status === 'warning' ? (
+                    <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-bold">⚠️ Warning</span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">✅ Active</span>
+                  )}
+                  <span className="text-gray-400">•</span>
+                  <span className="font-bold text-gray-700">Strikes:</span>
+                  <span className="font-bold text-church-royal-blue">{selectedUserAudit.violationCount} / 3</span>
+                </div>
+
+                {selectedUserAudit.status === 'blocked' && (
+                  <button
+                    onClick={() => handleUnblockUser(selectedUserAudit.phoneNumber)}
+                    disabled={actionInProgress}
+                    className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center gap-1 shadow-xs cursor-pointer"
+                  >
+                    <FiUnlock className="text-xs" /> Restore Access Now
+                  </button>
+                )}
+              </div>
+
+              {/* Incidents Timeline */}
+              <div className="p-6 overflow-y-auto space-y-4 flex-1">
+                {(!selectedUserAudit.violations || selectedUserAudit.violations.length === 0) ? (
+                  <div className="text-center py-10 text-gray-400">
+                    <FiCheckCircle className="text-3xl text-emerald-500 inline mb-2" />
+                    <p className="font-semibold text-gray-700">No recorded violations</p>
+                    <p className="text-xs text-gray-400">This contact currently has a completely clean record.</p>
+                  </div>
+                ) : (
+                  selectedUserAudit.violations.map((v, idx) => (
+                    <div key={idx} className="bg-white border border-gray-200 rounded-2xl p-4 shadow-2xs space-y-2.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-bold px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200">
+                          Strike #{idx + 1} • Severity {v.severity || 2}
+                        </span>
+                        <span className="text-gray-400 font-mono text-[11px]">
+                          {new Date(v.timestamp).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+
+                      {/* Raw Offensive Text */}
+                      <div className="bg-slate-900 text-rose-300 p-3 rounded-xl font-mono text-xs break-all border border-slate-800">
+                        <span className="text-slate-500 select-none">Incoming Message: </span>
+                        {v.messageText}
+                      </div>
+
+                      {/* Detected Words */}
+                      {v.matchedWords && v.matchedWords.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap text-xs">
+                          <span className="text-gray-500 font-bold text-[11px]">Detected Prohibited Words:</span>
+                          {v.matchedWords.map((w, wIdx) => (
+                            <span key={wIdx} className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 font-bold font-mono text-[10px]">
+                              {w}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Bot Warning Sent */}
+                      {v.warningSent && (
+                        <div className="bg-amber-50 text-amber-950 p-2.5 rounded-xl text-xs border border-amber-200/80">
+                          <span className="font-bold text-amber-800 block text-[11px] mb-0.5">Automated System Response:</span>
+                          {v.warningSent}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── MODAL: MANUAL BLOCK PROMPT ───────────────────────────────────────── */}
+      <AnimatePresence>
+        {blockModalOpen && userToBlock && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center text-lg">
+                  <FiAlertOctagon />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-base">Restrict User Access</h3>
+                  <p className="text-xs text-gray-500 font-mono">+{userToBlock.phoneNumber}</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Blocking this phone number will prevent it from executing WhatsApp bot commands. If an associated website account exists, it will be deactivated immediately and active login sessions will be invalidated.
+              </p>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">Reason for Restriction:</label>
+                <textarea
+                  rows={3}
+                  value={blockReasonInput}
+                  onChange={(e) => setBlockReasonInput(e.target.value)}
+                  placeholder="e.g. Abusive behavior, harassment, spam..."
+                  className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:border-rose-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  onClick={() => setBlockModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBlockUser}
+                  disabled={actionInProgress}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white flex items-center gap-1 shadow-sm cursor-pointer"
+                >
+                  <FiLock className="text-xs" />
+                  <span>{actionInProgress ? 'Restricting...' : 'Confirm Block'}</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* ─── MODAL: BROADCAST CONFIRMATION & PREVIEW ─────────────────────────── */}
       <AnimatePresence>

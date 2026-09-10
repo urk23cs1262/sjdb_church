@@ -10,23 +10,19 @@ export const CHURCH_MASS_INTENTION_CATEGORIES = [
     ta: 'பெற்ற நன்மைகளுக்கு நன்றியாக'
   },
   {
-    id: 'birthday_wedding_anniversary',
-    en: 'For Birthday / Wedding Anniversary',
-    ta: 'பிறந்த நாள் / திருமண நாள் நன்றியாக'
-  },
-  {
     id: 'birthday',
-    en: 'Birthday',
-    ta: 'பிறந்த நாள்',
-    isSubOption: true,
-    parentId: 'birthday_wedding_anniversary'
+    en: 'For Birthday',
+    ta: 'பிறந்த நாள் நன்றியாக'
   },
   {
     id: 'wedding_anniversary',
-    en: 'Wedding Anniversary',
-    ta: 'திருமண நாள்',
-    isSubOption: true,
-    parentId: 'birthday_wedding_anniversary'
+    en: 'For Wedding Anniversary',
+    ta: 'திருமண நாள் நன்றியாக'
+  },
+  {
+    id: 'birthday_wedding_anniversary',
+    en: 'For Birthday / Wedding Anniversary',
+    ta: 'பிறந்த நாள் / திருமண நாள் நன்றியாக'
   },
   {
     id: 'good_health',
@@ -49,23 +45,19 @@ export const CHURCH_MASS_INTENTION_CATEGORIES = [
     ta: 'வேலைவாய்ப்பு கிடைத்திட'
   },
   {
-    id: 'abroad_military',
-    en: 'For Those Living Abroad / Serving in the Military',
-    ta: 'வெளிநாடு / இராணுவத்தில் உள்ளோருக்காக'
-  },
-  {
     id: 'living_abroad',
-    en: 'Living Abroad',
-    ta: 'வெளிநாட்டில் உள்ளோருக்காக',
-    isSubOption: true,
-    parentId: 'abroad_military'
+    en: 'For Those Living Abroad',
+    ta: 'வெளிநாட்டில் உள்ளோருக்காக'
   },
   {
     id: 'military_service',
-    en: 'Serving in the Military',
-    ta: 'இராணுவத்தில் உள்ளோருக்காக',
-    isSubOption: true,
-    parentId: 'abroad_military'
+    en: 'For Those Serving in the Military',
+    ta: 'இராணுவத்தில் உள்ளோருக்காக'
+  },
+  {
+    id: 'abroad_military',
+    en: 'For Those Living Abroad / Serving in the Military',
+    ta: 'வெளிநாடு / இராணுவத்தில் உள்ளோருக்காக'
   },
   {
     id: 'family_peace_harmony',
@@ -136,8 +128,10 @@ const ALL_CATEGORIES_MAP = new Map();
 // Legacy string to Category ID / translations fallback
 const LEGACY_MAPPING = {
   'Thanksgiving': { en: 'In Thanksgiving for Blessings Received', ta: 'பெற்ற நன்மைகளுக்கு நன்றியாக' },
-  'Birthday Blessing': { en: 'Birthday', ta: 'பிறந்த நாள்' },
-  'Wedding Anniversary': { en: 'Wedding Anniversary', ta: 'திருமண நாள்' },
+  'Birthday': { en: 'For Birthday', ta: 'பிறந்த நாள் நன்றியாக' },
+  'Birthday Blessing': { en: 'For Birthday', ta: 'பிறந்த நாள் நன்றியாக' },
+  'Wedding Anniversary': { en: 'For Wedding Anniversary', ta: 'திருமண நாள் நன்றியாக' },
+  'Birthday / Wedding Anniversary': { en: 'For Birthday / Wedding Anniversary', ta: 'பிறந்த நாள் / திருமண நாள் நன்றியாக' },
   'Good Health & Healing': { en: 'For Everyone to Live in Good Health', ta: 'அனைவரும் நற்சுகத்துடன் வாழ' },
   'Safe Journey': { en: 'Safe Journey', ta: 'பாதுகாப்பான பயணம்' },
   'Exam Success': { en: 'For Success in Examinations', ta: 'தேர்வில் வெற்றி பெற' },

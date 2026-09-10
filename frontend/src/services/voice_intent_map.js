@@ -438,7 +438,7 @@ export const CONTROL_MAP = [
     labelEn: 'Closing.',
     labelTa: 'மூடுகிறேன்.',
     patterns: [
-      /\b(close this|close assistant|cancel|dismiss|stop|never mind)\b/i,
+      /\b(close|close this|close connect|close assistant|cancel|dismiss|stop|never mind)\b/i,
       /(மூடு|ரத்து செய்|நிறுத்து)/i,
     ],
   },

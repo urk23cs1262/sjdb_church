@@ -62,6 +62,8 @@ const userSchema = new mongoose.Schema({
   isSuspended: { type: Boolean, default: false },
   suspendedAt: { type: Date },
   suspensionReason: { type: String },
+  deactivatedReason: { type: String },
+  deactivatedAt: { type: Date },
   preferredLanguage: { type: String, enum: ['en', 'ta', 'both'], default: 'en' },
   mass_reflection_language: { type: String, enum: ['ta', 'en', 'both'], default: 'en' },
   // WhatsApp Bot preferences — defaults to opted-in for website registrants

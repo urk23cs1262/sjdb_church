@@ -229,6 +229,37 @@ const notifyAdmin = async (event) => {
         break;
       }
 
+      case 'WHATSAPP_ABUSE_ALERT': {
+        const isBlocked = Boolean(extra.isBlocked);
+        const strikeCount = extra.strikeCount || 1;
+        const totalViolations = extra.totalViolations || strikeCount;
+        const detectedWordsList = Array.isArray(extra.detectedWords) ? extra.detectedWords.join(', ') : (extra.detectedWords || 'Prohibited word');
+        const phone = extra.phoneNumber || userPhone;
+        const displayName = extra.displayName || userName;
+
+        title = isBlocked
+          ? `🚫 Critical Abuse Alert: User Blocked (${displayName} - +${phone})`
+          : `⚠️ WhatsApp Abuse Detected: Strike ${strikeCount}/3 (${displayName} - +${phone})`;
+
+        message = `Inappropriate / abusive language detected on SJDB Connect WhatsApp Bot.\n\n` +
+          `• User: ${displayName} (+${phone})\n` +
+          `• Detected Prohibited Words: ${detectedWordsList}\n` +
+          `• Offense Level: Strike ${strikeCount} of 3 (Total lifetime violations: ${totalViolations})\n` +
+          `• Action Taken: ${isBlocked ? 'ACCESS RESTRICTED & WEBSITE ACCOUNT DEACTIVATED' : 'Warning Message Sent'}\n` +
+          `• Incoming Message: "${extra.messageText || 'N/A'}"\n` +
+          `• Bot System Reply: "${extra.warningMessage || 'N/A'}"\n` +
+          `• Time: ${formattedTime}`;
+
+        category = 'security';
+        priority = isBlocked ? 'critical' : 'high';
+        sendEmailAlert = true;
+        sendSmsAlert = isBlocked;
+        emailSubject = isBlocked
+          ? `🚫 [CRITICAL SECURITY] User Blocked for WhatsApp Abuse — ${displayName} (+${phone})`
+          : `⚠️ [Abuse Warning Strike ${strikeCount}/3] Prohibited Words Detected — ${displayName} (+${phone})`;
+        break;
+      }
+
       case 'FIRST_BOT_INTERACTION': {
         const isRegistered = Boolean(extra.isRegistered);
         title = `✨ First-Time WhatsApp Bot User: ${userName}`;
@@ -267,6 +298,11 @@ const notifyAdmin = async (event) => {
         userName,
         userEmail,
         userPhone,
+        phoneNumber: extra.phoneNumber || userPhone,
+        displayName: extra.displayName || userName,
+        detectedWords: extra.detectedWords,
+        strikeCount: extra.strikeCount,
+        totalViolations: extra.totalViolations,
         memberId,
         familyId,
         ip,
@@ -368,6 +404,130 @@ const notifyAdmin = async (event) => {
           ${message.replace(/\n/g, '<br>')}
         </div>
 
+<!-- WHATSAPP_ABUSE_ALERT DEDICATED CARD -->
+        ${type === 'WHATSAPP_ABUSE_ALERT' ? `
+        <div style="margin-bottom:22px;">
+          <!-- STRIKE & STATUS BANNER -->
+          <div style="background:${isCritical ? 'linear-gradient(135deg,#991b1b,#dc2626)' : extra.strikeCount === 2 ? 'linear-gradient(135deg,#9a3412,#ea580c)' : 'linear-gradient(135deg,#854d0e,#d97706)'}; color:#ffffff; padding:16px 18px; border-radius:14px; margin-bottom:18px; box-shadow:0 4px 14px rgba(220,38,38,0.25);">
+            <div style="font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; opacity:0.9; margin-bottom:4px;">
+              ${extra.isBlocked ? '🚫 ENFORCEMENT ACTION: USER RESTRICTED & BLOCKED' : `⚠️ ENFORCEMENT ACTION: WARNING ${extra.strikeCount || 1} OF 3 DELIVERED`}
+            </div>
+            <div style="font-size:17px; font-weight:900;">
+              ${extra.isBlocked ? 'Access to SJDB Connect & Parish Website Restricted' : `Strike ${extra.strikeCount || 1} of 3 Registered (24-Hour Rolling Window)`}
+            </div>
+          </div>
+
+          <!-- DETECTED BAD WORDS SECTION -->
+          <div style="background-color:#fff1f2; border:1.5px solid #fecdd3; border-radius:14px; padding:16px 18px; margin-bottom:16px;">
+            <div style="font-size:11px; font-weight:800; color:#9f1239; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;">
+              🚨 Detected Prohibited Words (${extra.detectedWords?.length || 1})
+            </div>
+            <div style="margin-bottom:10px;">
+              ${(extra.detectedWords || []).map(w => `<span style="display:inline-block; background-color:#ffe4e6; color:#9f1239; border:1px solid #fda4af; padding:4px 10px; border-radius:6px; font-family:Consolas, Monaco, monospace; font-weight:800; font-size:13px; margin:2px 4px 2px 0;">${w}</span>`).join('')}
+            </div>
+            <div style="font-size:11.5px; color:#be123c; font-weight:600;">
+              Severity Rating: <strong>Level ${extra.highestSeverity || 2} / 3</strong> ${extra.highestSeverity === 3 ? '(Critical / Extreme Threat)' : '(Profanity & Abusive Language)'}
+            </div>
+          </div>
+
+          <!-- INCOMING MESSAGE RAW TEXT -->
+          <div style="background-color:#0f172a; border-radius:14px; padding:16px 18px; margin-bottom:16px; border:1px solid #334155;">
+            <div style="font-size:11px; font-weight:800; color:#f87171; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">
+              💬 Flagged Incoming Message Text
+            </div>
+            <div style="font-family:Consolas, Monaco, monospace; font-size:13px; color:#fecaca; line-height:1.6; word-break:break-word;">
+              ${(extra.messageText || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}
+            </div>
+          </div>
+
+          <!-- HOW MANY TIMES / VIOLATION METRICS -->
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;">
+            <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:12px 14px; text-align:center;">
+              <div style="font-size:10.5px; font-weight:700; color:#64748b; text-transform:uppercase;">Active Strikes (24h)</div>
+              <div style="font-size:22px; font-weight:900; color:#dc2626; margin-top:2px;">${extra.strikeCount || 1} / 3</div>
+              <div style="font-size:10px; color:#94a3b8;">${extra.isBlocked ? 'Blocked' : `${3 - (extra.strikeCount || 1)} strike(s) remaining`}</div>
+            </div>
+            <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:12px 14px; text-align:center;">
+              <div style="font-size:10.5px; font-weight:700; color:#64748b; text-transform:uppercase;">Lifetime Violations</div>
+              <div style="font-size:22px; font-weight:900; color:#7c3aed; margin-top:2px;">${extra.totalViolations || extra.strikeCount || 1}</div>
+              <div style="font-size:10px; color:#94a3b8;">Total historical incidents</div>
+            </div>
+          </div>
+
+          <!-- COMPLETE USER & ACCOUNT DETAILS -->
+          <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:16px 18px; margin-bottom:16px;">
+            <div style="font-size:11px; font-weight:800; color:#1e3a8a; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:12px; border-bottom:1px solid #e2e8f0; padding-bottom:6px;">
+              👤 Complete User & Parishioner Profile
+            </div>
+            
+            <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+              <tr>
+                <td style="padding:5px 0; color:#64748b; width:40%; font-weight:600;">WhatsApp Number:</td>
+                <td style="padding:5px 0; font-weight:800; color:#0f172a; font-family:monospace;">+${extra.phoneNumber || userPhone}</td>
+              </tr>
+              <tr>
+                <td style="padding:5px 0; color:#64748b; font-weight:600;">WhatsApp Name:</td>
+                <td style="padding:5px 0; font-weight:700; color:#0f172a;">${extra.displayName || userName}</td>
+              </tr>
+              <tr>
+                <td style="padding:5px 0; color:#64748b; font-weight:600;">Website Account:</td>
+                <td style="padding:5px 0;">
+                  ${extra.linkedUser ? `<span style="display:inline-block; background-color:${extra.linkedUser.isActive ? '#dcfce7' : '#fee2e2'}; color:${extra.linkedUser.isActive ? '#15803d' : '#b91c1c'}; font-size:11px; font-weight:800; padding:2px 8px; border-radius:4px;">${extra.linkedUser.isActive ? 'Registered & Active' : 'Deactivated / Restricted'}</span>` : '<span style="color:#94a3b8; font-style:italic;">No Website Account Linked</span>'}
+                </td>
+              </tr>
+              ${extra.linkedUser ? `
+              <tr>
+                <td style="padding:5px 0; color:#64748b; font-weight:600;">Parishioner Name:</td>
+                <td style="padding:5px 0; font-weight:800; color:#1e3a8a;">${extra.linkedUser.name}</td>
+              </tr>
+              <tr>
+                <td style="padding:5px 0; color:#64748b; font-weight:600;">Member ID / Family ID:</td>
+                <td style="padding:5px 0; font-family:monospace; font-weight:700; color:#0f172a;">${extra.linkedUser.parishMemberId || 'N/A'} / ${extra.linkedUser.familyId || 'N/A'}</td>
+              </tr>
+              <tr>
+                <td style="padding:5px 0; color:#64748b; font-weight:600;">Registered Email:</td>
+                <td style="padding:5px 0; font-weight:600; color:#2563eb;">${extra.linkedUser.email || 'None'}</td>
+              </tr>
+              <tr>
+                <td style="padding:5px 0; color:#64748b; font-weight:600;">Sub-Station / Anbiyam:</td>
+                <td style="padding:5px 0; font-weight:600; color:#334155;">${extra.linkedUser.anbiyam || 'Main Church'}</td>
+              </tr>
+              ` : ''}
+              <tr>
+                <td style="padding:5px 0; color:#64748b; font-weight:600;">Incident Time:</td>
+                <td style="padding:5px 0; font-weight:600; color:#334155;">${formattedTime} (IST)</td>
+              </tr>
+            </table>
+          </div>
+
+          <!-- PREVIOUS INCIDENTS SUMMARY -->
+          ${extra.previousViolations && extra.previousViolations.length > 0 ? `
+          <div style="background-color:#f1f5f9; border:1px solid #cbd5e1; border-radius:12px; padding:12px 14px; margin-bottom:16px;">
+            <div style="font-size:10.5px; font-weight:700; color:#475569; text-transform:uppercase; margin-bottom:6px;">
+              📋 Previous Violations on Record (${extra.previousViolations.length}):
+            </div>
+            <div style="font-size:11.5px; color:#334155; line-height:1.6;">
+              ${extra.previousViolations.map((pv, i) => `
+                <div style="margin-bottom:4px; padding-bottom:4px; border-bottom:1px dashed #e2e8f0;">
+                  <strong>Incident #${i + 1}:</strong> ${new Date(pv.timestamp).toLocaleDateString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })} — 
+                  Words: <code>${(pv.matchedWords || []).join(', ') || 'profanity'}</code>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          ` : ''}
+
+          <!-- BOT AUTOMATED REPLY DISPATCHED -->
+          <div style="background-color:#fffbeb; border:1px solid #fef3c7; border-radius:12px; padding:12px 14px; margin-bottom:16px;">
+            <div style="font-size:10.5px; font-weight:700; color:#92400e; text-transform:uppercase; margin-bottom:4px;">
+              🤖 Automated System Response Sent to User:
+            </div>
+            <div style="font-size:12px; color:#78350f; font-weight:600; line-height:1.5;">
+              "${extra.warningMessage || 'Warning message delivered.'}"
+            </div>
+          </div>
+        </div>
+        ` : `
         <!-- DETAILS SECTION -->
         <div style="margin-bottom:22px;">
           <div style="font-size:12px; font-weight:800; color:#1e3a8a; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:10px; border-bottom:1px solid #e2e8f0; padding-bottom:6px;">
@@ -428,6 +588,8 @@ const notifyAdmin = async (event) => {
           ` : ''}
         </div>
 
+        `}
+
         ${pdfUrl ? `
         <!-- ATTACHED PDF CALLOUT -->
         <div style="background:linear-gradient(135deg,#ecfdf5,#d1fae5); border:1.5px solid #6ee7b7; border-radius:14px; padding:16px 18px; margin-bottom:22px; text-align:center;">
@@ -439,8 +601,8 @@ const notifyAdmin = async (event) => {
 
         <!-- ACTION BUTTON -->
         <div style="text-align:center; margin-top:24px;">
-          <a class="action-btn" href="${process.env.CLIENT_URL || 'http://localhost:5173'}/admin/notifications" style="background:linear-gradient(135deg,#1e3a8a,#1e40af); color:#ffffff; text-decoration:none; padding:13px 28px; border-radius:12px; font-weight:800; font-size:13.5px; display:inline-block; box-shadow:0 4px 14px rgba(30,58,138,0.35);">
-            Open Admin Notification Center →
+          <a class="action-btn" href="${process.env.CLIENT_URL || 'http://localhost:5173'}${type === 'WHATSAPP_ABUSE_ALERT' ? '/admin/whatsapp' : '/admin/notifications'}" style="background:linear-gradient(135deg,#1e3a8a,#1e40af); color:#ffffff; text-decoration:none; padding:13px 28px; border-radius:12px; font-weight:800; font-size:13.5px; display:inline-block; box-shadow:0 4px 14px rgba(30,58,138,0.35);">
+            ${type === 'WHATSAPP_ABUSE_ALERT' ? 'Open Abuse & Moderation Center →' : 'Open Admin Notification Center →'}
           </a>
         </div>
       </div>
