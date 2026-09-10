@@ -11,7 +11,7 @@ const BlockedWord = require('../models/BlockedWord');
 const User = require('../models/User');
 const { BAD_WORDS_LIST } = require('../bot/moderation');
 
-const { normalizeToE164, getPhoneLookupKeys, isSamePhoneIdentity } = require('../utils/phoneUtils');
+const { normalizeToE164, getPhoneLookupKeys, isSamePhoneIdentity, formatPhoneDisplay } = require('../utils/phoneUtils');
 
 const VIOLATION_WINDOW_HOURS = 24; // 24-hour rolling strike window calculated dynamically
 
@@ -254,44 +254,90 @@ async function deactivateWebsiteAccount(user, reason, detectedWords = []) {
     if (user.email) {
       try {
         const { sendMail } = require('../config/mailer');
-        const wordsStr = Array.isArray(detectedWords) && detectedWords.length > 0
-          ? detectedWords.map(w => `<code style="background:#fee2e2; padding:2px 6px; border-radius:4px; color:#b91c1c;">${w}</code>`).join(' ')
-          : 'Prohibited / abusive content';
+        const wordsBadges = Array.isArray(detectedWords) && detectedWords.length > 0
+          ? detectedWords.map(w => `<span style="display:inline-block; background-color:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-family:Consolas, Monaco, monospace; font-weight:800; font-size:13px; padding:3px 8px; border-radius:5px; margin:2px 4px 2px 0;">${w}</span>`).join(' ')
+          : '<span style="color:#b91c1c; font-weight:bold;">Prohibited / abusive content</span>';
 
         await sendMail({
           to: user.email,
           subject: '🚫 Notice: Your SJDB Connect Account has been Deactivated and Blocked',
-          html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
-            <div style="background: linear-gradient(135deg, #b91c1c, #dc2626); padding: 24px; text-align: center; color: #ffffff;">
-              <h1 style="margin: 0; font-size: 22px; font-weight: bold;">🚫 SJDB Connect — Account Deactivated & Blocked</h1>
-              <p style="margin: 6px 0 0; font-size: 13px; opacity: 0.95;">St. John de Britto Church, Kalayarkoil</p>
-            </div>
-            <div style="padding: 24px; color: #334155; line-height: 1.6;">
-              <p>Dear <strong>${user.name || 'Parishioner'}</strong>,</p>
-              <p>Your SJDB Connect account and interactive WhatsApp bot access have been <strong>automatically deactivated and blocked</strong> due to repeated community policy violations (use of prohibited or abusive language).</p>
-              
-              <div style="background: #fef2f2; border-left: 4px solid #ef4444; border-radius: 6px; padding: 14px; margin: 18px 0;">
-                <p style="margin: 0 0 6px; font-weight: bold; color: #991b1b; font-size: 14px;">Policy Violation Details:</p>
-                <p style="margin: 0; font-size: 13px; color: #7f1d1d;"><strong>Reason:</strong> ${reason}</p>
-                <p style="margin: 4px 0 0; font-size: 13px; color: #7f1d1d;"><strong>Detected words:</strong> ${wordsStr}</p>
-                <p style="margin: 4px 0 0; font-size: 13px; color: #7f1d1d;"><strong>Status:</strong> Website account locked, interactive bot commands suspended, notifications suspended.</p>
-              </div>
+          html: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>Account Deactivated & Blocked</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f1f5f9; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing:antialiased;">
+  <div style="max-width:600px; margin:0 auto; padding:16px 8px;">
+    
+    <div style="background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.08); border:1px solid #e2e8f0;">
+      
+      <!-- HEADER -->
+      <div style="background:linear-gradient(135deg, #991b1b 0%, #dc2626 100%); padding:26px 20px; text-align:center; color:#ffffff;">
+        <div style="display:inline-block; background:rgba(255,255,255,0.22); padding:4px 14px; border-radius:20px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">
+          🚫 Account Notice
+        </div>
+        <h1 style="margin:0; font-size:22px; font-weight:900; line-height:1.3; color:#ffffff;">
+          Account Deactivated & Blocked
+        </h1>
+        <p style="margin:6px 0 0; font-size:13px; opacity:0.95; color:#ffffff;">
+          St. John de Britto Church, Kalayarkoil • SJDB Connect
+        </p>
+      </div>
 
-              <h3 style="color: #0f172a; margin: 20px 0 10px; font-size: 15px;">Parish Administrator Contact Details:</h3>
-              <p style="margin: 0 0 8px; font-size: 13px;">If you believe this action was taken in error or wish to request reinstatement, please contact the church administration directly:</p>
-              <ul style="padding-left: 20px; font-size: 13px; color: #1e293b; line-height: 1.8;">
-                <li><strong>Parish Office:</strong> St. John de Britto Church, Kalayarkoil - 630551</li>
-                <li><strong>Administrator Phone:</strong> <a href="tel:+919655639144" style="color: #2563eb; font-weight: bold;">+91 9655639144</a> / +91 9443123456</li>
-                <li><strong>Admin Email:</strong> <a href="mailto:arndas777@gmail.com" style="color: #2563eb; font-weight: bold;">arndas777@gmail.com</a></li>
-                <li><strong>Office Hours:</strong> Monday – Saturday, 9:00 AM – 5:00 PM IST</li>
-                <li><strong>Parish Website:</strong> <a href="https://st-jb-church.vercel.app" style="color: #2563eb;">st-jb-church.vercel.app</a></li>
-              </ul>
+      <!-- BODY -->
+      <div style="padding:22px 18px; color:#1e293b;">
+        <p style="font-size:15px; margin:0 0 12px; line-height:1.5;">Dear <strong>${user.name || 'Parishioner'}</strong>,</p>
+        <p style="font-size:13.5px; color:#475569; margin:0 0 16px; line-height:1.6;">
+          Your SJDB Connect parish account and interactive WhatsApp bot access have been <strong>automatically deactivated and restricted</strong> due to policy violations (use of prohibited or inappropriate language).
+        </p>
 
-              <p style="margin: 20px 0 0; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0; padding-top: 14px;">
-                This is an automated safety notice issued by St. John de Britto Church parish administration.
-              </p>
-            </div>
-          </div>`
+        <!-- VIOLATION DETAILS CARD -->
+        <div style="background-color:#fef2f2; border:1px solid #fecaca; border-left:5px solid #dc2626; border-radius:10px; padding:14px 16px; margin-bottom:18px;">
+          <div style="font-size:11px; font-weight:800; color:#991b1b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">
+            Policy Violation Details
+          </div>
+          <div style="font-size:13px; color:#7f1d1d; margin-bottom:5px;">
+            • <strong>Reason:</strong> ${reason || 'Inappropriate or abusive language'}
+          </div>
+          <div style="font-size:13px; color:#7f1d1d; margin-bottom:6px;">
+            • <strong>Detected Words:</strong> ${wordsBadges}
+          </div>
+          <div style="font-size:13px; color:#7f1d1d;">
+            • <strong>Current Status:</strong> Website login locked, interactive bot messaging suspended, all automated notifications suspended.
+          </div>
+        </div>
+
+        <!-- CONTACT DETAILS CARD -->
+        <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px 18px; margin-bottom:18px;">
+          <div style="font-size:12px; font-weight:800; color:#1e3a8a; text-transform:uppercase; letter-spacing:0.6px; margin-bottom:10px; border-bottom:1px solid #e2e8f0; padding-bottom:6px;">
+            📞 Parish Administration Contact Details
+          </div>
+          <p style="font-size:13px; color:#334155; margin:0 0 12px; line-height:1.5;">
+            SJDB Connect is a sacred platform dedicated to prayer, spiritual reflection, and community fellowship. If you believe this action was taken in error or wish to appeal for account restoration, please contact the church administration directly:
+          </p>
+          
+          <div style="font-size:13px; color:#1e293b; line-height:1.9;">
+            <div>• <strong>Parish Office:</strong> St. John de Britto Church, Kalayarkoil - 630551</div>
+            <div>• <strong>Parish Priest / Admin Phone:</strong> <a href="tel:+919655639144" style="color:#2563eb; font-weight:bold; text-decoration:none;">+91 9655639144</a> / <a href="tel:+919443123456" style="color:#2563eb; text-decoration:none;">+91 9443123456</a></div>
+            <div>• <strong>Administrator Email:</strong> <a href="mailto:arndas777@gmail.com" style="color:#2563eb; font-weight:bold; text-decoration:none;">arndas777@gmail.com</a></div>
+            <div>• <strong>Office Hours:</strong> Monday – Saturday, 9:00 AM – 5:00 PM IST</div>
+            <div>• <strong>Parish Website:</strong> <a href="https://st-jb-church.vercel.app" style="color:#2563eb; text-decoration:none;">st-jb-church.vercel.app</a></div>
+          </div>
+        </div>
+
+        <p style="margin:16px 0 0; font-size:12px; color:#94a3b8; border-top:1px solid #e2e8f0; padding-top:12px; text-align:center;">
+          Automated safety notice issued by St. John de Britto Church Parish Administration.
+        </p>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>`
         });
       } catch (mailErr) {
         console.warn('[Moderation] Could not send user deactivation email notice:', mailErr.message);
@@ -517,70 +563,222 @@ Your message contained prohibited language:
   // Direct email to Admin to guarantee delivery with all details
   try {
     const { sendMail } = require('../config/mailer');
+    const formattedPhone = formatPhoneDisplay(canonicalPhone);
+    const wordsBadges = (detectedWords || []).map(w => 
+      `<span style="display:inline-block; background-color:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-family:Consolas, Monaco, monospace; font-weight:800; font-size:14px; padding:4px 10px; border-radius:6px; margin:2px 6px 2px 0;">${w}</span>`
+    ).join('');
+    const formattedTimestamp = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'medium' });
+
     await sendMail({
       to: 'arndas777@gmail.com',
       subject: shouldBlock
-        ? `🚨 URGENT: User Blocked & Deactivated for Abusive Language — ${displayName || canonicalPhone}`
-        : `⚠️ WhatsApp Abuse Warning Issued — ${displayName || canonicalPhone}`,
-      html: `<div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
-        <div style="background: ${shouldBlock ? 'linear-gradient(135deg, #991b1b, #dc2626)' : 'linear-gradient(135deg, #d97706, #f59e0b)'}; padding: 22px; text-align: center; color: #ffffff;">
-          <h2 style="margin: 0; font-size: 20px;">${shouldBlock ? '🚨 User Automatically Blocked & Deactivated' : '⚠️ WhatsApp Abuse Warning Issued'}</h2>
-          <p style="margin: 6px 0 0; font-size: 13px; opacity: 0.95;">SJDB Connect Central Moderation Service</p>
+        ? `🚨 URGENT: User Blocked & Deactivated for Abusive Language — ${displayName || formattedPhone}`
+        : `⚠️ WhatsApp Abuse Warning Issued — ${displayName || formattedPhone}`,
+      html: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <title>${shouldBlock ? '🚨 User Blocked & Deactivated' : '⚠️ WhatsApp Abuse Warning'}</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f1f5f9; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing:antialiased;">
+  <div style="max-width:600px; margin:0 auto; padding:16px 8px;">
+    
+    <!-- MAIN CARD CONTAINER -->
+    <div style="background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.08); border:1px solid #e2e8f0;">
+      
+      <!-- HEADER BANNER -->
+      <div style="background:${shouldBlock ? 'linear-gradient(135deg, #991b1b 0%, #dc2626 100%)' : 'linear-gradient(135deg, #b45309 0%, #ea580c 100%)'}; padding:26px 20px; text-align:center; color:#ffffff;">
+        <div style="display:inline-block; background:rgba(255,255,255,0.22); padding:4px 14px; border-radius:20px; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">
+          ${shouldBlock ? '🚨 Critical Security Enforcement' : '⚠️ Central Moderation Alert'}
         </div>
-        <div style="padding: 24px; color: #1e293b; line-height: 1.6; font-size: 13.5px;">
-          <p>A message containing prohibited language was intercepted on the WhatsApp bot.</p>
-          
-          <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
-            <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 10px; font-weight: bold; width: 35%;">Sender Phone:</td>
-              <td style="padding: 10px;">${canonicalPhone}</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 10px; font-weight: bold;">WhatsApp Name:</td>
-              <td style="padding: 10px;">${displayName || 'Unknown'}</td>
-            </tr>
-            <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 10px; font-weight: bold;">Website Account:</td>
-              <td style="padding: 10px;">${linkedUser ? `Registered Member (${linkedUser.name})` : 'Unregistered WhatsApp User'}</td>
-            </tr>
-            ${linkedUser ? `
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 10px; font-weight: bold;">Member ID / Anbiyam:</td>
-              <td style="padding: 10px;">${linkedUser.parishMemberId || 'N/A'} / ${linkedUser.anbiyam || linkedUser.subStation || 'N/A'}</td>
-            </tr>
-            <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 10px; font-weight: bold;">User Email:</td>
-              <td style="padding: 10px;">${linkedUser.email || 'N/A'}</td>
-            </tr>
-            ` : ''}
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 10px; font-weight: bold; color: #b91c1c;">Detected Words:</td>
-              <td style="padding: 10px; color: #b91c1c; font-weight: bold;">${detectedWords.map(w => `<span style="background:#fee2e2; padding:2px 6px; border-radius:4px; margin-right:4px;">${w}</span>`).join(' ')}</td>
-            </tr>
-            <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 10px; font-weight: bold;">Full Message Text:</td>
-              <td style="padding: 10px; font-style: italic; color: #475569;">"${messageText}"</td>
-            </tr>
-            <tr style="border-bottom: 1px solid #e2e8f0;">
-              <td style="padding: 10px; font-weight: bold;">Action Taken:</td>
-              <td style="padding: 10px; font-weight: bold; color: ${shouldBlock ? '#b91c1c' : '#d97706'};">
-                ${shouldBlock ? `Strike ${activeStrikes}: User Automatically Blocked & Website Account Deactivated` : `Strike ${activeStrikes}: Formal Warning Sent`}
-              </td>
-            </tr>
-            <tr style="background: #f8fafc;">
-              <td style="padding: 10px; font-weight: bold;">Timestamp:</td>
-              <td style="padding: 10px;">${now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (IST)</td>
-            </tr>
-          </table>
+        <h1 style="margin:0; font-size:22px; font-weight:900; line-height:1.3; color:#ffffff;">
+          ${shouldBlock ? 'User Automatically Blocked & Deactivated' : 'WhatsApp Abuse Warning Issued'}
+        </h1>
+        <p style="margin:6px 0 0; font-size:13px; opacity:0.95; color:#ffffff;">
+          SJDB Connect Central Moderation Service • St. John de Britto Church, Kalayarkoil
+        </p>
+      </div>
 
-          <div style="text-align: center; margin-top: 24px;">
-            <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/admin/whatsapp" style="background: #1e3a8a; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; display: inline-block;">
-              Open Moderation Center & Audit Logs →
-            </a>
+      <!-- BODY WRAPPER -->
+      <div style="padding:22px 18px; color:#1e293b;">
+        
+        <!-- ENFORCEMENT SUMMARY CALLOUT -->
+        <div style="background-color:${shouldBlock ? '#fef2f2' : '#fffbeb'}; border-left:5px solid ${shouldBlock ? '#dc2626' : '#f59e0b'}; border-radius:8px; padding:14px 16px; margin-bottom:20px;">
+          <div style="font-size:14px; font-weight:800; color:${shouldBlock ? '#991b1b' : '#92400e'}; margin-bottom:4px;">
+            ${shouldBlock ? '🚫 Action Taken: Account Restricted & Deactivated' : `⚠️ Action Taken: Formal Warning Issued (Strike ${activeStrikes} of 3)`}
+          </div>
+          <div style="font-size:13px; color:${shouldBlock ? '#7f1d1d' : '#78350f'}; line-height:1.5;">
+            ${shouldBlock 
+              ? `User <strong>${displayName || formattedPhone}</strong> exceeded policy thresholds. Their interactive WhatsApp bot messaging and linked parish website account have been <strong>automatically deactivated and blocked</strong>.` 
+              : `User <strong>${displayName || formattedPhone}</strong> sent prohibited language. A formal warning was delivered. <strong>${3 - activeStrikes} strike(s)</strong> remaining before automatic account deactivation.`}
           </div>
         </div>
-      </div>`
-    }).catch(err => console.warn('[Moderation] Direct admin email error:', err.message));
+
+        <!-- SECTION 1: INCIDENT & ABUSE DETAILS -->
+        <div style="margin-bottom:22px;">
+          <div style="font-size:12px; font-weight:800; color:#64748b; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:10px; border-bottom:2px solid #f1f5f9; padding-bottom:6px;">
+            🚨 Incident & Violation Breakdown
+          </div>
+
+          <!-- DETECTED WORDS CARD -->
+          <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px 16px; margin-bottom:10px;">
+            <div style="font-size:11px; font-weight:700; color:#b91c1c; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">
+              Detected Prohibited Words (${detectedWords.length})
+            </div>
+            <div style="margin-bottom:6px;">
+              ${wordsBadges}
+            </div>
+            <div style="font-size:11.5px; color:#64748b;">
+              Severity Rating: <strong style="color:#0f172a;">Level ${highestSeverity} of 3</strong> ${highestSeverity === 3 ? '(Critical Threat / Instant Ban)' : '(Profanity / Vulgar Language)'}
+            </div>
+          </div>
+
+          <!-- VERBATIM MESSAGE TEXT -->
+          <div style="background-color:#0f172a; border-radius:10px; padding:14px 16px; margin-bottom:10px; border:1px solid #334155;">
+            <div style="font-size:11px; font-weight:700; color:#f87171; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">
+              💬 Flagged Incoming Message Text
+            </div>
+            <div style="font-family:Consolas, Monaco, monospace; font-size:14px; color:#fecaca; line-height:1.5; word-break:break-word; overflow-wrap:anywhere;">
+              "${(messageText || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}"
+            </div>
+          </div>
+
+          <!-- STRIKES & VIOLATION METRICS -->
+          <table style="width:100%; border-collapse:collapse; margin-bottom:6px;">
+            <tr>
+              <td style="width:50%; padding-right:5px; vertical-align:top;">
+                <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; text-align:center;">
+                  <div style="font-size:10.5px; font-weight:700; color:#64748b; text-transform:uppercase;">Active Strikes (24h)</div>
+                  <div style="font-size:22px; font-weight:900; color:#dc2626; margin:4px 0 2px;">${activeStrikes} / 3</div>
+                  <div style="font-size:11px; color:#64748b; font-weight:600;">${shouldBlock ? 'Threshold Exceeded (Blocked)' : `${3 - activeStrikes} strike(s) remaining`}</div>
+                </div>
+              </td>
+              <td style="width:50%; padding-left:5px; vertical-align:top;">
+                <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:12px; text-align:center;">
+                  <div style="font-size:10.5px; font-weight:700; color:#64748b; text-transform:uppercase;">Lifetime Violations</div>
+                  <div style="font-size:22px; font-weight:900; color:#7c3aed; margin:4px 0 2px;">${updatedRecord.violations?.length || activeStrikes}</div>
+                  <div style="font-size:11px; color:#64748b; font-weight:600;">Permanent Audit Trail</div>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- SECTION 2: USER & PARISHIONER PROFILE -->
+        <div style="margin-bottom:22px;">
+          <div style="font-size:12px; font-weight:800; color:#64748b; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:10px; border-bottom:2px solid #f1f5f9; padding-bottom:6px;">
+            👤 Offending User Profile & Details
+          </div>
+
+          <!-- SENDER PHONE -->
+          <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:11px 15px; margin-bottom:8px;">
+            <div style="font-size:10.5px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px;">
+              Sender Mobile Number
+            </div>
+            <div style="font-size:16px; font-weight:800; color:#0f172a; font-family:Consolas, Monaco, monospace; letter-spacing:0.5px;">
+              ${formattedPhone}
+            </div>
+          </div>
+
+          <!-- WHATSAPP DISPLAY NAME -->
+          <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:11px 15px; margin-bottom:8px;">
+            <div style="font-size:10.5px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px;">
+              WhatsApp Display Name
+            </div>
+            <div style="font-size:15px; font-weight:700; color:#0f172a; word-break:break-word;">
+              ${displayName || 'Unknown'}
+            </div>
+          </div>
+
+          <!-- WEBSITE ACCOUNT STATUS -->
+          <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:11px 15px; margin-bottom:8px;">
+            <div style="font-size:10.5px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">
+              Website Account Link
+            </div>
+            <div>
+              ${linkedUser 
+                ? `<span style="display:inline-block; background-color:${shouldBlock ? '#fee2e2' : '#dcfce7'}; color:${shouldBlock ? '#b91c1c' : '#15803d'}; border:1px solid ${shouldBlock ? '#fca5a5' : '#86efac'}; font-size:12px; font-weight:800; padding:3px 10px; border-radius:5px;">
+                    ${shouldBlock ? '🔒 Registered Member (Account Deactivated & Blocked)' : '✅ Registered Parishioner (Active)'}
+                   </span>`
+                : '<span style="color:#64748b; font-style:italic; font-size:13.5px;">Unregistered WhatsApp User (No Website Account)</span>'}
+            </div>
+          </div>
+
+          ${linkedUser ? `
+          <!-- PARISHIONER NAME -->
+          <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:11px 15px; margin-bottom:8px;">
+            <div style="font-size:10.5px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px;">
+              Parishioner Full Name
+            </div>
+            <div style="font-size:15.5px; font-weight:800; color:#1e3a8a; word-break:break-word;">
+              ${linkedUser.name}
+            </div>
+          </div>
+
+          <!-- MEMBER ID & FAMILY ID -->
+          <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:11px 15px; margin-bottom:8px;">
+            <div style="font-size:10.5px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px;">
+              Parish Member ID / Family ID
+            </div>
+            <div style="font-size:15px; font-weight:800; color:#0f172a; font-family:Consolas, Monaco, monospace;">
+              ${linkedUser.parishMemberId || 'N/A'}${linkedUser.familyId ? ` <span style="color:#64748b; font-weight:normal;">(Family: ${linkedUser.familyId})</span>` : ''}
+            </div>
+          </div>
+
+          <!-- ANBIYAM / SUB-STATION -->
+          <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:11px 15px; margin-bottom:8px;">
+            <div style="font-size:10.5px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px;">
+              Anbiyam / Sub-Station
+            </div>
+            <div style="font-size:14.5px; font-weight:700; color:#0f172a; word-break:break-word;">
+              ${linkedUser.anbiyam || linkedUser.subStation || 'Main Parish'}
+            </div>
+          </div>
+
+          <!-- REGISTERED USER EMAIL -->
+          <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:11px 15px; margin-bottom:8px;">
+            <div style="font-size:10.5px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px;">
+              Registered User Email
+            </div>
+            <div style="font-size:15px; font-weight:700; color:#2563eb; word-break:break-word; overflow-wrap:anywhere;">
+              <a href="mailto:${linkedUser.email}" style="color:#2563eb; text-decoration:none;">${linkedUser.email || 'None'}</a>
+            </div>
+          </div>
+          ` : ''}
+
+          <!-- INCIDENT TIMESTAMP -->
+          <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:11px 15px; margin-bottom:8px;">
+            <div style="font-size:10.5px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:3px;">
+              Incident Date & Time
+            </div>
+            <div style="font-size:13.5px; font-weight:700; color:#334155;">
+              ${formattedTimestamp} (IST)
+            </div>
+          </div>
+        </div>
+
+        <!-- ACTION BUTTON -->
+        <div style="text-align:center; margin:26px 0 10px;">
+          <a href="${process.env.CLIENT_URL || 'https://st-jb-church.vercel.app'}/admin/whatsapp" style="background:#1e3a8a; color:#ffffff; text-decoration:none; padding:14px 28px; border-radius:10px; font-size:14px; font-weight:800; display:inline-block; box-shadow:0 4px 14px rgba(30,58,138,0.25);">
+            Open Moderation Center & Audit Logs →
+          </a>
+        </div>
+
+      </div>
+
+      <!-- FOOTER -->
+      <div style="background-color:#f8fafc; border-top:1px solid #e2e8f0; padding:14px; text-align:center; font-size:11.5px; color:#64748b;">
+        Automated security notification issued by SJDB Connect Central Moderation • St. John de Britto Church, Kalayarkoil
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>`
+    });
   } catch (err) {
     console.warn('[Moderation] Direct admin email notice error:', err.message);
   }
@@ -745,17 +943,56 @@ Your account has been restricted by the administrator.
       const { sendMail } = require('../config/mailer');
       await sendMail({
         to: linkedUser.email,
-        subject: '🚫 Notice: SJDB Connect Account Restricted',
-        html: `<div style="font-family:sans-serif; padding:20px; color:#1e293b;">
-          <h2 style="color:#b91c1c;">SJDB Connect — Account Restricted</h2>
-          <p>Your access to the SJDB Connect WhatsApp bot and website account has been restricted by the administrator.</p>
-          <p><strong>Reason:</strong> ${reason}</p>
-          <div style="background:#fef2f2; border-left:4px solid #ef4444; padding:12px; border-radius:4px; margin:16px 0;">
-            <p style="margin:0; font-weight:bold; color:#991b1b;">All Services & Notifications Suspended:</p>
-            <p style="margin:4px 0 0; font-size:13px; color:#7f1d1d;">All bot messaging, daily Catholic readings, broadcasts, and church notifications are suspended until your account is reviewed and restored by an administrator.</p>
+        subject: '🚫 Notice: Your SJDB Connect Account has been Restricted',
+        html: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Account Restricted</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f1f5f9; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <div style="max-width:600px; margin:0 auto; padding:16px 8px;">
+    <div style="background-color:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 20px rgba(0,0,0,0.08); border:1px solid #e2e8f0;">
+      <div style="background:linear-gradient(135deg, #991b1b 0%, #dc2626 100%); padding:26px 20px; text-align:center; color:#ffffff;">
+        <h1 style="margin:0; font-size:22px; font-weight:900; line-height:1.3; color:#ffffff;">
+          Account Restricted by Administrator
+        </h1>
+        <p style="margin:6px 0 0; font-size:13px; opacity:0.95; color:#ffffff;">
+          St. John de Britto Church, Kalayarkoil • SJDB Connect
+        </p>
+      </div>
+      <div style="padding:22px 18px; color:#1e293b;">
+        <p style="font-size:15px; margin:0 0 12px; line-height:1.5;">Dear <strong>${linkedUser.name || 'Parishioner'}</strong>,</p>
+        <p style="font-size:13.5px; color:#475569; margin:0 0 16px; line-height:1.6;">
+          Your access to the SJDB Connect WhatsApp bot and website account has been restricted by the parish administrator.
+        </p>
+
+        <div style="background-color:#fef2f2; border:1px solid #fecaca; border-left:5px solid #dc2626; border-radius:10px; padding:14px 16px; margin-bottom:18px;">
+          <div style="font-size:11px; font-weight:800; color:#991b1b; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">Restriction Reason</div>
+          <div style="font-size:13.5px; color:#7f1d1d; font-weight:600; margin-bottom:6px;">${reason}</div>
+          <div style="font-size:12.5px; color:#7f1d1d;">All bot messaging, Catholic daily readings, and church notifications are suspended until your account is reviewed and restored by an administrator.</div>
+        </div>
+
+        <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:16px 18px; font-size:13px; line-height:1.8;">
+          <div style="font-size:12px; font-weight:800; color:#1e3a8a; text-transform:uppercase; letter-spacing:0.6px; margin-bottom:8px; border-bottom:1px solid #e2e8f0; padding-bottom:6px;">
+            📞 Parish Administration Contact Details
           </div>
-          <p style="font-size:12px; color:#64748b;">If you believe this was in error, please contact the church office.</p>
-        </div>`
+          <div>• <strong>Parish Office:</strong> St. John de Britto Church, Kalayarkoil - 630551</div>
+          <div>• <strong>Admin Phone:</strong> <a href="tel:+919655639144" style="color:#2563eb; font-weight:bold; text-decoration:none;">+91 9655639144</a> / <a href="tel:+919443123456" style="color:#2563eb; text-decoration:none;">+91 9443123456</a></div>
+          <div>• <strong>Admin Email:</strong> <a href="mailto:arndas777@gmail.com" style="color:#2563eb; font-weight:bold; text-decoration:none;">arndas777@gmail.com</a></div>
+          <div>• <strong>Office Hours:</strong> Monday – Saturday, 9:00 AM – 5:00 PM IST</div>
+          <div>• <strong>Parish Website:</strong> <a href="https://st-jb-church.vercel.app" style="color:#2563eb; text-decoration:none;">st-jb-church.vercel.app</a></div>
+        </div>
+
+        <p style="margin:16px 0 0; font-size:12px; color:#94a3b8; border-top:1px solid #e2e8f0; padding-top:12px; text-align:center;">
+          Automated administrative notice issued by St. John de Britto Church.
+        </p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`
       });
     } catch (mailErr) {
       console.warn('[Moderation] Could not send manual block email notice:', mailErr.message);

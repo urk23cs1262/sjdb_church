@@ -5,6 +5,7 @@ const { sendSMS, sendWhatsApp } = require('../config/twilio');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
 const { generateUserReportPdf } = require('./userReportPdfService');
+const { formatPhoneDisplay } = require('../utils/phoneUtils');
 
 /**
  * Parses client IP address and location cleanly from request.
@@ -253,11 +254,11 @@ const notifyAdmin = async (event) => {
 
         category = 'security';
         priority = isBlocked ? 'critical' : 'high';
-        sendEmailAlert = true;
+        sendEmailAlert = false; // Primary responsive card email is delivered directly by userModerationService
         sendSmsAlert = isBlocked;
         emailSubject = isBlocked
-          ? `🚫 [CRITICAL SECURITY] User Blocked for WhatsApp Abuse — ${displayName} (+${phone})`
-          : `⚠️ [Abuse Warning Strike ${strikeCount}/2] Prohibited Words Detected — ${displayName} (+${phone})`;
+          ? `🚫 [CRITICAL SECURITY] User Blocked for WhatsApp Abuse — ${displayName} (${formatPhoneDisplay(phone)})`
+          : `⚠️ [Abuse Warning Strike ${strikeCount}/2] Prohibited Words Detected — ${displayName} (${formatPhoneDisplay(phone)})`;
         break;
       }
 
@@ -468,7 +469,7 @@ const notifyAdmin = async (event) => {
             <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
               <tr>
                 <td style="padding:5px 0; color:#64748b; width:40%; font-weight:600;">WhatsApp Number:</td>
-                <td style="padding:5px 0; font-weight:800; color:#0f172a; font-family:monospace;">+${extra.phoneNumber || userPhone}</td>
+                <td style="padding:5px 0; font-weight:800; color:#0f172a; font-family:monospace;">${formatPhoneDisplay(extra.phoneNumber || userPhone)}</td>
               </tr>
               <tr>
                 <td style="padding:5px 0; color:#64748b; font-weight:600;">WhatsApp Name:</td>

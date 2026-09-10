@@ -87,8 +87,22 @@ function isSamePhoneIdentity(phoneA, phoneB, defaultCountry = '91') {
   return a === b;
 }
 
+/**
+ * Format phone number for clean human presentation (e.g. "+91 76395 20006").
+ */
+function formatPhoneDisplay(phone, defaultCountry = '91') {
+  const e164 = normalizeToE164(phone, defaultCountry);
+  if (!e164) return String(phone || 'N/A');
+  // If Indian mobile (+91 followed by 10 digits)
+  if (e164.startsWith('+91') && e164.length === 13) {
+    return `+91 ${e164.slice(3, 8)} ${e164.slice(8)}`;
+  }
+  return e164;
+}
+
 module.exports = {
   normalizeToE164,
   getPhoneLookupKeys,
-  isSamePhoneIdentity
+  isSamePhoneIdentity,
+  formatPhoneDisplay
 };
