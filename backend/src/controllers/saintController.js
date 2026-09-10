@@ -167,4 +167,33 @@ const getSaintStatus = async (req, res) => {
   }
 };
 
-module.exports = { getSaint, refreshSaint, getSaintStatus };
+const searchSaintImage = async (req, res) => {
+  try {
+    const { name } = req.query;
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ success: false, message: 'Saint name is required' });
+    }
+    const { searchAndApplySaintImage } = require('../services/saintService');
+    const result = await searchAndApplySaintImage(name.trim());
+    if (result && result.url) {
+      return res.json({
+        success: true,
+        image: result.url,
+        imageSource: result.source || 'google_web_search',
+        imageSourceUrl: result.sourceUrl,
+        imageFallback: false
+      });
+    }
+    const { DIGNIFIED_FALLBACK_IMAGE } = require('../services/saintImageResolver');
+    return res.json({
+      success: true,
+      image: DIGNIFIED_FALLBACK_IMAGE,
+      imageSource: 'liturgical_fallback',
+      imageFallback: true
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { getSaint, refreshSaint, getSaintStatus, searchSaintImage };

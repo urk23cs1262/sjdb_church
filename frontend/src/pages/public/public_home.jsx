@@ -191,7 +191,7 @@ export default function Home() {
             <h1 className="font-display text-4xl sm:text-5xl md:text-7xl font-bold text-white mb-2 leading-tight">
               <span className="gradient-text">St. John de</span>
               <br />
-              <span className="text-white">Britto's Church</span>
+              <span className="text-white">Britto Church</span>
             </h1>
             <p className="text-gold-300 font-tamil text-2xl sm:text-3xl font-bold mb-3">
               புனித அருளானந்தர் தேவாலயம்
@@ -276,7 +276,7 @@ export default function Home() {
             <p className="section-subtitle text-gold-400 mb-2">{t('home.dailyVerse')}</p>
             {verse.category && (
               <span className="inline-block bg-amber-400/20 text-gold-300 border border-gold-400/40 text-xs font-bold px-3.5 py-1 rounded-full uppercase tracking-wider mb-4 shadow-xs">
-                 {verse.category}
+                {verse.category}
               </span>
             )}
             <blockquote className="text-xl sm:text-2xl md:text-3xl text-white font-serif italic leading-relaxed mb-4">
@@ -474,11 +474,11 @@ export default function Home() {
             <div className="text-center md:text-left flex flex-col items-center md:items-start">
               <GiDove className="text-church-gold text-3xl mb-3" />
               <p className="text-gray-600 text-base md:text-lg italic leading-relaxed mb-4 text-justify md:text-left">
-                "Welcome to St. John de Britto's Church, Kalayarkoil. We are a vibrant community united in faith, love, and service to God and our neighbors. May this digital space be a source of spiritual nourishment and connection for every member of our parish family."
+                "Welcome to St. John de Britto Church, Kalayarkoil. We are a vibrant community united in faith, love, and service to God and our neighbors. May this digital space be a source of spiritual nourishment and connection for every member of our parish family."
               </p>
               <div className="text-center md:text-left">
                 <p className="font-semibold text-church-royal-blue">Rev. Fr. Parish Priest</p>
-                <p className="text-gray-500 text-sm">Parish Priest, St. John de Britto's Church</p>
+                <p className="text-gray-500 text-sm">Parish Priest, St. John de Britto Church</p>
               </div>
             </div>
           </motion.div>

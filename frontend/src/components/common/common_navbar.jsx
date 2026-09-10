@@ -200,7 +200,7 @@ export default function Navbar() {
                       className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-2 text-gray-200 hover:text-church-gold hover:bg-white/10`}
                       onClick={toggleRosaryAudio}
                     >
-                      <FiHeadphones />
+                      <FiHeadphones className="text-lg" />
                       <span className="notranslate" translate="no">{t(`nav.${link.key}`)}</span>
                     </button>
                   ) : (
@@ -288,7 +288,17 @@ export default function Navbar() {
 
             {/* Actions */}
             <div className="flex items-center gap-1.5 sm:gap-2">
-              {/* Hey Connect mic button — desktop (pill) & mobile (circle) */}
+              {/* Rosary Button Mobile/Tablets — kept LEFT side of voice icon */}
+              <button
+                onClick={toggleRosaryAudio}
+                className="lg:hidden flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 text-gray-200 hover:text-church-gold hover:bg-white/10 rounded-full transition-all cursor-pointer"
+                title="Rosary"
+                aria-label="Rosary"
+              >
+                <FiHeadphones className="text-xl sm:text-[1.35rem]" />
+              </button>
+
+              {/* Hey Connect mic button — desktop (pill) & mobile (circle) — kept RIGHT side of rosary icon */}
               <button
                 onClick={() => window.dispatchEvent(new CustomEvent('hey-connect-activate'))}
                 className="connect-mic-btn"
@@ -298,15 +308,6 @@ export default function Navbar() {
               >
                 <FiMic />
                 <span className="hidden sm:inline notranslate" translate="no">Hey Connect</span>
-              </button>
-
-              {/* Rosary Button Mobile/Tablets */}
-              <button
-                onClick={toggleRosaryAudio}
-                className="lg:hidden flex items-center gap-1 text-gray-200 hover:text-gold-300 transition-colors p-2 rounded-lg hover:bg-white/10"
-                title="Rosary"
-              >
-                <FiHeadphones className="text-base" />
               </button>
 
               {/* Google Translate Hidden Widget */}

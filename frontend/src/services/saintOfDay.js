@@ -88,3 +88,16 @@ export async function fetchSaintOfTheDay(dateStr) {
   saintClientCache.set(dateKey, fallbackPayload);
   return fallbackPayload;
 }
+
+export async function searchSaintImage(saintName) {
+  if (!saintName) return null;
+  try {
+    const res = await api.get(`/saint-of-the-day/image-search?name=${encodeURIComponent(saintName)}`);
+    if (res.data && res.data.success && res.data.image) {
+      return res.data;
+    }
+  } catch (err) {
+    console.warn('Failed to search saint image online:', err.message);
+  }
+  return null;
+}

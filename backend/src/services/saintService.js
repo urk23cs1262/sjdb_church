@@ -386,8 +386,9 @@ async function loadCachedSaint() {
     
     if (cacheSetting && cacheSetting.value) {
       const parsed = JSON.parse(cacheSetting.value);
-      // Valid cache must match today's date and have a non-empty image
-      if (parsed && parsed.date === todayStr && (parsed.saintName || parsed.name) && parsed.image) {
+      const isBrokenVirginMary = parsed.image && parsed.image.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato');
+      // Valid cache must match today's date and have a non-empty, non-broken image
+      if (parsed && parsed.date === todayStr && (parsed.saintName || parsed.name) && parsed.image && !isBrokenVirginMary) {
         dailySaint = parsed;
         if (dailySaint.lastSynced) {
           dailySaint.lastSynced = new Date(dailySaint.lastSynced);
@@ -436,6 +437,23 @@ cron.schedule('0 0 * * *', () => {
   timezone: 'Asia/Kolkata'
 });
 
+async function searchAndApplySaintImage(saintName) {
+  if (!saintName) return null;
+  const { searchSaintFallback } = require('./saintImageResolver');
+  const found = await searchSaintFallback(saintName);
+  if (found && found.url) {
+    if (dailySaint) {
+      dailySaint.image = found.url;
+      dailySaint.imageSource = found.source || 'google_web_search';
+      dailySaint.imageSourceUrl = found.sourceUrl;
+      dailySaint.imageFallback = false;
+      await saveSaintToDatabase(dailySaint);
+    }
+    return found;
+  }
+  return null;
+}
+
 const getDailySaint = () => {
   const today = new Date();
   const month = String(today.getMonth() + 1).padStart(2, "0");
@@ -468,4 +486,4 @@ const getDailySaint = () => {
   return dailySaint;
 };
 
-module.exports = { getDailySaint, fetchDailySaint };
+module.exports = { getDailySaint, fetchDailySaint, searchAndApplySaintImage };

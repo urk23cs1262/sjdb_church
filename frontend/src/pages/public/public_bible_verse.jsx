@@ -10,7 +10,7 @@ import * as htmlToImage from 'html-to-image';
 import downloadjs from 'downloadjs';
 import PageHero from '../../components/common/common_page_hero';
 import api from '../../services/api';
-import { fetchSaintOfTheDay } from '../../services/saintOfDay';
+import { fetchSaintOfTheDay, searchSaintImage } from '../../services/saintOfDay';
 
 
 // ── Date helpers — always use LOCAL time, never UTC ────────────────────────
@@ -328,12 +328,50 @@ export default function BibleVerse() {
     setSaintLoading(true);
     setSaintImgError(false);
     fetchSaintOfTheDay(date)
-      .then(data => {
-        if (data) setSaintData(data);
+      .then(async (data) => {
+        if (data) {
+          // If image is missing or broken placeholder, fetch from Google/online search
+          if (!data.image || data.image.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato')) {
+            try {
+              const found = await searchSaintImage(data.englishName || data.saintName);
+              if (found && found.image) {
+                data.image = found.image;
+                data.imageSource = found.imageSource || 'google_web_search';
+                data.imageFallback = false;
+              }
+            } catch (err) {
+              console.warn('Auto search saint image notice:', err);
+            }
+          }
+          setSaintData(data);
+        }
       })
       .catch(e => console.error('Failed to load saint of the day:', e))
       .finally(() => setSaintLoading(false));
   }, [date]);
+
+  // Fallback image error handler: if the saint image fails, fetch it from Google/online search
+  const handleSaintImageError = async () => {
+    if (saintImgError) return;
+    setSaintImgError(true);
+    const targetName = saintData?.englishName || saintData?.saintName;
+    if (targetName) {
+      try {
+        const found = await searchSaintImage(targetName);
+        if (found && found.image) {
+          setSaintData(prev => ({
+            ...prev,
+            image: found.image,
+            imageSource: found.imageSource || 'google_web_search',
+            imageFallback: false
+          }));
+          setSaintImgError(false);
+        }
+      } catch (e) {
+        console.warn('Fallback saint image search failed:', e);
+      }
+    }
+  };
 
   // Smooth scroll to targeted anchor based on path or hash
   useEffect(() => {
@@ -962,7 +1000,7 @@ export default function BibleVerse() {
                     <img
                       src={saintData.image}
                       alt={saintData.saintName || saintData.name}
-                      onError={() => setSaintImgError(true)}
+                      onError={handleSaintImageError}
                       className="w-full h-full object-cover object-top transition-transform duration-700 hover:scale-105"
                     />
                   ) : (

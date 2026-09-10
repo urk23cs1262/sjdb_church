@@ -150,7 +150,7 @@ app.get(['/health', '/api/health', '/api/bot/health'], (req, res) => {
   res.json({
     success: true,
     status: 'healthy',
-    service: "SJDB Connect — St. John de Britto's Church 24/7 Platform",
+    service: "SJDB Connect — St. John de Britto Church 24/7 Platform",
     database: mongooseState,
     whatsappBot: {
       isLive: waConnected,
@@ -175,7 +175,7 @@ app.get(['/health', '/api/health', '/api/bot/health'], (req, res) => {
 // Root route (stops Render showing "Cannot GET /")
 app.get('/', (req, res) => res.json({
   success: true,
-  message: "St. John de Britto's Church API & 24/7 Bot Daemon",
+  message: "St. John de Britto Church API & 24/7 Bot Daemon",
 }));
 
 // 404
@@ -189,7 +189,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`\n St. John de Britto's Church API & 24/7 WhatsApp Daemon`);
+  console.log(`\n St. John de Britto Church API & 24/7 WhatsApp Daemon`);
   console.log(` Server running on port ${PORT}`);
   console.log(` Allowed origins: ${allowedOrigins.join(', ')}`);
   console.log(` Health: /api/health\n`);

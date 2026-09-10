@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiX, FiExternalLink, FiInfo } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
-import { fetchSaintOfTheDay } from '../../services/saintOfDay';
+import { fetchSaintOfTheDay, searchSaintImage } from '../../services/saintOfDay';
 import { getSaintForDate } from '../../data/catholic_saints_calendar';
 
 function checkIsTamil() {
@@ -53,6 +53,19 @@ export default function DailySaintTicker() {
       try {
         const data = await fetchSaintOfTheDay();
         if (isMounted && data && (data.saintName || data.englishName)) {
+          // If original image is missing or broken placeholder, fetch from Google/online search
+          if (!data.image || data.image.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato')) {
+            try {
+              const found = await searchSaintImage(data.englishName || data.saintName);
+              if (found && found.image) {
+                data.image = found.image;
+                data.imageSource = found.imageSource || 'google_web_search';
+                data.imageFallback = false;
+              }
+            } catch (err) {
+              console.warn('Auto search saint image notice:', err);
+            }
+          }
           setSaintOfDay(data);
           setImgError(false);
         }
@@ -100,7 +113,31 @@ export default function DailySaintTicker() {
     });
   }, [isTamil]);
 
-  const defaultSacredImage = "https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato.jpg/500px-Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato.jpg";
+  const defaultSacredImage = "https://upload.wikimedia.org/wikipedia/commons/b/bf/St._John_De_Britto.jpg";
+
+  // Fallback image error handler: if the active image fails, fetch it from Google/online search
+  const handleImageError = async () => {
+    if (imgError) return;
+    setImgError(true);
+    const saintTarget = saintOfDay?.englishName || saintOfDay?.saintName || displayName;
+    if (saintTarget) {
+      try {
+        const found = await searchSaintImage(saintTarget);
+        if (found && found.image) {
+          setSaintOfDay(prev => ({
+            ...prev,
+            image: found.image,
+            imageSource: found.imageSource || 'google_web_search',
+            imageFallback: false
+          }));
+          setImgError(false);
+        }
+      } catch (e) {
+        console.warn('Failed to fetch online saint image on error:', e);
+      }
+    }
+  };
+
   const activeImage = (!imgError && saintOfDay.image) ? saintOfDay.image : (todayLiturgical.image || defaultSacredImage);
 
   // Prevent background scrolling when modal is open
@@ -243,7 +280,7 @@ export default function DailySaintTicker() {
                           <img
                             src={activeImage}
                             alt={displayName}
-                            onError={() => setImgError(true)}
+                            onError={handleImageError}
                             className="absolute inset-0 w-full h-full object-cover object-top transition-transform duration-700 hover:scale-105"
                           />
                         ) : (

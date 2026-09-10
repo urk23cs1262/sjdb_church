@@ -23,7 +23,7 @@ const sendBirthdayWishes = async () => {
 
     for (const user of birthdayUsers) {
       const title = "Birthday Blessings";
-      const message = `Dear ${user.name}, St. John de Britto's Church wishes you a very Happy Birthday! May God bless you with abundant joy, health, and peace on your special day. `;
+      const message = `Dear ${user.name}, St. John de Britto Church wishes you a very Happy Birthday! May God bless you with abundant joy, health, and peace on your special day. `;
 
       // Send via email and SMS
       await createNotification({

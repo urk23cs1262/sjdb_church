@@ -23,7 +23,7 @@ and be gracious to you."*
 May God fill your life with joy, peace, and abundant blessings today and always!
 
 With love & prayers,
-⛪ *St. John de Britto's Church*
+⛪ *St. John de Britto Church*
 _SJDB Connect — Connecting Faith & Community_`;
 }
 

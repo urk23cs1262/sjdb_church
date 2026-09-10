@@ -58,7 +58,7 @@ require('./services/saintService');
 require('./services/birthdayService');
 
 // Health check
-app.get('/api/health', (req, res) => res.json({ success: true, message: "St. John de Britto's Church API is running", timestamp: new Date() }));
+app.get('/api/health', (req, res) => res.json({ success: true, message: "St. John de Britto Church API is running", timestamp: new Date() }));
 
 // 404 handler
 app.use((req, res) => res.status(404).json({ success: false, message: 'Route not found' }));
@@ -71,7 +71,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`\nSt. John de Britto's Church API`);
+  console.log(`\nSt. John de Britto Church API`);
   console.log(`Server running on http://localhost:${PORT}`);
   console.log(`Health: http://localhost:${PORT}/api/health\n`);
 });
