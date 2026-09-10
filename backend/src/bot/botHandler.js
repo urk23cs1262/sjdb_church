@@ -44,6 +44,7 @@ const {
   getStep6ContentLanguageMessage,
   getStep7AllSetMessage,
   getStep8MainMenuMessage,
+  getHowToUseSJDBConnectMessage,
   parseBotLanguage,
   parsePhoneNumber,
   parseOTP,
@@ -708,15 +709,10 @@ Detected words: ${detectedWords.map(w => `\`${w}\``).join(', ')}`;
           const allSetMsg = getStep7AllSetMessage(session.preferences, session.language, session.botLanguage);
           await wa.sendWhatsAppMessage(replyTarget, allSetMsg);
 
-          // 8️⃣ Step 8: Main Menu (sent immediately after Step 7)
+          // 📖 "How to use SJDB Connect" (sent in a separate message immediately after You're All Set)
           await new Promise(r => setTimeout(r, 450));
-          let userName = '';
-          if (session.linkedUserId) {
-            const u = await User.findById(session.linkedUserId).select('name');
-            if (u) userName = u.name;
-          }
-          const menuMsg = getStep8MainMenuMessage(userName || pushName || '', session.botLanguage);
-          await wa.sendWhatsAppMessage(replyTarget, menuMsg);
+          const howToUseMsg = getHowToUseSJDBConnectMessage(session.botLanguage);
+          await wa.sendWhatsAppMessage(replyTarget, howToUseMsg);
           return;
         }
 

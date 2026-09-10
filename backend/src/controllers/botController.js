@@ -13,6 +13,7 @@ const {
   getStep6ContentLanguageMessage,
   getStep7AllSetMessage,
   getStep8MainMenuMessage,
+  getHowToUseSJDBConnectMessage,
   parseBotLanguage,
   parsePhoneNumber,
   parseOTP,
@@ -535,8 +536,8 @@ const testBotMessage = async (req, res) => {
         newLanguage = chosenLang;
         nextStep = 'done';
         const confirmMsg = getStep7AllSetMessage(newPreferences, newLanguage, session.botLanguage || 'en');
-        const mainMenuMsg = getStep8MainMenuMessage('Parishioner', session.botLanguage || 'en');
-        botReply = `${confirmMsg}\n\n${mainMenuMsg}`;
+        const howToUseMsg = getHowToUseSJDBConnectMessage(session.botLanguage || 'en');
+        botReply = `${confirmMsg}\n\n${howToUseMsg}`;
       } else {
         botReply = getStep6ContentLanguageMessage(session.botLanguage || 'en');
       }

@@ -3,21 +3,21 @@
  * 
  * HI
  *  ↓
- * 1️⃣ Bot Language
+ * Bot Language
  *  ↓
- * 2️⃣ Phone Number Verification
+ * Phone Number Verification
  *  ↓
- * 3️⃣ OTP Verification
+ * OTP Verification
  *  ↓
- * 4️⃣ Phone Number Verified
+ * Phone Number Verified
  *  ↓
- * 5️⃣ SJDB Connect Preferences
+ * SJDB Connect Preferences
  *  ↓
- * 6️⃣ Daily Catholic Content Language
+ * Daily Catholic Content Language
  *  ↓
- * 7️⃣ You're All Set
+ * You're All Set
  *  ↓
- * 8️⃣ Main Menu
+ * Main Menu
  */
 
 function getStep1BotLanguageMessage() {
@@ -134,55 +134,97 @@ Select your preferred language for Daily Bible Verse, Mass Readings, Reflection 
 }
 
 function getStep7AllSetMessage(preferences, contentLang, botLang = 'en') {
-  const prefLabels = botLang === 'ta' ? {
-    verse: '📖 தினசரி விவிலிய வசனம்',
-    saint: '🕊️ அன்றைய புனிதர்',
-    mass: '⛪ திருப்பலி வாசகங்கள் & சிந்தனை',
-    events: '📅 திருவிழாக்கள் & நிகழ்வுகள்',
-    announcements: '📢 பங்கு அறிவிப்புகள்',
-    birthday: '🎂 பிறந்தநாள் வாழ்த்துகள்'
-  } : {
-    verse: '📖 Daily Bible Verse',
-    saint: '🕊️ Saint of the Day',
-    mass: '⛪ Daily Mass Readings & Reflection',
-    events: '📅 Church Events',
-    announcements: '📢 Parish Announcements',
-    birthday: '🎂 Birthday Wishes'
+  const defaultServices = `• 📖 Daily Bible Verse
+• 🕊️ Saint of the Day
+• ⛪ Daily Mass Readings & Reflection
+• 📅 Church Events
+• 📢 Parish Announcements
+• 🎂 Birthday Wishes`;
+
+  const prefLabels = {
+    verse: '• 📖 Daily Bible Verse',
+    saint: '• 🕊️ Saint of the Day',
+    mass: '• ⛪ Daily Mass Readings & Reflection',
+    events: '• 📅 Church Events',
+    announcements: '• 📢 Parish Announcements',
+    birthday: '• 🎂 Birthday Wishes'
   };
 
-  const prefList = (preferences || []).map(p => `• ${prefLabels[p] || p}`).join('\n');
-  const langLabel = contentLang === 'ta' ? 'Tamil (தமிழ்)' : contentLang === 'both' ? 'Both (Tamil + English)' : 'English';
-
-  if (botLang === 'ta') {
-    return `🎉 *7️⃣ You're All Set! (அனைத்தும் தயார்!)*
-
-📋 *உங்கள் பதிவுசெய்யப்பட்ட சேவைகள்:*
-${prefList || '• 📖 தினசரி விவிலிய வசனம்\n• ⛪ திருப்பலி வாசகங்கள்\n• 🕊️ அன்றைய புனிதர்'}
-
-🌐 தினசரி ஆன்மீக மொழி: *${langLabel}*
-⏰ தினசரி விடியற்காலை *4:00 AM IST* மணிக்கு உங்களுக்கு அனுப்பப்படும்.
-
-இறைவன் உங்களையும் உங்கள் குடும்பத்தினரையும் ஆசீர்வதிப்பாராக! 🙏❤️
-— *SJDB Connect*
-_புனித அருளானந்தர் திருத்தலம், காளையார்கோவில்_`;
+  let prefList = '';
+  if (Array.isArray(preferences) && preferences.length > 0) {
+    const items = preferences.map(p => prefLabels[p]).filter(Boolean);
+    if (items.length > 0) {
+      prefList = items.join('\n');
+    }
+  }
+  if (!prefList) {
+    prefList = defaultServices;
   }
 
-  return `🎉 *7️⃣ You're All Set!*
+  let langLabel = 'Both (Tamil + English)';
+  if (contentLang === 'ta') langLabel = 'Tamil (தமிழ்)';
+  else if (contentLang === 'en') langLabel = 'English';
+  else if (contentLang === 'both') langLabel = 'Both (Tamil + English)';
+
+  if (botLang === 'ta') {
+    return `✅ *You're all set! (அனைத்தும் தயார்!)*
 
 📋 *Your Subscribed Services:*
-${prefList || '• 📖 Daily Bible Verse\n• ⛪ Daily Mass Readings & Reflection\n• 🕊️ Saint of the Day'}
+${prefList}
 
 🌐 Daily Catholic Content Language: *${langLabel}*
-⏰ Daily Catholic devotions broadcast is delivered sharply at *4:00 AM IST*.
+⏰ Daily Catholic broadcast is delivered sharply at *4:00 AM IST*.
 
 May God bless you and your family! 🙏❤️
 — *SJDB Connect*
-_St. John de Britto Church, Kalayarkoil_`;
+_St. John de Britto's Church, Kalayarkoil_
+
+➡️ Type *Menu* for Quick Commands
+➡️ Type *Services* for Help Desk`;
+  }
+
+  return `✅ *You're all set!*
+
+📋 *Your Subscribed Services:*
+${prefList}
+
+🌐 Daily Catholic Content Language: *${langLabel}*
+⏰ Daily Catholic broadcast is delivered sharply at *4:00 AM IST*.
+
+May God bless you and your family! 🙏❤️
+— *SJDB Connect*
+_St. John de Britto's Church, Kalayarkoil_
+
+➡️ Type *Menu* for Quick Commands
+➡️ Type *Services* for Help Desk`;
+}
+
+function getHowToUseSJDBConnectMessage(botLang = 'en') {
+  return `⛪ *How to use SJDB Connect*
+
+You can ask me about any church or faith-related topic:
+
+• ⛪ *Mass & Confession:* "When is Sunday Mass?", "What time is confession?"
+• 📖 *Scripture & Devotions:* "Say today's Bible verse", "Give me today's reflection"
+• 🕊️ *Saints & Readings:* "Who is today's saint?", "What are today's Mass readings?"
+• 🙏 *Prayers & Rosary:* "How do I pray the Rosary?", "Prayer before Mass"
+• ✝️ *Sacraments:* "How do I register for Baptism / Marriage?"
+• 📅 *Parish News:* "Any parish announcements?", "What events are coming?"
+• 🏛️ *Ministries:* "What ministries are available?", "Anbiyam groups"
+• 📍 *Location & Contact:* "Where is the church?", "Parish office hours"
+• 📱 *My Account:* "My profile", "My language", "My notifications", "My registrations"
+• 🌐 *Bot Commands:* Reply *READINGS* for full readings, *LANGUAGE* to change language
+
+🌐 *Read more:*
+https://st-jb-church.vercel.app
+
+— *St. John de britto Church, Kalayarkoil*
+_SJDB Connect_`;
 }
 
 function getStep8MainMenuMessage(userName, botLang = 'en') {
   if (botLang === 'ta') {
-    return `⛪ *8️⃣ Main Menu (முதன்மை மெனு)*
+    return `⛪ *Main Menu (முதன்மை மெனு)*
 ${userName ? `வணக்கம், *${userName}*! ` : ''}உங்களுக்கு எவ்வாறு உதவ முடியும்?
 
 1️⃣ 📖 தினசரி விவிலிய வசனம் (Daily Bible)
@@ -198,7 +240,7 @@ ${userName ? `வணக்கம், *${userName}*! ` : ''}உங்களுக
 ➡️ *14 பங்கு உதவி சேவைகளுக்கு "Services" என தட்டச்சு செய்யவும்.*`;
   }
 
-  return `⛪ *8️⃣ Main Menu*
+  return `⛪ *Main Menu*
 ${userName ? `Welcome, *${userName}*! ` : ''}How can I help you today?
 
 1️⃣ 📖 *Daily Bible*
@@ -267,6 +309,7 @@ module.exports = {
   getStep6ContentLanguageMessage,
   getStep7AllSetMessage,
   getStep8MainMenuMessage,
+  getHowToUseSJDBConnectMessage,
   parseBotLanguage,
   parsePhoneNumber,
   parseOTP,
