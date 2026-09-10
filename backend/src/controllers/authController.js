@@ -295,22 +295,44 @@ const login = async (req, res) => {
 
     const now = new Date();
 
-    // 0. Check if Account is Deactivated due to Moderation / Abuse
-    if (user.isActive === false && (user.deactivatedReason || '').includes('abuse')) {
-      return res.status(403).json({
-        success: false,
-        isDeactivated: true,
-        message: 'Your account has been deactivated due to policy violations on SJDB Connect. Please contact the church administrator to restore access.'
-      });
-    }
+    // Check if Administrator / Priest / Tech Team
+    const isStaffOrAdmin = user.role === 'admin' || 
+                           user.role === 'priest' || 
+                           user.isTechnicalTeam || 
+                           (user.email || '').toLowerCase() === 'arndas777@gmail.com';
 
-    const { isPhoneBlocked: isLoginPhoneBlocked } = require('../services/userModerationService');
-    if (user.phone && await isLoginPhoneBlocked(user.phone)) {
-      return res.status(403).json({
-        success: false,
-        isBlocked: true,
-        message: 'Your account has been restricted due to policy violations. Please contact the church administrator to restore access.'
-      });
+    if (isStaffOrAdmin) {
+      if (user.isActive === false || user.isSuspended || user.isLockedUntil) {
+        user.isActive = true;
+        user.isSuspended = false;
+        user.isLockedUntil = null;
+        user.failedLoginAttempts = 0;
+        await User.findByIdAndUpdate(user._id, {
+          isActive: true,
+          deactivatedReason: null,
+          isSuspended: false,
+          isLockedUntil: null,
+          failedLoginAttempts: 0
+        });
+      }
+    } else {
+      // 0. Check if Account is Deactivated for regular users
+      if (user.isActive === false) {
+        return res.status(403).json({
+          success: false,
+          isDeactivated: true,
+          message: user.deactivatedReason || 'Your account has been deactivated. Please contact the church administrator to restore access.'
+        });
+      }
+
+      const { isPhoneBlocked: isLoginPhoneBlocked } = require('../services/userModerationService');
+      if (user.phone && await isLoginPhoneBlocked(user.phone)) {
+        return res.status(403).json({
+          success: false,
+          isBlocked: true,
+          message: 'Your account has been restricted due to policy violations. Please contact the church administrator to restore access.'
+        });
+      }
     }
 
     // 1. Check if Account is Suspended

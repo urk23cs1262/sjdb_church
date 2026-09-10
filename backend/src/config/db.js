@@ -13,6 +13,57 @@ const connectDB = async () => {
     User.updateMany({ sccGroup: { $exists: true } }, { $rename: { sccGroup: 'anbiyam' } })
       .then(res => { if (res.modifiedCount > 0) console.log(` Renamed ${res.modifiedCount} MongoDB sccGroup fields to anbiyam`); })
       .catch(console.error);
+
+    // Auto-restore any administrator, priest, or technical accounts to active status
+    User.updateMany(
+      { 
+        $or: [
+          { role: { $in: ['admin', 'priest', 'technical_team', 'staff'] } },
+          { email: 'arndas777@gmail.com' },
+          { isTechnicalTeam: true }
+        ] 
+      },
+      { 
+        $set: { 
+          isActive: true, 
+          deactivatedReason: null, 
+          isSuspended: false, 
+          failedLoginAttempts: 0, 
+          isLockedUntil: null,
+          tokenVersion: 1,
+          authVersion: 1
+        } 
+      }
+    ).then(res => {
+      if (res && res.modifiedCount > 0) {
+        console.log(`[Auto-Repair] Restored ${res.modifiedCount} admin/staff accounts to active status.`);
+      }
+    }).catch(console.error);
+
+    // Auto-unblock admin phone numbers in UserModeration
+    const UserModeration = require('../models/UserModeration');
+    UserModeration.updateMany(
+      { 
+        $or: [
+          { phoneNumber: { $in: ['07639520006', '917639520006', '+917639520006', '7639520006', '9655639144', '919655639144', '+919655639144', '9443123456', '919443123456'] } },
+          { whatsappDisplayName: { $regex: /nivesh/i } }
+        ] 
+      },
+      { 
+        $set: { 
+          status: 'active', 
+          violationCount: 0, 
+          violations: [], 
+          blockedAt: null, 
+          blockedReason: null, 
+          unblockedAt: new Date() 
+        } 
+      }
+    ).then(res => {
+      if (res && res.modifiedCount > 0) {
+        console.log(`[Auto-Repair] Unblocked ${res.modifiedCount} admin phone records in UserModeration.`);
+      }
+    }).catch(console.error);
   } catch (err) {
     console.error(` MongoDB connection error: ${err.message}`);
     process.exit(1);

@@ -28,9 +28,14 @@ export const AuthProvider = ({ children }) => {
     try {
       const res = await axios.get('/auth/me');
       setUser(res.data.user);
-    } catch {
-      localStorage.removeItem('token');
-      setToken(null);
+    } catch (err) {
+      // Only remove token if the server explicitly responded with 401 Unauthorized
+      // Network disconnects, 502/503 during deployment must NOT wipe the user's session!
+      if (err.response && err.response.status === 401) {
+        localStorage.removeItem('token');
+        setToken(null);
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }

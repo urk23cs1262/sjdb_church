@@ -21,9 +21,16 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('token');
-      if (typeof window !== 'undefined' && window.location.pathname.startsWith('/admin') && window.location.pathname !== '/admin/login') {
-        window.location.href = '/admin/login';
+      // Don't intercept or clear token for failed credentials on login or OTP endpoints
+      const isAuthEndpoint = err.config?.url?.includes('/auth/login') || err.config?.url?.includes('/auth/verify-otp');
+      if (!isAuthEndpoint) {
+        localStorage.removeItem('token');
+        if (typeof window !== 'undefined') {
+          const currentPath = window.location.pathname;
+          if (currentPath !== '/login' && !currentPath.startsWith('/login')) {
+            window.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
+          }
+        }
       }
     }
     return Promise.reject(err);

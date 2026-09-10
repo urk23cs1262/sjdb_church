@@ -223,8 +223,16 @@ async function findLinkedUserByPhone(phone) {
  */
 async function deactivateWebsiteAccount(user, reason, detectedWords = []) {
   if (!user) return;
-  if (user.role === 'admin' || user.role === 'priest' || user.isTechnicalTeam) {
-    console.warn(`[Moderation] Protected administrator account (${user.name} / ${user.email}) will NOT be deactivated.`);
+  const adminPhones = ['07639520006', '917639520006', '7639520006', '9655639144', '919655639144', '9443123456', '919443123456'];
+  const userPhoneDigits = (user.phone || '').replace(/\D/g, '');
+  const isProtectedAdmin = user.role === 'admin' || 
+                           user.role === 'priest' || 
+                           user.isTechnicalTeam || 
+                           (user.email || '').toLowerCase() === 'arndas777@gmail.com' ||
+                           adminPhones.some(p => userPhoneDigits.endsWith(p.slice(-10)));
+
+  if (isProtectedAdmin) {
+    console.warn(`[Moderation] Protected administrator account (${user.name} / ${user.email || user.phone}) will NOT be deactivated.`);
     return;
   }
   try {
@@ -827,6 +835,13 @@ Your message contained prohibited language:
  */
 async function isPhoneBlocked(phone) {
   if (!phone) return false;
+  // Parish administrators and official church numbers are NEVER blocked
+  const adminPhones = ['07639520006', '917639520006', '7639520006', '9655639144', '919655639144', '9443123456', '919443123456'];
+  const cleanDigits = phone.replace(/\D/g, '');
+  if (adminPhones.some(p => cleanDigits.endsWith(p.slice(-10)))) {
+    return false;
+  }
+
   const keys = getPhoneLookupKeys(phone);
   if (!keys.e164 && !keys.last10) return false;
 
