@@ -3,6 +3,7 @@ const https = require('https');
 const cheerio = require('cheerio');
 const nodeCron = require('node-cron');
 const DailyMassReading = require('../models/DailyMassReading');
+const { cleanCatholicContent, deduplicateReadings, getCanonicalReadingKey } = require('../utils/cleanCatholicContent');
 
 const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
@@ -28,6 +29,35 @@ function isGarbageOrCalendarLine(l) {
   if (!l || typeof l !== 'string') return true;
   const trimmed = l.trim();
   if (!trimmed) return true;
+
+  // Advertisement and CSS rules/classes
+  if (
+    trimmed.includes('.cgAd') ||
+    trimmed.includes('.cgWrap') ||
+    trimmed.includes('cgAd2') ||
+    trimmed.includes('cgAd-2') ||
+    trimmed.includes('cgWrap-2') ||
+    trimmed.includes('@media') ||
+    trimmed.includes('!important') ||
+    trimmed.includes('display:inline-block') ||
+    trimmed.includes('min-height:') ||
+    trimmed.includes('text-align:') ||
+    trimmed.includes('Official Catholic Gallery App') ||
+    trimmed.includes('Download our Official') ||
+    (trimmed.includes('width:') && trimmed.includes('height:')) ||
+    /^[.#][a-zA-Z0-9_-]+\s*\{/.test(trimmed) ||
+    /\{[^}]*(?:width|height|margin|padding|display|color|font)[^}]*\}/i.test(trimmed) ||
+    /^[{}\s;]+$/.test(trimmed) ||
+    trimmed === 'New:' ||
+    trimmed === 'New' ||
+    trimmed === 'Android &' ||
+    trimmed === 'iOS' ||
+    trimmed.includes('Android') ||
+    trimmed.includes('iOS') ||
+    trimmed.includes('Catholic Gallery')
+  ) {
+    return true;
+  }
 
   // Month-Year pattern like ஆகஸ்ட்-2026, ஆகத்து-2026, August-2026, etc.
   if (/^(ஜனவரி|பிப்ரவரி|மார்ச்|ஏப்ரல்|மே|ஜூன்|ஜூலை|ஆகஸ்ட்|ஆகத்து|செப்டம்பர்|அக்டோபர்|நவம்பர்|டிசம்பர்|January|February|March|April|May|June|July|August|September|October|November|December)[-\s]?\d{4}$/i.test(trimmed)) {
@@ -139,34 +169,35 @@ function processReadingLines(lines) {
   const bodyParagraphs = [];
 
   lines.forEach((l) => {
-    const trimmed = l.trim();
-    if (!trimmed || isGarbageOrCalendarLine(trimmed)) return;
+    const cleaned = cleanCatholicContent(l.trim());
+    if (!cleaned || isGarbageOrCalendarLine(cleaned)) return;
 
     // Ignore repetitive section headers inside lines
     if (
-      trimmed === 'முதல் வாசகம்' || 
-      trimmed === 'இரண்டாம் வாசகம்' || 
-      trimmed === 'நற்செய்தி வாசகம்' || 
-      trimmed === 'பதிலுரைப் பாடல்' || 
-      trimmed === 'நற்செய்திக்கு முன் வாழ்த்தொலி'
+      cleaned === 'முதல் வாசகம்' || 
+      cleaned === 'இரண்டாம் வாசகம்' || 
+      cleaned === 'நற்செய்தி வாசகம்' || 
+      cleaned === 'பதிலுரைப் பாடல்' || 
+      cleaned === 'பதிலுரை பாடல்' || 
+      cleaned === 'நற்செய்திக்கு முன் வாழ்த்தொலி'
     ) {
       return;
     }
 
     // Ignore repeated ending responses from scraped text (we append them once cleanly)
     if (
-      trimmed.includes('ஆண்டவரின் அருள்வாக்கு') || 
-      trimmed.includes('கிறிஸ்து வழங்கும் நற்செய்தி')
+      cleaned.includes('ஆண்டவரின் அருள்வாக்கு') || 
+      cleaned.includes('கிறிஸ்து வழங்கும் நற்செய்தி')
     ) {
       return;
     }
 
-    if ((trimmed.includes('நூலிலிருந்து') || trimmed.includes('திருத்தூதர்') || trimmed.includes('நற்செய்தியிலிருந்து') || trimmed.includes('எழுதிய') || trimmed.includes('\u2720')) && !reference && trimmed.length < 200) {
-      reference = trimmed;
-    } else if (!subtitle && !reference && trimmed.length < 150) {
-      subtitle = trimmed;
+    if ((cleaned.includes('நூலிலிருந்து') || cleaned.includes('திருத்தூதர்') || cleaned.includes('நற்செய்தியிலிருந்து') || cleaned.includes('எழுதிய') || cleaned.includes('\u2720')) && !reference && cleaned.length < 200) {
+      reference = cleaned;
+    } else if (!subtitle && !reference && cleaned.length < 150) {
+      subtitle = cleaned;
     } else {
-      bodyParagraphs.push(trimmed);
+      bodyParagraphs.push(cleaned);
     }
   });
 
@@ -184,14 +215,18 @@ function processReadingLines(lines) {
 function parseTamilReadingHtml(html, dateStr, url) {
   const $ = cheerio.load(html);
 
+  // 1. Completely remove all styles, scripts, and ad wrapper tags before parsing
+  $('style, script, noscript, iframe, ins, .cgAd2, .cgAd-2, .cgWrap-2, [class*="cgAd"], [class*="cgWrap"], [class*="adslot"], .comments-area, .share-buttons, #respond').remove();
+
   const pageTitle = cleanText($('h1.entry-title, h1').first().text());
   const entryContent = $('.entry-content').first();
 
-  // Extract clean distinct lines (filtering ads and calendar month/year selectors)
+  // Extract clean distinct lines (filtering ads, calendar month/year selectors, and inner styles)
   const rawElements = [];
   entryContent.find('p, h2, h3, h4, div').each((_, el) => {
-    if ($(el).parents('.comments-area, .share-buttons, #respond').length) return;
-    const full = $(el).text();
+    // Only process leaf blocks (elements without nested child blocks) to prevent duplicate text extraction
+    if ($(el).find('p, div, h2, h3, h4').length > 0) return;
+    const full = cleanCatholicContent($(el).text());
     const parts = full.split('\n').map(l => cleanText(l)).filter(Boolean);
     parts.forEach(l => {
       if (!isGarbageOrCalendarLine(l)) {
@@ -212,31 +247,39 @@ function parseTamilReadingHtml(html, dateStr, url) {
       celebration = l;
     } else if (!liturgicalDay && (l.includes('வாரம்') || l.includes('ஞாயிறு') || l.includes('பொதுக்காலம்') || l.includes('திருவழிபாடு') || l.includes('தவக்காலம்') || l.includes('பாஸ்கா'))) {
       liturgicalDay = l;
-    } else if (!liturgicalDay) {
+    } else if (!liturgicalDay && l.length > 5 && !l.startsWith('New:')) {
       liturgicalDay = l;
     }
   });
 
-  // Group into Sections
+  // Group into Sections with robust boundary detection
+  const headingsMap = [
+    { type: 'firstReading', heading: 'முதல் வாசகம்' },
+    { type: 'secondReading', heading: 'இரண்டாம் வாசகம்' },
+    { type: 'responsorialPsalm', heading: 'பதிலுரைப் பாடல்' },
+    { type: 'alleluia', heading: 'நற்செய்திக்கு முன் வாழ்த்தொலி' },
+    { type: 'gospel', heading: 'நற்செய்தி வாசகம்' }
+  ];
+
   let currentSection = null;
   const rawSections = [];
 
   rawElements.forEach((line) => {
-    if (line === 'முதல் வாசகம்' || (line.includes('முதல் வாசகம்') && line.length < 30)) {
+    let matchedHeading = null;
+    for (const h of headingsMap) {
+      if (line === h.heading || line.startsWith(h.heading)) {
+        matchedHeading = h;
+        break;
+      }
+    }
+
+    if (matchedHeading) {
       if (currentSection) rawSections.push(currentSection);
-      currentSection = { type: 'firstReading', heading: 'முதல் வாசகம்', lines: [] };
-    } else if (line === 'இரண்டாம் வாசகம்' || (line.includes('இரண்டாம் வாசகம்') && line.length < 30)) {
-      if (currentSection) rawSections.push(currentSection);
-      currentSection = { type: 'secondReading', heading: 'இரண்டாம் வாசகம்', lines: [] };
-    } else if (line === 'பதிலுரைப் பாடல்' || (line.includes('பதிலுரைப் பாடல்') && line.length < 30)) {
-      if (currentSection) rawSections.push(currentSection);
-      currentSection = { type: 'responsorialPsalm', heading: 'பதிலுரைப் பாடல்', lines: [] };
-    } else if (line === 'நற்செய்திக்கு முன் வாழ்த்தொலி' || (line.includes('நற்செய்திக்கு முன் வாழ்த்தொலி') && line.length < 40)) {
-      if (currentSection) rawSections.push(currentSection);
-      currentSection = { type: 'alleluia', heading: 'நற்செய்திக்கு முன் வாழ்த்தொலி', lines: [] };
-    } else if (line === 'நற்செய்தி வாசகம்' || (line.includes('நற்செய்தி வாசகம்') && line.length < 30)) {
-      if (currentSection) rawSections.push(currentSection);
-      currentSection = { type: 'gospel', heading: 'நற்செய்தி வாசகம்', lines: [] };
+      currentSection = { type: matchedHeading.type, heading: matchedHeading.heading, lines: [] };
+      const rest = line.slice(matchedHeading.heading.length).replace(/^[:\s\-]+/, '').trim();
+      if (rest) {
+        currentSection.lines.push(rest);
+      }
     } else {
       if (currentSection) {
         currentSection.lines.push(line);
@@ -245,7 +288,7 @@ function parseTamilReadingHtml(html, dateStr, url) {
   });
   if (currentSection) rawSections.push(currentSection);
 
-  // Construct structured model fields & standard sections array
+  // Construct structured model fields & standard sections array (with strict deduplication)
   let firstReading = null;
   let responsorialPsalm = null;
   let secondReading = null;
@@ -253,8 +296,13 @@ function parseTamilReadingHtml(html, dateStr, url) {
   let gospel = null;
 
   const standardSections = [];
+  const seenTypes = new Set();
 
   rawSections.forEach((sec) => {
+    const canonKey = getCanonicalReadingKey(sec.heading || sec.type);
+    if (seenTypes.has(canonKey)) return;
+    seenTypes.add(canonKey);
+
     if (sec.type === 'firstReading') {
       const { subtitle, reference, text, paragraphs } = processReadingLines(sec.lines);
       firstReading = { heading: 'முதல் வாசகம்', subtitle, reference, text, paragraphs };
@@ -272,7 +320,7 @@ function parseTamilReadingHtml(html, dateStr, url) {
       const verses = [];
 
       sec.lines.forEach((l) => {
-        const trimmed = l.trim();
+        const trimmed = cleanCatholicContent(l.trim());
         if (isGarbageOrCalendarLine(trimmed)) return;
 
         if (trimmed.startsWith('திபா') && !reference) {
@@ -312,7 +360,7 @@ function parseTamilReadingHtml(html, dateStr, url) {
       let reference = '';
       const textLines = [];
       sec.lines.forEach((l) => {
-        const trimmed = l.trim();
+        const trimmed = cleanCatholicContent(l.trim());
         if (isGarbageOrCalendarLine(trimmed)) return;
 
         if ((trimmed.startsWith('திபா') || trimmed.startsWith('யோவா') || trimmed.startsWith('மத்') || trimmed.startsWith('லூக்') || trimmed.startsWith('எபி')) && !reference && trimmed.length < 50) {
@@ -345,7 +393,10 @@ function parseTamilReadingHtml(html, dateStr, url) {
     }
   });
 
-  const title = celebration || liturgicalDay || 'திருப்பலி வாசகங்கள்';
+  let title = celebration || liturgicalDay || 'இன்றைய திருப்பலி வாசகங்கள்';
+  if (!title || title === 'New:' || title.length < 4) {
+    title = 'இன்றைய திருப்பலி வாசகங்கள்';
+  }
 
   return {
     date: dateStr,
@@ -626,8 +677,21 @@ async function getReadingForDate(dateStr) {
     }
   }
 
-  // Ensure reflection is attached and clean (self-heal corrupt/repetitive reflections)
+  // Ensure reading has no CSS corruption and clean reflection (self-heal)
   if (reading) {
+    const hasCssCorruption = 
+      reading.sections?.some(s => s.paragraphs?.some(p => p.includes('cgAd') || p.includes('cgWrap') || p.includes('@media'))) ||
+      (reading.firstReading?.text && (reading.firstReading.text.includes('cgAd') || reading.firstReading.text.includes('@media')));
+
+    if (hasCssCorruption) {
+      console.log(`[Mass Readings] Stored reading for ${cleanDate} has CSS fragments. Re-fetching and cleaning...`);
+      try {
+        reading = await fetchAndStoreTamilReading(cleanDate);
+      } catch (err) {
+        console.warn(`[Mass Readings] Live re-fetch failed:`, err.message);
+      }
+    }
+
     const hasCorruptReflection = 
       !reading.reflection?.title ||
       (reading.reflection?.paragraphs && reading.reflection.paragraphs.length > 3) ||
@@ -818,10 +882,14 @@ async function getOrGenerateEnglishTranslation(dateStr) {
   const reading = await getReadingForDate(dateStr);
   if (!reading) throw new Error('Reading not found');
 
-  // Verify that cached translation exists AND is not corrupted with raw untranslated Tamil
+  // Verify that cached translation exists, has no CSS corruption, and is not corrupted with raw untranslated Tamil
   const cachedEn = reading.translation?.en;
   const hasCachedReflection = !reading.reflection?.title || (cachedEn?.reflection && cachedEn.reflection.title);
+  const hasCssCorruption = cachedEn?.sections?.some(s => 
+    s.paragraphs?.some(p => p.includes('cgAd') || p.includes('cgWrap') || p.includes('@media'))
+  );
   const isProperlyTranslated = cachedEn &&
+    !hasCssCorruption &&
     cachedEn.sections?.length > 0 &&
     cachedEn.title && !/[\u0B80-\u0BFF]/.test(cachedEn.title) &&
     cachedEn.sections[0]?.paragraphs?.[0] && !/[\u0B80-\u0BFF]/.test(cachedEn.sections[0].paragraphs[0]);
@@ -847,7 +915,10 @@ async function getOrGenerateEnglishTranslation(dateStr) {
 
       let translatedParagraphs = [];
       if (sec.paragraphs && sec.paragraphs.length > 0) {
-        translatedParagraphs = await batchTranslateTamilToEnglish(sec.paragraphs);
+        const rawTranslated = await batchTranslateTamilToEnglish(sec.paragraphs);
+        translatedParagraphs = rawTranslated
+          .map(p => cleanCatholicContent(p))
+          .filter(p => p && !p.includes('cgAd') && !p.includes('cgWrap') && !p.includes('@media'));
       }
       translatedSections.push({
         heading: translatedHeading,
@@ -864,7 +935,10 @@ async function getOrGenerateEnglishTranslation(dateStr) {
 
     let transParagraphs = [];
     if (reading.reflection.paragraphs && reading.reflection.paragraphs.length > 0) {
-      transParagraphs = await batchTranslateTamilToEnglish(reading.reflection.paragraphs);
+      const rawTransParagraphs = await batchTranslateTamilToEnglish(reading.reflection.paragraphs);
+      transParagraphs = rawTransParagraphs
+        .map(p => cleanCatholicContent(p))
+        .filter(p => p && !p.includes('cgAd') && !p.includes('cgWrap') && !p.includes('@media'));
     }
 
     translatedReflection = {
@@ -877,13 +951,18 @@ async function getOrGenerateEnglishTranslation(dateStr) {
     };
   }
 
+  let finalEnTitle = translatedTitle;
+  if (!finalEnTitle || finalEnTitle === 'New:' || finalEnTitle.length < 4) {
+    finalEnTitle = 'Daily Mass Readings';
+  }
+
   const englishData = {
     date: reading.date,
-    title: translatedTitle,
+    title: finalEnTitle,
     liturgicalDay: translatedLiturgicalDay,
     celebration: translatedCelebration,
     lectionary: reading.lectionary || '',
-    sections: translatedSections,
+    sections: deduplicateReadings(translatedSections),
     reflection: translatedReflection,
     originalLanguage: 'ta',
     translatedLanguage: 'en',

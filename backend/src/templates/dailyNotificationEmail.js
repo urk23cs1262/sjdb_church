@@ -1,7 +1,4 @@
-/**
- * Daily Catholic Spiritual Notification Email Template
- * Generates personalized, elegant HTML email with CID image attachments.
- */
+const { cleanCatholicContent, deduplicateReadings } = require('../utils/cleanCatholicContent');
 
 function escapeHtml(str) {
   if (!str) return '';
@@ -15,10 +12,18 @@ function escapeHtml(str) {
 
 function formatParagraphs(text) {
   if (!text) return '';
-  return text
+  const cleaned = cleanCatholicContent(text);
+  if (!cleaned) return '';
+  return cleaned
     .split(/\n\n+/)
     .map(p => p.trim())
-    .filter(p => p.length > 0)
+    .filter(p => {
+      if (!p || p.length === 0) return false;
+      if (p.includes('cgAd') || p.includes('cgWrap') || p.includes('@media') || p.includes('!important')) return false;
+      if (/^[.#][a-zA-Z0-9_-]+\s*\{/.test(p)) return false;
+      if (/^(width|height|min-height|max-height|position|display|margin|padding|text-align)\s*:/i.test(p)) return false;
+      return true;
+    })
     .map(p => {
       let formatted = escapeHtml(p);
       // Replace **text** with <strong>text</strong>
@@ -39,16 +44,18 @@ function renderMassReadingsSection(massReadings, lang) {
   let html = '';
 
   if (showTamil) {
-    const taReadings = massReadings.tamil?.readings || [];
+    const rawTa = massReadings.tamil?.readings || [];
+    const taReadings = deduplicateReadings(rawTa);
     html += `
       <div style="margin-bottom: ${showEnglish ? '24px' : '0'};">
         <div style="background-color: #F8FAFC; border-left: 4px solid #C5A059; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 14px;">
-          <h3 style="margin: 0; color: #1E293B; font-size: 16px; font-weight: 700;">இன்றைய திருப்பலி வாசகங்கள்</h3>
-          ${massReadings.tamil?.title ? `<p style="margin: 4px 0 0 0; color: #C5A059; font-size: 13px; font-weight: 600;">${escapeHtml(massReadings.tamil.title)}</p>` : ''}
+          <h3 style="margin: 0; color: #1E293B; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">DAILY MASS READINGS</h3>
+          <div style="margin: 4px 0 0 0; color: #C5A059; font-size: 14px; font-weight: 700;">தமிழ்</div>
+          ${massReadings.tamil?.title && massReadings.tamil.title !== 'New:' ? `<p style="margin: 4px 0 0 0; color: #64748B; font-size: 13px; font-weight: 600;">${escapeHtml(massReadings.tamil.title)}</p>` : ''}
         </div>
         ${taReadings.length > 0 ? taReadings.map(r => `
           <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed #E2E8F0;">
-            <div style="color: #0F172A; font-weight: 700; font-size: 14px; margin-bottom: 4px;">${escapeHtml(r.type || 'வாசகம்')} <span style="color: #64748B; font-weight: 500; font-size: 13px;">(${escapeHtml(r.reference || '')})</span></div>
+            <div style="color: #0F172A; font-weight: 700; font-size: 14px; margin-bottom: 4px;">${escapeHtml(r.type || 'வாசகம்')} ${r.reference ? `<span style="color: #64748B; font-weight: 500; font-size: 13px;">(${escapeHtml(r.reference)})</span>` : ''}</div>
             <div style="color: #334155; font-size: 14px; line-height: 1.6;">${formatParagraphs(r.text || '')}</div>
           </div>
         `).join('') : formatParagraphs(massReadings.tamil?.fullText || '')}
@@ -57,16 +64,18 @@ function renderMassReadingsSection(massReadings, lang) {
   }
 
   if (showEnglish) {
-    const enReadings = massReadings.english?.readings || [];
+    const rawEn = massReadings.english?.readings || [];
+    const enReadings = deduplicateReadings(rawEn);
     html += `
       <div>
         <div style="background-color: #F8FAFC; border-left: 4px solid #1E293B; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 14px;">
-          <h3 style="margin: 0; color: #1E293B; font-size: 16px; font-weight: 700;">DAILY MASS READINGS</h3>
-          ${massReadings.english?.title ? `<p style="margin: 4px 0 0 0; color: #64748B; font-size: 13px; font-weight: 600;">${escapeHtml(massReadings.english.title)}</p>` : ''}
+          <h3 style="margin: 0; color: #1E293B; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">DAILY MASS READINGS</h3>
+          <div style="margin: 4px 0 0 0; color: #64748B; font-size: 14px; font-weight: 700;">English</div>
+          ${massReadings.english?.title && massReadings.english.title !== 'New:' ? `<p style="margin: 4px 0 0 0; color: #64748B; font-size: 13px; font-weight: 600;">${escapeHtml(massReadings.english.title)}</p>` : ''}
         </div>
         ${enReadings.length > 0 ? enReadings.map(r => `
           <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed #E2E8F0;">
-            <div style="color: #0F172A; font-weight: 700; font-size: 14px; margin-bottom: 4px;">${escapeHtml(r.type || 'Reading')} <span style="color: #64748B; font-weight: 500; font-size: 13px;">(${escapeHtml(r.reference || '')})</span></div>
+            <div style="color: #0F172A; font-weight: 700; font-size: 14px; margin-bottom: 4px;">${escapeHtml(r.type || 'Reading')} ${r.reference ? `<span style="color: #64748B; font-weight: 500; font-size: 13px;">(${escapeHtml(r.reference)})</span>` : ''}</div>
             <div style="color: #334155; font-size: 14px; line-height: 1.6;">${formatParagraphs(r.text || '')}</div>
           </div>
         `).join('') : formatParagraphs(massReadings.english?.fullText || '')}

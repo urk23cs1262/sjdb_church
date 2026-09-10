@@ -9,6 +9,7 @@ const {
   getOrGenerateEnglishTranslation, 
   getDateKey 
 } = require('./dailyMassReadingService');
+const { cleanCatholicContent, deduplicateReadings } = require('../utils/cleanCatholicContent');
 
 const DEFAULT_BIBLE_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons/b/b6/Gutenberg_Bible%2C_Lenox_Copy%2C_New_York_Public_Library%2C_2009._Pic_01.jpg';
 
@@ -141,40 +142,52 @@ async function getTodayDailyContent(targetDate = new Date()) {
     }
   }
 
-  // Map Tamil sections to readings array
+  // Map Tamil sections to readings array (clean & deduplicated)
   let tamilReadingsList = [];
   if (massReadingDoc?.sections && massReadingDoc.sections.length > 0) {
     tamilReadingsList = massReadingDoc.sections.map(s => ({
       type: s.heading || 'வாசகம்',
       reference: s.reference || '',
-      text: (s.paragraphs && s.paragraphs.length > 0)
+      text: cleanCatholicContent((s.paragraphs && s.paragraphs.length > 0)
         ? s.paragraphs.join('\n\n')
-        : (s.text || '')
+        : (s.text || ''))
     }));
   }
+  tamilReadingsList = deduplicateReadings(tamilReadingsList);
 
-  // Map English sections to readings array
+  // Map English sections to readings array (clean & deduplicated)
   let englishReadingsList = [];
   if (englishDoc?.sections && englishDoc.sections.length > 0) {
     englishReadingsList = englishDoc.sections.map(s => ({
       type: s.heading || 'Reading',
       reference: s.reference || '',
-      text: (s.paragraphs && s.paragraphs.length > 0)
+      text: cleanCatholicContent((s.paragraphs && s.paragraphs.length > 0)
         ? s.paragraphs.join('\n\n')
-        : (s.text || '')
+        : (s.text || ''))
     }));
+  }
+  englishReadingsList = deduplicateReadings(englishReadingsList);
+
+  let tamilTitle = massReadingDoc?.celebration || massReadingDoc?.title || massReadingDoc?.pageTitle || massReadingDoc?.liturgicalDay || 'இன்றைய திருப்பலி வாசகங்கள்';
+  if (!tamilTitle || tamilTitle === 'New:' || tamilTitle.length < 4) {
+    tamilTitle = 'இன்றைய திருப்பலி வாசகங்கள்';
+  }
+
+  let englishTitle = englishDoc?.celebration || englishDoc?.title || englishDoc?.liturgicalDay || 'Daily Mass Readings';
+  if (!englishTitle || englishTitle === 'New:' || englishTitle.length < 4) {
+    englishTitle = 'Daily Mass Readings';
   }
 
   const massReadings = {
     tamil: {
-      title: massReadingDoc?.celebration || massReadingDoc?.title || massReadingDoc?.pageTitle || massReadingDoc?.liturgicalDay || 'இன்றைய திருப்பலி வாசகங்கள்',
+      title: tamilTitle,
       readings: tamilReadingsList,
-      fullText: tamilReadingsList.map(r => `${r.type} ${r.reference ? `(${r.reference})` : ''}\n${r.text}`).join('\n\n')
+      fullText: tamilReadingsList.map(r => `${r.type} ${r.reference ? `(${r.reference})` : ''}\n${cleanCatholicContent(r.text)}`).join('\n\n')
     },
     english: {
-      title: englishDoc?.celebration || englishDoc?.title || englishDoc?.liturgicalDay || 'Daily Mass Readings',
+      title: englishTitle,
       readings: englishReadingsList,
-      fullText: englishReadingsList.map(r => `${r.type} ${r.reference ? `(${r.reference})` : ''}\n${r.text}`).join('\n\n')
+      fullText: englishReadingsList.map(r => `${r.type} ${r.reference ? `(${r.reference})` : ''}\n${cleanCatholicContent(r.text)}`).join('\n\n')
     }
   };
 
@@ -185,12 +198,12 @@ async function getTodayDailyContent(targetDate = new Date()) {
     const parts = [];
     if (r.title && r.title.trim()) parts.push(`${r.title.trim()}`);
     if (r.paragraphs && r.paragraphs.length > 0) {
-      parts.push(r.paragraphs.map(p => p.trim()).filter(Boolean).join('\n\n'));
+      parts.push(r.paragraphs.map(p => cleanCatholicContent(p.trim())).filter(Boolean).join('\n\n'));
     } else if (r.content && r.content.trim()) {
-      parts.push(r.content.trim());
+      parts.push(cleanCatholicContent(r.content.trim()));
     }
     if (r.prayer && r.prayer.trim()) {
-      parts.push(`மன்றாட்டு:\n${r.prayer.trim()}`);
+      parts.push(`மன்றாட்டு:\n${cleanCatholicContent(r.prayer.trim())}`);
     }
     tamilReflectionText = parts.join('\n\n');
   }
@@ -205,12 +218,12 @@ async function getTodayDailyContent(targetDate = new Date()) {
     const parts = [];
     if (r.title && r.title.trim()) parts.push(`${r.title.trim()}`);
     if (r.paragraphs && r.paragraphs.length > 0) {
-      parts.push(r.paragraphs.map(p => p.trim()).filter(Boolean).join('\n\n'));
+      parts.push(r.paragraphs.map(p => cleanCatholicContent(p.trim())).filter(Boolean).join('\n\n'));
     } else if (r.content && r.content.trim()) {
-      parts.push(r.content.trim());
+      parts.push(cleanCatholicContent(r.content.trim()));
     }
     if (r.prayer && r.prayer.trim()) {
-      parts.push(`Prayer:\n${r.prayer.trim()}`);
+      parts.push(`Prayer:\n${cleanCatholicContent(r.prayer.trim())}`);
     }
     englishReflectionText = parts.join('\n\n');
   }
