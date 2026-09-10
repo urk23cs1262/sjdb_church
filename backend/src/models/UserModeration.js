@@ -9,8 +9,17 @@ const violationIncidentSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now }
 }, { _id: true });
 
+const restorationAuditSchema = new mongoose.Schema({
+  restoredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  restoredByName: { type: String, default: 'Parish Administrator' },
+  restoredAt: { type: Date, default: Date.now },
+  restoreReason: { type: String, default: 'Restored by parish administrator upon review' },
+  previousStatus: { type: String, default: 'blocked' },
+  strikesAtRestore: { type: Number, default: 0 }
+}, { _id: true });
+
 const userModerationSchema = new mongoose.Schema({
-  // Authoritative identity: clean numeric phone number (e.g. "919876543210" or "9876543210")
+  // Authoritative identity: canonical E.164 phone number (e.g. "+919876543210")
   phoneNumber: {
     type: String,
     required: true,
@@ -63,7 +72,8 @@ const userModerationSchema = new mongoose.Schema({
     ref: 'User',
     default: null
   },
-  violations: [violationIncidentSchema]
+  violations: [violationIncidentSchema],
+  restorationHistory: [restorationAuditSchema]
 }, {
   timestamps: true
 });

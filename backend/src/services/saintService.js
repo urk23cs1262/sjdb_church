@@ -386,6 +386,11 @@ async function fetchDailySaint(targetDate = new Date()) {
 async function saveSaintToDatabase(saintObj) {
   try {
     if (!saintObj || !saintObj.date) return;
+    // Validation guard: Never overwrite cache with missing or invalid saint payload
+    if (!saintObj.saintName || typeof saintObj.saintName !== 'string' || saintObj.saintName.trim().length < 2) {
+      console.warn('⚠️ [SaintService] Refusing to overwrite cache with empty/invalid saint payload.');
+      return;
+    }
     const SiteSettings = require('../models/SiteSettings');
     await SiteSettings.findOneAndUpdate(
       { key: 'daily_saint_cache' },
@@ -522,4 +527,4 @@ const getDailySaint = (targetDate = new Date()) => {
   return dailySaint;
 };
 
-module.exports = { getDailySaint, fetchDailySaint, searchAndApplySaintImage, getISTDateParts };
+module.exports = { getDailySaint, fetchDailySaint, searchAndApplySaintImage, getISTDateParts, saveSaintToDatabase };

@@ -11,15 +11,15 @@ const BlockedWord = require('../models/BlockedWord');
 const User = require('../models/User');
 const { BAD_WORDS_LIST } = require('../bot/moderation');
 
-const VIOLATION_WINDOW_HOURS = 24; // 3 strikes within 24 hours triggers automatic block
+const { normalizeToE164, getPhoneLookupKeys, isSamePhoneIdentity } = require('../utils/phoneUtils');
+
+const VIOLATION_WINDOW_HOURS = 24; // 24-hour rolling strike window calculated dynamically
 
 /**
- * Clean phone number to digits only (e.g. "+91 98765-43210" -> "919876543210")
+ * Clean phone number to canonical E.164 format (e.g. "+919876543210")
  */
 function cleanPhoneNumber(phone) {
-  if (!phone) return '';
-  const digits = String(phone).replace(/\D/g, '');
-  return digits;
+  return normalizeToE164(phone);
 }
 
 /**
@@ -124,22 +124,50 @@ function escapeRegex(string) {
 }
 
 /**
+ * Distinguish educational/inquiry questions from abusive harassment
+ * e.g. "What does the word bitch mean?", "why is this word bad?", "பொருள் என்ன"
+ */
+function isEducationalOrInquiryContext(text) {
+  if (!text || typeof text !== 'string') return false;
+  const lower = text.toLowerCase().trim();
+  const patterns = [
+    /what\s+(is|does)\s+(the\s+)?(meaning|definition|mean)\s+of/i,
+    /why\s+is\s+.+\s+(a\s+)?(bad\s*word|curse|slur|inappropriate)/i,
+    /meaning\s+of\s+/i,
+    /definition\s+of\s+/i,
+    /what\s+does\s+.+\s+mean/i,
+    /பொருள்\s+என்ன/i,
+    /அர்த்தம்\s+என்ன/i,
+    /விளக்கம்\s+என்ன/i
+  ];
+  return patterns.some(p => p.test(lower));
+}
+
+/**
  * Detect inappropriate or abusive words in message
  */
 async function detectViolations(text) {
   if (!text || typeof text !== 'string') {
-    return { isViolation: false, detectedWords: [], highestSeverity: 0 };
+    return { isViolation: false, detectedWords: [], highestSeverity: 0, isEducational: false, isDirectThreat: false };
   }
 
   const { rawLower, normalized, collapsed } = normalizeText(text);
   const wordsList = await getActiveBlockedWords();
+
+  const isEducational = isEducationalOrInquiryContext(text);
+  const isDirectThreat = /(i\s*will\s*(kill|murder|rape)|die\s+(bitch|bastard|you)|fuck\s+you|fuck\s+off|go\s+to\s+hell)/i.test(text);
 
   const detectedSet = new Set();
   let highestSeverity = 0;
 
   for (const item of wordsList) {
     const word = item.word.toLowerCase();
-    const severity = item.severity || 2;
+    let severity = item.severity || 2;
+
+    // False-positive guard: If asking an educational / dictionary inquiry, downgrade severity
+    if (isEducational && severity === 3) {
+      severity = 1;
+    }
 
     // 1. Check exact word boundary in raw/normalized text
     const escaped = escapeRegex(word);
@@ -158,24 +186,35 @@ async function detectViolations(text) {
     }
   }
 
+  // Explicit direct personal threats escalate to maximum severity
+  if (isDirectThreat) {
+    highestSeverity = 3;
+  }
+
   const detectedWords = Array.from(detectedSet);
   return {
     isViolation: detectedWords.length > 0,
     detectedWords,
-    highestSeverity: highestSeverity || (detectedWords.length > 0 ? 2 : 0)
+    highestSeverity: highestSeverity || (detectedWords.length > 0 ? 2 : 0),
+    isEducational,
+    isDirectThreat
   };
 }
 
 /**
- * Look up associated website user account by phone number
+ * Look up associated website user account by canonical phone identity
  */
 async function findLinkedUserByPhone(phone) {
-  const clean = cleanPhoneNumber(phone);
-  if (!clean) return null;
-  const last10 = clean.slice(-10);
+  if (!phone) return null;
+  const keys = getPhoneLookupKeys(phone);
+  if (!keys.last10) return null;
 
   return User.findOne({
-    phone: new RegExp(last10 + '$')
+    $or: [
+      { phone: keys.e164 },
+      { phone: keys.rawDigits },
+      { phone: new RegExp(keys.last10 + '$') }
+    ]
   });
 }
 
@@ -272,8 +311,10 @@ async function reactivateWebsiteAccount(user) {
     user.isActive = true;
     user.deactivatedReason = null;
     user.deactivatedAt = null;
+    user.tokenVersion = (user.tokenVersion || 1) + 1;
+    user.authVersion = (user.authVersion || 1) + 1;
     await user.save();
-    console.log(`[Moderation] Linked website account (${user.name} / ${user.phone}) restored by admin.`);
+    console.log(`[Moderation] Linked website account (${user.name} / ${user.phone}) restored by admin with updated tokenVersion.`);
   } catch (err) {
     console.error('[Moderation] Failed to reactivate website account:', err.message);
   }
@@ -290,39 +331,16 @@ async function reactivateWebsiteAccount(user) {
  * - Blocked users -> Disallowed from executing commands or registering on website
  */
 async function processIncomingMessage({ phoneNumber, displayName = '', messageText = '', messageId = null, userId = null }) {
-  const cleanPhone = cleanPhoneNumber(phoneNumber);
-  if (!cleanPhone) {
+  const canonicalPhone = normalizeToE164(phoneNumber);
+  if (!canonicalPhone) {
     return { isBlocked: false, isViolation: false };
   }
 
-  // 1. Retrieve or initialize UserModeration record
-  let modRecord = await UserModeration.findOne({ phoneNumber: cleanPhone });
-  let linkedUser = null;
-  if (userId) {
-    linkedUser = await User.findById(userId);
-  }
-  if (!linkedUser) {
-    linkedUser = await findLinkedUserByPhone(cleanPhone);
-  }
+  const keys = getPhoneLookupKeys(canonicalPhone);
 
-  if (!modRecord) {
-    modRecord = new UserModeration({
-      phoneNumber: cleanPhone,
-      userId: linkedUser ? linkedUser._id : null,
-      whatsappDisplayName: displayName || (linkedUser ? linkedUser.name : ''),
-      status: 'active',
-      violationCount: 0
-    });
-  } else if (!modRecord.userId && linkedUser) {
-    modRecord.userId = linkedUser._id;
-  }
-
-  if (displayName && !modRecord.whatsappDisplayName) {
-    modRecord.whatsappDisplayName = displayName;
-  }
-
-  // 2. If user is ALREADY BLOCKED, reject immediately with Parish Admin contact info
-  if (modRecord.status === 'blocked') {
+  // 1. Check if user is ALREADY BLOCKED
+  const alreadyBlocked = await isPhoneBlocked(canonicalPhone);
+  if (alreadyBlocked) {
     return {
       isBlocked: true,
       isViolation: false,
@@ -341,41 +359,66 @@ To appeal this restriction, please contact the church office directly.`
     };
   }
 
-  // 3. Scan message for violations
-  const { isViolation, detectedWords, highestSeverity } = await detectViolations(messageText);
+  // 2. Scan message for violations
+  const { isViolation, detectedWords, highestSeverity, isEducational, isDirectThreat } = await detectViolations(messageText);
 
   if (!isViolation) {
     return { isBlocked: false, isViolation: false };
   }
 
-  // 4. Violation Detected — Calculate 24-hour window
-  const now = new Date();
-  const windowMs = VIOLATION_WINDOW_HOURS * 60 * 60 * 1000;
-
-  if (modRecord.lastViolationAt && (now.getTime() - new Date(modRecord.lastViolationAt).getTime()) > windowMs) {
-    console.log(`[Moderation] Violation window expired for ${cleanPhone} (> ${VIOLATION_WINDOW_HOURS}h). Resetting strike count to 0.`);
-    modRecord.violationCount = 0;
+  // 3. Violation Detected — Atomic concurrency & dynamic 24-hour rolling strike window
+  let linkedUser = null;
+  if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+    linkedUser = await User.findById(userId);
+  }
+  if (!linkedUser) {
+    linkedUser = await findLinkedUserByPhone(canonicalPhone);
   }
 
-  modRecord.violationCount += 1;
-  modRecord.lastViolationAt = now;
+  const now = new Date();
+  const newViolation = {
+    messageId,
+    messageText,
+    matchedWords: detectedWords,
+    severity: highestSeverity,
+    warningSent: '',
+    timestamp: now
+  };
 
-  let warningMessage = '';
-  let shouldBlock = false;
+  // Atomic push ensures NO lost strikes during concurrent rapid messages
+  const updatedRecord = await UserModeration.findOneAndUpdate(
+    { $or: keys.dbOrQuery },
+    {
+      $setOnInsert: {
+        phoneNumber: canonicalPhone,
+        userId: linkedUser ? linkedUser._id : null,
+        createdAt: now
+      },
+      $push: { violations: newViolation },
+      $set: {
+        lastViolationAt: now,
+        whatsappDisplayName: displayName || (linkedUser ? linkedUser.name : '')
+      }
+    },
+    { new: true, upsert: true }
+  );
 
+  // Calculate active strikes inside the rolling 24h window from actual timestamps
+  // If an administrator restored this user, violations prior to restoration are preserved but do not count toward active strikes.
+  const cutoff24h = new Date(now.getTime() - VIOLATION_WINDOW_HOURS * 60 * 60 * 1000);
+  const lastUnblockedAt = updatedRecord.unblockedAt ? new Date(updatedRecord.unblockedAt) : null;
+  const effectiveCutoff = (lastUnblockedAt && lastUnblockedAt > cutoff24h) ? lastUnblockedAt : cutoff24h;
+
+  const activeViolations = (updatedRecord.violations || []).filter(v => v.timestamp && new Date(v.timestamp) >= effectiveCutoff);
+  const activeStrikes = activeViolations.length;
+
+  const isSevereThreat = highestSeverity === 3 && !isEducational;
+  const shouldBlock = isSevereThreat || activeStrikes >= 3;
   const wordsListStr = detectedWords.map(w => `\`${w}\``).join(', ');
 
-  // Automatic Block rule:
-  // 1st bad message -> Warning
-  // 2nd bad message (or extreme severity 3) -> Automatically block and deactivate!
-  if (highestSeverity === 3 || modRecord.violationCount >= 2) {
-    shouldBlock = true;
-    modRecord.status = 'blocked';
-    modRecord.blockedAt = now;
-    modRecord.blockedReason = highestSeverity === 3
-      ? 'Severe abusive or threatening content'
-      : `Repeated abusive messages (${modRecord.violationCount} violations in ${VIOLATION_WINDOW_HOURS}h)`;
+  let warningMessage = '';
 
+  if (shouldBlock) {
     warningMessage = `🚫 *SJDB Connect — Account Deactivated & Blocked*
 
 Your message contained prohibited language:
@@ -395,35 +438,44 @@ If you wish to appeal or request account reactivation, please contact the church
 — *Parish Administration*
 _SJDB Connect_`;
 
-    // Cross-system enforcement: deactivate website account and notify user
     if (linkedUser) {
-      await deactivateWebsiteAccount(linkedUser, modRecord.blockedReason, detectedWords);
+      const blockedReason = isSevereThreat
+        ? 'Severe abusive or threatening content'
+        : `Repeated abusive messages (${activeStrikes} violations in ${VIOLATION_WINDOW_HOURS}h)`;
+      await deactivateWebsiteAccount(linkedUser, blockedReason, detectedWords);
     }
   } else {
-    // 1st bad message -> Warning
-    modRecord.status = 'warning';
     warningMessage = `⚠️ *Warning: Inappropriate Language Detected*
 
 Your message contained prohibited language:
 🚨 *Detected words:* ${wordsListStr}
 
-• *Status:* Strike 1 Warning
+• *Status:* Strike ${activeStrikes} Warning
 • *Notice:* SJDB Connect is a sacred parish platform. If you send inappropriate language again, your account will be *automatically deactivated and blocked*.
 • *Policy:* Please maintain respect and Christian charity in all communications.`;
   }
 
-  // Record incident in audit trail
-  modRecord.violations.push({
-    messageId,
-    messageText,
-    matchedWords: detectedWords,
-    severity: highestSeverity,
-    warningSent: warningMessage,
-    timestamp: now
-  });
+  // Finalize state atomically
+  const blockedReason = shouldBlock
+    ? (isSevereThreat ? 'Severe abusive or threatening content' : `Repeated abusive messages (${activeStrikes} violations in ${VIOLATION_WINDOW_HOURS}h)`)
+    : null;
 
-  await modRecord.save();
-  console.warn(`[Moderation] Violation registered for ${cleanPhone} (Strike ${modRecord.violationCount}): Status=${modRecord.status}`);
+  const finalRecord = await UserModeration.findByIdAndUpdate(
+    updatedRecord._id,
+    {
+      $set: {
+        violationCount: activeStrikes,
+        status: shouldBlock ? 'blocked' : 'warning',
+        ...(shouldBlock && !updatedRecord.blockedAt ? {
+          blockedAt: now,
+          blockedReason
+        } : {})
+      }
+    },
+    { new: true }
+  );
+
+  console.warn(`[Moderation] Violation registered for ${canonicalPhone} (Strike ${activeStrikes}): Status=${finalRecord.status}`);
 
   // Dispatch Email Notification to Administrator with full incident and user details
   try {
@@ -432,18 +484,18 @@ Your message contained prohibited language:
       type: 'WHATSAPP_ABUSE_ALERT',
       user: linkedUser,
       extra: {
-        phoneNumber: cleanPhone,
+        phoneNumber: canonicalPhone,
         displayName: displayName || (linkedUser ? linkedUser.name : 'WhatsApp User'),
         messageText,
         detectedWords,
         highestSeverity,
-        strikeCount: modRecord.violationCount,
-        totalViolations: modRecord.violations.length,
-        status: modRecord.status,
+        strikeCount: activeStrikes,
+        totalViolations: updatedRecord.violations.length,
+        status: finalRecord.status,
         isBlocked: shouldBlock,
         warningMessage,
-        blockedReason: modRecord.blockedReason,
-        previousViolations: modRecord.violations.slice(0, -1),
+        blockedReason,
+        previousViolations: updatedRecord.violations.slice(0, -1),
         linkedUser: linkedUser ? {
           _id: linkedUser._id,
           name: linkedUser.name,
@@ -468,8 +520,8 @@ Your message contained prohibited language:
     await sendMail({
       to: 'arndas777@gmail.com',
       subject: shouldBlock
-        ? `🚨 URGENT: User Blocked & Deactivated for Abusive Language — ${displayName || cleanPhone}`
-        : `⚠️ WhatsApp Abuse Warning Issued — ${displayName || cleanPhone}`,
+        ? `🚨 URGENT: User Blocked & Deactivated for Abusive Language — ${displayName || canonicalPhone}`
+        : `⚠️ WhatsApp Abuse Warning Issued — ${displayName || canonicalPhone}`,
       html: `<div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
         <div style="background: ${shouldBlock ? 'linear-gradient(135deg, #991b1b, #dc2626)' : 'linear-gradient(135deg, #d97706, #f59e0b)'}; padding: 22px; text-align: center; color: #ffffff;">
           <h2 style="margin: 0; font-size: 20px;">${shouldBlock ? '🚨 User Automatically Blocked & Deactivated' : '⚠️ WhatsApp Abuse Warning Issued'}</h2>
@@ -481,7 +533,7 @@ Your message contained prohibited language:
           <table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
             <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
               <td style="padding: 10px; font-weight: bold; width: 35%;">Sender Phone:</td>
-              <td style="padding: 10px;">${cleanPhone}</td>
+              <td style="padding: 10px;">${canonicalPhone}</td>
             </tr>
             <tr style="border-bottom: 1px solid #e2e8f0;">
               <td style="padding: 10px; font-weight: bold;">WhatsApp Name:</td>
@@ -512,7 +564,7 @@ Your message contained prohibited language:
             <tr style="border-bottom: 1px solid #e2e8f0;">
               <td style="padding: 10px; font-weight: bold;">Action Taken:</td>
               <td style="padding: 10px; font-weight: bold; color: ${shouldBlock ? '#b91c1c' : '#d97706'};">
-                ${shouldBlock ? `Strike ${modRecord.violationCount}: User Automatically Blocked & Website Account Deactivated` : `Strike ${modRecord.violationCount}: Formal Warning Sent`}
+                ${shouldBlock ? `Strike ${activeStrikes}: User Automatically Blocked & Website Account Deactivated` : `Strike ${activeStrikes}: Formal Warning Sent`}
               </td>
             </tr>
             <tr style="background: #f8fafc;">
@@ -540,18 +592,18 @@ Your message contained prohibited language:
       recipient: 'admin',
       isBroadcast: false,
       title: shouldBlock
-        ? `🚨 User Blocked & Deactivated: ${displayName || cleanPhone}`
-        : `⚠️ WhatsApp Abuse Warning: ${displayName || cleanPhone}`,
-      message: `User ${displayName || cleanPhone} sent prohibited words (${detectedWords.join(', ')}). Action: ${shouldBlock ? 'Automatically Blocked & Deactivated' : 'Strike 1 Warning Issued'}.`,
+        ? `🚨 User Blocked & Deactivated: ${displayName || canonicalPhone}`
+        : `⚠️ WhatsApp Abuse Warning: ${displayName || canonicalPhone}`,
+      message: `User ${displayName || canonicalPhone} sent prohibited words (${detectedWords.join(', ')}). Action: ${shouldBlock ? 'Automatically Blocked & Deactivated' : 'Strike 1 Warning Issued'}.`,
       type: 'security',
       category: 'security',
       priority: shouldBlock ? 'critical' : 'high',
       actionUrl: '/admin/whatsapp',
       metadata: {
-        phoneNumber: cleanPhone,
+        phoneNumber: canonicalPhone,
         detectedWords,
         messageText,
-        strikeCount: modRecord.violationCount,
+        strikeCount: activeStrikes,
         isBlocked: shouldBlock
       }
     }).catch(e => console.warn('[Moderation] Admin notification error:', e.message));
@@ -563,8 +615,8 @@ Your message contained prohibited language:
     isBlocked: shouldBlock,
     isViolation: true,
     replyMessage: warningMessage,
-    violationCount: modRecord.violationCount,
-    status: modRecord.status
+    violationCount: activeStrikes,
+    status: finalRecord.status
   };
 }
 
@@ -573,16 +625,12 @@ Your message contained prohibited language:
  */
 async function isPhoneBlocked(phone) {
   if (!phone) return false;
-  const clean = cleanPhoneNumber(phone);
-  if (!clean) return false;
-
-  const last10 = clean.slice(-10);
+  const keys = getPhoneLookupKeys(phone);
+  if (!keys.e164 && !keys.last10) return false;
 
   const blockedRecord = await UserModeration.findOne({
-    $or: [
-      { phoneNumber: clean, status: 'blocked' },
-      { phoneNumber: new RegExp(last10 + '$'), status: 'blocked' }
-    ]
+    status: 'blocked',
+    $or: keys.dbOrQuery
   }).lean();
 
   return Boolean(blockedRecord);
@@ -590,33 +638,54 @@ async function isPhoneBlocked(phone) {
 
 /**
  * Unblock user and restore access (WhatsApp + Website)
+ * Fully preserves all historical violation records for audit integrity.
  */
-async function unblockUser(phoneNumber, adminUserId = null) {
-  const clean = cleanPhoneNumber(phoneNumber);
-  if (!clean) return null;
+async function unblockUser(phoneNumber, adminUserId = null, restoreReason = 'Restored by parish administrator upon review') {
+  if (!phoneNumber) return null;
+  const keys = getPhoneLookupKeys(phoneNumber);
+  if (!keys.e164 && !keys.last10) return null;
 
   const record = await UserModeration.findOne({
-    $or: [
-      { phoneNumber: clean },
-      { phoneNumber: new RegExp(clean.slice(-10) + '$') }
-    ]
+    $or: keys.dbOrQuery
   });
 
   if (!record) return null;
+
+  let adminName = 'Parish Administrator';
+  if (adminUserId && mongoose.Types.ObjectId.isValid(adminUserId)) {
+    const adminUser = await User.findById(adminUserId).select('name');
+    if (adminUser) adminName = adminUser.name;
+  }
+
+  const previousStatus = record.status;
+  const strikesAtRestore = record.violationCount || 0;
 
   record.status = 'active';
   record.violationCount = 0;
   record.unblockedAt = new Date();
   record.unblockedBy = (adminUserId && mongoose.Types.ObjectId.isValid(adminUserId)) ? adminUserId : null;
+  record.blockedAt = null;
+  record.blockedReason = null;
+
+  if (!record.restorationHistory) record.restorationHistory = [];
+  record.restorationHistory.push({
+    restoredBy: (adminUserId && mongoose.Types.ObjectId.isValid(adminUserId)) ? adminUserId : null,
+    restoredByName: adminName,
+    restoredAt: new Date(),
+    restoreReason: restoreReason || 'Restored by parish administrator upon review',
+    previousStatus,
+    strikesAtRestore
+  });
+
   await record.save();
 
   // Restore linked website account if exists
-  const linkedUser = await findLinkedUserByPhone(clean);
+  const linkedUser = await findLinkedUserByPhone(phoneNumber);
   if (linkedUser) {
     await reactivateWebsiteAccount(linkedUser);
   }
 
-  console.log(`[Moderation] User ${clean} successfully unblocked by admin (${adminUserId || 'system'}).`);
+  console.log(`[Moderation] User ${record.phoneNumber} unblocked by admin (${adminName}). Historical violations (${record.violations?.length || 0}) preserved.`);
   return record;
 }
 
@@ -624,21 +693,19 @@ async function unblockUser(phoneNumber, adminUserId = null) {
  * Manually block a user (Admin Action)
  */
 async function blockUserManually(phoneNumber, reason = 'Manually blocked by administrator', adminUserId = null) {
-  const clean = cleanPhoneNumber(phoneNumber);
-  if (!clean) return null;
+  if (!phoneNumber) return null;
+  const keys = getPhoneLookupKeys(phoneNumber);
+  if (!keys.e164 && !keys.last10) return null;
 
   let record = await UserModeration.findOne({
-    $or: [
-      { phoneNumber: clean },
-      { phoneNumber: new RegExp(clean.slice(-10) + '$') }
-    ]
+    $or: keys.dbOrQuery
   });
 
-  const linkedUser = await findLinkedUserByPhone(clean);
+  const linkedUser = await findLinkedUserByPhone(phoneNumber);
 
   if (!record) {
     record = new UserModeration({
-      phoneNumber: clean,
+      phoneNumber: keys.e164 || keys.rawDigits,
       userId: linkedUser ? linkedUser._id : null,
       whatsappDisplayName: linkedUser ? linkedUser.name : ''
     });
@@ -649,12 +716,14 @@ async function blockUserManually(phoneNumber, reason = 'Manually blocked by admi
   record.blockedReason = reason;
   record.unblockedAt = null;
   record.unblockedBy = null;
-  record.violationCount = Math.max(3, record.violationCount + 1);
+  record.violationCount = Math.max(3, (record.violationCount || 0) + 1);
   await record.save();
 
   if (linkedUser) {
     await deactivateWebsiteAccount(linkedUser, reason);
   }
+
+  const targetPhone = keys.e164 || keys.rawDigits;
 
   // Send manual block notification to user on WhatsApp & Email so they are informed access is suspended
   try {
@@ -666,7 +735,7 @@ Your account has been restricted by the administrator.
 • *Status:* All bot services and parish notifications have been suspended.
 • No notifications or messages will be sent until an administrator restores your account.
 • If you wish to appeal this decision, please contact the church office.`;
-    await wa.sendWhatsAppMessage(clean, manualBlockMsg);
+    await wa.sendWhatsAppMessage(targetPhone, manualBlockMsg);
   } catch (waErr) {
     console.warn('[Moderation] Could not send manual block WhatsApp notice:', waErr.message);
   }
@@ -693,12 +762,13 @@ Your account has been restricted by the administrator.
     }
   }
 
-  console.log(`[Moderation] User ${clean} manually blocked by admin (${adminUserId || 'system'}).`);
+  console.log(`[Moderation] User ${targetPhone} manually blocked by admin (${adminUserId || 'system'}).`);
   return record;
 }
 
 /**
- * Restore all restricted/moderated users and reactivate linked accounts
+ * Restore all restricted/moderated users and reactivate linked accounts.
+ * Retains complete historical violation records for audit integrity.
  */
 async function restoreAllActiveUsers(adminUserId = null) {
   const modResult = await UserModeration.updateMany({}, {
@@ -708,8 +778,7 @@ async function restoreAllActiveUsers(adminUserId = null) {
       blockedReason: null,
       blockedAt: null,
       unblockedAt: new Date(),
-      unblockedBy: adminUserId || null,
-      violations: []
+      unblockedBy: adminUserId || null
     }
   });
 

@@ -33,6 +33,16 @@ const protect = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Session expired due to security reset. Please log in again.' });
     }
 
+    // Direct check against moderation phone status
+    const { isPhoneBlocked } = require('../services/userModerationService');
+    if (req.user.phone && await isPhoneBlocked(req.user.phone)) {
+      return res.status(403).json({
+        success: false,
+        isBlocked: true,
+        message: 'Your account has been restricted due to policy violations. Please contact the church administrator.'
+      });
+    }
+
     next();
   } catch (err) {
     return res.status(401).json({ success: false, message: 'Token invalid or expired: ' + err.message });

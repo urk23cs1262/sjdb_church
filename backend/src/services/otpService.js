@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const OTPVerification = require('../models/OTPVerification');
@@ -212,16 +213,49 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
 /**
  * Verifies a submitted OTP against the latest active OTPVerification session.
  */
-const verifyOTPSession = async ({ userId, inputOtp, purpose, req }) => {
-  if (!userId || !inputOtp) {
-    return { valid: false, message: 'Missing user ID or OTP code' };
+const verifyOTPSession = async (argsOrUserId, maybeOtp, maybePurpose, maybeReq) => {
+  let userId, inputOtp, purpose, phone, req;
+  if (argsOrUserId && typeof argsOrUserId === 'object' && !argsOrUserId._bsontype && !mongoose.Types.ObjectId.isValid(argsOrUserId)) {
+    userId = argsOrUserId.userId;
+    inputOtp = argsOrUserId.inputOtp || argsOrUserId.otp;
+    purpose = argsOrUserId.purpose;
+    phone = argsOrUserId.phone || argsOrUserId.session?.phone;
+    req = argsOrUserId.req;
+  } else {
+    userId = argsOrUserId;
+    inputOtp = maybeOtp;
+    purpose = maybePurpose;
+    req = maybeReq;
+  }
+
+  const { isPhoneBlocked: isOtpUserBlocked } = require('./userModerationService');
+  let targetPhone = (phone || '').trim();
+  let existingUser = null;
+  if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+    existingUser = await User.findById(userId);
+    if (!targetPhone && existingUser?.phone) {
+      targetPhone = existingUser.phone;
+    }
+  }
+
+  if (targetPhone && await isOtpUserBlocked(targetPhone)) {
+    return {
+      valid: false,
+      isBlocked: true,
+      message: 'Your account is restricted due to policy violations. Please contact the church administrator.'
+    };
+  }
+
+  if ((!userId && !targetPhone) || !inputOtp) {
+    return { valid: false, message: 'Missing user ID/phone or OTP code' };
   }
 
   const query = {
-    userId,
     verified: false,
     status: 'pending'
   };
+  if (userId) query.userId = userId;
+  else if (targetPhone) query.phone = targetPhone;
   if (purpose) query.purpose = purpose;
 
   // Find the latest pending verification session
@@ -231,6 +265,21 @@ const verifyOTPSession = async ({ userId, inputOtp, purpose, req }) => {
     return {
       valid: false,
       message: 'No active verification session found. Please request a fresh OTP or log in again.'
+    };
+  }
+
+  if (!targetPhone && session.phone) {
+    targetPhone = session.phone;
+  }
+  if (!targetPhone && session.userId) {
+    const sUser = await User.findById(session.userId);
+    if (sUser?.phone) targetPhone = sUser.phone;
+  }
+  if (targetPhone && await isOtpUserBlocked(targetPhone)) {
+    return {
+      valid: false,
+      isBlocked: true,
+      message: 'Your account is restricted due to policy violations. Please contact the church administrator.'
     };
   }
 
@@ -283,31 +332,24 @@ const verifyOTPSession = async ({ userId, inputOtp, purpose, req }) => {
   session.status = 'verified';
   await session.save();
 
-  const { isPhoneBlocked: isOtpUserBlocked } = require('./userModerationService');
-  const existingUser = await User.findById(userId);
-  if (existingUser && existingUser.phone && await isOtpUserBlocked(existingUser.phone)) {
-    return {
-      valid: false,
-      isBlocked: true,
-      message: 'Your account is restricted due to policy violations. Please contact the church administrator.'
-    };
-  }
-
   // Mark user as verified, active, unsuspended and clear all failure/lockout counters
   // Preserve all existing account records and profile details completely
-  const user = await User.findByIdAndUpdate(userId, {
-    isVerified: true,
-    isActive: true,
-    isSuspended: false,
-    suspensionReason: undefined,
-    failedLoginAttempts: 0,
-    firstFailedAttempt: null,
-    lastFailedAttempt: null,
-    isLockedUntil: null,
-    lockoutCount: 0,
-    firstLockoutAt: null,
-    otpNotifiedExpired: true
-  }, { new: true });
+  let user = null;
+  if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+    user = await User.findByIdAndUpdate(userId, {
+      isVerified: true,
+      isActive: true,
+      isSuspended: false,
+      suspensionReason: undefined,
+      failedLoginAttempts: 0,
+      firstFailedAttempt: null,
+      lastFailedAttempt: null,
+      isLockedUntil: null,
+      lockoutCount: 0,
+      firstLockoutAt: null,
+      otpNotifiedExpired: true
+    }, { new: true });
+  }
 
   // Auto-resolve any pending SecurityIncident records for this user
   try {
@@ -345,8 +387,11 @@ const sendOTP = async (userId, phone, email, purpose = 'login', req) => {
 /**
  * Backward compatibility adapter for verifyOTP.
  */
-const verifyOTP = async (userId, inputOtp, purpose, req) => {
-  return verifyOTPSession({ userId, inputOtp, purpose, req });
+const verifyOTP = async (userIdOrArgs, inputOtp, purpose, req) => {
+  if (userIdOrArgs && typeof userIdOrArgs === 'object' && !userIdOrArgs._bsontype && !mongoose.Types.ObjectId.isValid(userIdOrArgs)) {
+    return verifyOTPSession(userIdOrArgs);
+  }
+  return verifyOTPSession({ userId: userIdOrArgs, inputOtp, purpose, req });
 };
 
 /**
