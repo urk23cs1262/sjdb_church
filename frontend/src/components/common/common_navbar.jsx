@@ -10,7 +10,7 @@ import { UPLOADS_URL, getMediaUrl } from '../../services/api';
 
 import {
   FiMenu, FiX, FiUser, FiLogOut,
-  FiSettings, FiUserCheck, FiBell, FiGlobe, FiVolume2, FiVolumeX, FiMusic, FiHeadphones, FiChevronDown, FiLayout
+  FiSettings, FiUserCheck, FiBell, FiGlobe, FiVolume2, FiVolumeX, FiMusic, FiHeadphones, FiChevronDown, FiLayout, FiMic
 } from 'react-icons/fi';
 import { FaUserCog } from 'react-icons/fa';
 import { GiChurch, GiCrucifix } from 'react-icons/gi';
@@ -287,7 +287,19 @@ export default function Navbar() {
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {/* Hey Connect mic button — desktop (pill) & mobile (circle) */}
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent('hey-connect-activate'))}
+                className="connect-mic-btn"
+                title="Hey Connect — Voice Assistant"
+                aria-label="Activate Hey Connect voice assistant"
+                id="hey-connect-navbar-btn"
+              >
+                <FiMic />
+                <span className="hidden sm:inline notranslate" translate="no">Hey Connect</span>
+              </button>
+
               {/* Rosary Button Mobile/Tablets */}
               <button
                 onClick={toggleRosaryAudio}
@@ -493,6 +505,22 @@ export default function Navbar() {
                     )
                   ))}
                 </div>
+
+                <div className="h-px bg-white/10 my-2" />
+
+                {/* Hey Connect mic button — mobile menu */}
+                <button
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent('hey-connect-activate'));
+                    setMobileOpen(false);
+                  }}
+                  className="connect-mic-btn w-full justify-center"
+                  id="hey-connect-mobile-btn"
+                  aria-label="Activate Hey Connect voice assistant"
+                >
+                  <FiMic />
+                  <span className="notranslate" translate="no">Hey Connect</span>
+                </button>
 
                 <div className="h-px bg-white/10 my-2" />
 

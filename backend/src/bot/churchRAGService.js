@@ -142,7 +142,7 @@ function extractQueryIntents(rawText) {
 
   // 1. User Own Account Queries
   const isProfileQuery = /\b(my profile|who am i|my account|my details|my family id|my parish id|my member id)\b/i.test(norm) ||
-    /(சுயவிவர|என் சுயவிவரம்|என் கணக்கு|என் விபரம்|நான் யார்)/.test(rawText);
+    /(என் சுயவிவரம்|என் கணக்கு|என் விபரம்|நான் யார்)/.test(rawText);
   if (isProfileQuery) intents.push('user_profile');
 
   const isUserLanguageQuery = /\b(what language|my language|my saved language|current language|saved language)\b/i.test(norm) ||
@@ -371,10 +371,10 @@ He was martyred for his Catholic faith at Oriyur on February 4, 1693. Pope Pius 
 function buildChurchHistorySection(isTamil) {
   const body = isTamil
     ? `காளையார்கோவிலில் அமைந்துள்ள புனித ஜான் டி பிரிட்டோ திருத்தலம் சிவகங்கை மறைமாவட்டத்தின் புகழ்மிக்க ஆன்மீகக் கோட்டையாகும். மறைசாட்சி புனித அருளானந்தர் நினைவாக அர்ப்பணிக்கப்பட்டு, பல தலைமுறைகளாக மக்களின் விசுவாச மையமாக விளங்கி வருகிறது.\n`
-    : `St. John de britto Church in Kalayarkoil is a historic parish of the Diocese of Sivagangai. Dedicated to martyr St. John de Britto, it serves thousands of Catholic families with vibrant Anbiyams and active pastoral ministries.\n`;
+    : `St. John de Britto's Church in Kalayarkoil is a historic parish of the Diocese of Sivagangai. Dedicated to martyr St. John de Britto, it serves thousands of Catholic families with vibrant Anbiyams and active pastoral ministries.\n`;
 
   return {
-    header: isTamil ? `⛪ *காளையார்கோவில் ஆலய வரலாறு (Church History)*` : `⛪ *About St. John de britto Church & Parish Details*`,
+    header: isTamil ? `⛪ *காளையார்கோவில் ஆலய வரலாறு (Church History)*` : `⛪ *About St. John de Britto's Church & Parish Details*`,
     body,
     linkTitle: isTamil ? 'ஆலய வரலாறு' : 'Church History',
     url: getSiteUrl(SITE_ROUTES.ABOUT)
@@ -474,7 +474,7 @@ function buildMassAmbiguousSection(isTamil) {
 • 🙏 *Mass Prayers* (e.g. "Prayer before Mass")\n`;
 
   return {
-    header: isTamil ? `⛪ *திருப்பலி வழிகாட்டுதல் (Holy Mass)*` : `⛪ *Holy Mass — St. John de britto Church*`,
+    header: isTamil ? `⛪ *திருப்பலி வழிகாட்டுதல் (Holy Mass)*` : `⛪ *Holy Mass — St. John de Britto's Church*`,
     body,
     linkTitle: isTamil ? 'திருப்பலி அட்டவணை' : 'Mass Schedule',
     url: getSiteUrl(SITE_ROUTES.MASS_TIMINGS)
@@ -683,7 +683,7 @@ function buildLocationSection(isTamil) {
 
 📍 *கூகுள் மேப் வழிகாட்டல் (Google Maps):*
 ${EXTERNAL_LINKS.GOOGLE_MAPS}\n`
-    : `🏛️ *St. John de britto Church*
+    : `🏛️ *St. John de Britto's Church*
 Church Road, Kalayarkoil,
 Sivagangai District, Tamil Nadu — 630551.
 (Diocese of Sivagangai)
@@ -1050,10 +1050,7 @@ async function answerChurchQuestion(rawText, userPreferredLang = null, userAuthC
     };
   }
 
-  const detectedLang = detectQueryLanguage(rawText);
-  const queryLang = (userPreferredLang === 'ta' || userPreferredLang === 'en')
-    ? userPreferredLang
-    : (detectedLang === 'ta' ? 'ta' : 'en');
+  const queryLang = userPreferredLang || detectQueryLanguage(rawText);
   const isTamil = queryLang === 'ta';
 
   const intents = extractQueryIntents(rawText);
@@ -1187,7 +1184,7 @@ async function answerChurchQuestion(rawText, userPreferredLang = null, userAuthC
   }
 
   // Consistent Church Signature
-  messageContent += `\n— *${isTamil ? 'புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்' : "St. John de britto Church, Kalayarkoil"}*\n_SJDB Connect_`;
+  messageContent += `\n— *${isTamil ? 'புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்' : "St. John de Britto's Church, Kalayarkoil"}*\n_SJDB Connect_`;
 
   const isSaintOnly = sections.length === 1 && sections[0].isSaintOfDayFlow;
 

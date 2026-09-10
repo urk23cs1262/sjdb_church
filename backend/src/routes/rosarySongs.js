@@ -9,17 +9,10 @@ const {
   updateSong, 
   bulkUpdateStatus, 
   reorderSongs,
-  deleteSong,
-  getUserPlaybackProgress,
-  saveUserPlaybackProgress
+  deleteSong 
 } = require('../controllers/rosarySongController');
 const { protect, adminOnly } = require('../middleware/auth');
 const upload = require('../middleware/upload');
-
-// User: Get & save personalized devotional playback progress
-router.get('/playback-progress', protect, getUserPlaybackProgress);
-router.put('/playback-progress', protect, saveUserPlaybackProgress);
-router.post('/playback-progress', protect, saveUserPlaybackProgress);
 
 // Public: Get all active songs for Navbar Rosary modal
 router.get('/', getActiveSongs);
@@ -27,11 +20,11 @@ router.get('/', getActiveSongs);
 // Admin: Get all songs (active & inactive)
 router.get('/admin', protect, adminOnly, getAllSongsAdmin);
 
-// Admin: Upload individual song audio files (up to 100 files, 500MB total)
-router.post('/individual', protect, adminOnly, upload.handleUpload(upload.array('files', 100)), uploadIndividualSongs);
+// Admin: Upload individual song audio files
+router.post('/individual', protect, adminOnly, upload.array('files', 50), uploadIndividualSongs);
 
-// Admin: Upload ZIP archive with songs (up to 500MB)
-router.post('/zip', protect, adminOnly, upload.handleUpload(upload.single('file')), uploadZipSongs);
+// Admin: Upload ZIP archive with songs
+router.post('/zip', protect, adminOnly, upload.single('file'), uploadZipSongs);
 
 // Admin: Toggle active status
 router.patch('/:id/toggle', protect, adminOnly, toggleSongStatus);

@@ -70,7 +70,7 @@ export default function Login() {
       if (res.data.success && res.data.isEnabled) {
         setIsMaintenanceActive(true);
       }
-    }).catch(() => { });
+    }).catch(() => {});
   }, []);
 
   const getRedirectDestination = (userData) => {
@@ -98,14 +98,6 @@ export default function Login() {
         localStorage.setItem('last_login_identifier', data.login.trim());
       }
       const res = await api.post('/auth/login', { login: data.login, password: data.password });
-      if (res.data?.requiresReverification) {
-        const target = getRedirectDestination(res.data.user);
-        sessionStorage.setItem('redirectAfterLogin', target);
-        toast(res.data.message || 'Account re-verification required (30-day security cycle).', { icon: '🔐' });
-        navigate(`/verify-account?identifier=${encodeURIComponent(data.login)}&userId=${res.data.userId || ''}&redirect=${encodeURIComponent(target)}`);
-        return;
-      }
-
       if (res.data?.requiresOTP || (res.data?.userId && !res.data?.token)) {
         setUserId(res.data.userId);
         setStage('otp');
@@ -125,13 +117,6 @@ export default function Login() {
       navigate(target);
     } catch (e) {
       const resData = e.response?.data;
-      if (resData?.requiresReverification) {
-        const target = getRedirectDestination(null);
-        sessionStorage.setItem('redirectAfterLogin', target);
-        toast(resData.message || 'Account re-verification required.', { icon: '🔐' });
-        navigate(`/verify-account?identifier=${encodeURIComponent(data.login)}&userId=${resData.userId || ''}&redirect=${encodeURIComponent(target)}`);
-        return;
-      }
       if (resData?.requiresOTP || resData?.userId) {
         setUserId(resData.userId);
         setStage('otp');
@@ -212,11 +197,6 @@ export default function Login() {
       setVerifyStep('otp');
       setVerifyCooldown(60);
       toast.success(res.data.message || 'Verification code sent!');
-      if (res.data.devOtp) {
-        setDevOtp(res.data.devOtp);
-        setIsOtpLoading(true);
-        setTimeout(() => setIsOtpLoading(false), 5000);
-      }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to send verification OTP');
     } finally {
@@ -273,7 +253,7 @@ export default function Login() {
               <img src={churchLogo} alt="Logo" className="w-full h-full object-cover object-[center_20%] transform" />
             </div>
             <h1 className="font-display text-2xl font-bold text-church-royal-blue ">{t('auth.login')}</h1>
-            <p className="text-gray-500 text-sm mt-1">St. John de britto Church</p>
+            <p className="text-gray-500 text-sm mt-1">St. John de Britto's Church</p>
           </div>
 
           {/* Login Form */}
@@ -368,7 +348,7 @@ export default function Login() {
 
               <div>
                 <span className="text-[11px] font-bold text-amber-800 uppercase tracking-widest bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
-                  Access Restricted
+                   Access Restricted
                 </span>
                 <h2 className="text-xl font-display font-extrabold text-church-royal-blue mt-2">
                   Access Restricted
@@ -415,7 +395,7 @@ export default function Login() {
 
               <div>
                 <span className="text-[11px] font-bold text-red-700 uppercase tracking-widest bg-red-50 px-3 py-1 rounded-full border border-red-200">
-                  Account Under Security Review
+                   Account Under Security Review
                 </span>
                 <h2 className="text-xl font-display font-extrabold text-church-royal-blue mt-2">
                   Account Under Security Review
@@ -510,7 +490,7 @@ export default function Login() {
                     <div className="flex flex-col items-center gap-2 w-full px-4 py-1">
                       <p className="text-amber-800 text-xs font-semibold">Sending...</p>
                       <div className="w-full bg-amber-200 h-1.5 rounded-full overflow-hidden">
-                        <motion.div
+                        <motion.div 
                           className="bg-amber-500 h-full"
                           initial={{ width: "0%" }}
                           animate={{ width: "100%" }}
@@ -541,9 +521,9 @@ export default function Login() {
                 <input {...register('otp', { required: true, minLength: 6, maxLength: 6 })} className="church-input text-center text-2xl tracking-widest font-bold" placeholder="000000" maxLength={6} />
               </div>
               <button type="submit" disabled={isSubmitting} className="btn-gold w-full justify-center py-3.5">{t('auth.verifyOtp')}</button>
-              <button type="button" onClick={async () => {
-                const res = await api.post('/auth/resend-otp', { userId });
-                toast.success('OTP resent!');
+              <button type="button" onClick={async () => { 
+                const res = await api.post('/auth/resend-otp', { userId }); 
+                toast.success('OTP resent!'); 
                 if (res.data.devOtp) {
                   setDevOtp(res.data.devOtp);
                   setIsOtpLoading(true);
@@ -577,7 +557,7 @@ export default function Login() {
                     <div className="flex flex-col items-center gap-2 w-full px-4 py-1">
                       <p className="text-amber-800 text-xs font-semibold">Sending...</p>
                       <div className="w-full bg-amber-200 h-1.5 rounded-full overflow-hidden">
-                        <motion.div
+                        <motion.div 
                           className="bg-amber-500 h-full"
                           initial={{ width: "0%" }}
                           animate={{ width: "100%" }}
@@ -657,7 +637,7 @@ export default function Login() {
                           }}
                           className="text-[11px] font-bold text-amber-700 hover:text-amber-800 underline cursor-pointer"
                         >
-
+                          ⚡ Auto-fill saved
                         </button>
                       )}
                     </div>
@@ -704,38 +684,6 @@ export default function Login() {
                     </p>
                   </div>
 
-                  {devOtp && (
-                    <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 flex flex-col items-center justify-center gap-2 mb-4 min-h-[76px]">
-                      {isOtpLoading ? (
-                        <div className="flex flex-col items-center gap-2 w-full px-4 py-1">
-                          <p className="text-amber-800 text-xs font-semibold">Sending...</p>
-                          <div className="w-full bg-amber-200 h-1.5 rounded-full overflow-hidden">
-                            <motion.div
-                              className="bg-amber-500 h-full"
-                              initial={{ width: "0%" }}
-                              animate={{ width: "100%" }}
-                              transition={{ duration: 5, ease: "linear" }}
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <p className="text-amber-800 text-xs font-semibold text-center">OTP sent to your number/email</p>
-                          <div className="flex items-center gap-3">
-                            <span className="text-amber-900 font-mono font-bold text-xl tracking-widest">{devOtp.slice(0, 2)}xxxx</span>
-                            <button
-                              type="button"
-                              onClick={() => setVerifyOtpVal(devOtp)}
-                              className="bg-amber-400 hover:bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded transition-colors"
-                            >
-                              Auto Fill
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-
                   <div>
                     <label className="church-label text-center">6-Digit OTP</label>
                     <input
@@ -769,7 +717,7 @@ export default function Login() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setVerifyStep('email'); setVerifyOtpVal(''); setDevOtp(null); }}
+                      onClick={() => { setVerifyStep('email'); setVerifyOtpVal(''); }}
                       className="text-gray-500 hover:text-gray-700 font-medium"
                     >
                       Change Email
@@ -778,7 +726,7 @@ export default function Login() {
 
                   <button
                     type="button"
-                    onClick={() => { setStage('login'); setDevOtp(null); }}
+                    onClick={() => setStage('login')}
                     className="btn-ghost w-full justify-center text-xs text-gray-500 pt-1"
                   >
                     ← Back to Login

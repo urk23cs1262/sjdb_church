@@ -6,18 +6,11 @@ const botSessionSchema = new mongoose.Schema({
   step: {
     type: String,
     enum: [
-      'language_selection',
-      'bot_language',
       'welcome',
       'ask_phone',
-      'ask_phone_manual',
       'phone_verification',
-      'otp_verification',
       'select_preferences',
       'preferences',
-      'catholic_language',
-      'bot_language_change',
-      'catholic_language_change',
       'select_language',
       'language',
       'reading_pref',
@@ -26,21 +19,16 @@ const botSessionSchema = new mongoose.Schema({
       'stopped',
       'done'
     ],
-    default: 'language_selection'
+    default: 'welcome'
   },
   isVerified: { type: Boolean, default: false },
   isOnboarded: { type: Boolean, default: false },
   providedPhone: { type: String, default: '' },
-  tempOtp: { type: String, default: null },
-  tempOtpExpires: { type: Date, default: null },
   preferences: [{
     type: String,
     enum: ['verse', 'saint', 'mass', 'events', 'announcements', 'birthday', 'maintenance', 'info']
   }],
-  language: { type: String, enum: ['en', 'ta', 'both', 'ml'], default: null }, // Bot Language
-  catholicLanguage: { type: String, enum: ['en', 'ta', 'both'], default: 'ta' }, // Daily Catholic Content Language
-  waitingForReply: { type: Boolean, default: false },
-  pendingStep: { type: String, default: null },
+  language: { type: String, enum: ['en', 'ta', 'both', 'ml'], default: 'en' },
   readingPreference: { type: String, enum: ['full', 'short', 'verse-reflection', 'complete'], default: 'full' },
   sendLinks: { type: Boolean, default: true },
   lastMessage: { type: Date, default: Date.now },
@@ -56,8 +44,7 @@ const botSessionSchema = new mongoose.Schema({
   processedMessageIds: [{ type: String }],
   lastProcessedMessageId: { type: String, default: '' },
   lastSentResponseHash: { type: String, default: '' },
-  lastSentAt: { type: Date },
-  currentMenu: { type: String, default: 'main' }
+  lastSentAt: { type: Date }
 }, { timestamps: true });
 
 module.exports = mongoose.model('BotSession', botSessionSchema);

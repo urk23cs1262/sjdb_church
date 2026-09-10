@@ -105,10 +105,10 @@ export default function DailyNotificationManager() {
             </span>
             <div>
               <h2 className="text-base sm:text-lg font-bold text-church-royal-blue font-display">
-                04:00 AM IST 4-Channel Catholic Notifications
+                12:00 AM IST 4-Channel Catholic Notifications
               </h2>
               <p className="text-gray-500 text-xs mt-0.5">
-                Automated 04:00 AM IST delivery of bilingual Bible Verses, Mass Readings, Reflection & Saint of the Day across Email, In-App, Push & WhatsApp.
+                Automated midnight delivery of bilingual Bible Verses, Mass Readings, Reflection & Saint of the Day across Email, In-App, Push & WhatsApp.
               </p>
             </div>
           </div>

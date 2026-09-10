@@ -23,14 +23,6 @@ export const AuthProvider = ({ children }) => {
     }
   }, [user]);
 
-  useEffect(() => {
-    const handleUnauthorized = () => {
-      logout();
-    };
-    window.addEventListener('auth:unauthorized', handleUnauthorized);
-    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
-  }, []);
-
 
   const fetchMe = async () => {
     try {
@@ -58,19 +50,9 @@ export const AuthProvider = ({ children }) => {
 
   const isAdmin = user?.role === 'admin';
   const isAuthenticated = !!user;
-  const isReverificationRequired = Boolean(user && user.role !== 'admin' && user.requiresReverification);
-
-  const markReverified = (updatedUser) => {
-    setUser(prev => ({
-      ...(prev || {}),
-      ...(updatedUser || {}),
-      requiresReverification: false,
-      account_verified: true
-    }));
-  };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, token, loading, login, logout, isAdmin, isAuthenticated, isReverificationRequired, markReverified, fetchMe }}>
+    <AuthContext.Provider value={{ user, token, loading, login, logout, isAdmin, isAuthenticated, fetchMe }}>
       {children}
     </AuthContext.Provider>
   );

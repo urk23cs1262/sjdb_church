@@ -414,14 +414,6 @@ export const CATHOLIC_SAINTS_CALENDAR = {
     image: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/MotherTeresa_090.jpg/500px-MotherTeresa_090.jpg",
     link: "https://www.catholic.org/saints/saint.php?saint_id=5611"
   },
-  "09-06": {
-    name: "St. Zachary, Prophet",
-    nameTa: "புனித செக்கரியா (இறைவாக்கினர்)",
-    description: "Zechariah was the last of the Minor Prophets, who lived during the period of the reconstruction of the Temple in Jerusalem. He exhorted the people to penance and foretold the coming of the Messiah.",
-    descriptionTa: "எருசலேம் கோவில் மீண்டும் கட்டியெழுப்பப்பட்ட காலத்தில் வாழ்ந்த சிறிய இறைவாக்கினர்களில் ஒருவரான புனித செக்கரியா, மக்களை மனந்திரும்புதலுக்கு அழைத்து மெசியாவின் வருகையை முன்னறிவித்தவர்.",
-    image: "https://upload.wikimedia.org/wikipedia/commons/4/44/Zacharias_%28Michelangelo%29.jpg",
-    link: "https://www.vaticannews.va/en/saints/09/06.html"
-  },
   "09-08": {
     name: "The Nativity of the Blessed Virgin Mary (Arogya Matha)",
     nameTa: "தூய கன்னி மரியாவின் பிறப்புப் பெருவிழா (ஆரோக்கிய மாதா)",
@@ -634,31 +626,8 @@ export const CATHOLIC_SAINTS_CALENDAR = {
  * Helper to get the Catholic Saint of the Day for any date object
  */
 export function getSaintForDate(date = new Date()) {
-  let monthStr, dayStr;
-  if (!date) {
-    const now = new Date();
-    monthStr = String(now.getMonth() + 1).padStart(2, '0');
-    dayStr = String(now.getDate()).padStart(2, '0');
-  } else if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    const parts = date.split('-');
-    monthStr = parts[1];
-    dayStr = parts[2];
-  } else if (typeof date === 'string' && /^\d{2}-\d{2}$/.test(date)) {
-    const parts = date.split('-');
-    monthStr = parts[0];
-    dayStr = parts[1];
-  } else {
-    const dt = (date instanceof Date && !isNaN(date.getTime())) ? date : new Date(date);
-    if (!isNaN(dt.getTime())) {
-      monthStr = String(dt.getMonth() + 1).padStart(2, '0');
-      dayStr = String(dt.getDate()).padStart(2, '0');
-    } else {
-      const now = new Date();
-      monthStr = String(now.getMonth() + 1).padStart(2, '0');
-      dayStr = String(now.getDate()).padStart(2, '0');
-    }
-  }
-
+  const monthStr = String(date.getMonth() + 1).padStart(2, '0');
+  const dayStr = String(date.getDate()).padStart(2, '0');
   const key = `${monthStr}-${dayStr}`;
 
   // 1. Direct match for today's date

@@ -20,7 +20,7 @@ self.addEventListener('fetch', (event) => {
 
 self.addEventListener('push', (event) => {
   let data = {
-    title: "St. John de britto Church",
+    title: "St. John de Britto's Church",
     body: "New parish update received.",
     url: "/notifications"
   };
@@ -40,7 +40,6 @@ self.addEventListener('push', (event) => {
     body: data.body || data.message || "New parish update received.",
     icon: data.icon || '/favicon.png',
     badge: data.badge || '/favicon.png',
-    image: data.image || (data.data && data.data.image) || undefined,
     tag: data.tag || (notificationId ? `sjdb-notif-${notificationId}` : `sjdb-${Date.now()}`),
     renotify: true,
     vibrate: [100, 50, 100],
@@ -51,7 +50,7 @@ self.addEventListener('push', (event) => {
   };
 
   event.waitUntil(
-    self.registration.showNotification(data.title || "St. John de britto Church", options)
+    self.registration.showNotification(data.title || "St. John de Britto's Church", options)
   );
 });
 

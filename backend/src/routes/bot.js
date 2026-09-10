@@ -16,9 +16,7 @@ const {
   triggerBroadcast,
   sendCustomMessage,
   testDirectMessage,
-  testBotMessage,
-  triggerBirthdays,
-  getTodayBirthdays
+  testBotMessage
 } = require('../controllers/botController');
 const { protect, adminOnly } = require('../middleware/auth');
 
@@ -41,7 +39,5 @@ router.post('/broadcast/now', protect, adminOnly, triggerBroadcast);
 router.post('/send', protect, adminOnly, sendCustomMessage);
 router.post('/test-direct', protect, adminOnly, testDirectMessage);
 router.post('/test-message', protect, adminOnly, testBotMessage);
-router.post('/trigger-birthdays', protect, adminOnly, triggerBirthdays);
-router.get('/birthdays/today', protect, adminOnly, getTodayBirthdays);
 
 module.exports = router;

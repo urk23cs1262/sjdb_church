@@ -120,7 +120,7 @@ const getDashboardStats = async (req, res) => {
 
     // Calculate Birthdays and Anniversaries accurately in current month
     const currentMonth = now.getMonth();
-
+    
     const allBirthdaysThisMonth = allUsersForSpecialDays.filter(u => {
       if (!u.dob) return false;
       const d = new Date(u.dob);
@@ -197,8 +197,7 @@ const getDashboardStats = async (req, res) => {
       });
     });
 
-    const completedReverification = Math.max(0, totalUsers - otpPendingCount);
-    const reverificationPercentage = totalUsers > 0 ? parseFloat(((completedReverification / totalUsers) * 100).toFixed(1)) : 100.0;
+    activities.sort((a, b) => new Date(b.time) - new Date(a.time));
 
     res.json({
       success: true,
@@ -209,12 +208,6 @@ const getDashboardStats = async (req, res) => {
         newMembersToday,
         newMembersThisMonth,
         otpPendingCount,
-        reverification: {
-          totalUsers,
-          completed: completedReverification,
-          pending: otpPendingCount,
-          completionPercentage: reverificationPercentage
-        },
         loginAttemptsTodayCount,
         todayBookings,
         totalEvents,
@@ -261,15 +254,13 @@ const forceGlobalOtpReverification = async (req, res) => {
     const { sendPushBroadcast } = require('../services/webPushService');
     const { sendMail } = require('../config/mailer');
 
-    // 1. Update all users: set otpVerified: false, account_verified: false, otpVerifiedAt: null, verificationExpiresAt: new Date(0), increment authVersion & tokenVersion
+    // 1. Update all users and admins: set otpVerified: false, otpVerifiedAt: null, increment authVersion & tokenVersion
     const result = await User.updateMany(
       {},
       {
         $set: {
           otpVerified: false,
-          account_verified: false,
-          otpVerifiedAt: null,
-          verificationExpiresAt: new Date(0)
+          otpVerifiedAt: null
         },
         $inc: {
           tokenVersion: 1,
@@ -302,7 +293,7 @@ const forceGlobalOtpReverification = async (req, res) => {
         category: 'security',
         priority: 'high',
         recipient: 'user',
-        actionUrl: '/verify-account',
+        actionUrl: '/login',
         channels: ['in_app']
       });
     } catch (notifErr) {
@@ -315,7 +306,7 @@ const forceGlobalOtpReverification = async (req, res) => {
         title: 'Security Alert — Re-verification Required',
         body: 'All active sessions have been safely reset. Please log in with your password and verify your OTP.',
         notificationId: inAppNotif?._id ? inAppNotif._id.toString() : 'global-otp-reset',
-        url: '/verify-account',
+        url: '/login',
         icon: '/favicon.png',
         badge: '/favicon.png',
         tag: 'sjdb-global-otp-reset',
@@ -326,8 +317,8 @@ const forceGlobalOtpReverification = async (req, res) => {
     }
 
     // 5. Send Security Advisory Email to All Registered Users
-    const clientUrl = (process.env.CLIENT_URL || 'https://st-jb-church.vercel.app').replace('http://localhost:5173', 'https://st-jb-church.vercel.app');
-
+    const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
+    
     // Fetch all users with valid email
     const usersWithEmail = await User.find({
       email: { $exists: true, $ne: null, $ne: '' },
@@ -373,7 +364,7 @@ const forceGlobalOtpReverification = async (req, res) => {
         <div style="width: 75px; height: 75px; background: #ffffff; border-radius: 50%; margin: 0 auto 12px; overflow: hidden; border: 3px solid #fbbf24; box-shadow: 0 4px 14px rgba(0,0,0,0.25);">
           <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
         </div>
-        <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #fbbf24; letter-spacing: 0.5px;">St. John de britto Church</h1>
+        <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #fbbf24; letter-spacing: 0.5px;">St. John de Britto's Church</h1>
         <p style="margin: 4px 0 0 0; font-size: 13px; color: #e2e8f0; font-weight: 500;">புனித அருளானந்தர் தேவாலயம்</p>
         <div style="display: inline-block; margin-top: 12px; padding: 4px 14px; background: rgba(245, 158, 11, 0.2); border: 1px solid rgba(245, 158, 11, 0.5); border-radius: 999px; font-size: 11px; font-weight: 700; color: #fef08a; text-transform: uppercase; letter-spacing: 0.8px;">
           Official Security Advisory
@@ -409,8 +400,8 @@ const forceGlobalOtpReverification = async (req, res) => {
           <p style="margin: 0 0 16px; font-size: 13px; color: #64748b; line-height: 1.5;">
             Click the button below to visit the church portal, sign in with your password, and enter the 6-digit OTP code sent to your registered contact.
           </p>
-          <a href="${clientUrl}/verify-account" class="btn-responsive" style="display: inline-block; background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 800; padding: 13px 28px; border-radius: 10px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35); text-align: center;">
-            Verify Account Online →
+          <a href="${clientUrl}/login" class="btn-responsive" style="display: inline-block; background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 800; padding: 13px 28px; border-radius: 10px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35); text-align: center;">
+            Log In & Verify Account →
           </a>
         </div>
 
@@ -432,8 +423,8 @@ const forceGlobalOtpReverification = async (req, res) => {
 
       <!-- FOOTER -->
       <div style="background-color: #0f172a; padding: 16px 18px; text-align: center; color: #94a3b8; font-size: 11.5px;">
-        <p style="margin: 0; font-weight: 700; color: #f8fafc;">St. John de britto Church, Kalayarkoil</p>
-        <p style="margin: 4px 0 0; color: #64748b;">Parish Security & Verification System</p>
+        <p style="margin: 0; font-weight: 700; color: #f8fafc;">St. John de Britto's Church, Kalayarkoil</p>
+        <p style="margin: 4px 0 0; color: #64748b;">Automated Security Advisory • Do not reply</p>
       </div>
 
     </div>
@@ -445,7 +436,7 @@ const forceGlobalOtpReverification = async (req, res) => {
         try {
           await sendMail({
             to: u.email,
-            subject: `Security Advisory: Account Re-verification Required — St. John de britto Church`,
+            subject: `Security Advisory: Account Re-verification Required — St. John de Britto's Church`,
             html: emailHtml
           });
           emailSuccessCount++;
@@ -457,52 +448,17 @@ const forceGlobalOtpReverification = async (req, res) => {
       console.log(`[forceGlobalOtpReverification] Email broadcast completed: ${emailSuccessCount} sent, ${emailFailCount} failed.`);
     })().catch(e => console.error('[forceGlobalOtpReverification] Async email broadcast error:', e.message));
 
-    // 6. Send WhatsApp Bot Broadcast to Parishioners with Registered Phone
-    const usersWithPhone = await User.find({
-      phone: { $exists: true, $ne: null, $ne: '' },
-      isActive: { $ne: false }
-    }).select('name phone parishMemberId preferredLanguage');
-
-    (async () => {
-      try {
-        const wa = require('../bot/whatsapp');
-        console.log(`[forceGlobalOtpReverification] Starting WhatsApp broadcast to ${usersWithPhone.length} users...`);
-        let waCount = 0;
-        for (const u of usersWithPhone) {
-          if (!u.phone) continue;
-          const uName = u.name || 'Parishioner';
-          const uMemberId = u.parishMemberId || 'Parish Member';
-          const isTamil = u.preferredLanguage === 'ta';
-
-          const waMsg = isTamil
-            ? `*புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்*\n🔐 *பாதுகாப்பு அறிவிப்பு: கணக்கு மறுசரிபார்ப்பு தேவை*\n\nஅன்பார்ந்த *${uName}* (பங்கு எண்: ${uMemberId}),\n\nதேவாலய பாதுகாப்பு காரணங்களுக்காக அனைத்து அமர்வுகளும் மீட்டமைக்கப்பட்டுள்ளன. தயவுசெய்து உங்கள் கணக்கை உடனே மறுசரிபார்க்கவும்.\n\n👉 *நேரடி சரிபார்ப்பு இணைப்பு:*\n${clientUrl}/verify-account\n\n_புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்_`
-            : `*St. John de britto Church, Kalayarkoil*\n🔐 *Security Alert: Account Re-verification Required*\n\nDear *${uName}* (ID: ${uMemberId}),\n\nFor parish records safety and enhanced security, all active sessions have been safely reset. Please complete your account re-verification to continue accessing all church features freely.\n\n👉 *Direct Re-verification Link:*\n${clientUrl}/verify-account\n\n_St. John de britto Church, Kalayarkoil_`;
-
-          if (typeof wa.sendWhatsAppToUser === 'function') {
-            await wa.sendWhatsAppToUser(u, waMsg).catch(() => { });
-          } else if (typeof wa.sendWhatsAppMessage === 'function') {
-            await wa.sendWhatsAppMessage(u.phone, waMsg).catch(() => { });
-          }
-          waCount++;
-          await new Promise(r => setTimeout(r, 150));
-        }
-        console.log(`[forceGlobalOtpReverification] WhatsApp broadcast finished: ${waCount} processed.`);
-      } catch (waErr) {
-        console.warn('[forceGlobalOtpReverification] WhatsApp broadcast error:', waErr.message);
-      }
-    })().catch(e => console.error('[forceGlobalOtpReverification] Async WA broadcast error:', e.message));
-
-    // 7. Notify Admin Activity Stream
+    // 6. Notify Admin Activity Stream
     notifyAdmin({
       type: 'SECURITY_ALERT',
       req,
-      title: 'Global OTP Re-verification & Multi-Channel Broadcast Sent',
-      reason: `Admin triggered global OTP reset. ${result.modifiedCount} accounts reset. In-app notifications, web push broadcast, ${usersWithEmail.length} security advisory emails, and ${usersWithPhone.length} WhatsApp Bot alerts dispatched to all users.`
+      title: 'Global OTP Re-verification & Broadcast Sent',
+      reason: `Admin triggered global OTP reset. ${result.modifiedCount} accounts reset. In-app notifications, web push broadcast, and ${usersWithEmail.length} security advisory emails dispatched to all users.`
     }).catch(e => console.warn('Admin notification error:', e.message));
 
     res.json({
       success: true,
-      message: `Global OTP Re-verification successfully activated. ${result.modifiedCount} accounts have been reset. Multi-channel alerts (WhatsApp bot, in-app notifications, web push, and security emails) are being dispatched to all registered parishioners.`,
+      message: `Global OTP Re-verification successfully activated. ${result.modifiedCount} accounts have been reset, in-app notifications created, web push broadcast sent, and security advisory emails are being dispatched to ${usersWithEmail.length} registered users.`,
       modifiedCount: result.modifiedCount,
       emailRecipientsCount: usersWithEmail.length
     });

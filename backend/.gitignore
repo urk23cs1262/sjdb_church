@@ -23,6 +23,3 @@ yarn-error.log*
 .idea/
 .DS_Store
 Thumbs.db
-
-# Legacy/local Baileys session artifacts (production auth is stored in MongoDB)
-src/bot/session/

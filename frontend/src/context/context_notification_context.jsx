@@ -6,7 +6,7 @@ import { registerServiceWorker, showNativeNotification } from '../services/servi
 const NotificationContext = createContext(null);
 
 export const NotificationProvider = ({ children }) => {
-  const { isAuthenticated, isAdmin, token } = useAuth();
+  const { isAuthenticated, isAdmin } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [adminNotifications, setAdminNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -24,29 +24,29 @@ export const NotificationProvider = ({ children }) => {
         if (permission === 'granted') {
           console.log(' Push notification permission auto-granted!');
           showNativeNotification({
-            title: "St. John de britto Church ",
+            title: "St. John de Britto's Church ",
             body: "Real-time browser notifications auto-enabled! You will receive instant parish updates.",
             url: "/dashboard"
           });
         }
-      }).catch(() => { });
+      }).catch(() => {});
     }
   }, []);
 
   const triggerNativePush = (notif) => {
-    let title = "St. John de britto Church ";
+    let title = "St. John de Britto's Church ";
     let body = notif.message || notif.title;
     let url = notif.actionUrl || '/dashboard';
 
     const cat = notif.category || notif.type;
     if (cat === 'events' || cat === 'event') {
-      title = " St. John de britto Church — New Event";
+      title = " St. John de Britto's Church — New Event";
       url = '/events';
     } else if (cat === 'announcements' || cat === 'announcement') {
-      title = " St. John de britto Church — Announcement";
+      title = " Church Announcement";
       url = '/announcements';
-    } else if (cat === 'donation' || cat === 'donations') {
-      title = " Church Contribution Update";
+    } else if (cat === 'donations' || cat === 'donation') {
+      title = " Donation Campaign";
       url = '/donate';
     } else if (cat === 'prayer' || cat === 'prayers') {
       title = " Community Prayer Request";
@@ -68,7 +68,6 @@ export const NotificationProvider = ({ children }) => {
   };
 
   const fetchUserNotifications = useCallback(async () => {
-    if (!isAuthenticated || !localStorage.getItem('token')) return;
     try {
       const res = await api.get('/notifications');
       const list = res.data.notifications || [];
@@ -87,10 +86,9 @@ export const NotificationProvider = ({ children }) => {
         }
       });
     } catch { /* silent */ }
-  }, [isAuthenticated]);
+  }, []);
 
   const fetchAdminNotifications = useCallback(async () => {
-    if (!isAuthenticated || !isAdmin || !localStorage.getItem('token')) return;
     try {
       const res = await api.get('/notifications/admin');
       const list = res.data.notifications || [];
@@ -108,10 +106,10 @@ export const NotificationProvider = ({ children }) => {
         }
       });
     } catch { /* silent */ }
-  }, [isAuthenticated, isAdmin]);
+  }, []);
 
   const refetch = useCallback(async () => {
-    if (!isAuthenticated || !localStorage.getItem('token')) return;
+    if (!isAuthenticated) return;
     setLoading(true);
     try {
       await fetchUserNotifications();
@@ -124,7 +122,7 @@ export const NotificationProvider = ({ children }) => {
 
   // Initial load + 20-second polling interval for real-time notifications
   useEffect(() => {
-    if (!isAuthenticated || !token || !localStorage.getItem('token')) {
+    if (!isAuthenticated) {
       setNotifications([]);
       setAdminNotifications([]);
       setUnreadCount(0);
@@ -138,7 +136,7 @@ export const NotificationProvider = ({ children }) => {
     refetch();
     pollInterval.current = setInterval(refetch, 20000);
     return () => clearInterval(pollInterval.current);
-  }, [isAuthenticated, token, refetch]);
+  }, [isAuthenticated, refetch]);
 
   const markRead = async (id) => {
     try {

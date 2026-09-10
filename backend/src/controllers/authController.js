@@ -9,8 +9,6 @@ const { sendLoginAlertEmail, sendPasswordUpdatedEmail } = require('../services/l
 
 const { generateNextMemberId, generateNextFamilyId } = require('../services/memberIdService');
 
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-
 // @POST /api/auth/register
 const register = async (req, res) => {
   try {
@@ -32,7 +30,7 @@ const register = async (req, res) => {
 
     // Sanitize empty strings for unique fields so they don't trigger E11000 duplicate key errors
     if (email === "") email = undefined;
-
+    
     // Auto-generate sequential Member ID (SJDB_M01, SJDB_M02...) if not provided
     if (!parishMemberId || parishMemberId.trim() === "") {
       parishMemberId = await generateNextMemberId();
@@ -93,20 +91,20 @@ const register = async (req, res) => {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const user = await User.create({
-      name,
-      familyName,
+    const user = await User.create({ 
+      name, 
+      familyName, 
       familyId,
-      dob,
-      gender,
-      phone,
-      email,
-      address,
+      dob, 
+      gender, 
+      phone, 
+      email, 
+      address, 
       subStation,
       familyRole,
       familyMembers,
-      parishMemberId,
-      passwordHash
+      parishMemberId, 
+      passwordHash 
     });
 
     const { otp } = await createAndSendOTP({
@@ -179,7 +177,7 @@ const verifyOtp = async (req, res) => {
       const SecurityIncident = require('../models/SecurityIncident');
       await SecurityIncident.updateMany(
         { userId: user._id, status: { $in: ['Awaiting Review', 'Under Review'] } },
-        {
+        { 
           $set: { status: 'Reactivated', reactivationTime: now },
           $push: { actionsTaken: `Auto-reactivated via verified OTP login on ${now.toISOString()}` }
         }
@@ -211,7 +209,7 @@ const verifyOtp = async (req, res) => {
       createNotification({
         userId: user._id,
         recipient: 'user',
-        title: "Welcome to St. John de britto Church! ",
+        title: "Welcome to St. John de Britto's Church! ",
         message: `Dear ${user.name}, thank you for registering with our Parish platform. Our website allows you to book Mass intentions, request documents, view daily readings, and stay updated with church events. We are glad to have you with us!`,
         type: 'general',
         category: 'account',
@@ -229,7 +227,7 @@ const verifyOtp = async (req, res) => {
             userId: user._id,
             isBroadcast: false,
             title: "Birthday Blessings",
-            message: `Dear ${user.name}, St. John de britto Church wishes you a very Happy Birthday! May God bless you with abundant joy, health, and peace on your special day. `,
+            message: `Dear ${user.name}, St. John de Britto's Church wishes you a very Happy Birthday! May God bless you with abundant joy, health, and peace on your special day. `,
             type: 'general',
             channels: ['email']
           }).catch(e => console.warn('Birthday notification error:', e.message));
@@ -237,18 +235,18 @@ const verifyOtp = async (req, res) => {
       }
     }
 
-    return res.json({
-      success: true,
-      message: isReVerification ? 'Re-verified successfully. Your account remains active.' : 'Verified successfully',
-      token,
-      user: {
-        _id: updatedUser._id,
-        name: updatedUser.name,
+    return res.json({ 
+      success: true, 
+      message: isReVerification ? 'Re-verified successfully. Your account remains active.' : 'Verified successfully', 
+      token, 
+      user: { 
+        _id: updatedUser._id, 
+        name: updatedUser.name, 
         role: updatedUser.role,
         dob: updatedUser.dob,
         isVerified: true,
         isActive: updatedUser.isActive
-      }
+      } 
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -416,7 +414,7 @@ const login = async (req, res) => {
           message: 'Your account has been automatically suspended due to repeated failed login attempts for your security. Please contact the administrator to restore access.'
         });
 
-      }
+      } 
       // RULE: 5 Failed Attempts = 15-MINUTE TEMPORARY LOCKOUT
       else if (failedAttempts >= 5) {
         const lockUntil = new Date(Date.now() + 15 * 60 * 1000);
@@ -449,7 +447,7 @@ const login = async (req, res) => {
           message: 'Your account has been temporarily locked for 15 minutes due to multiple failed login attempts. Please check your email or reset your password.'
         });
 
-      }
+      } 
       // RULE: 4 Failed Attempts = WARNING MESSAGE
       else if (failedAttempts === 4) {
         notifyAdmin({
@@ -466,7 +464,7 @@ const login = async (req, res) => {
           message: 'You have 1 attempt remaining before your account is temporarily locked for 15 minutes.'
         });
 
-      }
+      } 
       // ℹ RULE: 1 - 3 Failed Attempts = STANDARD ERROR MESSAGE
       else {
         notifyAdmin({
@@ -485,33 +483,29 @@ const login = async (req, res) => {
       }
     }
 
-    // Mandatory Re-verification / 30-Day Cycle Check
-    const requiresReverification = checkReverificationRequired(user);
+    // 30-Day OTP Re-verification Cycle Check
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const isOtpValid30Days = (user.otpVerified === true || user.isVerified === true) && user.otpVerifiedAt && ((now.getTime() - new Date(user.otpVerifiedAt).getTime()) < THIRTY_DAYS_MS);
 
-    if (requiresReverification) {
+    if (!isOtpValid30Days || !user.isVerified) {
       const { otp } = await createAndSendOTP({
         userId: user._id,
         phone: user.phone,
         email: user.email,
-        purpose: 'account_verification',
+        purpose: 'login',
         req
       });
 
       const isExpiredCycle = user.otpVerifiedAt && ((now.getTime() - new Date(user.otpVerifiedAt).getTime()) >= THIRTY_DAYS_MS);
-      const emailMasked = user.email ? user.email.replace(/^(.{2})(.*)(@.*)$/, '$1***$3') : null;
-      const phoneMasked = user.phone ? user.phone.slice(0, 2) + '******' + user.phone.slice(-2) : null;
 
       return res.status(200).json({
         success: true,
         requiresOTP: true,
-        requiresReverification: true,
         userId: user._id,
         devOtp: otp,
-        emailMasked,
-        phoneMasked,
         message: isExpiredCycle
           ? 'Your 30-day security verification window has expired. A fresh 5-minute verification code has been sent.'
-          : 'Security verification code required. A 5-minute code has been dispatched to your registered contact.'
+          : 'Security verification code required. A 5-minute code has been dispatched to your registered phone/email.'
       });
     }
 
@@ -566,12 +560,12 @@ const login = async (req, res) => {
     return res.json({
       success: true,
       token,
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
+      user: { 
+        _id: user._id, 
+        name: user.name, 
+        email: user.email, 
+        phone: user.phone, 
+        role: user.role, 
         isTechnicalTeam: user.isTechnicalTeam || (user.role === 'staff' || user.role === 'technical_team'),
         profilePhoto: user.profilePhoto,
         dob: user.dob
@@ -616,7 +610,7 @@ const forgotPassword = async (req, res) => {
     }
 
     const { login: loginId } = req.body;
-
+    
     let user = await User.findOne({
       $or: [
         { email: { $regex: new RegExp('^' + loginId.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&') + '$', 'i') } },
@@ -704,60 +698,9 @@ const resetPassword = async (req, res) => {
   }
 };
 
-/**
- * Determines whether a user requires mandatory account re-verification.
- * - Church admins are exempt from routine parishioner verification.
- * - Checks account_verified, isVerified, otpVerified.
- * - Checks 30-day security cycle expiration individually starting from latest successful verification date.
- */
-const checkReverificationRequired = (user) => {
-  if (!user) return false;
-  if (user.role === 'admin') return false;
-  if (user.account_verified === false) return true;
-  if (user.isVerified === false) return true;
-  if (user.otpVerified === false) return true;
-
-  // 1. Check explicit verification expiry date if present
-  if (user.verificationExpiresAt) {
-    return Date.now() >= new Date(user.verificationExpiresAt).getTime();
-  }
-
-  // 2. Individual 30-day cycle calculated from latest successful verification date (or registration)
-  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-  const refDate = user.last_verified_at || user.otpVerifiedAt || user.createdAt;
-  if (!refDate) return true;
-  if ((Date.now() - new Date(refDate).getTime()) >= THIRTY_DAYS_MS) return true;
-  return false;
-};
-
-/**
- * Calculates remaining active parishioners requiring re-verification dynamically from database.
- */
-const getPendingReverificationCount = async () => {
-  const now = new Date();
-  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-  const thirtyDaysAgo = new Date(now.getTime() - THIRTY_DAYS_MS);
-  return await User.countDocuments({
-    $or: [
-      { otpVerified: false },
-      { isVerified: false },
-      { account_verified: false },
-      { verificationExpiresAt: { $lte: now } },
-      { otpVerifiedAt: null },
-      { otpVerifiedAt: { $lte: thirtyDaysAgo } }
-    ],
-    isActive: { $ne: false },
-    role: { $ne: 'admin' }
-  });
-};
-
 // @GET /api/auth/me
 const getMe = async (req, res) => {
-  const userObj = req.user ? (req.user.toObject ? req.user.toObject() : { ...req.user }) : null;
-  if (userObj) {
-    userObj.requiresReverification = checkReverificationRequired(req.user);
-  }
-  res.json({ success: true, user: userObj });
+  res.json({ success: true, user: req.user });
 };
 
 // @GET /api/auth/family-lookup?familyName=...
@@ -780,9 +723,9 @@ const lookupFamily = async (req, res) => {
     const families = users.map(user => {
       const allMembers = [];
       if (user.name) {
-        allMembers.push({
-          name: user.name,
-          role: user.familyRole || 'Head',
+        allMembers.push({ 
+          name: user.name, 
+          role: user.familyRole || 'Head', 
           isRegisteredUser: true,
           parishMemberId: user.parishMemberId || '—',
           familyId: user.familyId || '—'
@@ -791,9 +734,9 @@ const lookupFamily = async (req, res) => {
       if (user.familyMembers && Array.isArray(user.familyMembers)) {
         user.familyMembers.forEach(m => {
           if (m.name) {
-            allMembers.push({
-              name: m.name,
-              role: m.role || 'Member',
+            allMembers.push({ 
+              name: m.name, 
+              role: m.role || 'Member', 
               isRegisteredUser: false,
               parishMemberId: m.parishMemberId || '—',
               familyId: user.familyId || '—'
@@ -824,71 +767,28 @@ const lookupFamily = async (req, res) => {
 // POST /api/auth/verify-account/send-otp
 const sendVerificationOtp = async (req, res) => {
   try {
-    const { userId, emailOrUsername } = req.body;
-    if (!userId && !emailOrUsername) {
-      return res.status(400).json({ success: false, message: 'Please enter your email, username, or phone number' });
+    const { emailOrUsername } = req.body;
+    if (!emailOrUsername) {
+      return res.status(400).json({ success: false, message: 'Please enter your email or username' });
     }
 
-    let user = null;
-    if (userId) {
-      user = await User.findById(userId);
-    } else {
-      const trimmed = emailOrUsername.trim().toLowerCase();
-      user = await User.findOne({
-        $or: [
-          { email: trimmed },
-          { phone: trimmed },
-          { parishMemberId: trimmed.toUpperCase() },
-          { name: new RegExp(`^${trimmed}$`, 'i') }
-        ]
-      });
-    }
+    const trimmed = emailOrUsername.trim().toLowerCase();
+    const user = await User.findOne({
+      $or: [
+        { email: trimmed },
+        { phone: trimmed },
+        { parishMemberId: trimmed.toUpperCase() },
+        { name: new RegExp(`^${trimmed}$`, 'i') }
+      ]
+    });
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'No registered account found with that email or identifier' });
     }
 
-    // User Isolation Check: Authenticated users can only verify their own account
-    if (req.user && req.user.role !== 'admin') {
-      const authUserId = req.user._id ? req.user._id.toString() : '';
-      const targetUserId = user._id ? user._id.toString() : '';
-      if (authUserId !== targetUserId) {
-        return res.status(403).json({
-          success: false,
-          message: 'Security protection: You can only request verification for your own registered account.'
-        });
-      }
-    }
-
-    // Edge Case: Inactive or suspended accounts cannot receive verification OTP
-    if (user.isActive === false || user.isSuspended) {
-      return res.status(403).json({
-        success: false,
-        message: 'This account is suspended or inactive. OTP verification cannot restore access. Please contact the church administrator.'
-      });
-    }
-
-    // Edge Case: No registered email or phone on file
-    if (!user.email && !user.phone) {
-      return res.status(400).json({
-        success: false,
-        message: 'No registered email address or phone number found for this account. Please contact the parish office to update your contact information.'
-      });
-    }
-
-    // Check if user is already verified
-    if (!checkReverificationRequired(user)) {
-      return res.json({
-        success: true,
-        alreadyVerified: true,
-        message: 'Your account is already verified. No OTP verification needed.',
-        userId: user._id
-      });
-    }
-
     // Generate and dispatch OTP via Email and SMS
     const { createAndSendOTP } = require('../services/otpService');
-    const { otp } = await createAndSendOTP({
+    await createAndSendOTP({
       userId: user._id,
       email: user.email,
       phone: user.phone,
@@ -897,20 +797,16 @@ const sendVerificationOtp = async (req, res) => {
     });
 
     const emailMasked = user.email ? user.email.replace(/^(.{2})(.*)(@.*)$/, '$1***$3') : null;
-    const phoneMasked = user.phone ? user.phone.slice(0, 2) + '******' + user.phone.slice(-2) : null;
-    const targetDisplay = [emailMasked, phoneMasked].filter(Boolean).join(' and ');
 
     res.json({
       success: true,
-      message: `Verification code sent to ${targetDisplay || 'your registered contact'}`,
+      message: `Verification code sent to ${emailMasked || 'your registered contact'}`,
       userId: user._id,
-      emailMasked,
-      phoneMasked,
-      devOtp: otp
+      emailMasked
     });
   } catch (err) {
     console.error('sendVerificationOtp error:', err);
-    res.status(err.statusCode || 500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
@@ -940,26 +836,6 @@ const verifyAccountOtp = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User account not found' });
     }
 
-    // User Isolation Check: Authenticated user cannot verify someone else's account
-    if (req.user && req.user.role !== 'admin') {
-      const authUserId = req.user._id ? req.user._id.toString() : '';
-      const targetUserId = user._id ? user._id.toString() : '';
-      if (authUserId !== targetUserId) {
-        return res.status(403).json({
-          success: false,
-          message: 'Security protection: You cannot verify another user\'s account.'
-        });
-      }
-    }
-
-    // Inactive or suspended accounts cannot restore access via OTP
-    if (user.isActive === false || user.isSuspended) {
-      return res.status(403).json({
-        success: false,
-        message: 'This account is suspended or inactive. OTP verification cannot restore access.'
-      });
-    }
-
     const { verifyOTPSession } = require('../services/otpService');
     const result = await verifyOTPSession({
       userId: user._id,
@@ -972,214 +848,27 @@ const verifyAccountOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: result.message });
     }
 
-    const now = new Date();
-    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-    const verificationExpiresAt = new Date(now.getTime() + THIRTY_DAYS_MS);
-    const wasRecentlyVerified = user.reverificationNotifiedAt && (now.getTime() - new Date(user.reverificationNotifiedAt).getTime() < 60000);
-
-    // Restart individual 30-day verification cycle from latest successful verification date
+    // Reset 30-day verification cycle
     user.account_verified = true;
     user.isVerified = true;
-    user.otpVerified = true;
-    user.last_verified_at = now;
-    user.otpVerifiedAt = now;
-    user.verificationExpiresAt = verificationExpiresAt;
+    user.last_verified_at = new Date();
     user.last_verification_stage = null;
     user.last_verification_reminder_at = null;
-    user.reverificationNotifiedAt = now;
     await user.save();
-
-    let remainingCount = 0;
-
-    // Immediately enable/send notifications across all subscribed channels (with duplicate prevention)
-    if (!wasRecentlyVerified) {
-      // 1. In-App Notification to User
-      const userLang = user.preferredLanguage || 'en';
-      const userNotifTitle = userLang === 'ta' ? 'கணக்கு வெற்றிகரமாக மறுசரிபார்க்கப்பட்டது! ✅' : 'Account Re-Verified Successfully! ✅';
-      const userNotifMessage = userLang === 'ta'
-        ? `அன்பார்ந்த ${user.name}, உங்கள் பங்கு கணக்கு மறுசரிபார்ப்பு வெற்றிகரமாக நிறைவடைந்தது. இணையதளத்தின் அனைத்து சேவைகளும் தடையின்றி இயங்கும்.`
-        : `Dear ${user.name}, your parish account re-verification has been completed successfully. All church services, mass bookings, and daily readings are fully active.`;
-
-      createNotification({
-        userId: user._id,
-        recipient: 'user',
-        title: userNotifTitle,
-        message: userNotifMessage,
-        type: 'security',
-        category: 'account',
-        priority: 'high',
-        actionUrl: '/dashboard'
-      }).catch(err => console.warn('User re-verification in-app notification error:', err.message));
-
-      // 2. Web Push Notification to User (if enabled)
-      if (user.settings?.notifications?.push !== false) {
-        const { sendPushToUser } = require('../services/webPushService');
-        sendPushToUser(user._id, {
-          title: 'Account Re-Verified — St. John de britto Church',
-          body: `Welcome back, ${user.name}! Your account re-verification is complete. All notifications are active.`,
-          url: '/dashboard',
-          icon: '/favicon.png'
-        }).catch(err => console.warn('User re-verification push error:', err.message));
-      }
-
-      // 3. Email Notification to User (if email exists and enabled)
-      if (user.email && user.settings?.notifications?.email !== false) {
-        const { sendMail } = require('../config/mailer');
-        sendMail({
-          to: user.email,
-          subject: 'Account Re-Verification Completed — St. John de britto Church',
-          html: `<!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><title>Account Re-Verified</title></head>
-<body style="margin:0;padding:20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background-color:#f1f5f9;">
-  <div style="max-width:580px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);">
-    <div style="background:linear-gradient(135deg,#1e3a8a,#1e40af);padding:32px 24px;text-align:center;color:#ffffff;">
-      <h1 style="margin:0 0 8px;font-size:22px;font-weight:800;">St. John de britto Church</h1>
-      <p style="margin:0;font-size:13px;color:#cbd5e1;">Kalayarkoil, Tamil Nadu</p>
-    </div>
-    <div style="padding:28px 24px;">
-      <div style="text-align:center;margin-bottom:20px;">
-        <span style="display:inline-block;background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0;padding:6px 16px;border-radius:999px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">✅ Re-Verified</span>
-      </div>
-      <h2 style="font-size:18px;color:#0f172a;margin:0 0 12px;text-align:center;">Account Successfully Re-Verified</h2>
-      <p style="font-size:14px;color:#475569;line-height:1.6;margin:0 0 16px;">
-        Dear <strong>${user.name}</strong> (Parish ID: ${user.parishMemberId || 'N/A'}),
-      </p>
-      <p style="font-size:14px;color:#475569;line-height:1.6;margin:0 0 20px;">
-        Thank you for completing your scheduled account re-verification. Your parishioner account has been securely renewed for another 30 days. You will continue receiving your subscribed notifications, daily readings, and parish updates without interruption.
-      </p>
-      <div style="text-align:center;margin:28px 0 16px;">
-        <a href="${process.env.CLIENT_URL || 'http://localhost:5173'}/dashboard" style="display:inline-block;background:#d97706;color:#ffffff;text-decoration:none;padding:12px 32px;border-radius:10px;font-weight:700;font-size:14px;">Go to Dashboard →</a>
-      </div>
-    </div>
-    <div style="background:#0f172a;padding:20px;text-align:center;color:#94a3b8;font-size:12px;">
-      <p style="margin:0;">St. John de britto Church • Automated Parish Service</p>
-    </div>
-  </div>
-</body>
-</html>`
-        }).catch(err => console.warn('User re-verification email error:', err.message));
-      }
-
-      // 4. WhatsApp Bot Notification to User (if phone exists and opted-in)
-      if (user.phone && user.whatsappOptIn !== false) {
-        const { sendWhatsAppMessage } = require('../bot/whatsapp');
-        const userWaText = userLang === 'ta'
-          ? `*புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்*\n\n✅ *கணக்கு மறுசரிபார்ப்பு வெற்றிகரமாக முடிந்தது*\n\nஅன்பார்ந்த *${user.name}* (பங்கு எண்: ${user.parishMemberId || 'N/A'}),\n\nஉங்கள் பங்கு இணையதளக் கணக்கு வெற்றிகரமாக மறுசரிபார்க்கப்பட்டது. தங்களின் தினசரி வாசிப்புகள், அறிவிப்புகள் மற்றும் தேவாலய சேவைகள் வழக்கம் போல் இயங்கும்.\n\n🌐 *இணையதளம்:* ${process.env.CLIENT_URL || 'https://st-jb-church.vercel.app'}\n\n_புனித அருளானந்தர் தேவாலயம்_`
-          : `*St. John de britto Church, Kalayarkoil*\n\n✅ *Account Re-Verification Completed*\n\nDear *${user.name}* (ID: ${user.parishMemberId || 'N/A'}),\n\nYour parish account re-verification has been completed successfully. Your daily readings, announcements, and mass booking features remain fully active.\n\n🌐 *Website:* ${process.env.CLIENT_URL || 'https://st-jb-church.vercel.app'}\n\n_St. John de britto Church_`;
-
-        sendWhatsAppMessage(user.phone, userWaText).catch(err => console.warn('User re-verification WhatsApp error:', err.message));
-      }
-
-      // 5. Dynamic Calculation of Remaining Users
-      remainingCount = await getPendingReverificationCount();
-
-      const maskedContact = user.email
-        ? user.email.replace(/^(.{2})(.*)(@.*)$/, '$1***$3')
-        : (user.phone ? user.phone.slice(0, 2) + '******' + user.phone.slice(-2) : 'Confidential');
-
-      // 6. Admin Notifications: In-App, Audit Email, and WhatsApp
-      createNotification({
-        recipient: 'admin',
-        title: 'User Re-Verification Completed',
-        message: `A user has successfully completed account re-verification.\nUser: ${user.name} (ID: ${user.parishMemberId || 'N/A'}, Contact: ${maskedContact})\n\nRemaining users: ${remainingCount} users have not yet completed re-verification.`,
-        type: 'security',
-        category: 'account',
-        priority: 'normal',
-        actionUrl: '/admin/users'
-      }).catch(err => console.warn('Admin re-verification in-app error:', err.message));
-
-      const { notifyAdmin } = require('../services/adminNotificationService');
-      notifyAdmin({
-        type: 'USER_REVERIFIED',
-        user: {
-          _id: user._id,
-          name: user.name,
-          parishMemberId: user.parishMemberId
-        },
-        req,
-        extra: {
-          remainingCount,
-          maskedContact,
-          name: user.name
-        }
-      }).catch(err => console.warn('Admin notifyAdmin error:', err.message));
-
-      // Admin WhatsApp Alert
-      User.find({ role: 'admin', phone: { $exists: true, $ne: null } }).select('phone').then(admins => {
-        const { sendWhatsAppMessage } = require('../bot/whatsapp');
-        const adminWaMsg = `⛪ *St. John de britto Church — Admin Alert*\n\n✅ *User Re-Verification Completed*\nA user has successfully completed account re-verification.\n\n👤 *User:* ${user.name} (ID: ${user.parishMemberId || 'N/A'})\n📱 *Contact:* ${maskedContact}\n\n⏳ *Remaining users:* *${remainingCount}* users have not yet completed re-verification.\n\n_புனித அருளானந்தர் தேவாலயம்_`;
-        for (const adm of admins) {
-          if (adm.phone) {
-            sendWhatsAppMessage(adm.phone, adminWaMsg).catch(() => { });
-          }
-        }
-      }).catch(() => { });
-    } else {
-      remainingCount = await getPendingReverificationCount();
-    }
-
-    const token = generateToken(user._id, user.role, user.authVersion || user.tokenVersion || 1);
-    const updatedUser = await User.findById(user._id).select('-passwordHash -otp -otpExpires');
 
     res.json({
       success: true,
-      message: 'Your account has been successfully verified. You can now continue using your account.',
-      token,
+      message: 'Account verified successfully! You can now use all church features freely.',
       user: {
-        ...updatedUser.toObject(),
-        requiresReverification: false,
+        _id: user._id,
+        name: user.name,
+        email: user.email,
         account_verified: true,
-        last_verified_at: user.last_verified_at,
-        verificationExpiresAt: user.verificationExpiresAt
-      },
-      remainingPendingUsers: remainingCount
+        last_verified_at: user.last_verified_at
+      }
     });
   } catch (err) {
     console.error('verifyAccountOtp error:', err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-// GET /api/auth/verify-account/status
-const getVerificationStatus = async (req, res) => {
-  try {
-    let user = req.user;
-    if (!user && (req.query.userId || req.query.emailOrUsername)) {
-      if (req.query.userId) {
-        user = await User.findById(req.query.userId);
-      } else {
-        const trimmed = req.query.emailOrUsername.trim().toLowerCase();
-        user = await User.findOne({
-          $or: [
-            { email: trimmed },
-            { phone: trimmed },
-            { parishMemberId: trimmed.toUpperCase() }
-          ]
-        });
-      }
-    }
-
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-
-    const requiresReverification = checkReverificationRequired(user);
-    const emailMasked = user.email ? user.email.replace(/^(.{2})(.*)(@.*)$/, '$1***$3') : null;
-    const phoneMasked = user.phone ? user.phone.slice(0, 2) + '******' + user.phone.slice(-2) : null;
-
-    res.json({
-      success: true,
-      userId: user._id,
-      name: user.name,
-      emailMasked,
-      phoneMasked,
-      isVerified: Boolean(user.isVerified && user.account_verified),
-      requiresReverification,
-      lastVerifiedAt: user.last_verified_at || user.otpVerifiedAt,
-      verificationExpiresAt: user.verificationExpiresAt
-    });
-  } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -1194,10 +883,7 @@ module.exports = {
   getMe,
   lookupFamily,
   sendVerificationOtp,
-  verifyAccountOtp,
-  getVerificationStatus,
-  checkReverificationRequired,
-  getPendingReverificationCount
+  verifyAccountOtp
 };
 
 

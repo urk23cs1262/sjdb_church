@@ -16,9 +16,8 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
-// Database and background services are started only after MongoDB is ready.
-// This prevents the WhatsApp auth state and cron workers from starting against
-// an unavailable database.
+// Connect DB
+connectDB();
 
 // Security
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
@@ -113,7 +112,6 @@ app.use('/api/mass-reading', require('./routes/dailyMassReading'));
 app.use('/api/daily-reading', require('./routes/dailyReading'));
 app.use('/api/daily-saint', require('./routes/saint'));
 app.use('/api/saint-of-the-day', require('./routes/saint'));
-app.use('/api/daily-content', require('./routes/dailyContentRoutes'));
 app.use('/api/daily-notifications', require('./routes/dailyNotificationRoutes'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/rosary-songs', require('./routes/rosarySongs'));
@@ -124,13 +122,12 @@ app.use('/api/bot', require('./routes/bot'));
 // Background Services
 require('./services/saintService');
 require('./services/birthdayService');
-require('./services/dailyBroadcastService'); // Daily spiritual content broadcast helper
+require('./services/dailyBroadcastService'); // 6:00 AM spiritual content broadcast
 require('./services/reminderSchedulerService'); // Automated Event & Announcement reminders via Email, WhatsApp bot & In-App
 require('./services/maintenanceSchedulerService'); // Automated Maintenance start/end scheduler
 require('./services/bibleVerseService'); // 12:00 AM Daily Bible Verse automated rotation scheduler
 require('./services/dailyMassReadingService').initMidnightCron(); // 12:00 AM IST Daily Tamil Mass Readings automated sync scheduler
-require('./services/contentMonitoringService'); // Continuous Server-Side Content Sync & Monitoring Service (Vatican News, Catholic Gallery, Reflection, Verse)
-require('./services/dailyNotificationService'); // 04:00 AM IST Daily Automated Catholic Notification System (WhatsApp & Email Broadcast)
+require('./services/dailyNotificationService'); // 12:00 AM IST Daily Automated Catholic Notification System (Email Broadcast)
 require('./services/accountVerificationService'); // 8:00 AM IST Daily Account Verification & Admin Alert System
 
 // Background Monitor: Scan for expired/abandoned unverified OTPs every 60s
@@ -145,47 +142,25 @@ const { warmUpCache, getCacheDiagnostics } = require('./bot/churchDataCache');
 app.get(['/health', '/api/health', '/api/bot/health'], (req, res) => {
   const mongooseState = ['disconnected', 'connected', 'connecting', 'disconnecting'][require('mongoose').connection.readyState] || 'unknown';
   let waConnected = false;
-  let waStatus = 'unknown';
   try {
     const wa = require('./bot/whatsapp');
-    const connStatus = wa.getConnectionStatus?.() || {};
-    // getConnectionStatus() returns { connected: bool, status: string, ... }
-    // NOT isConnected — using the wrong key was causing isLive to always be false
-    waConnected = connStatus.connected || false;
-    waStatus = connStatus.status || (waConnected ? 'connected' : 'disconnected');
+    waConnected = wa.getConnectionStatus?.()?.isConnected || false;
   } catch (e) { }
-
-  let schedulerStatus = { schedulerRegistered: false };
-  try {
-    const { getSchedulerStatus } = require('./services/dailyNotificationService');
-    schedulerStatus = getSchedulerStatus();
-  } catch (e) { schedulerStatus = { schedulerRegistered: false, error: e.message }; }
 
   res.json({
     success: true,
     status: 'healthy',
-    service: "SJDB Connect — St. John de britto Church 24/7 Platform",
+    service: "SJDB Connect — St. John de Britto's Church 24/7 Platform",
     database: mongooseState,
     whatsappBot: {
       isLive: waConnected,
-      status: waStatus,
       mode: '24/7 Always-On Daemon'
     },
-    dailyCatholicScheduler: {
-      registered: schedulerStatus.schedulerRegistered,
-      timezone: schedulerStatus.timezone || 'Asia/Kolkata',
-      cronExpression: schedulerStatus.cronExpression || '0 4 * * *',
-      scheduleTime: '04:00 AM IST',
-      lastRunTime: schedulerStatus.lastRunTime || null,
-      lastRunDateKey: schedulerStatus.lastRunDateKey || null,
-      lastRunResult: schedulerStatus.lastRunResult || null,
-      nextRunIST: schedulerStatus.nextRunIST || null,
-    },
     backgroundWorkers: {
-      dailyBroadcast4AM: `${schedulerStatus.schedulerRegistered ? 'Active' : 'Registered'} (0 4 * * * Asia/Kolkata)`,
+      dailyBroadcast4AM: 'Active (0 4 * * * Asia/Kolkata)',
       reminderScheduler: 'Active (4:00 AM, 12:00 PM, Hourly)',
       dailyMassSync: 'Active (0 0 * * * Asia/Kolkata)',
-      birthdayWishes: 'Active (12:00 AM IST | 0 0 * * * Asia/Kolkata)'
+      birthdayWishes: 'Active (0 0 * * * Asia/Kolkata)'
     },
     cache: getCacheDiagnostics(),
     memory: {
@@ -200,7 +175,7 @@ app.get(['/health', '/api/health', '/api/bot/health'], (req, res) => {
 // Root route (stops Render showing "Cannot GET /")
 app.get('/', (req, res) => res.json({
   success: true,
-  message: "St. John de britto Church API & 24/7 Bot Daemon",
+  message: "St. John de Britto's Church API & 24/7 Bot Daemon",
 }));
 
 // 404
@@ -208,78 +183,27 @@ app.use((req, res) => res.status(404).json({ success: false, message: 'Route not
 
 // Error handler
 app.use((err, req, res, next) => {
-  if (err.name === 'MulterError') {
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(413).json({
-        success: false,
-        message: 'File too large. Maximum allowed size is 500MB.'
-      });
-    }
-    if (err.code === 'LIMIT_FILE_COUNT') {
-      return res.status(400).json({
-        success: false,
-        message: 'Too many files uploaded at once. Maximum allowed is 100 files.'
-      });
-    }
-    return res.status(400).json({
-      success: false,
-      message: `Upload error: ${err.message}`
-    });
-  }
-
   console.error(err.stack);
   res.status(err.status || 500).json({ success: false, message: err.message || 'Internal Server Error' });
 });
 
 const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`\n St. John de Britto's Church API & 24/7 WhatsApp Daemon`);
+  console.log(` Server running on port ${PORT}`);
+  console.log(` Allowed origins: ${allowedOrigins.join(', ')}`);
+  console.log(` Health: /api/health\n`);
 
-async function startServer() {
-  try {
-    await connectDB();
+  // Warm up data cache immediately on boot
+  warmUpCache().catch(e => console.warn('[Server] Cache warm-up notice:', e.message));
 
-    const server = app.listen(PORT, () => {
-      console.log(`\nSt. John de britto Church API & 24/7 WhatsApp Daemon`);
-      console.log(`Server running on port ${PORT}`);
-      console.log(`Allowed origins: ${allowedOrigins.join(', ')}`);
-      console.log(`Health: /api/health\n`);
-    });
+  // Initialize Baileys WhatsApp connection
+  // Runs after server starts so a WA failure doesn't prevent API from starting
+  const { connectToWhatsApp } = require('./bot/whatsapp');
+  connectToWhatsApp().catch(err => {
+    console.error(' WhatsApp (Baileys) connection failed:', err.message);
+  });
+});
 
-    // Warm up data cache immediately on boot.
-    warmUpCache().catch(e =>
-      console.warn('[Server] Cache warm-up notice:', e.message)
-    );
-
-    // IMPORTANT: WhatsApp is a backend daemon. It is intentionally started here,
-    // never from the React/Admin page. The Admin page only observes/controls it.
-    const { connectToWhatsApp, shutdownWhatsApp } = require('./bot/whatsapp');
-    connectToWhatsApp().catch(err =>
-      console.error('[Server] Initial WhatsApp connection failed:', err.message)
-    );
-
-    const gracefulShutdown = async signal => {
-      console.log(`[Server] ${signal} received; shutting down gracefully...`);
-      try { shutdownWhatsApp(); } catch (e) { }
-      server.close(() => process.exit(0));
-      setTimeout(() => process.exit(1), 10000).unref();
-    };
-
-    process.once('SIGTERM', () => gracefulShutdown('SIGTERM'));
-    process.once('SIGINT', () => gracefulShutdown('SIGINT'));
-
-    process.on('unhandledRejection', err => {
-      console.error('[Process] Unhandled rejection:', err);
-    });
-    process.on('uncaughtException', err => {
-      console.error('[Process] Uncaught exception:', err);
-      // Let the process manager restart the process after a fatal exception.
-      setTimeout(() => process.exit(1), 100);
-    });
-  } catch (err) {
-    console.error('[Server] Fatal startup error:', err.message);
-    process.exit(1);
-  }
-}
-
-startServer();
 
 module.exports = app;

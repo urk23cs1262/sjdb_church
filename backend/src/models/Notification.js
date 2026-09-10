@@ -18,7 +18,7 @@ const notificationSchema = new mongoose.Schema({
       'donation', 'donations', 'prayer', 'prayers', 'family', 'account',
       'profile', 'system', 'ai', 'feedback', 'general', 'permission',
       'security', 'activity', 'auth', 'account_verification', 'spiritual',
-      'daily_spiritual', 'verse', 'saint', 'mass', 'birthday'
+      'daily_spiritual', 'verse', 'saint', 'mass'
     ],
     default: 'general'
   },
@@ -29,7 +29,7 @@ const notificationSchema = new mongoose.Schema({
       'family', 'prayer', 'prayers', 'account', 'profile', 'system', 'ai',
       'feedback', 'general', 'bookings', 'booking', 'documents', 'document',
       'tickets', 'ticket', 'permission', 'security', 'activity', 'auth',
-      'account_verification', 'spiritual', 'daily_spiritual', 'birthday'
+      'account_verification', 'spiritual', 'daily_spiritual'
     ],
     default: 'general'
   },
@@ -49,7 +49,7 @@ const notificationSchema = new mongoose.Schema({
   actionUrl: { type: String },
 
   // Delivery channels
-  sentVia: [{ type: String, enum: ['email', 'sms', 'whatsapp', 'push', 'inApp', 'in_app', 'website'] }],
+  sentVia: [{ type: String, enum: ['email', 'sms', 'whatsapp', 'push', 'inApp', 'website'] }],
 
   // Related document
   relatedId: { type: mongoose.Schema.Types.ObjectId },

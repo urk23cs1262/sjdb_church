@@ -40,7 +40,6 @@ import AdminLayout from './components/admin/admin_layout';
 // Auth & Security pages
 const Login = lazy(() => import('./pages/auth/auth_login'));
 const Register = lazy(() => import('./pages/auth/auth_register'));
-const UserVerifyAccount = lazy(() => import('./pages/auth/user_verify_account'));
 const ReportUnauthorized = lazy(() => import('./pages/security/security_report_unauthorized'));
 
 // User dashboard
@@ -72,18 +71,13 @@ const AdminAnbiyam = lazy(() => import('./pages/admin/admin_anbiyams'));
 
 // Route guards
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading, isReverificationRequired } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const location = useLocation();
   if (loading) return <PageLoader />;
   if (!isAuthenticated) {
     const fullPath = location.pathname + location.search + location.hash;
     sessionStorage.setItem("redirectAfterLogin", fullPath);
     return <Navigate to={`/login?redirect=${encodeURIComponent(fullPath)}`} replace />;
-  }
-  if (isReverificationRequired && location.pathname !== '/verify-account') {
-    const fullPath = location.pathname + location.search + location.hash;
-    sessionStorage.setItem("redirectAfterLogin", fullPath);
-    return <Navigate to={`/verify-account?redirect=${encodeURIComponent(fullPath)}`} replace />;
   }
   return children;
 };
@@ -121,8 +115,10 @@ function AppRoutes() {
             <Route element={<Layout />}>
               <Route path="/" element={<Home />} />
               <Route path="/about" element={<About />} />
+              <Route path="/st-john-de-britto" element={<About />} />
               <Route path="/priests" element={<Priests />} />
               <Route path="/mass-timings" element={<MassTimings />} />
+              <Route path="/mass" element={<MassTimings />} />
               <Route path="/events" element={<Events />} />
               <Route path="/gallery" element={<Gallery />} />
               <Route path="/live" element={<LiveStream />} />
@@ -130,6 +126,7 @@ function AppRoutes() {
               <Route path="/donate" element={<Donate />} />
               <Route path="/bible-verse" element={<BibleVerse />} />
               <Route path="/daily-mass-readings" element={<BibleVerse />} />
+              <Route path="/daily-readings" element={<BibleVerse />} />
               <Route path="/readings" element={<BibleVerse />} />
               <Route path="/reflection" element={<BibleVerse />} />
               <Route path="/saint-of-the-day" element={<BibleVerse />} />
@@ -168,7 +165,6 @@ function AppRoutes() {
             {/* Auth & Security routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/verify-account" element={<UserVerifyAccount />} />
             <Route path="/security/report-unauthorized" element={<ReportUnauthorized />} />
 
             {/* Admin dashboard routes */}

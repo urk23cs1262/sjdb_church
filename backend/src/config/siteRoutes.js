@@ -46,7 +46,6 @@ const SITE_ROUTES = {
   // Auth & Account
   LOGIN: '/login',
   REGISTER: '/register',
-  VERIFY_ACCOUNT: '/verify-account',
   PROFILE: '/dashboard/profile',
   DASHBOARD: '/dashboard',
   BOOKINGS: '/dashboard/booking',

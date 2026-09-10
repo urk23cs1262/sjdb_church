@@ -65,7 +65,6 @@ export default function AdminWhatsApp() {
   const [qrCode, setQrCode] = useState(null);
   const [todayPreview, setTodayPreview] = useState(null);
   const [broadcastHistory, setBroadcastHistory] = useState([]);
-  const [dailyJob, setDailyJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -136,20 +135,19 @@ export default function AdminWhatsApp() {
     return () => clearInterval(timer);
   }, [pairingCountdown]);
 
-  // Primary Data Fetcher (Dashboard Monitoring Only — Zero Side Effects)
+  // Primary Data Fetcher
   const fetchData = async (isBackground = false) => {
     if (!isBackground) setLoading(true);
     else setRefreshing(true);
 
     try {
-      const [statsRes, subsRes, statusRes, qrRes, previewRes, historyRes, jobRes] = await Promise.all([
+      const [statsRes, subsRes, statusRes, qrRes, previewRes, historyRes] = await Promise.all([
         api.get('/bot/stats').catch(() => ({ data: { stats: null } })),
         api.get('/bot/subscribers').catch(() => ({ data: { subscribers: [] } })),
         api.get('/bot/status').catch(() => ({ data: { connected: false, status: 'disconnected' } })),
         api.get('/bot/qr').catch(() => ({ data: { qr: null } })),
         api.get('/bot/preview-today').catch(() => ({ data: null })),
         api.get('/bot/history').catch(() => ({ data: { history: [] } })),
-        api.get('/daily-notifications/job-status').catch(() => ({ data: null })),
       ]);
 
       if (statsRes.data?.stats) setStats(statsRes.data.stats);
@@ -159,7 +157,6 @@ export default function AdminWhatsApp() {
       else if (statusRes.data?.connected) setQrCode(null);
       if (previewRes.data?.success) setTodayPreview(previewRes.data);
       if (historyRes.data?.history) setBroadcastHistory(historyRes.data.history);
-      if (jobRes.data?.job) setDailyJob(jobRes.data);
     } catch {
       if (!isBackground) toast.error('Failed to load WhatsApp bot data');
     } finally {
@@ -458,7 +455,7 @@ export default function AdminWhatsApp() {
     });
   }, [subscribers, subscriberSearch, subscriberFilter]);
 
-  // Format Next 04:00 AM IST Countdown
+  // Format Next 4:00 AM IST Countdown
   const nextBroadcastInfo = useMemo(() => {
     const now = new Date();
     // Convert to IST
@@ -492,30 +489,32 @@ export default function AdminWhatsApp() {
               </h1>
               {/* Connection Live Pill */}
               <span
-                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold shadow-xs ${waStatus.connected
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold shadow-xs ${
+                  waStatus.connected
                     ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                     : waStatus.status === 'connecting'
-                      ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
-                      : 'bg-rose-100 text-rose-800 border border-rose-300'
-                  }`}
+                    ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
+                    : 'bg-rose-100 text-rose-800 border border-rose-300'
+                }`}
               >
                 <span
-                  className={`w-2 h-2 rounded-full ${waStatus.connected
+                  className={`w-2 h-2 rounded-full ${
+                    waStatus.connected
                       ? 'bg-emerald-500 animate-pulse'
                       : waStatus.status === 'connecting'
-                        ? 'bg-amber-500'
-                        : 'bg-rose-500'
-                    }`}
+                      ? 'bg-amber-500'
+                      : 'bg-rose-500'
+                  }`}
                 />
                 {waStatus.connected
                   ? 'Connected'
                   : waStatus.status === 'connecting'
-                    ? 'Connecting...'
-                    : 'Disconnected'}
+                  ? 'Connecting...'
+                  : 'Disconnected'}
               </span>
             </div>
             <p className="text-xs text-gray-500 mt-0.5">
-              SJDB Connect • Baileys WhatsApp Engine & 04:00 AM Automated Spiritual Broadcast
+              SJDB Connect • Baileys WhatsApp Engine & 4:00 AM Automated Spiritual Broadcast
             </p>
           </div>
         </div>
@@ -625,10 +624,11 @@ export default function AdminWhatsApp() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all shrink-0 cursor-pointer ${activeTab === tab.id
+            className={`px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+              activeTab === tab.id
                 ? 'bg-church-royal-blue text-white shadow-md shadow-blue-900/20'
                 : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200/80'
-              }`}
+            }`}
           >
             <span className="text-xs sm:text-sm">{tab.icon}</span>
             <span>{tab.label}</span>
@@ -679,7 +679,7 @@ export default function AdminWhatsApp() {
               <div className="bg-gray-50/80 rounded-xl p-3 border border-gray-100">
                 <span className="text-[11px] font-semibold text-gray-400 block mb-1">Account Display</span>
                 <span className="text-xs sm:text-sm font-bold text-gray-800 truncate block">
-                  {waStatus.userName || "St. John de britto Church"}
+                  {waStatus.userName || "St. John de Britto's Church"}
                 </span>
               </div>
 
@@ -696,7 +696,7 @@ export default function AdminWhatsApp() {
 
               <div className="bg-gray-50/80 rounded-xl p-3 border border-gray-100">
                 <span className="text-[11px] font-semibold text-gray-400 block mb-1">Daily Broadcast</span>
-                <span className="text-xs sm:text-sm font-bold text-church-gold">04:00 AM IST (Active)</span>
+                <span className="text-xs sm:text-sm font-bold text-church-gold">4:00 AM IST (Active)</span>
               </div>
             </div>
 
@@ -710,7 +710,7 @@ export default function AdminWhatsApp() {
                   <div>
                     <h3 className="font-bold text-sm text-emerald-950">WhatsApp Bot is Active</h3>
                     <p className="text-xs text-emerald-800">
-                      All daily 04:00 AM spiritual broadcasts, automatic birthday wishes, and on-demand reading commands are live.
+                      All daily 4:00 AM spiritual broadcasts, automatic birthday wishes, and on-demand reading commands are live.
                     </p>
                   </div>
                 </div>
@@ -750,20 +750,22 @@ export default function AdminWhatsApp() {
                     <button
                       type="button"
                       onClick={() => setConnectionMode('qr')}
-                      className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${connectionMode === 'qr'
+                      className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        connectionMode === 'qr'
                           ? 'bg-church-royal-blue text-white shadow-xs'
                           : 'text-gray-600 hover:text-gray-900'
-                        }`}
+                      }`}
                     >
                       <FiGrid className="text-xs" /> QR Code
                     </button>
                     <button
                       type="button"
                       onClick={() => setConnectionMode('phone')}
-                      className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${connectionMode === 'phone'
+                      className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        connectionMode === 'phone'
                           ? 'bg-church-royal-blue text-white shadow-xs'
                           : 'text-gray-600 hover:text-gray-900'
-                        }`}
+                      }`}
                     >
                       <FiPhone className="text-xs" /> Pairing Code
                     </button>
@@ -852,8 +854,8 @@ export default function AdminWhatsApp() {
                           {isGeneratingPairing
                             ? 'Generating...'
                             : pairingCountdown > 0
-                              ? `Valid (${pairingCountdown}s)`
-                              : 'Generate Code'}
+                            ? `Valid (${pairingCountdown}s)`
+                            : 'Generate Code'}
                         </button>
                       </div>
                     </form>
@@ -918,78 +920,6 @@ export default function AdminWhatsApp() {
               </div>
             </div>
           )}
-
-          {/* Today's 04:00 AM IST Daily Catholic Notification Job Status */}
-          <div className="glass-card p-4 sm:p-6 border border-gray-100 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 pb-4 mb-4">
-              <div>
-                <h3 className="font-bold text-church-royal-blue text-sm sm:text-base flex items-center gap-2">
-                  <FiClock className="text-church-gold" /> Daily Catholic Notifications (04:00 AM IST)
-                </h3>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  100% backend automated delivery across WhatsApp & Email. Zero browser dependency.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                  dailyJob?.status === 'Completed' || dailyJob?.job?.status === 'completed'
-                    ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                    : dailyJob?.job?.status === 'running'
-                      ? 'bg-blue-50 text-blue-800 border-blue-300 animate-pulse'
-                      : dailyJob?.job?.status === 'partial'
-                        ? 'bg-amber-50 text-amber-800 border-amber-300'
-                        : 'bg-gray-50 text-gray-700 border-gray-200'
-                }`}>
-                  Job: {dailyJob?.status || (dailyJob?.job?.status ? dailyJob.job.status.toUpperCase() : 'PENDING')}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-              <div className="bg-gray-50/90 rounded-xl p-3 border border-gray-100">
-                <span className="text-[11px] font-semibold text-gray-500 block mb-1">WhatsApp Delivered</span>
-                <span className="text-base sm:text-lg font-black text-emerald-700">
-                  {dailyJob?.channels?.whatsapp ?? stats?.sentToday ?? 0}
-                </span>
-                {Boolean(dailyJob?.channels?.whatsappFailed) && (
-                  <span className="text-[10px] text-rose-600 block">({dailyJob.channels.whatsappFailed} failed)</span>
-                )}
-              </div>
-              <div className="bg-gray-50/90 rounded-xl p-3 border border-gray-100">
-                <span className="text-[11px] font-semibold text-gray-500 block mb-1">Email Delivered</span>
-                <span className="text-base sm:text-lg font-black text-blue-700">
-                  {dailyJob?.channels?.email ?? 0}
-                </span>
-                {Boolean(dailyJob?.channels?.emailFailed) && (
-                  <span className="text-[10px] text-rose-600 block">({dailyJob.channels.emailFailed} failed)</span>
-                )}
-              </div>
-              <div className="bg-gray-50/90 rounded-xl p-3 border border-gray-100">
-                <span className="text-[11px] font-semibold text-gray-500 block mb-1">Daily Schedule</span>
-                <span className="text-xs sm:text-sm font-bold text-church-royal-blue block">
-                  04:00 AM IST
-                </span>
-                <span className="text-[10px] text-gray-400">Asia/Kolkata</span>
-              </div>
-              <div className="bg-gray-50/90 rounded-xl p-3 border border-gray-100">
-                <span className="text-[11px] font-semibold text-gray-500 block mb-1">Next Run</span>
-                <span className="text-xs sm:text-sm font-bold text-church-gold block truncate">
-                  {nextBroadcastInfo}
-                </span>
-                <span className="text-[10px] text-gray-400">Server cron active</span>
-              </div>
-            </div>
-
-            <div className="bg-blue-50/60 rounded-xl p-3 border border-blue-100 text-xs text-blue-900 flex items-start gap-2.5">
-              <FiShield className="text-blue-600 text-base shrink-0 mt-0.5" />
-              <div>
-                <span className="font-bold block">Autonomous 24/7 Delivery Architecture</span>
-                <span className="text-[11px] text-blue-800">
-                  Daily Catholic notifications run independently on the backend server. Closing the browser, logging out, or keeping tabs closed will NOT affect delivery.
-                </span>
-              </div>
-            </div>
-          </div>
         </div>
       )}
 
@@ -1028,10 +958,11 @@ export default function AdminWhatsApp() {
                 <button
                   key={f.id}
                   onClick={() => setSubscriberFilter(f.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${subscriberFilter === f.id
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                    subscriberFilter === f.id
                       ? 'bg-church-royal-blue text-white shadow-xs'
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
+                  }`}
                 >
                   {f.label}
                 </button>
@@ -1082,10 +1013,11 @@ export default function AdminWhatsApp() {
                     </td>
                     <td className="py-3 px-4">
                       <span
-                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${sub.source === 'Website User'
+                        className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          sub.source === 'Website User'
                             ? 'bg-blue-100 text-blue-700'
                             : 'bg-emerald-100 text-emerald-700'
-                          }`}
+                        }`}
                       >
                         {sub.source}
                       </span>
@@ -1102,10 +1034,11 @@ export default function AdminWhatsApp() {
                     <td className="py-3 px-4">
                       <button
                         onClick={() => handleToggleOptIn(sub)}
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-colors ${sub.optedIn !== false
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold cursor-pointer transition-colors ${
+                          sub.optedIn !== false
                             ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
                             : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                          }`}
+                        }`}
                         title="Click to toggle opt-in state"
                       >
                         {sub.optedIn !== false ? '● Active' : '○ Paused'}
@@ -1170,19 +1103,21 @@ export default function AdminWhatsApp() {
                       setSendMode('broadcast');
                       setTargetSubscriber(null);
                     }}
-                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${sendMode === 'broadcast'
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      sendMode === 'broadcast'
                         ? 'bg-church-royal-blue text-white shadow-xs'
                         : 'text-gray-600 hover:text-gray-900'
-                      }`}
+                    }`}
                   >
                     All Subscribers ({stats?.active ?? subscribers.length})
                   </button>
                   <button
                     onClick={() => setSendMode('direct')}
-                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${sendMode === 'direct'
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      sendMode === 'direct'
                         ? 'bg-church-royal-blue text-white shadow-xs'
                         : 'text-gray-600 hover:text-gray-900'
-                      }`}
+                    }`}
                   >
                     Direct 1-on-1
                   </button>
@@ -1276,10 +1211,11 @@ export default function AdminWhatsApp() {
 
                 {sendResult && (
                   <div
-                    className={`p-3 rounded-xl text-xs flex items-center gap-2 ${sendResult.success
+                    className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                      sendResult.success
                         ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                         : 'bg-rose-50 text-rose-800 border border-rose-200'
-                      }`}
+                    }`}
                   >
                     {sendResult.success ? <FiCheckCircle /> : <FiAlertTriangle />}
                     <span>{sendResult.text}</span>
@@ -1296,8 +1232,8 @@ export default function AdminWhatsApp() {
                     {sending
                       ? 'Sending Message...'
                       : sendMode === 'direct'
-                        ? `Send to ${targetSubscriber?.name || 'Selected'}`
-                        : `Broadcast to All (${stats?.active ?? subscribers.length}) Subscribers`}
+                      ? `Send to ${targetSubscriber?.name || 'Selected'}`
+                      : `Broadcast to All (${stats?.active ?? subscribers.length}) Subscribers`}
                   </span>
                 </button>
               </form>
@@ -1320,7 +1256,7 @@ export default function AdminWhatsApp() {
                   </div>
                   <div>{customMsg || todayPreview?.previewTa || '<Your announcement message will appear here>'}</div>
                   <div className="mt-2 text-[11px] italic text-gray-600 dark:text-gray-300">
-                    _St. John de britto Church, Kalayarkoil_
+                    _St. John de Britto's Church, Kalayarkoil_
                   </div>
                   <div className="text-[10px] text-gray-400 dark:text-green-200/60 text-right mt-1">
                     {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ✓✓
@@ -1443,15 +1379,17 @@ export default function AdminWhatsApp() {
                   className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[90%] sm:max-w-[80%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm whitespace-pre-wrap leading-relaxed shadow ${msg.sender === 'user'
+                    className={`max-w-[90%] sm:max-w-[80%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm whitespace-pre-wrap leading-relaxed shadow ${
+                      msg.sender === 'user'
                         ? 'bg-[#005c4b] text-white rounded-tr-none'
                         : 'bg-[#202c33] text-gray-100 rounded-tl-none border border-slate-700'
-                      }`}
+                    }`}
                   >
                     {msg.text}
                     <div
-                      className={`text-[10px] mt-1 text-right ${msg.sender === 'user' ? 'text-green-200/60' : 'text-gray-400'
-                        }`}
+                      className={`text-[10px] mt-1 text-right ${
+                        msg.sender === 'user' ? 'text-green-200/60' : 'text-gray-400'
+                      }`}
                     >
                       {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </div>
@@ -1520,7 +1458,7 @@ export default function AdminWhatsApp() {
                   Dispatches today's Mass readings, Bible verse, and Saint of the Day to all active subscribers.
                 </p>
                 <div className="mt-2 text-xs font-mono font-bold text-church-gold">
-                  ⏰ 04:00 AM IST ({nextBroadcastInfo})
+                  ⏰ 4:00 AM IST ({nextBroadcastInfo})
                 </div>
               </div>
             </div>
@@ -1676,7 +1614,7 @@ export default function AdminWhatsApp() {
                       <div className="bg-white p-2.5 rounded-xl border border-gray-100">
                         <span className="text-[10px] text-gray-400 font-semibold block">Broadcast Schedule</span>
                         <span className="font-bold text-emerald-700 truncate block">
-                          ⏰ 04:00 AM IST Daily
+                          ⏰ 4:00 AM IST Daily
                         </span>
                       </div>
                     </div>
@@ -1685,10 +1623,11 @@ export default function AdminWhatsApp() {
 
                 {broadcastResult && (
                   <div
-                    className={`p-3 rounded-xl text-xs font-semibold ${broadcastResult.status === 'success'
+                    className={`p-3 rounded-xl text-xs font-semibold ${
+                      broadcastResult.status === 'success'
                         ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
                         : 'bg-rose-50 text-rose-800 border border-rose-300'
-                      }`}
+                    }`}
                   >
                     {broadcastResult.message}
                   </div>
@@ -1770,7 +1709,7 @@ export default function AdminWhatsApp() {
               <h3 className="font-bold text-gray-900 text-base sm:text-lg mb-2">
                 ⚠️ Start Bot Fresh?
               </h3>
-
+              
               <p className="text-xs sm:text-sm text-gray-600 mb-6 leading-relaxed">
                 This will clear the current WhatsApp bot preferences and subscription selections for <strong>all users</strong>.
                 <br /><br />
@@ -1824,7 +1763,7 @@ export default function AdminWhatsApp() {
               <h3 className="font-bold text-gray-900 text-base sm:text-lg mb-2">
                 ⚠️ Delete Subscriber?
               </h3>
-
+              
               <p className="text-xs sm:text-sm text-gray-600 mb-2 leading-relaxed">
                 Are you sure you want to remove <strong>{subscriberToDelete.name}</strong> (+{subscriberToDelete.phoneNumber}) from SJDB Connect notifications?
               </p>

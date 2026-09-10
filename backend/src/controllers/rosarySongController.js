@@ -1,7 +1,6 @@
 const path = require('path');
 const AdmZip = require('adm-zip');
 const RosarySong = require('../models/RosarySong');
-const UserDevotionalProgress = require('../models/UserDevotionalProgress');
 const SiteSettings = require('../models/SiteSettings');
 const { uploadToGridFS, deleteFromGridFS, getGridFSFileDoc } = require('../services/gridfsService');
 
@@ -238,15 +237,7 @@ const uploadZipSongs = async (req, res) => {
         continue;
       }
 
-      let fileBuffer;
-      try {
-        fileBuffer = entry.getData();
-      } catch (entryErr) {
-        console.warn('Skipping corrupted ZIP entry:', entry.name, entryErr.message);
-        skippedCount++;
-        continue;
-      }
-
+      const fileBuffer = entry.getData();
       if (!fileBuffer || fileBuffer.length === 0) {
         continue;
       }
@@ -408,66 +399,6 @@ const reorderSongs = async (req, res) => {
   }
 };
 
-/**
- * User: Get personalized devotional playback progress
- */
-const getUserPlaybackProgress = async (req, res) => {
-  try {
-    if (!req.user || !req.user._id) {
-      return res.status(401).json({ success: false, message: 'Authentication required' });
-    }
-
-    const progress = await UserDevotionalProgress.findOne({ userId: req.user._id })
-      .populate('songId')
-      .lean();
-
-    res.json({ success: true, progress: progress || null });
-  } catch (err) {
-    console.error('Error fetching user playback progress:', err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-/**
- * User: Save personalized devotional playback progress
- */
-const saveUserPlaybackProgress = async (req, res) => {
-  try {
-    if (!req.user || !req.user._id) {
-      return res.status(401).json({ success: false, message: 'Authentication required' });
-    }
-
-    const { songId, songTitle, songIndex, positionSeconds, isCompleted } = req.body;
-
-    const updateData = {
-      lastUpdated: new Date()
-    };
-
-    if (songId) updateData.songId = songId;
-    if (typeof songTitle === 'string') updateData.songTitle = songTitle;
-    if (typeof songIndex === 'number' && !isNaN(songIndex)) {
-      updateData.songIndex = Math.max(0, Math.floor(songIndex));
-    }
-    if (typeof positionSeconds === 'number' && !isNaN(positionSeconds)) {
-      updateData.positionSeconds = Math.max(0, parseFloat(positionSeconds.toFixed(1)));
-    }
-    if (typeof isCompleted === 'boolean') {
-      updateData.isCompleted = isCompleted;
-    }
-
-    const progress = await UserDevotionalProgress.findOneAndUpdate(
-      { userId: req.user._id },
-      { $set: updateData },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    ).populate('songId').lean();
-
-    res.json({ success: true, progress });
-  } catch (err) {
-    console.error('Error saving user playback progress:', err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
 module.exports = {
   getActiveSongs,
   getAllSongsAdmin,
@@ -477,7 +408,5 @@ module.exports = {
   updateSong,
   bulkUpdateStatus,
   reorderSongs,
-  deleteSong,
-  getUserPlaybackProgress,
-  saveUserPlaybackProgress
+  deleteSong
 };

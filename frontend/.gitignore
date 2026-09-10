@@ -34,7 +34,3 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
-
-# Media & Archives
-*.zip
-*.tar.gz

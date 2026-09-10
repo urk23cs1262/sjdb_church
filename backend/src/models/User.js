@@ -39,8 +39,6 @@ const userSchema = new mongoose.Schema({
   isVerified: { type: Boolean, default: false },
   account_verified: { type: Boolean, default: false },
   last_verified_at: { type: Date, default: null },
-  verificationExpiresAt: { type: Date, default: null },
-  reverificationNotifiedAt: { type: Date, default: null },
   last_verification_reminder_at: { type: Date, default: null },
   last_verification_stage: { type: String, default: null },
   otpVerified: { type: Boolean, default: false },

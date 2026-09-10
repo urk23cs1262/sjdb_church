@@ -188,7 +188,7 @@ ${gospelR}
 Strengthen our faith, fill our hearts with
 your love, and help us to follow your word.`;
 
-    message = `⛪ *St. John de britto Church, Kalayarkoil*
+    message = `⛪ *St. John de Britto's Church, Kalayarkoil*
 
 🙏 Good Morning!
 
@@ -213,7 +213,7 @@ ${prayerBlock}
 
 ✨ Have a blessed day.
 
-📍 *St. John de britto Church*
+📍 *St. John de Britto's Church*
 _Kalayarkoil_`;
   }
 
@@ -270,7 +270,7 @@ ${prayerBlock}
 
 ✨ ദൈവം താങ്കളെ സമൃദ്ധമായി അനുഗ്രഹിക്കട്ടെ.
 
-📍 *St. John de britto Church*
+📍 *St. John de Britto's Church*
 _Kalayarkoil_`;
   }
 
@@ -317,7 +317,7 @@ your love, and help us to follow your word.`;
 எங்கள் விசுவாசத்தை திடப்படுத்தி, உம் அன்பால் இதயங்களை நிரப்பி,
 உம் வார்த்தையின்படி நடக்க அருள் தாரும்.`;
 
-    message = `⛪ *St. John de britto Church, Kalayarkoil*
+    message = `⛪ *St. John de Britto's Church, Kalayarkoil*
 _புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்_
 
 🙏 Good Morning! / காலை வணக்கம்!
@@ -350,7 +350,7 @@ ${prayerTa}
 ✨ Have a blessed day!
 இறைவன் உங்கள் நாளை ஆசீர்வதிப்பாராக.
 
-📍 *St. John de britto Church*
+📍 *St. John de Britto's Church*
 _Kalayarkoil_`;
   }
 
@@ -457,7 +457,7 @@ function generateSaintInfoMessage({ dailyContent, language = 'ta' }) {
   }
 
   msg += `🔗 *${isTamil ? 'மேலும் வாசிக்க' : 'Read More'}:*\n${saintLink}\n\n`;
-  msg += `— *${isTamil ? 'புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்' : "St. John de britto Church, Kalayarkoil"}*\n_SJDB Connect_`;
+  msg += `— *${isTamil ? 'புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்' : "St. John de Britto's Church, Kalayarkoil"}*\n_SJDB Connect_`;
 
   return msg;
 }
@@ -484,7 +484,7 @@ ${descEn}
 ${descTa && descTa !== descEn ? `\n*தமிழ் குறிப்பு:*\n${descTa}\n` : ''}
 May the intercession and holy life of ${saintNameEn} bring peace and blessings to your family today. 🙏❤️
 
-📍 *St. John de britto Church, Kalayarkoil*
+📍 *St. John de Britto's Church, Kalayarkoil*
 _புனித ஜான் டி பிரிட்டோ திருத்தலம்_`;
 }
 
@@ -493,7 +493,7 @@ _புனித ஜான் டி பிரிட்டோ திருத்
  *
  * Rules:
  * - Direct individual links for: Bible Verse, Daily Mass Readings, Daily Reflection, Saint of the Day
- * - Strictly uses https://st-jb-church.vercel.app
+ * - Strictly uses https://stjb-church.vercel.app
  *
  * @param {Object} dailyContent - Structured daily content object
  * @param {String} language - 'ta' (default) | 'en' | 'ml' | 'both'
@@ -538,92 +538,8 @@ ${reflectionLink}
 ✨ *Saint of the Day:*
 ${saintLink}
 
-— *St. John de britto Church, Kalayarkoil*
+— *St. John de Britto's Church, Kalayarkoil*
 _SJDB Connect_`;
-}
-
-/**
- * DAILY BIBLE VERSE — Dedicated Conversational Reply
- */
-function generateVerseMessage({ dailyContent, language = 'ta' }) {
-  const isTamil = language === 'ta';
-  const verseEn = dailyContent?.bible?.english || '';
-  const verseTa = dailyContent?.bible?.tamil || '';
-  const ref = dailyContent?.bible?.ref || '';
-  const readingsLink = getSiteUrl(SITE_ROUTES.DAILY_READINGS);
-
-  let msg = '';
-  if (isTamil) {
-    msg = `📖 *இன்றைய இறைவார்த்தை (Daily Bible Verse)*\n\n"${verseTa || verseEn}"\n${ref ? `— _${ref}_\n\n` : '\n'}`;
-    if (verseEn && verseTa && verseTa !== verseEn) {
-      msg += `"${verseEn}"\n\n`;
-    }
-    msg += `🌐 *முழு திருப்பலி வாசகங்களை இணையத்தில் வாசிக்க:*\n${readingsLink}\n\n`;
-    msg += `— *புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்*\n_SJDB Connect_`;
-  } else {
-    msg = `📖 *Daily Bible Verse*\n\n"${verseEn || verseTa}"\n${ref ? `— _${ref}_\n\n` : '\n'}`;
-    if (language === 'both' && verseTa && verseTa !== verseEn) {
-      msg += `"${verseTa}"\n\n`;
-    }
-    msg += `🌐 *Read complete Mass Readings online:*\n${readingsLink}\n\n`;
-    msg += `— *St. John de britto Church, Kalayarkoil*\n_SJDB Connect_`;
-  }
-  return msg;
-}
-
-/**
- * DAILY MASS READINGS — Dedicated Conversational Reply
- */
-function generateReadingsMessage({ dailyContent, language = 'ta' }) {
-  const isTamil = language === 'ta';
-  const taReadings = dailyContent?.massReadings?.tamil || {};
-  const enReadings = dailyContent?.massReadings?.english || {};
-
-  const firstR = isTamil ? (taReadings.firstReading || enReadings.firstReading) : (enReadings.firstReading || taReadings.firstReading);
-  const psalmR = isTamil ? (taReadings.psalm || enReadings.psalm) : (enReadings.psalm || taReadings.psalm);
-  const secondR = isTamil ? (taReadings.secondReading || enReadings.secondReading) : (enReadings.secondReading || taReadings.secondReading);
-  const gospelR = isTamil ? (taReadings.gospel || enReadings.gospel) : (enReadings.gospel || taReadings.gospel);
-
-  const readingsLink = getSiteUrl(SITE_ROUTES.DAILY_READINGS);
-
-  let msg = isTamil ? `📖 *இன்றைய திருப்பலி வாசகங்கள் (Daily Mass Readings)*\n\n` : `📖 *Daily Mass Readings*\n\n`;
-
-  msg += `*${isTamil ? 'முதல் வாசகம்' : 'First Reading'}:*\n${firstR || (isTamil ? 'இன்றைய வாசகம் கிடைக்கவில்லை.' : 'Not available')}\n\n`;
-  msg += `*${isTamil ? 'திருப்பாடல்' : 'Responsorial Psalm'}:*\n${psalmR || (isTamil ? 'இன்றைய திருப்பாடல் கிடைக்கவில்லை.' : 'Not available')}\n\n`;
-  if (secondR) {
-    msg += `*${isTamil ? 'இரண்டாம் வாசகம்' : 'Second Reading'}:*\n${secondR}\n\n`;
-  }
-  msg += `✝️ *${isTamil ? 'நற்செய்தி வாசகம்' : 'Holy Gospel'}:*\n${gospelR || (isTamil ? 'இன்றைய நற்செய்தி கிடைக்கவில்லை.' : 'Not available')}\n\n`;
-
-  msg += `🌐 *${isTamil ? 'முழு வாசகங்களை இணையதளத்தில் வாசிக்க' : 'Read complete Mass Readings online'}:*\n${readingsLink}\n\n`;
-  msg += `— *${isTamil ? 'புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்' : "St. John de britto Church, Kalayarkoil"}*\n_SJDB Connect_`;
-
-  return msg;
-}
-
-/**
- * DAILY REFLECTION — Dedicated Conversational Reply
- */
-function generateReflectionMessage({ dailyContent, language = 'ta' }) {
-  const isTamil = language === 'ta';
-  const reflEn = dailyContent?.reflection?.english || '';
-  const reflTa = dailyContent?.reflection?.tamil || '';
-  const reflectionText = isTamil ? (reflTa || reflEn) : (reflEn || reflTa);
-  const reflectionLink = getSiteUrl(SITE_ROUTES.DAILY_REFLECTION);
-
-  let msg = isTamil ? `🕊️ *இன்றைய தியானம் (Daily Reflection)*\n\n` : `🕊️ *Daily Reflection*\n\n`;
-  msg += `${reflectionText || (isTamil ? 'இறைவனின் வார்த்தை நம் வாழ்வின் வெளிச்சம்.' : 'The word of God is a light unto our path.')}\n\n`;
-
-  if (isTamil) {
-    msg += `🙏 *செபம்:*\nஅன்பின் ஆண்டவரே, இந்த புதிய நாளில் உமது வார்த்தையின்படி வாழ எங்களுக்கு அருள் தாரும். ஆமென்.\n\n`;
-  } else {
-    msg += `🙏 *Prayer:*\nLord, guide our steps today and grant us the grace to live according to Your holy Word. Amen.\n\n`;
-  }
-
-  msg += `🌐 *${isTamil ? 'மேலும் வாசிக்க' : 'Read more'}:*\n${reflectionLink}\n\n`;
-  msg += `— *${isTamil ? 'புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்' : "St. John de britto Church, Kalayarkoil"}*\n_SJDB Connect_`;
-
-  return msg;
 }
 
 module.exports = {
@@ -631,9 +547,6 @@ module.exports = {
   generateSaintCaption,
   generateSaintInfoMessage,
   generateDailyLinksMessage,
-  generateVerseMessage,
-  generateReadingsMessage,
-  generateReflectionMessage,
   validateUrl,
   removeAllUrls
 };

@@ -100,12 +100,8 @@ export default function DailySaintTicker() {
     });
   }, [isTamil]);
 
-  const defaultSacredImage = "https://upload.wikimedia.org/wikipedia/commons/4/43/The_Virgin_in_Prayer_-_Giovanni_Battista_Salvi_%28Sassoferrato%29.jpg";
-  const rawImage = saintOfDay.image;
-  const isInvalidImage = !rawImage || rawImage.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato');
-  const activeImage = (!imgError && !isInvalidImage) 
-    ? rawImage 
-    : (todayLiturgical.image || defaultSacredImage);
+  const defaultSacredImage = "https://upload.wikimedia.org/wikipedia/commons/thumb/0/09/Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato.jpg/500px-Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato.jpg";
+  const activeImage = (!imgError && saintOfDay.image) ? saintOfDay.image : (todayLiturgical.image || defaultSacredImage);
 
   // Prevent background scrolling when modal is open
   useEffect(() => {
@@ -243,17 +239,11 @@ export default function DailySaintTicker() {
                     <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
                       {/* SAINT IMAGE BANNER (LEFT SIDE: ONLY SAINT NAME UNDER SAINT OF THE DAY) */}
                       <div className="w-full md:w-5/12 relative h-[260px] sm:h-[300px] md:h-full flex-shrink-0 bg-slate-950 overflow-hidden">
-                        {activeImage && !imgError ? (
+                        {activeImage ? (
                           <img
                             src={activeImage}
                             alt={displayName}
-                            onError={(e) => {
-                              if (activeImage !== defaultSacredImage) {
-                                e.currentTarget.src = defaultSacredImage;
-                              } else {
-                                setImgError(true);
-                              }
-                            }}
+                            onError={() => setImgError(true)}
                             className="absolute inset-0 w-full h-full object-cover object-top transition-transform duration-700 hover:scale-105"
                           />
                         ) : (

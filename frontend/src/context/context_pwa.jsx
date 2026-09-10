@@ -79,17 +79,11 @@ export function PWAProvider({ children }) {
     };
   }, [checkIsInstalled, detectIOS]);
 
-  // Check for post-login prompt trigger (triggers if not installed in this browser)
+  // Check for post-login prompt trigger (Mandatory: triggers if not installed in this browser)
   const checkPostLoginPrompt = useCallback(() => {
     if (typeof window === 'undefined') return;
     const isPendingPrompt = sessionStorage.getItem('pwa_prompt_after_login') === 'true';
     if (!isPendingPrompt) return;
-
-    // Never pop up on auth / onboarding pages
-    const pathname = window.location?.pathname || '';
-    if (/^\/(login|register|verify-account|forgot-password|reset-password)/i.test(pathname)) {
-      return;
-    }
 
     // Clear the trigger flag
     sessionStorage.removeItem('pwa_prompt_after_login');
@@ -108,7 +102,7 @@ export function PWAProvider({ children }) {
         setInstallState('idle');
       }
       setShowModal(true);
-    }, 600);
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [checkIsInstalled, detectIOS]);
@@ -128,6 +122,7 @@ export function PWAProvider({ children }) {
   }, [checkIsInstalled, detectIOS]);
 
   const closeInstallModal = useCallback(() => {
+    // Only used for completed installation or iOS dismissed guidance
     setShowModal(false);
     setInstallState('idle');
   }, []);
@@ -139,26 +134,26 @@ export function PWAProvider({ children }) {
     }
 
     if (!deferredPrompt) {
-      // Fallback for desktop / development: trigger the installing animation and success flow
-      setInstallState('installing');
+      // If browser doesn't have deferredPrompt ready yet, keep in idle
+      setInstallState('idle');
       return;
     }
 
     try {
+      setInstallState('installing');
       await deferredPrompt.prompt();
       const choiceResult = await deferredPrompt.userChoice;
 
       if (choiceResult.outcome === 'accepted') {
-        // App installation accepted: enter installing state
-        setInstallState('installing');
+        // App is installing; keep dialog open in 'installing' state until 'appinstalled' event fires
         setDeferredPrompt(null);
       } else {
-        // User dismissed native prompt: return to idle
+        // User cancelled native prompt; return to idle state so they can click Install App again
         setInstallState('idle');
       }
     } catch (err) {
       console.warn('[PWA] Prompt error:', err);
-      setInstallState('installing');
+      setInstallState('idle');
     }
   }, [deferredPrompt, detectIOS]);
 

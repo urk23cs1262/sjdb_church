@@ -11,7 +11,6 @@ import downloadjs from 'downloadjs';
 import PageHero from '../../components/common/common_page_hero';
 import api from '../../services/api';
 import { fetchSaintOfTheDay } from '../../services/saintOfDay';
-import { getSaintForDate } from '../../data/catholic_saints_calendar';
 
 
 // ── Date helpers — always use LOCAL time, never UTC ────────────────────────
@@ -959,32 +958,18 @@ export default function BibleVerse() {
               <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8">
                 {/* Image portrait */}
                 <div className="w-full md:w-5/12 h-[260px] sm:h-[300px] rounded-2xl overflow-hidden bg-slate-950 shadow-md relative flex-shrink-0">
-                  {(() => {
-                    const rawSaintImg = saintData?.image;
-                    const isInvalidSaintImg = !rawSaintImg || rawSaintImg.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato');
-                    const liturgicalFallback = getSaintForDate(date);
-                    const defaultSacred = "https://upload.wikimedia.org/wikipedia/commons/4/43/The_Virgin_in_Prayer_-_Giovanni_Battista_Salvi_%28Sassoferrato%29.jpg";
-                    const displaySaintImage = (!isInvalidSaintImg && rawSaintImg) ? rawSaintImg : (liturgicalFallback?.image || defaultSacred);
-
-                    return (!saintImgError && displaySaintImage) ? (
-                      <img
-                        src={displaySaintImage}
-                        alt={saintData?.saintName || saintData?.name || 'Saint of the Day'}
-                        onError={(e) => {
-                          if (displaySaintImage !== defaultSacred) {
-                            e.currentTarget.src = defaultSacred;
-                          } else {
-                            setSaintImgError(true);
-                          }
-                        }}
-                        className="w-full h-full object-cover object-top transition-transform duration-700 hover:scale-105"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-church-royal-blue to-indigo-950 text-church-gold text-5xl">
-                        ✝
-                      </div>
-                    );
-                  })()}
+                  {(!saintImgError && saintData?.image) ? (
+                    <img
+                      src={saintData.image}
+                      alt={saintData.saintName || saintData.name}
+                      onError={() => setSaintImgError(true)}
+                      className="w-full h-full object-cover object-top transition-transform duration-700 hover:scale-105"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-church-royal-blue to-indigo-950 text-church-gold text-5xl">
+                      ✝
+                    </div>
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
                   <div className="absolute bottom-3 left-4 right-4 text-white">
                     <span className="inline-block px-2.5 py-0.5 rounded-md bg-church-gold text-amber-950 font-black text-[10px] uppercase tracking-wider mb-1">

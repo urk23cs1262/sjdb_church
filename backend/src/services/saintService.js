@@ -386,12 +386,8 @@ async function loadCachedSaint() {
     
     if (cacheSetting && cacheSetting.value) {
       const parsed = JSON.parse(cacheSetting.value);
-      // Valid cache must match today's date, have a valid image, and not be a placeholder
-      const isPlaceholder = !parsed.image || 
-        parsed.image.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato') || 
-        parsed.imageSource === 'placeholder';
-
-      if (parsed && parsed.date === todayStr && (parsed.saintName || parsed.name) && !isPlaceholder) {
+      // Valid cache must match today's date and have a non-empty image
+      if (parsed && parsed.date === todayStr && (parsed.saintName || parsed.name) && parsed.image) {
         dailySaint = parsed;
         if (dailySaint.lastSynced) {
           dailySaint.lastSynced = new Date(dailySaint.lastSynced);
@@ -446,11 +442,7 @@ const getDailySaint = () => {
   const day = String(today.getDate()).padStart(2, "0");
   const todayStr = `${today.getFullYear()}-${month}-${day}`;
 
-  const isPlaceholder = !dailySaint?.image || 
-    dailySaint.image.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato') || 
-    dailySaint.imageSource === 'placeholder';
-
-  if (!dailySaint || dailySaint.date !== todayStr || isPlaceholder) {
+  if (!dailySaint || dailySaint.date !== todayStr) {
     const fallbackSaint = getSaintForDate(today);
     dailySaint = {
       date: todayStr,

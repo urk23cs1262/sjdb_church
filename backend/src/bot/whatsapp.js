@@ -18,29 +18,12 @@ const {
 const QRCode = require('qrcode');
 const { handleIncomingMessage } = require('./botHandler');
 const { useMongoDBAuthState, clearMongoDBAuthState } = require('./mongoAuthState');
-const {
-  isSignalDecryptionError,
-  isDecryptionFailureMessage,
-  isProtocolOrRetryMessage,
-  signalSessionTracker,
-  installLibsignalErrorFilter,
-  createCustomBaileysLogger
-} = require('./signalSessionRecovery');
-
-// Install console.error interceptor to catch and rate-limit libsignal internal stack traces
-installLibsignalErrorFilter(signalSessionTracker);
 
 let sock = null; // Active socket instance
 let isConnected = false;
 let currentQr = null; // Stored QR Code data URL
 let isConnecting = false;
 let lastConnectedTime = null;
-let reconnectTimer = null;
-let connectionGeneration = 0;
-let shuttingDown = false;
-const RECONNECT_BASE_MS = 5000;
-const RECONNECT_MAX_MS = 60000;
-let reconnectAttempt = 0;
 
 // Active pairing code cache & mutex
 let activePairingInfo = null; // { phone, code, requestedAt }
@@ -50,8 +33,6 @@ let isPairingInProgress = false;
 
 async function resetWhatsAppSession() {
   console.log('🔄 Resetting WhatsApp session & clearing MongoDB auth keys...');
-  clearReconnectTimer();
-  connectionGeneration += 1;
   activePairingInfo = null;
   isPairingInProgress = false;
 
@@ -68,15 +49,13 @@ async function resetWhatsAppSession() {
   currentQr = null;
   lastConnectedTime = null;
   await clearMongoDBAuthState();
-  scheduleReconnect(1000);
+  setTimeout(connectToWhatsApp, 1000);
 }
 
 // ─── Force Reconnect (Keep Session) ─────────────────────────────────────────
 
 async function reconnectWhatsApp() {
   console.log('🔄 Reconnecting WhatsApp socket...');
-  clearReconnectTimer();
-  connectionGeneration += 1;
   if (sock) {
     try {
       sock.end(undefined);
@@ -91,39 +70,10 @@ async function reconnectWhatsApp() {
 
 // ─── Connect to WhatsApp ────────────────────────────────────────────────────
 
-function clearReconnectTimer() {
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-}
-
-function scheduleReconnect(delayMs = null) {
-  if (shuttingDown || reconnectTimer || isConnecting || isConnected) return;
-  const delay = delayMs ?? Math.min(
-    RECONNECT_MAX_MS,
-    RECONNECT_BASE_MS * Math.pow(2, Math.min(reconnectAttempt, 4))
-  );
-  reconnectAttempt += 1;
-  console.log(`🔄 WhatsApp reconnect scheduled in ${Math.ceil(delay / 1000)}s...`);
-  reconnectTimer = setTimeout(() => {
-    reconnectTimer = null;
-    connectToWhatsApp().catch(err =>
-      console.error('[WhatsApp] Scheduled reconnect failed:', err.message)
-    );
-  }, delay);
-}
-
 async function connectToWhatsApp() {
-  if (shuttingDown) return null;
-  if (isConnected && sock) return sock;
   if (isConnecting) return sock;
-
-  clearReconnectTimer();
   isConnecting = true;
-  const generation = ++connectionGeneration;
 
-  let newSock = null;
   try {
     const { state, saveCreds } = await useMongoDBAuthState();
 
@@ -132,39 +82,49 @@ async function connectToWhatsApp() {
       const vRes = await fetchLatestBaileysVersion();
       if (vRes?.version) version = vRes.version;
     } catch (vErr) {
-      console.warn('⚠️ Could not fetch remote Baileys version; using fallback version.');
+      console.warn('⚠️ Could not fetch remote Baileys version, using latest default version.');
     }
 
     console.log(`\n📡 SJDB Connect — Connecting to WhatsApp Web (Baileys v${version.join('.')})`);
 
-    const customLogger = createCustomBaileysLogger(signalSessionTracker);
-
-    newSock = makeWASocket({
+    // Use canonical Browsers.windows('Desktop') to prevent WhatsApp pairing rejections
+    sock = makeWASocket({
       version,
       auth: state,
-      logger: customLogger,
       printQRInTerminal: false,
       browser: Browsers.windows('Desktop'),
       syncFullHistory: false,
       markOnlineOnConnect: false,
-      connectTimeoutMs: 60000,
-      keepAliveIntervalMs: 25000
     });
 
-    sock = newSock;
-
-    newSock.ev.on('connection.update', async (update) => {
-      if (generation !== connectionGeneration || newSock !== sock) return;
-
+    // ── QR Code & Connection Lifecycle ─────────────────────────────────────────
+    sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
+        console.log('📱 New WhatsApp QR Code generated for Admin Dashboard.');
         try {
           currentQr = await QRCode.toDataURL(qr);
-          console.log('📱 WhatsApp QR Code is ready in the Admin Dashboard.');
+          console.log('✅ QR Code Data URL ready for Web Dashboard!');
         } catch (e) {
           currentQr = null;
-          console.error('[WhatsApp] QR generation failed:', e.message);
+        }
+      }
+
+      if (connection === 'close') {
+        isConnected = false;
+        isConnecting = false;
+        const statusCode = lastDisconnect?.error?.output?.statusCode;
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut && statusCode !== 401;
+
+        console.log(`\n⚠️ WhatsApp disconnected. Code: ${statusCode}. Reconnect: ${shouldReconnect}`);
+
+        if (shouldReconnect) {
+          console.log('🔄 Reconnecting in 5 seconds...');
+          setTimeout(connectToWhatsApp, 5000);
+        } else {
+          console.log('🚪 Logged out or session invalid. Resetting auth state for fresh QR/pairing...');
+          resetWhatsAppSession();
         }
       }
 
@@ -175,72 +135,23 @@ async function connectToWhatsApp() {
         activePairingInfo = null;
         isPairingInProgress = false;
         lastConnectedTime = Date.now();
-        reconnectAttempt = 0;
-        console.log('\n🟢 WhatsApp connected! SJDB Connect bot is live 24/7.\n');
-        return;
-      }
-
-      if (connection === 'close') {
-        isConnected = false;
-        isConnecting = false;
-        if (sock === newSock) sock = null;
-
-        const statusCode = lastDisconnect?.error?.output?.statusCode;
-        const shouldReconnect =
-          statusCode !== DisconnectReason.loggedOut &&
-          statusCode !== 401;
-
-        console.log(`\n⚠️ WhatsApp disconnected. Code: ${statusCode}. Reconnect: ${shouldReconnect}`);
-
-        if (shouldReconnect) {
-          scheduleReconnect();
-        } else if (!shuttingDown) {
-          console.log('🚪 WhatsApp session logged out/invalid. Clearing auth for a new QR/pairing link.');
-          try {
-            await clearMongoDBAuthState();
-          } catch (e) {
-            console.error('[WhatsApp] Failed to clear invalid auth state:', e.message);
-          }
-          currentQr = null;
-          activePairingInfo = null;
-          scheduleReconnect(1500);
-        }
+        console.log('\n🟢 WhatsApp connected! SJDB Connect bot is live.\n');
       }
     });
 
-    newSock.ev.on('creds.update', saveCreds);
+    // ── Save credentials on update ────────────────────────────────────────────
+    sock.ev.on('creds.update', saveCreds);
 
-    newSock.ev.on('messages.upsert', async ({ messages, type }) => {
-      if (generation !== connectionGeneration || newSock !== sock || type !== 'notify') return;
+    // ── Incoming Messages ──────────────────────────────────────────────────────
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+      if (type !== 'notify') return;
 
       for (const msg of messages) {
-        if (msg.key?.remoteJid === 'status@broadcast') continue;
+        if (msg.key.remoteJid === 'status@broadcast') continue;
 
-        const from = msg.key?.remoteJid || '';
-        const messageId = msg.key?.id || null;
-        const messageTimestamp = msg.messageTimestamp || null;
-
-        // ── 1. SIGNAL DECRYPTION FAILURE & CIPHERTEXT STUB CHECK ──
-        if (isDecryptionFailureMessage(msg)) {
-          const stubParam = msg.messageStubParameters?.[0] || 'CIPHERTEXT';
-          signalSessionTracker.recordDecryptFailure(from, stubParam);
-          // CRITICAL ARCHITECTURAL RULE:
-          // Drop event immediately. NO botHandler, NO RAG, NO reply, NO notifications, NO jobs.
-          continue;
-        }
-
-        // ── 2. PROTOCOL & RETRY RECEIPT CHECK ──
-        if (isProtocolOrRetryMessage(msg)) {
-          // Internal protocol message or receipt — never treat as user input
-          continue;
-        }
-
-        // ── 3. FROM-ME REPLAY & OUTGOING ECHO FILTER ──
-        if (msg.key?.fromMe) {
-          const myJid = newSock?.user?.id
-            ? newSock.user.id.split(':')[0].replace(/\D/g, '')
-            : '';
-          const remoteJidNum = from ? from.replace(/\D/g, '') : '';
+        if (msg.key.fromMe) {
+          const myJid = sock?.user?.id ? sock.user.id.split(':')[0].replace(/\D/g, '') : '';
+          const remoteJidNum = msg.key.remoteJid ? msg.key.remoteJid.replace(/\D/g, '') : '';
 
           if (!myJid || myJid.slice(-10) !== remoteJidNum.slice(-10)) continue;
 
@@ -260,64 +171,36 @@ async function connectToWhatsApp() {
             textContent.includes('New Church Announcement') ||
             textContent.includes('Updated Church Event') ||
             textContent.includes('Updated Parish Announcement')
-          ) continue;
-        }
-
-        const body =
-          msg.message?.conversation ||
-          msg.message?.extendedTextMessage?.text ||
-          msg.message?.imageMessage?.caption ||
-          msg.message?.videoMessage?.caption ||
-          '';
-
-        if (!body || !body.trim()) continue;
-
-        // ── 4. SAFETY GUARD: TEXT CONTENT DECRYPTION ERROR CHECK ──
-        if (isSignalDecryptionError(body)) {
-          signalSessionTracker.recordDecryptFailure(from, body);
-          continue;
-        }
-
-        // ── 5. RECORD SUCCESSFUL DECRYPTION ──
-        signalSessionTracker.recordSuccessfulDecrypt(from);
-
-        const phone = from.replace('@s.whatsapp.net', '').replace('@g.us', '');
-
-        // Drop stale replayed historical messages (e.g. emitted on reconnect or chat reopen > 5 min old)
-        if (messageTimestamp) {
-          const nowSeconds = Math.floor(Date.now() / 1000);
-          const rawTs = typeof messageTimestamp === 'object' && messageTimestamp?.low ? messageTimestamp.low : Number(messageTimestamp);
-          if (rawTs && (nowSeconds - rawTs > 300)) {
-            console.log(`⚡ [WhatsApp] Dropping stale replayed message ID ${messageId} (${nowSeconds - rawTs}s old)`);
+          ) {
             continue;
           }
         }
 
+        const from = msg.key.remoteJid;
+        const body =
+          msg.message?.conversation ||
+          msg.message?.extendedTextMessage?.text ||
+          msg.message?.imageMessage?.caption ||
+          '';
+
+        if (!body) continue;
+
+        const phone = from.replace('@s.whatsapp.net', '').replace('@g.us', '');
+        const messageId = msg.key?.id || null;
+        const messageTimestamp = msg.messageTimestamp || null;
+
         try {
-          await handleIncomingMessage(
-            phone,
-            body,
-            from,
-            msg.pushName,
-            messageId,
-            messageTimestamp
-          );
+          await handleIncomingMessage(phone, body, from, msg.pushName, messageId, messageTimestamp);
         } catch (err) {
           console.error('❌ Bot handler error:', err.message);
         }
       }
     });
 
-    return newSock;
+    return sock;
   } catch (err) {
-    if (generation === connectionGeneration) {
-      isConnecting = false;
-      isConnected = false;
-      if (sock && sock === newSock) sock = null;
-      console.error('❌ Error during connectToWhatsApp:', err.message);
-      scheduleReconnect();
-    }
-    return null;
+    isConnecting = false;
+    console.error('❌ Error during connectToWhatsApp:', err.message);
   }
 }
 
@@ -405,11 +288,7 @@ async function sendWhatsAppMessage(phone, text) {
     console.log(`✉️ WhatsApp sent to ${jid}`);
     return true;
   } catch (err) {
-    if (isSignalDecryptionError(err)) {
-      signalSessionTracker.recordDecryptFailure(jid, err.message);
-    } else {
-      console.error(`❌ Failed to send WhatsApp to ${jid}:`, err.message);
-    }
+    console.error(`❌ Failed to send WhatsApp to ${jid}:`, err.message);
     return false;
   }
 }
@@ -455,11 +334,7 @@ async function sendWhatsAppMedia(phone, mediaArg, optionalCaption) {
     console.log(`📎 WhatsApp media sent to ${jid}`);
     return true;
   } catch (err) {
-    if (isSignalDecryptionError(err)) {
-      signalSessionTracker.recordDecryptFailure(jid, err.message);
-    } else {
-      console.error(`❌ Failed to send media to ${jid}:`, err.message);
-    }
+    console.error(`❌ Failed to send media to ${jid}:`, err.message);
     return false;
   }
 }
@@ -583,18 +458,6 @@ async function requestPairingCode(phoneNumber) {
 
 // ─── Connection Status ────────────────────────────────────────────────────────
 
-function shutdownWhatsApp() {
-  shuttingDown = true;
-  clearReconnectTimer();
-  connectionGeneration += 1;
-  isConnected = false;
-  isConnecting = false;
-  if (sock) {
-    try { sock.end(undefined); } catch (e) {}
-  }
-  sock = null;
-}
-
 function getConnectionStatus() {
   const userJid = sock?.user?.id || '';
   const rawNumber = userJid ? userJid.split(':')[0].split('@')[0].replace(/\D/g, '') : null;
@@ -617,32 +480,12 @@ function getConnectionStatus() {
     lastConnectedAt: lastConnectedTime,
     uptimeSeconds: isConnected && lastConnectedTime ? Math.floor((Date.now() - lastConnectedTime) / 1000) : 0,
     hasQr: !!currentQr,
-    sock: !!sock,
-    sessionHealth: signalSessionTracker.getDiagnostics()
+    sock: !!sock
   };
 }
 
 function getQR() {
   return currentQr;
-}
-
-/**
- * Wait for WhatsApp socket to be connected and ready.
- * If connecting or offline, polls up to timeoutMs (default 25s).
- */
-async function waitForWhatsAppReady(timeoutMs = 25000) {
-  if (isConnected && sock) return true;
-  if (!sock && !isConnecting && !shuttingDown) {
-    try {
-      connectToWhatsApp().catch(() => {});
-    } catch (e) {}
-  }
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (isConnected && sock) return true;
-    await new Promise(r => setTimeout(r, 1000));
-  }
-  return isConnected && Boolean(sock);
 }
 
 module.exports = {
@@ -654,9 +497,5 @@ module.exports = {
   sendWhatsAppMedia,
   sendWhatsAppToUser,
   getConnectionStatus,
-  getQR,
-  waitForWhatsAppReady,
-  shutdownWhatsApp,
-  signalSessionTracker,
-  isSignalDecryptionError
+  getQR
 };

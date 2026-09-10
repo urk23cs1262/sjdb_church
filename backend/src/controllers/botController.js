@@ -3,14 +3,7 @@ const BotSession = require('../models/BotSession');
 const User = require('../models/User');
 const DailyNotificationLog = require('../models/DailyNotificationLog');
 const { getTodayDailyContent } = require('../services/dailyContentService');
-const {
-  generateDailyCatholicMessage,
-  generateDailyLinksMessage,
-  generateSaintInfoMessage,
-  generateVerseMessage,
-  generateReadingsMessage,
-  generateReflectionMessage
-} = require('../services/whatsappDailyFormatter');
+const { generateDailyCatholicMessage, generateDailyLinksMessage, generateSaintInfoMessage } = require('../services/whatsappDailyFormatter');
 const { answerChurchQuestion } = require('../bot/churchRAGService');
 
 function sendWA(phone, text) {
@@ -362,7 +355,7 @@ const sendCustomMessage = async (req, res) => {
     // Direct single message mode
     if (recipientPhone) {
       const cleanTarget = recipientPhone.replace(/\D/g, '');
-      const formatted = `*SJDB Connect*\n\n${message.trim()}\n\n_St. John de britto Church_`;
+      const formatted = `*SJDB Connect*\n\n${message.trim()}\n\n_St. John de Britto's Church_`;
       const ok = await sendWA(cleanTarget, formatted);
       if (ok) {
         return res.json({ success: true, message: `Message delivered to +${cleanTarget}` });
@@ -391,7 +384,7 @@ const sendCustomMessage = async (req, res) => {
     setImmediate(async () => {
       let sent = 0;
       let failed = 0;
-      const formatted = `*SJDB Connect*\n\n${message.trim()}\n\n_St. John de britto Church_`;
+      const formatted = `*SJDB Connect*\n\n${message.trim()}\n\n_St. John de Britto's Church_`;
       for (const phone of targetList) {
         try {
           const ok = await sendWA(phone, formatted);
@@ -425,7 +418,7 @@ const testDirectMessage = async (req, res) => {
     }
 
     const cleanTarget = phoneNumber.replace(/\D/g, '');
-    const textToSend = message || `🧪 *SJDB Connect — Test Message*\n\nThis is a verified test message sent from the St. John de britto Church WhatsApp Bot.\n\n⏰ Timestamp: ${new Date().toLocaleTimeString('en-IN')}`;
+    const textToSend = message || `🧪 *SJDB Connect — Test Message*\n\nThis is a verified test message sent from the St. John de Britto's Church WhatsApp Bot.\n\n⏰ Timestamp: ${new Date().toLocaleTimeString('en-IN')}`;
 
     const ok = await sendWA(cleanTarget, textToSend);
     if (ok) {
@@ -441,115 +434,114 @@ const testDirectMessage = async (req, res) => {
 // POST /api/bot/test-message — Admin Playground to test bot interaction flow
 const testBotMessage = async (req, res) => {
   try {
-    const { message, text: textParam, sessionState = {} } = req.body;
+    const { message, sessionState = {} } = req.body;
     let {
-      step = 'language_selection',
+      step = 'welcome',
       isVerified = false,
-      isOnboarded = false,
       providedPhone = '',
       preferences = [],
-      language = null,
-      catholicLanguage = 'ta',
+      language = 'en',
       readingPreference = 'full',
-      sendLinks = false,
-      tempOtp = null
+      sendLinks = false
     } = sessionState;
 
-    const rawText = (message || textParam || '').trim();
-    const normalizedText = rawText.toLowerCase().replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const rawText = (message || '').trim();
     const text = rawText.toUpperCase();
     const { SITE_ROUTES, EXTERNAL_LINKS, getSiteUrl } = require('../config/siteRoutes');
 
     let botReply = '';
     let nextStep = step;
     let newIsVerified = isVerified;
-    let newIsOnboarded = isOnboarded;
     let newProvidedPhone = providedPhone;
     let newPreferences = [...preferences];
     let newLanguage = language;
-    let newCatholicLanguage = catholicLanguage;
     let newReadingPreference = readingPreference;
     let newSendLinks = sendLinks;
-    let newTempOtp = tempOtp;
 
-    // Determine current isTamil based on chosen bot language
-    const isTamil = newLanguage === 'ta';
+    const normalizedForTrigger = rawText.toLowerCase().replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const isStartTrigger = /^(hi|hello|hey|start|reset|menu|வணக்கம்)$/i.test(normalizedForTrigger) ||
+      normalizedForTrigger.includes('sjdb connect') ||
+      normalizedForTrigger.includes('connecting faith & community') ||
+      normalizedForTrigger.includes('connecting faith and community') ||
+      (normalizedForTrigger.includes('hi') && normalizedForTrigger.includes('sjdb'));
 
-    // Global STOP
-    if (/^(stop|unsubscribe|நிறுத்து|விலகு)$/i.test(normalizedText)) {
-      nextStep = 'language_selection';
-      newIsVerified = false;
-      newIsOnboarded = false;
-      newPreferences = [];
-      newLanguage = null;
-      botReply = `You have been unsubscribed from SJDB Connect.\n\nReply *HI* anytime to re-subscribe. God bless! 🙏\n\n—\nநீங்கள் *SJDB Connect* சேவையிலிருந்து விலகியுள்ளீர்கள்.\n\nமீண்டும் இணைய எப்போது வேண்டுமானாலும் *HI* என்று பதிலளிக்கவும். இறை ஆசீர்வாதம்! 🙏`;
-      return res.json({
-        success: true,
-        botReply,
-        sessionState: {
-          step: nextStep,
-          isVerified: newIsVerified,
-          isOnboarded: newIsOnboarded,
-          providedPhone: newProvidedPhone,
-          preferences: newPreferences,
-          language: newLanguage,
-          catholicLanguage: newCatholicLanguage,
-          readingPreference: newReadingPreference,
-          sendLinks: newSendLinks,
-          tempOtp: newTempOtp
-        }
-      });
-    }
+    if (isStartTrigger) {
+      if (newIsVerified && newProvidedPhone) {
+        nextStep = 'done';
+        botReply = `👋 *Welcome to SJDB Connect!*
+⛪ *St. John de Britto's Church, Kalayarkoil*
 
-    // Step 1: Language selection gate
-    if (step === 'language_selection' || step === 'bot_language' || step === 'welcome' || !newLanguage) {
-      if (/^(1|tamil|தமிழ்|ta)$/i.test(normalizedText)) {
-        newLanguage = 'ta';
-        nextStep = 'phone_verification';
-        botReply = `🙏 வணக்கம்! *SJDB CONNECT*-க்கு உங்களை அன்புடன் வரவேற்கிறோம்!\n⛪ *புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்*\n\n🔐 *தொலைபேசி எண் சரிபார்ப்பு*\n\nதொடர்ந்து பங்கு சேவைகளைப் பயன்படுத்த, உங்கள் **10-இலக்க மொபைல் எண்ணை** உள்ளிடவும்:\n📱 (எ.கா: *9876543210*)`;
-      } else if (/^(2|english|ஆங்கிலம்|eng|en)$/i.test(normalizedText)) {
-        newLanguage = 'en';
-        nextStep = 'phone_verification';
-        botReply = `🙏 Welcome to *SJDB CONNECT*!\n⛪ *St. John de britto Church, Kalayarkoil*\n\n🔐 *Phone Number Verification*\n\nTo continue accessing parish services, please enter your **10-digit mobile number**:\n📱 (e.g., *9876543210*)`;
-      } else if (step === 'bot_language' || step === 'language_selection') {
-        nextStep = 'bot_language';
-        botReply = `👉 Please reply with *1* or *2*.\n👉 தயவுசெய்து *1* அல்லது *2* என்று பதிலளிக்கவும்.`;
+How can I help you today?
+
+1️⃣ 📖 *Daily Bible*
+2️⃣ ⛪ *Mass Timings*
+3️⃣ 🕊️ *Services*
+4️⃣ 📅 *Events*
+5️⃣ 📢 *Announcements*
+6️⃣ 📜 *Church Information*
+7️⃣ 🌟 *Saint of the Day*
+8️⃣ ❓ *Help*
+
+👉 *You can reply with a number or ask your question naturally.*`;
       } else {
-        nextStep = 'bot_language';
-        botReply = `🙏 Welcome to *SJDB CONNECT!*\n\nவணக்கம்! *SJDB CONNECT*-க்கு உங்களை அன்புடன் வரவேற்கிறோம்! 🙏\n\n*How would you like to continue with SJDB CONNECT?*\n*SJDB CONNECT-ஐ எந்த மொழியில் தொடர விரும்புகிறீர்கள்?*\n\n1️⃣ *Tamil / தமிழ்*\n2️⃣ *English / ஆங்கிலம்*\n\n👉 Please reply with *1 or 2*.\n👉 *1 அல்லது 2* என்று மட்டும் பதிலளிக்கவும்.`;
+        nextStep = 'phone_verification';
+        botReply = `👋 *Welcome to SJDB Connect!*
+⛪ *St. John de Britto's Church, Kalayarkoil*
+_Connecting Faith & Community_
+
+🔐 *Phone Number Verification*
+
+To start chatting and access church services, please enter your **10-digit mobile phone number** to verify your account.
+
+📱 *Please reply with your 10-digit mobile number (e.g., 9876543210):*`;
       }
-    } else if (step === 'phone_verification' || step === 'ask_phone_manual') {
+    } else if (step === 'welcome') {
+      botReply = `👋 *Welcome to SJDB Connect!*\n⛪ *St. John de Britto's Church, Kalayarkoil*\n\nPlease reply with *Hi* or enter your 10-digit mobile number to verify your account.`;
+    } else if (step === 'phone_verification' || step === 'ask_phone') {
       const rawDigits = rawText.replace(/\D/g, '');
-      if (rawDigits.length >= 10) {
-        newProvidedPhone = rawDigits.slice(-10);
-        newTempOtp = '123456';
-        nextStep = 'otp_verification';
-        botReply = isTamil
-          ? `🔐 *OTP சரிபார்ப்பு*\n\nஉங்கள் 6-இலக்க சரிபார்ப்புக் குறியீடு (OTP):\n👉 *123456*\n\n⏳ இது *5 நிமிடங்கள்* மட்டுமே செல்லுபடியாகும்.\n\n👉 தொடர உங்கள் *6-இலக்க OTP குறியீட்டை* உள்ளிடவும்:`
-          : `🔐 *OTP Verification*\n\nYour 6-digit verification code (OTP) is:\n👉 *123456*\n\n⏳ Valid for *5 minutes*.\n\n👉 Please reply with your *6-digit OTP code* to verify:`;
+      if (!rawDigits || rawDigits.length < 10) {
+        botReply = `⚠️ Please enter a valid 10-digit mobile phone number (e.g., *9876543210*).\n\n📱 *Please reply with your 10-digit mobile number:*`;
       } else {
-        botReply = isTamil
-          ? `👉 தயவுசெய்து உங்கள் 10-இலக்க மொபைல் எண்ணை உள்ளிடவும் (எ.கா: *9876543210*).`
-          : `👉 Please enter your 10-digit mobile number (e.g., *9876543210*).`;
-      }
-    } else if (step === 'otp_verification') {
-      const cleanOtpDigits = rawText.replace(/\D/g, '');
-      if (cleanOtpDigits === (newTempOtp || '123456')) {
+        const clean10Digits = rawDigits.slice(-10);
+        newProvidedPhone = clean10Digits;
         newIsVerified = true;
-        nextStep = 'select_preferences';
-        botReply = isTamil
-          ? `✅ *தொலைபேசி எண் சரிபார்க்கப்பட்டது!*\n*SJDB CONNECT*-க்கு உங்களை அன்புடன் வரவேற்கிறோம்! 🙏\n\n⚙️ *SJDB Connect விருப்பங்கள்*\n\nநீங்கள் பெற விரும்பும் சேவைகளைத் தேர்ந்தெடுக்கவும்:\n\n1️⃣ 📖 தினசரி விவிலியம்\n2️⃣ 🌟 இன்றைய புனிதர்\n3️⃣ 📜 திருப்பலி வாசகங்கள் & தியானம்\n4️⃣ 📅 ஆலய நிகழ்வுகள்\n5️⃣ 📢 பங்கு அறிவிப்புகள்\n6️⃣ 🌟 மேற்கண்ட அனைத்தும்\n\n👉 எண்களை காற்புள்ளியுடன் (எ.கா: *1,2,3*) அல்லது அனைத்திற்கும் *6* என்று பதிலளிக்கவும்.`
-          : `✅ *Phone Number Verified!*\nWelcome to *SJDB CONNECT*! 🙏\n\n⚙️ *SJDB Connect Preferences*\n\nPlease select the services you would like to receive:\n\n1️⃣ 📖 Daily Bible Verse\n2️⃣ 🌟 Saint of the Day\n3️⃣ 📜 Daily Mass Readings & Reflection\n4️⃣ 📅 Church Events\n5️⃣ 📢 Parish Announcements\n6️⃣ 🌟 All of the above\n\n👉 Reply with numbers separated by commas (e.g. *1,2,3*) or reply *6* for all services.`;
-      } else {
-        botReply = isTamil
-          ? `❌ தவறான OTP குறியீடு. தயவுசெய்து சரியான 6-இலக்க OTP குறியீட்டை உள்ளிடவும்:`
-          : `❌ Invalid OTP code. Please enter the correct 6-digit verification code:`;
+        nextStep = 'preferences';
+
+        const parishUser = await User.findOne({ phone: { $regex: clean10Digits } });
+        let ackHeader = '';
+
+        if (parishUser) {
+          const zoneOrAnbiyam = parishUser.anbiyam || parishUser.subStation || parishUser.parishZone || 'Parishioner';
+          ackHeader = `✅ *Phone Number Verified!*\nWelcome, *${parishUser.name}* (${zoneOrAnbiyam})! 🙏\n\n`;
+        } else {
+          ackHeader = `✅ *Phone Number Verified!*\n📱 Phone: *+91 ${clean10Digits}*\n\n`;
+        }
+
+        const prefMenu = `📋 *SJDB Connect Preferences*
+
+Please select the services you would like to receive:
+
+1️⃣ Daily Bible Verse
+2️⃣ Saint of the Day
+3️⃣ Daily Mass Readings & Reflection
+4️⃣ Church Events
+5️⃣ Parish Announcements
+6️⃣ Birthday Wishes
+7️⃣ All of the above
+
+👉 Reply with numbers separated by commas (e.g. 1,2,3) or reply *7 / ALL* for all services.
+
+➡️ Type *Menu* for Quick Commands
+➡️ Type *Services* for Help Desk`;
+        botReply = `${ackHeader}${prefMenu}`;
       }
-    } else if (step === 'select_preferences' || step === 'preferences') {
-      const prefMap = { '1': 'verse', '2': 'saint', '3': 'mass', '4': 'events', '5': 'announcements' };
+    } else if (step === 'preferences') {
+      const prefMap = { '1': 'verse', '2': 'saint', '3': 'mass', '4': 'events', '5': 'announcements', '6': 'birthday' };
+      const cleanInput = rawText.toLowerCase().trim();
       let selectedPrefs = [];
-      if (normalizedText === '6' || /^(all|\*|all of the above|அனைத்தும்|7)$/i.test(normalizedText)) {
-        selectedPrefs = ['verse', 'saint', 'mass', 'events', 'announcements'];
+
+      if (cleanInput === '7' || /^(all|\*|all of the above)$/i.test(cleanInput)) {
+        selectedPrefs = ['verse', 'saint', 'mass', 'events', 'announcements', 'birthday'];
       } else {
         const parts = rawText.split(/[,\s]+/).map(s => s.trim().replace(/[^0-9]/g, '')).filter(Boolean);
         selectedPrefs = Array.from(new Set(parts.map(p => prefMap[p]).filter(Boolean)));
@@ -557,141 +549,153 @@ const testBotMessage = async (req, res) => {
 
       if (selectedPrefs.length > 0) {
         newPreferences = selectedPrefs;
-        nextStep = 'catholic_language';
-        botReply = isTamil
-          ? `🌐 *Daily Catholic Content Language*\n\nதினசரி கத்தோலிக்க உள்ளடக்கத்தை எந்த மொழியில் பெற விரும்புகிறீர்கள்?\n\n1️⃣ *Tamil / தமிழ்*\n2️⃣ *English / ஆங்கிலம்*\n\n👉 *1 அல்லது 2* என்று பதிலளிக்கவும்.`
-          : `🌐 *Daily Catholic Content Language*\n\nWhich language would you like to receive your Daily Catholic Content in?\n\n1️⃣ *Tamil / தமிழ்*\n2️⃣ *English / ஆங்கிலம்*\n\n👉 Please reply with *1 or 2*.`;
+        nextStep = 'language';
+        botReply = `🌐 *Daily Catholic Content Language*
+
+Select your preferred language for Daily Bible Verse, Mass Readings, Reflection & Saint of the Day:
+
+1️⃣ Tamil (தமிழ்)
+2️⃣ English
+3️⃣ Both (Tamil + English)
+
+👉 Reply with *1*, *2*, or *3*.`;
       } else {
-        botReply = isTamil
-          ? `⚠️ தவறான தேர்வு. எண்களை காற்புள்ளியுடன் (எ.கா: *1,2,3*) அல்லது அனைத்திற்கும் *6* என்று பதிலளிக்கவும்.`
-          : `⚠️ Invalid selection. Please reply with numbers (e.g. *1,2,3*) or reply *6* for all services.`;
+        botReply = `⚠️ Invalid selection. Please reply with numbers separated by commas (e.g., *1,2,3*) or reply *7 / ALL* for all services.`;
       }
-    } else if (step === 'catholic_language') {
-      if (/^(1|tamil|தமிழ்|ta)$/i.test(normalizedText)) {
-        newCatholicLanguage = 'ta';
-      } else if (/^(2|english|ஆங்கிலம்|eng|en)$/i.test(normalizedText)) {
-        newCatholicLanguage = 'en';
-      } else if (/^(3|both|இரண்டும்|both tamil & english|all)$/i.test(normalizedText)) {
-        newCatholicLanguage = 'both';
+    } else if (step === 'language') {
+      let chosenLang = null;
+      const cleanChoice = rawText.toLowerCase().trim();
+      if (/^(1|tamil|தமிழ்|ta)$/i.test(cleanChoice)) {
+        chosenLang = 'ta';
+      } else if (/^(2|english|eng|en)$/i.test(cleanChoice)) {
+        chosenLang = 'en';
+      } else if (/^(3|both|tamil \+ english|all)$/i.test(cleanChoice)) {
+        chosenLang = 'both';
       }
 
-      if (newCatholicLanguage) {
+      if (chosenLang) {
+        newLanguage = chosenLang;
         nextStep = 'done';
-        newIsOnboarded = true;
-        const { getSetupCompleteMessage, getAssistanceMessage } = require('../bot/botHandler');
-        const step7Msg = getSetupCompleteMessage(newPreferences, newCatholicLanguage, isTamil);
-        const step8Assistance = getAssistanceMessage(isTamil);
-        botReply = `${step7Msg}\n\n${step8Assistance}`;
+
+        const prefLabels = {
+          verse: '📖 Daily Bible Verse',
+          saint: '🕊️ Saint of the Day',
+          mass: '⛪ Daily Mass Readings & Reflection',
+          events: '📅 Church Events',
+          announcements: '📢 Parish Announcements',
+          birthday: '🎂 Birthday Wishes'
+        };
+
+        const prefText = newPreferences.map(p => `• ${prefLabels[p] || p}`).join('\n');
+        const langText = chosenLang === 'ta' ? 'Tamil (தமிழ்)' : chosenLang === 'both' ? 'Both (Tamil + English)' : 'English';
+
+        const confirmMsg = `✅ *You're all set!*
+
+📋 *Your Subscribed Services:*
+${prefText || '• 📖 Daily Bible Verse\n• ⛪ Daily Mass Readings & Reflection\n• 🕊️ Saint of the Day'}
+
+🌐 Daily Catholic Content Language: *${langText}*
+⏰ Daily Catholic broadcast is delivered sharply at *4:00 AM IST*.
+
+May God bless you and your family! 🙏❤️
+— *SJDB Connect*
+➡️ Type *Menu* for Quick Commands
+➡️ Type *Services* for Help Desk`;
+
+        botReply = confirmMsg;
       } else {
-        botReply = isTamil ? `👉 *1, 2 அல்லது 3* என்று பதிலளிக்கவும்.` : `👉 Please reply with *1, 2, or 3*.`;
-      }
-    } else if (step === 'bot_language_change') {
-      if (/^(1|tamil|தமிழ்|ta)$/i.test(normalizedText)) {
-        newLanguage = 'ta';
-        nextStep = 'done';
-        botReply = `✅ *உங்கள் பாட் மொழி தமிழாக மாற்றப்பட்டது! (Bot language set to Tamil)*\n\nஇனி பாட் தகவல்கள் மற்றும் மெனுக்கள் தமிழில் வழங்கப்படும்.\n📌 உதவிக்கு *MENU* அல்லது *SERVICES* என தட்டச்சு செய்யவும்.`;
-      } else if (/^(2|english|ஆங்கிலம்|eng|en)$/i.test(normalizedText)) {
-        newLanguage = 'en';
-        nextStep = 'done';
-        botReply = `✅ *Bot language updated to English successfully!*\n\nFuture bot responses and navigation menus will be delivered in English.\n📌 Type *MENU* for Quick Commands or *SERVICES* for Help Desk.`;
-      } else {
-        botReply = `👉 Please reply with *1 or 2*.\n👉 *1 அல்லது 2* என்று மட்டும் பதிலளிக்கவும்.`;
-      }
-    } else if (step === 'catholic_language_change') {
-      if (/^(1|tamil|தமிழ்|ta)$/i.test(normalizedText)) {
-        newCatholicLanguage = 'ta';
-        nextStep = 'done';
-        botReply = isTamil
-          ? `✅ *தினசரி கத்தோலிக்க உள்ளடக்க மொழி தமிழாக மாற்றப்பட்டது!*\nதினசரி விவிலியம், திருப்பலி வாசகங்கள், தியானம் & புனிதர் விபரம் தமிழில் வழங்கப்படும்.\n\n📌 உதவிக்கு *MENU* அல்லது *SERVICES* என தட்டச்சு செய்யவும்.`
-          : `✅ *Daily Catholic Content Language set to Tamil!*\nDaily Bible Verse, Mass Readings, Reflection & Saint of the Day will be delivered in Tamil.\n\n📌 Type *MENU* for Quick Commands or *SERVICES* for Help Desk.`;
-      } else if (/^(2|english|ஆங்கிலம்|eng|en)$/i.test(normalizedText)) {
-        newCatholicLanguage = 'en';
-        nextStep = 'done';
-        botReply = isTamil
-          ? `✅ *தினசரி கத்தோலிக்க உள்ளடக்க மொழி ஆங்கிலமாக மாற்றப்பட்டது!*\nதினசரி விவிலியம், திருப்பலி வாசகங்கள், தியானம் & புனிதர் விபரம் ஆங்கிலத்தில் வழங்கப்படும்.\n\n📌 உதவிக்கு *MENU* அல்லது *SERVICES* என தட்டச்சு செய்யவும்.`
-          : `✅ *Daily Catholic Content Language set to English!*\nDaily Bible Verse, Mass Readings, Reflection & Saint of the Day will be delivered in English.\n\n📌 Type *MENU* for Quick Commands or *SERVICES* for Help Desk.`;
-      } else if (/^(3|both|இரண்டும்|both tamil & english|all)$/i.test(normalizedText)) {
-        newCatholicLanguage = 'both';
-        nextStep = 'done';
-        botReply = isTamil
-          ? `✅ *தினசரி கத்தோலிக்க உள்ளடக்க மொழி தமிழ் & ஆங்கிலம் (Both) என மாற்றப்பட்டது!*\nதினசரி விவிலியம், திருப்பலி வாசகங்கள், தியானம் & புனிதர் விபரம் இரு மொழிகளிலும் வழங்கப்படும்.\n\n📌 உதவிக்கு *MENU* அல்லது *SERVICES* என தட்டச்சு செய்யவும்.`
-          : `✅ *Daily Catholic Content Language set to Both (Tamil & English)!*\nDaily Bible Verse, Mass Readings, Reflection & Saint of the Day will be delivered in both Tamil & English.\n\n📌 Type *MENU* for Quick Commands or *SERVICES* for Help Desk.`;
-      } else {
-        botReply = isTamil ? `👉 *1, 2 அல்லது 3* என்று பதிலளிக்கவும்.` : `👉 Please reply with *1, 2, or 3*.`;
+        botReply = `⚠️ Please reply with *1*, *2*, or *3* to choose your Daily Catholic Content language:\n\n1️⃣ Tamil (தமிழ்)\n2️⃣ English\n3️⃣ Both (Tamil + English)`;
       }
     } else if (step === 'done') {
-      if (/^(bot\s*language|bot\s*lang|பாட்\s*மொழி|language|lang|மொழி)$/i.test(normalizedText)) {
-        nextStep = 'bot_language_change';
-        botReply = `🙏 Welcome to *SJDB CONNECT!*\n\nவணக்கம்! *SJDB CONNECT*-க்கு உங்களை அன்புடன் வரவேற்கிறோம்! 🙏\n\n*How would you like to continue with SJDB CONNECT?*\n*SJDB CONNECT-ஐ எந்த மொழியில் தொடர விரும்புகிறீர்கள்?*\n\n1️⃣ *Tamil / தமிழ்*\n2️⃣ *English / ஆங்கிலம்*\n\n👉 Please reply with *1 or 2*.\n👉 *1 அல்லது 2* என்று மட்டும் பதிலளிக்கவும்.`;
-      } else if (/^(catholic\s*language|catholic\s*lang|devotion\s*language|கத்தோலிக்க\s*மொழி)$/i.test(normalizedText)) {
-        nextStep = 'catholic_language_change';
-        botReply = isTamil
-          ? `🌐 *Daily Catholic Content Language*\n\nதினசரி கத்தோலிக்க உள்ளடக்கத்தை எந்த மொழியில் பெற விரும்புகிறீர்கள்?\n\n1️⃣ *Tamil / தமிழ்*\n2️⃣ *English / ஆங்கிலம்*\n3️⃣ Both *Tamil / தமிழ்* & *English / ஆங்கிலம்*\n\n👉 *1, 2 அல்லது 3* என்று பதிலளிக்கவும்.`
-          : `🌐 *Daily Catholic Content Language*\n\nWhich language would you like to receive your Daily Catholic Content in?\n\n1️⃣ *Tamil / தமிழ்*\n2️⃣ *English / ஆங்கிலம்*\n3️⃣ Both *Tamil / தமிழ்* & *English / ஆங்கிலம்*\n\n👉 Please reply with *1, 2, or 3*.`;
-      } else if (/^(verify|reverify|சரிபார்)$/i.test(normalizedText)) {
+      if (text === 'STOP' || text === 'UNSUBSCRIBE') {
+        nextStep = 'welcome';
+        newPreferences = [];
+        newIsVerified = false;
+        botReply = `You have been unsubscribed from SJDB Connect.\n\nReply *HI* anytime to re-subscribe. God bless! 🙏`;
+      } else if (text === 'VERIFY' || text === 'REVERIFY') {
         nextStep = 'phone_verification';
         newIsVerified = false;
-        botReply = isTamil
-          ? `🙏 வணக்கம்! *SJDB CONNECT*-க்கு உங்களை அன்புடன் வரவேற்கிறோம்!\n⛪ *புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்*\n\n🔐 *தொலைபேசி எண் சரிபார்ப்பு*\n\nதொடர்ந்து பங்கு சேவைகளைப் பயன்படுத்த, உங்கள் **10-இலக்க மொபைல் எண்ணை** உள்ளிடவும்:\n📱 (எ.கா: *9876543210*)`
-          : `🙏 Welcome to *SJDB CONNECT*!\n⛪ *St. John de britto Church, Kalayarkoil*\n\n🔐 *Phone Number Verification*\n\nTo continue accessing parish services, please enter your **10-digit mobile number**:\n📱 (e.g., *9876543210*)`;
-      } else if (/^(preferences|prefs|விருப்பங்கள்)$/i.test(normalizedText)) {
-        nextStep = 'select_preferences';
-        botReply = isTamil
-          ? `⚙️ *SJDB Connect விருப்பங்கள்*\n\nநீங்கள் பெற விரும்பும் சேவைகளைத் தேர்ந்தெடுக்கவும்:\n\n1️⃣ 📖 தினசரி விவிலியம்\n2️⃣ 🌟 இன்றைய புனிதர்\n3️⃣ 📜 திருப்பலி வாசகங்கள் & தியானம்\n4️⃣ 📅 ஆலய நிகழ்வுகள்\n5️⃣ 📢 பங்கு அறிவிப்புகள்\n6️⃣ 🌟 மேற்கண்ட அனைத்தும்\n\n👉 எண்களை காற்புள்ளியுடன் (எ.கா: *1,2,3*) அல்லது அனைத்திற்கும் *6* என்று பதிலளிக்கவும்.`
-          : `⚙️ *SJDB Connect Preferences*\n\nPlease select the services you would like to receive:\n\n1️⃣ 📖 Daily Bible Verse\n2️⃣ 🌟 Saint of the Day\n3️⃣ 📜 Daily Mass Readings & Reflection\n4️⃣ 📅 Church Events\n5️⃣ 📢 Parish Announcements\n6️⃣ 🌟 All of the above\n\n👉 Reply with numbers separated by commas (e.g. *1,2,3*) or reply *6* for all services.`;
-      } else if (/^(help|\?|8|commands|options|உதவி|வழிகாட்டி)$/i.test(normalizedText)) {
-        botReply = isTamil
-          ? `❓ *SJDB Connect — உதவி & வழிகாட்டி*\n_புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்_\n\n📌 *பயன்படுத்தக்கூடிய முக்கிய கட்டளைகள்:*\n• *MENU* — முதன்மை மெனு\n• *SERVICES* — 14 பங்கு சேவைகள் பட்டியல்\n• *BOT LANGUAGE* — SJDB CONNECT Bot மொழியை மாற்ற\n• *CATHOLIC LANGUAGE* — தினசரி கத்தோலிக்க உள்ளடக்கத்தின் மொழியை மாற்ற\n• *VERIFY* — தொலைபேசி எண் சரிபார்ப்பு\n• *STOP* — தினசரி செய்திகளை நிறுத்த\n\n💡 *1 முதல் 8 வரை எண்களில் பதிலளிக்கலாம் அல்லது உங்கள் கேள்வியை இயல்பாகத் தட்டச்சு செய்து அனுப்பலாம்!*`
-          : `❓ *SJDB Connect — Help & Guidance*\n_St. John de britto Church, Kalayarkoil_\n\n📌 *Key Commands You Can Type Anytime:*\n• *MENU* — Main Navigation Menu\n• *SERVICES* — 14-Option Parish Services Directory\n• *BOT LANGUAGE* — Change SJDB CONNECT Bot Language\n• *CATHOLIC LANGUAGE* — Change Daily Catholic Content Language\n• *VERIFY* — Phone Number Verification\n• *STOP* — Stop daily messages\n\n💡 *You can reply with numbers 1 to 8 or type your question naturally in English or Tamil!*`;
-      } else if (normalizedText === '1' || /\b(daily bible|bible verse|verse|scripture)\b/i.test(normalizedText) || /(விவிலியம்|இறைவார்த்தை|வசனம்)/.test(rawText)) {
+        botReply = `🔐 *Phone Number Verification*\n\n📱 Please enter your 10-digit mobile phone number (e.g., *9876543210*) to verify:`;
+      } else if (text === 'PREFERENCES' || text === 'PREFS') {
+        nextStep = 'preferences';
+        botReply = `📋 *SJDB Connect Preferences*
+
+Please select the services you would like to receive:
+
+1️⃣ Daily Bible Verse
+2️⃣ Saint of the Day
+3️⃣ Daily Mass Readings & Reflection
+4️⃣ Church Events
+5️⃣ Parish Announcements
+6️⃣ Birthday Wishes
+7️⃣ All of the above
+
+👉 Reply with numbers separated by commas (e.g. 1,2,3) or reply *7 / ALL* for all services.
+
+Type *Menu* for Quick Commands
+Type *Services* for Help Desk`;
+      } else if (text === 'LANGUAGE' || text === 'LANG') {
+        nextStep = 'language';
+        botReply = `🌐 *Daily Catholic Content Language*
+
+Select your preferred language for Daily Bible Verse, Mass Readings, Reflection & Saint of the Day:
+
+1️⃣ Tamil (தமிழ்)
+2️⃣ English
+3️⃣ Both (Tamil + English)
+
+👉 Reply with *1*, *2*, or *3*.`;
+      } else if (text === '1' || /\b(READINGS?|TODAY READINGS|MASS READINGS|DAILY BIBLE)\b/i.test(text)) {
         const dailyContent = await getTodayDailyContent(new Date());
-        botReply = generateVerseMessage({ dailyContent, language: newCatholicLanguage });
-      } else if (normalizedText === '2' || /\b(mass timings?|mass time|mass schedule|when is mass|what time is mass|sunday mass)\b/i.test(normalizedText) || /(திருப்பலி நேரம்|பூசை நேரம்|திருப்பலி நேரங்கள்|ஞாயிறு திருப்பலி)/.test(rawText)) {
-        botReply = isTamil
-          ? `⛪ *புனித அருளானந்தர் தேவாலயம் — திருப்பலி நேரங்கள்*\n_காளையார்கோவில், சிவகங்கை மறைமாவட்டம்_\n\n📅 *வாரநாட்கள் (திங்கள் – சனி):*\n• காலை 6:00 மணி — தினசரி காலை திருப்பலி\n\n🌟 *ஞாயிறு திருப்பலிகள்:*\n• காலை 6:00 மணி — அதிகாலை திருப்பலி\n• காலை 8:00 மணி — பங்குப் பெருந்திருப்பலி\n\n🕯️ *செவ்வாய் நவநாள் திருப்பலி:*\n• மாலை 6:00 மணி — புனித அந்தோனியார் நவநாள் & திருப்பலி\n\n🕊️ *மாதத்தின் முதல் வெள்ளி:*\n• மாலை 6:00 மணி — நற்கருணை ஆராதனை & சிறப்பு திருப்பலி\n\n🕊️ *பாவசங்கீர்த்தனம் (ஒப்புரவு):*\n• சனிக்கிழமை: மாலை 5:30 – 6:30 மணி & காலை திருப்பலிக்கு முன்\n\n🌐 *முழு அட்டவணை:* ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}`
-          : `⛪ *St. John de britto Church — Holy Mass Timings*\n_Kalayarkoil, Sivagangai Diocese_\n\n📅 *Weekdays (Mon – Sat):*\n• 6:00 AM — Daily Morning Holy Mass\n\n🌟 *Sunday Holy Masses:*\n• 6:00 AM — Early Morning Mass\n• 8:00 AM — Parish High Mass\n\n🕯️ *Tuesday Novena:*\n• 6:00 PM — Novena to St. Antony & Mass\n\n🕊️ *First Friday:*\n• 6:00 PM — Eucharistic Adoration & Special Mass\n\n🕊️ *Confessions (Reconciliation):*\n• Saturdays: 5:30 PM – 6:30 PM & before daily morning Mass\n\n🌐 *Full Schedule:* ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}`;
-      } else if (normalizedText === '3' || /^(services|service|help desk|சேவைகள்|பங்கு சேவைகள்)$/i.test(normalizedText) || normalizedText.includes('service') || normalizedText.includes('சேவை')) {
-        botReply = isTamil
-          ? `⛪ *SJDB Connect – பங்கு சேவைகள் & உதவி மையம்*\n_புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்_\n\n1️⃣ ⛪ *திருப்பலி நேரங்கள்*\n2️⃣ 🕊️ *பாவசங்கீர்த்தன நேரங்கள்*\n3️⃣ ✝️ *மற்ற திருவருட்சாதனங்கள்*\n4️⃣ 📖 *தினசரி இறைவார்த்தை*\n5️⃣ 📜 *திருப்பலி வாசகங்கள்*\n6️⃣ 🌟 *இன்றைய புனிதர்*\n7️⃣ 🙏 *கத்தோலிக்க ஜெபங்கள்*\n8️⃣ 📅 *ஆலய நிகழ்வுகள்*\n9️⃣ 📢 *பங்கு அறிவிப்புகள்*\n🔟 📍 *ஆலய அமைவிடம் & வரைபடம்*\n1️⃣1️⃣ 👥 *அன்பியங்கள் & பங்கு அமைப்புகள்*\n1️⃣2️⃣ 👑 *பங்குத்தந்தை & குருக்கள்*\n1️⃣3️⃣ 🏛️ *ஆலய வரலாறு*\n1️⃣4️⃣ 📞 *தொடர்பு & அலுவலக நேரம்*\n\n👉 *எண் (1-14) அனுப்பலாம் அல்லது உங்கள் கேள்விகளை நேரடியாகக் கேட்கலாம்.*`
-          : `⛪ *SJDB Connect – Services & Help Desk*\n_St. John de britto Church, Kalayarkoil_\n\n1️⃣ ⛪ *Mass Timings*\n2️⃣ 🕊️ *Confession Timings*\n3️⃣ ✝️ *Other Sacrament Timings*\n4️⃣ 📖 *Daily Bible Verse*\n5️⃣ 📜 *Daily Mass Readings*\n6️⃣ 🌟 *Saint of the Day*\n7️⃣ 🙏 *Catholic Prayers*\n8️⃣ 📅 *Church Events*\n9️⃣ 📢 *Parish Announcements*\n🔟 📍 *Church Location & Map*\n1️⃣1️⃣ 👥 *Parish Ministries & Anbiyams*\n1️⃣2️⃣ 👑 *Parish Priest & Clergy*\n1️⃣3️⃣ 🏛️ *Church History*\n1️⃣4️⃣ 📞 *Contact Church*\n\n👉 *Reply with a number (1-14) or type your question naturally.*`;
-      } else if (normalizedText === '4' || /\b(events|upcoming events|church events)\b/i.test(normalizedText) || /(நிகழ்வுகள்|நிகழ்ச்சிகள்)/.test(rawText)) {
-        botReply = isTamil
-          ? `📅 *வரவிருக்கும் பங்கு நிகழ்வுகள்:*\n\nபங்கு நிகழ்வுகளை இணையத்தில் பார்க்க:\n🔗 ${getSiteUrl(SITE_ROUTES.EVENTS)}`
-          : `📅 *Upcoming Church Events:*\n\nView church events schedule online:\n🔗 ${getSiteUrl(SITE_ROUTES.EVENTS)}`;
-      } else if (normalizedText === '5' || /\b(announcements?|notices?|parish announcements?)\b/i.test(normalizedText) || /(அறிவிப்புகள்|பங்கு அறிவிப்பு)/.test(rawText)) {
-        botReply = isTamil
-          ? `📢 *பங்கு அறிவிப்புகள்:*\n\nபங்கு அறிவிப்புகளை இணையத்தில் பார்க்க:\n🌐 ${getSiteUrl(SITE_ROUTES.ANNOUNCEMENTS)}`
-          : `📢 *Parish Announcements:*\n\nView parish announcements online:\n🌐 ${getSiteUrl(SITE_ROUTES.ANNOUNCEMENTS)}`;
-      } else if (normalizedText === '6' || /\b(church information|church info|about church|history|patron saint)\b/i.test(normalizedText) || /(ஆலய விபரம்|பங்கு வரலாறு|புனிதர் வரலாறு)/.test(rawText)) {
-        botReply = isTamil
-          ? `🏛️ *புனித அருளானந்தர் தேவாலயம் — ஆலய விபரம் & வரலாறு*\n_காளையார்கோவில், சிவகங்கை மறைமாவட்டம்_\n\n👑 *பாதுகாவலர்:* புனித ஜான் டி பிரிட்டோ (அருளானந்தர்)\n🎉 *ஆலயப் பெருவிழா:* பிப்ரவரி 4\n\n🌐 *முழு விபரம்:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`
-          : `🏛️ *St. John de britto Church — Church Information*\n_Kalayarkoil, Sivagangai Diocese_\n\n👑 *Patron Saint:* St. John de Britto (Arulanandar)\n🎉 *Patronal Feast Day:* February 4\n\n🌐 *Read Complete History & Info:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`;
-      } else if (normalizedText === '7' || /\b(saints?|today saint|saint of the day|who is today saint)\b/i.test(normalizedText) || /(இன்றைய புனிதர்|புனிதர் யார்|புனிதர்)/.test(rawText)) {
+        const msg1 = generateDailyCatholicMessage({
+          dailyContent,
+          language: newLanguage,
+          readingPreference: 'full'
+        });
+        botReply = msg1;
+      } else if (text === '7' || text === '6' || /\b(SAINTS?|TODAY SAINT|SAINT OF THE DAY|WHO IS TODAY SAINT)\b/i.test(text) || /(இன்றைய புனிதர்|புனிதர் யார்)/.test(rawText)) {
         const dailyContent = await getTodayDailyContent(new Date());
-        botReply = generateSaintInfoMessage({ dailyContent, language: newCatholicLanguage });
-      } else if (/\b(readings?|today readings|mass readings)\b/i.test(normalizedText) || /(வாசகம்|வாசகங்கள்|திருப்பலி வாசகங்கள்)/.test(rawText)) {
-        const dailyContent = await getTodayDailyContent(new Date());
-        botReply = generateReadingsMessage({ dailyContent, language: newCatholicLanguage });
-      } else if (/\b(reflection|daily reflection|today reflection)\b/i.test(normalizedText) || /(தியானம்|சிந்தனை)/.test(rawText)) {
-        const dailyContent = await getTodayDailyContent(new Date());
-        botReply = generateReflectionMessage({ dailyContent, language: newCatholicLanguage });
-      } else if (/\b(birthday|birthdays|bday|today is my birthday|my birthday|happy birthday)\b/i.test(normalizedText) || /(பிறந்தநாள்|இன்று என் பிறந்தநாள்|பிறந்தநாள் வாழ்த்து|பிறந்த நாள்)/.test(rawText)) {
-        const { getBirthdayMessages } = require('../services/birthdayService');
-        const blessing = getBirthdayMessages('அன்பரே', isTamil ? 'ta' : 'en');
-        botReply = blessing.text;
-      } else if (/^(menu|home|0|hi|start|quick commands)$/i.test(normalizedText) || normalizedText.includes('main menu') || normalizedText.includes('முதன்மை மெனு')) {
-        botReply = isTamil
-          ? `🙏 *வணக்கம்!*\n⛪ *புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்*\n_SJDB CONNECT_\n\nஇன்று உங்களுக்கு எவ்வாறு உதவ முடியும்?\n\n1️⃣ 📖 *தினசரி விவிலியம்*\n2️⃣ ⛪ *திருப்பலி நேரங்கள்*\n3️⃣ 🕊️ *பங்கு சேவைகள்*\n4️⃣ 📅 *நிகழ்வுகள்*\n5️⃣ 📢 *அறிவிப்புகள்*\n6️⃣ 📜 *ஆலய விபரம்*\n7️⃣ 🌟 *இன்றைய புனிதர்*\n8️⃣ ❓ *உதவி*\n\n👉 *எண்களை அனுப்பலாம் அல்லது உங்கள் கேள்விகளைத் தட்டச்சு செய்யலாம்.*`
-          : `👋 *Welcome to SJDB Connect!*\n⛪ *St. John de britto Church, Kalayarkoil*\n\nHow can I help you today?\n\n1️⃣ 📖 *Daily Bible*\n2️⃣ ⛪ *Mass Timings*\n3️⃣ 🕊️ *Services*\n4️⃣ 📅 *Events*\n5️⃣ 📢 *Announcements*\n6️⃣ 📜 *Church Information*\n7️⃣ 🌟 *Saint of the Day*\n8️⃣ ❓ *Help*\n\n👉 *You can reply with a number or ask your question naturally.*`;
+        const saintInfo = generateSaintInfoMessage({ dailyContent, language: newLanguage });
+        botReply = saintInfo;
+      } else if (text === 'SERVICES' || text.toLowerCase().includes('service')) {
+        botReply = `⛪ *SJDB Connect – Services & Help Desk*
+_St. John de Britto's Church, Kalayarkoil_
+
+1️⃣ ⛪ *Mass Timings*
+2️⃣ 🕊️ *Confession Timings*
+3️⃣ ✝️ *Other Sacrament Timings*
+4️⃣ 📖 *Daily Bible Verse*
+5️⃣ 📜 *Daily Mass Readings*
+6️⃣ 🌟 *Saint of the Day*
+7️⃣ 🙏 *Catholic Prayers*
+8️⃣ 📅 *Church Events*
+9️⃣ 📢 *Parish Announcements*
+🔟 📍 *Church Location & Map*
+1️⃣1️⃣ 👥 *Parish Ministries & Anbiyams*
+1️⃣2️⃣ 👑 *Parish Priest & Clergy*
+1️⃣3️⃣ 🏛️ *Church History*
+1️⃣4️⃣ 📞 *Contact Church*
+
+👉 *Reply with a number (1-14) or type your question naturally.*`;
+      } else if (text === 'MENU' || text === 'HOME' || text === '0') {
+        botReply = `👋 *Welcome to SJDB Connect!*
+⛪ *St. John de Britto's Church, Kalayarkoil*
+
+How can I help you today?
+
+1️⃣ 📖 *Daily Bible*
+2️⃣ ⛪ *Mass Timings*
+3️⃣ 🕊️ *Services*
+4️⃣ 📅 *Events*
+5️⃣ 📢 *Announcements*
+6️⃣ 📜 *Church Information*
+7️⃣ 🌟 *Saint of the Day*
+8️⃣ ❓ *Help*
+
+👉 *You can reply with a number or ask your question naturally.*`;
       } else {
-        const ragResult = await answerChurchQuestion(rawText, newLanguage);
-        if (ragResult && ragResult.reply) {
-          botReply = ragResult.reply;
-        } else {
-          botReply = isTamil
-            ? `🙏 *வணக்கம்!*\n⛪ *புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்*\n_SJDB CONNECT_\n\nஇன்று உங்களுக்கு எவ்வாறு உதவ முடியும்?\n\n1️⃣ 📖 *தினசரி விவிலியம்*\n2️⃣ ⛪ *திருப்பலி நேரங்கள்*\n3️⃣ 🕊️ *பங்கு சேவைகள்*\n4️⃣ 📅 *நிகழ்வுகள்*\n5️⃣ 📢 *அறிவிப்புகள்*\n6️⃣ 📜 *ஆலய விபரம்*\n7️⃣ 🌟 *இன்றைய புனிதர்*\n8️⃣ ❓ *உதவி*\n\n👉 *எண்களை அனுப்பலாம் அல்லது உங்கள் கேள்விகளைத் தட்டச்சு செய்யலாம்.*`
-            : `👋 *Welcome to SJDB Connect!*\n⛪ *St. John de britto Church, Kalayarkoil*\n\nHow can I help you today?\n\n1️⃣ 📖 *Daily Bible*\n2️⃣ ⛪ *Mass Timings*\n3️⃣ 🕊️ *Services*\n4️⃣ 📅 *Events*\n5️⃣ 📢 *Announcements*\n6️⃣ 📜 *Church Information*\n7️⃣ 🌟 *Saint of the Day*\n8️⃣ ❓ *Help*\n\n👉 *You can reply with a number or ask your question naturally.*`;
-        }
+        const ragResult = await answerChurchQuestion(rawText, 'en');
+        botReply = ragResult.reply;
       }
     }
 
@@ -701,14 +705,11 @@ const testBotMessage = async (req, res) => {
       sessionState: {
         step: nextStep,
         isVerified: newIsVerified,
-        isOnboarded: newIsOnboarded,
         providedPhone: newProvidedPhone,
         preferences: newPreferences,
         language: newLanguage,
-        catholicLanguage: newCatholicLanguage,
         readingPreference: newReadingPreference,
-        sendLinks: newSendLinks,
-        tempOtp: newTempOtp
+        sendLinks: newSendLinks
       }
     });
   } catch (err) {
@@ -716,11 +717,7 @@ const testBotMessage = async (req, res) => {
   }
 };
 
-// POST /api/bot/clear-start-fresh (and /api/bot/subscribers/clear-all) — Complete fresh reset of all bot sessions
-// IMPORTANT: This ONLY clears WhatsApp bot conversation sessions and stale daily notification logs.
-// It does NOT set whatsappOptIn=false, because doing so would permanently opt out ALL users from the
-// automated midnight Daily Catholic Content delivery. User accounts, profiles, passwords, and
-// notification opt-in state are fully preserved.
+// POST /api/bot/clear-start-fresh (and /api/bot/subscribers/clear-all) — Complete fresh reset of all bot sessions & preferences
 const clearAllBotSubscribers = async (req, res) => {
   try {
     const { _clearDedupCacheForTesting } = require('../bot/botHandler');
@@ -728,34 +725,21 @@ const clearAllBotSubscribers = async (req, res) => {
       _clearDedupCacheForTesting();
     }
 
-    // 1. Delete all WhatsApp bot conversation sessions
     const botResult = await BotSession.deleteMany({});
-
-    // 2. Reset bot-specific conversation preferences ONLY (do NOT touch whatsappOptIn)
-    //    whatsappOptIn must remain true so the midnight scheduler can deliver to all users.
-    const userResult = await User.updateMany({}, {
-      $set: {
-        botPreferences: ['verse', 'saint', 'mass', 'events', 'announcements', 'birthday'],
+    const userResult = await User.updateMany({}, { 
+      $set: { 
+        whatsappOptIn: false, 
+        botPreferences: [],
         readingPreference: 'full',
-        sendLinks: true,
-        // Ensure whatsappOptIn is explicitly true so midnight delivery works for everyone
-        whatsappOptIn: true
-      }
+        sendLinks: true
+      } 
     });
-
-    // 3. Clear today's DailyNotificationLog so a fresh broadcast can be triggered today
-    //    (stale 'sent' logs would otherwise block the idempotency check and skip all users)
-    const todayDateKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
-    const logResult = await DailyNotificationLog.deleteMany({ dateKey: todayDateKey });
-
-    console.log(`[DAILY-CATHOLIC] Fresh reset: ${botResult.deletedCount} bot sessions deleted, ${userResult.modifiedCount} users restored to opt-in, ${logResult.deletedCount} today's delivery logs cleared.`);
 
     res.json({
       success: true,
-      message: `Fresh reset complete: Cleared ${botResult.deletedCount} bot conversation sessions, restored ${userResult.modifiedCount} users to WhatsApp opt-in, and cleared ${logResult.deletedCount} stale daily notification logs. All user accounts and the midnight scheduler are fully intact.`,
-      deletedBotSessions: botResult.deletedCount,
-      usersRestoredToOptIn: userResult.modifiedCount,
-      staleLogsCleared: logResult.deletedCount
+      message: `Fresh bot reset complete: Cleared ${botResult.deletedCount} bot sessions and reset ${userResult.modifiedCount} user subscription preferences. All accounts, registrations, and website content are safe.`,
+      deletedCount: botResult.deletedCount,
+      usersUpdated: userResult.modifiedCount
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -809,33 +793,6 @@ const deleteSubscriber = async (req, res) => {
   }
 };
 
-// POST /api/bot/trigger-birthdays — Manual admin dispatch for testing / immediate trigger
-const triggerBirthdays = async (req, res) => {
-  try {
-    const { sendBirthdayWishes } = require('../services/birthdayService');
-    const summary = await sendBirthdayWishes();
-    res.json({ success: true, message: 'Birthday notification process completed', summary });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-// GET /api/bot/birthdays/today — Admin preview of today's birthday celebrants
-const getTodayBirthdays = async (req, res) => {
-  try {
-    const { sendBirthdayWishes } = require('../services/birthdayService');
-    const summary = await sendBirthdayWishes({ dryRun: true });
-    res.json({
-      success: true,
-      date: summary.dateKey,
-      totalCelebrants: summary.totalFound,
-      celebrants: summary.recipients
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
-
 module.exports = {
   getStatus,
   reconnect,
@@ -852,7 +809,5 @@ module.exports = {
   triggerBroadcast,
   sendCustomMessage,
   testDirectMessage,
-  testBotMessage,
-  triggerBirthdays,
-  getTodayBirthdays
+  testBotMessage
 };
