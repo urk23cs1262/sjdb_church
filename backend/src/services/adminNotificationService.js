@@ -239,12 +239,13 @@ const notifyAdmin = async (event) => {
 
         title = isBlocked
           ? `🚫 Critical Abuse Alert: User Blocked (${displayName} - +${phone})`
-          : `⚠️ WhatsApp Abuse Detected: Strike ${strikeCount}/3 (${displayName} - +${phone})`;
+          : `⚠️ WhatsApp Abuse Detected: Strike ${strikeCount}/2 (${displayName} - +${phone})`;
 
         message = `Inappropriate / abusive language detected on SJDB Connect WhatsApp Bot.\n\n` +
           `• User: ${displayName} (+${phone})\n` +
           `• Detected Prohibited Words: ${detectedWordsList}\n` +
-          `• Offense Level: Strike ${strikeCount} of 3 (Total lifetime violations: ${totalViolations})\n` +
+          `• Offense Level: ${isBlocked ? `Strike ${strikeCount} (Automatic Block Triggered)` : `Strike ${strikeCount} of 2`}\n` +
+          `• Total Lifetime Violations: ${totalViolations}\n` +
           `• Action Taken: ${isBlocked ? 'ACCESS RESTRICTED & WEBSITE ACCOUNT DEACTIVATED' : 'Warning Message Sent'}\n` +
           `• Incoming Message: "${extra.messageText || 'N/A'}"\n` +
           `• Bot System Reply: "${extra.warningMessage || 'N/A'}"\n` +
@@ -256,7 +257,7 @@ const notifyAdmin = async (event) => {
         sendSmsAlert = isBlocked;
         emailSubject = isBlocked
           ? `🚫 [CRITICAL SECURITY] User Blocked for WhatsApp Abuse — ${displayName} (+${phone})`
-          : `⚠️ [Abuse Warning Strike ${strikeCount}/3] Prohibited Words Detected — ${displayName} (+${phone})`;
+          : `⚠️ [Abuse Warning Strike ${strikeCount}/2] Prohibited Words Detected — ${displayName} (+${phone})`;
         break;
       }
 
@@ -322,6 +323,10 @@ const notifyAdmin = async (event) => {
     // 2. Dispatch Email Alert to System Administrators
     if (sendEmailAlert) {
       const admins = await User.find({ role: 'admin' }).select('email phone name');
+      const adminList = [...admins];
+      if (!adminList.some(a => (a.email || '').toLowerCase() === 'arndas777@gmail.com')) {
+        adminList.push({ email: 'arndas777@gmail.com', name: 'Parish Administrator' });
+      }
       const attachments = [];
 
       if (pdfUrl) {
@@ -335,7 +340,7 @@ const notifyAdmin = async (event) => {
         }
       }
 
-      for (const admin of admins) {
+      for (const admin of adminList) {
         if (admin.email) {
           const isCritical = priority === 'critical';
           const isWarning = priority === 'high' || isCritical;

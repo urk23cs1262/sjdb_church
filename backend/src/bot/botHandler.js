@@ -25,7 +25,6 @@ const Announcement = require('../models/Announcement');
 const Priest = require('../models/Priest');
 const { getTodayDailyContent } = require('../services/dailyContentService');
 const { generateDailyCatholicMessage, generateSaintCaption, generateSaintInfoMessage } = require('../services/whatsappDailyFormatter');
-const { scanInappropriateContent } = require('./moderation');
 const { processIncomingMessage, isPhoneBlocked } = require('../services/userModerationService');
 const { answerChurchQuestion } = require('./churchRAGService');
 const { notifyAdmin } = require('../services/adminNotificationService');
@@ -339,17 +338,21 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
     session.lastMessage = new Date();
 
     // ── Centralized Abuse & Moderation Gate ─────────────────────────────────────
+    const senderIdentity = (session && session.providedPhone) ? session.providedPhone : (phone || fromNumber);
     const modResult = await processIncomingMessage({
-      phoneNumber: phone || fromNumber,
+      phoneNumber: senderIdentity,
       displayName: pushName || sessionKey,
       messageText: rawText,
-      messageId
+      messageId,
+      userId: session?.linkedUserId || null
     });
 
     if (modResult.isBlocked || modResult.isViolation) {
       if (modResult.replyMessage) {
-        if (modResult.isBlocked) {
-          const clean10 = (phone || sessionKey || '').replace(/\D/g, '').slice(-10);
+        // Apply cooldown only when user is already blocked and sending non-violation chatter,
+        // NEVER suppress a fresh strike warning or fresh block notification!
+        if (modResult.isBlocked && !modResult.isViolation) {
+          const clean10 = (senderIdentity || sessionKey || '').replace(/\D/g, '').slice(-10);
           const lastNotice = blockedNoticeCooldown.get(clean10);
           const now = Date.now();
           if (lastNotice && (now - lastNotice) < 30000) {
@@ -486,28 +489,6 @@ _SJDB Connect_`;
     // ── Language Filter (English & Tamil Only) ──────────────────────────────────
     if (isUnsupportedLanguage(rawText)) {
       await wa.sendWhatsAppMessage(replyTarget, UNSUPPORTED_LANGUAGE_MSG);
-      return;
-    }
-
-    // ── Inappropriate Content Scan ──────────────────────────────────────────────
-    const { hasInappropriate, detectedWords } = scanInappropriateContent(rawText);
-    if (hasInappropriate) {
-      console.warn(`[WhatsApp Moderation] Inappropriate content from ${sessionKey}:`, detectedWords);
-      session.moderationFlags.push({
-        detectedWords,
-        timestamp: new Date(),
-        rawText
-      });
-      await session.save();
-
-      const warningMsg = `⚠️ *Warning*
-Inappropriate language or content was detected in your message.
-
-*Your records are stored. Severe action will be taken for misuse of this service.*
-
-Detected words: ${detectedWords.map(w => `\`${w}\``).join(', ')}`;
-
-      await wa.sendWhatsAppMessage(replyTarget, warningMsg);
       return;
     }
 
