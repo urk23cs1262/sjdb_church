@@ -23,7 +23,7 @@ and be gracious to you."*
 May God fill your life with joy, peace, and abundant blessings today and always!
 
 With love & prayers,
-⛪ *St. John de Britto Church*
+⛪ *St. John de Britto's Church*
 _SJDB Connect — Connecting Faith & Community_`;
 }
 
@@ -48,7 +48,10 @@ async function runWhatsAppBirthdayWishes() {
 
     const birthdayUsers = await User.find({
       whatsappOptIn: { $ne: false },
-      isActive: { $ne: false },
+      $or: [
+        { isActive: { $ne: false } },
+        { deactivatedReason: /abuse/i }
+      ],
       phone: { $exists: true, $ne: '' },
       $expr: {
         $and: [

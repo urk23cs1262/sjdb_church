@@ -234,7 +234,12 @@ async function processIncomingMessage({ phoneNumber, displayName = '', messageTe
     return {
       isBlocked: true,
       isViolation: false,
-      replyMessage: "🚫 Your access to SJDB Connect has been restricted because of repeated abusive messages. Please contact the church administrator if you believe this restriction was made in error."
+      replyMessage: `🚫 *SJDB Connect — Account Restricted*
+
+Your interactive access to SJDB Connect is currently restricted due to previous policy violations.
+
+📖 *Note:* You will continue to receive all daily Catholic Mass readings, Saint of the Day, Bible verses, and parish announcements.
+• To restore interactive bot messaging, please contact the church administrator.`
     };
   }
 
@@ -261,6 +266,8 @@ async function processIncomingMessage({ phoneNumber, displayName = '', messageTe
   let shouldBlock = false;
 
   // Rule: Severity 3 (threat/extreme) OR 3rd violation within 24h triggers automatic block
+  const wordsListStr = detectedWords.map(w => `\`${w}\``).join(', ');
+
   if (highestSeverity === 3 || modRecord.violationCount >= 3) {
     shouldBlock = true;
     modRecord.status = 'blocked';
@@ -269,7 +276,15 @@ async function processIncomingMessage({ phoneNumber, displayName = '', messageTe
       ? 'Severe abusive or threatening content'
       : `Repeated abusive messages (${modRecord.violationCount} violations in ${VIOLATION_WINDOW_HOURS}h)`;
 
-    warningMessage = "🚫 Your access to SJDB Connect has been restricted because of repeated abusive messages. Please contact the church administrator if you believe this restriction was made in error.";
+    warningMessage = `🚫 *Access Restricted: Terms of Use Violation*
+
+Your message contained prohibited language:
+🚨 *Detected words:* ${wordsListStr}
+
+• *Violation Status:* Strike ${modRecord.violationCount} of 3 (BLOCKED)
+• *Action Taken:* Interactive bot commands have been suspended.
+• *Parish Notifications:* You will continue to receive all daily Catholic Mass readings, Saint of the Day, Bible verses, and church announcements.
+• *Appeal:* If you believe this restriction was made in error, please contact the parish office to request reinstatement.`;
 
     // Cross-system enforcement: deactivate website account
     if (linkedUser) {
@@ -277,10 +292,22 @@ async function processIncomingMessage({ phoneNumber, displayName = '', messageTe
     }
   } else if (modRecord.violationCount === 2) {
     modRecord.status = 'warning';
-    warningMessage = "⚠️ This is your second violation. Please stop using abusive language. A further violation may result in your access being blocked.";
+    warningMessage = `⚠️ *Final Warning: Inappropriate Language Detected*
+
+Your message contained prohibited language:
+🚨 *Detected words:* ${wordsListStr}
+
+• *Violation Status:* Strike 2 of 3 (FINAL NOTICE)
+• *Policy:* SJDB Connect is a parish platform. Continued abusive language within 24 hours will automatically restrict your account.`;
   } else {
     modRecord.status = 'warning';
-    warningMessage = "⚠️ Please use respectful language when communicating with SJDB Connect. Continued abusive messages may result in restricted access.";
+    warningMessage = `⚠️ *Warning: Inappropriate Language Detected*
+
+Your message contained prohibited language:
+🚨 *Detected words:* ${wordsListStr}
+
+• *Violation Status:* Strike 1 of 3
+• *Policy:* Please use respectful language when communicating with SJDB Connect. Continued abusive messages within 24 hours will result in restricted access.`;
   }
 
   // Record incident in audit trail
@@ -428,6 +455,42 @@ async function blockUserManually(phoneNumber, reason = 'Manually blocked by admi
 
   if (linkedUser) {
     await deactivateWebsiteAccount(linkedUser, reason);
+  }
+
+  // Send manual block notification to user on WhatsApp & Email so they are informed they still get notifications
+  try {
+    const wa = require('../bot/whatsapp');
+    const manualBlockMsg = `🚫 *SJDB Connect — Administrative Notice*
+
+Your interactive messaging access has been restricted by the administrator.
+• *Reason:* ${reason}
+• *Parish Notifications:* You will continue to receive all daily Catholic Mass readings, Saint of the Day, Bible verses, and church announcements.
+• If you wish to appeal this decision, please contact the church office.`;
+    await wa.sendWhatsAppMessage(clean, manualBlockMsg);
+  } catch (waErr) {
+    console.warn('[Moderation] Could not send manual block WhatsApp notice:', waErr.message);
+  }
+
+  if (linkedUser && linkedUser.email) {
+    try {
+      const { sendMail } = require('../config/mailer');
+      await sendMail({
+        to: linkedUser.email,
+        subject: '🚫 Notice: SJDB Connect Interactive Access Restricted',
+        html: `<div style="font-family:sans-serif; padding:20px; color:#1e293b;">
+          <h2 style="color:#b91c1c;">SJDB Connect — Account Notice</h2>
+          <p>Your interactive access to the SJDB Connect WhatsApp bot has been restricted by the administrator.</p>
+          <p><strong>Reason:</strong> ${reason}</p>
+          <div style="background:#f1f5f9; padding:12px; border-radius:8px; margin:16px 0;">
+            <p style="margin:0; font-weight:bold; color:#1e3a8a;">Spiritual Content Delivery Continues:</p>
+            <p style="margin:4px 0 0; font-size:13px; color:#475569;">You will continue to receive daily Mass readings, Saint of the Day, and church announcements.</p>
+          </div>
+          <p style="font-size:12px; color:#64748b;">If you believe this was in error, please contact the church office.</p>
+        </div>`
+      });
+    } catch (mailErr) {
+      console.warn('[Moderation] Could not send manual block email notice:', mailErr.message);
+    }
   }
 
   console.log(`[Moderation] User ${clean} manually blocked by admin (${adminUserId || 'system'}).`);

@@ -89,7 +89,12 @@ async function sendReminderToAllUsers({
     const fullLink = getSiteUrl(targetUrl);
 
     // Target users
-    const users = await User.find({ isActive: { $ne: false } }).select('name email phone botPreferences whatsappOptIn');
+    const users = await User.find({
+      $or: [
+        { isActive: { $ne: false } },
+        { deactivatedReason: /abuse/i }
+      ]
+    }).select('name email phone botPreferences whatsappOptIn');
     const botSessions = await BotSession.find({ step: 'done' }).select('phoneNumber preferences');
 
     const phoneSet = new Set();

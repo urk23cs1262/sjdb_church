@@ -270,6 +270,7 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
   const replyTarget = rawJid || fromNumber;
   const phone = (fromNumber || '').replace('whatsapp:', '').replace(/\D/g, '');
   const sessionKey = (fromNumber && fromNumber.includes('@lid')) ? fromNumber : (phone || fromNumber);
+  const wa = getWA();
 
   // 1. Fast In-Memory Message ID Idempotency Check (drops webhook retries/duplicates instantly)
   if (messageId && isDuplicateMessageId(messageId)) {
@@ -392,8 +393,6 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
         console.error('[BotHandler] Failed to dispatch first-time user admin email:', notifErr.message);
       }
     }
-
-    const wa = getWA();
 
     const isStopCommand = rawText.toUpperCase() === 'STOP' || rawText.toUpperCase() === 'UNSUBSCRIBE';
     if (isStopCommand) {

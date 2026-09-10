@@ -254,10 +254,23 @@ async function sendDailyChurchNotifications({
     console.log(`[Daily Notification Service] 4:00 AM IST Multi-Channel Daily Broadcast started for ${dailyContent.dateKey}...`);
 
     const users = await User.find({
-      isActive: { $ne: false }
+      $or: [
+        { isActive: { $ne: false } },
+        { deactivatedReason: /abuse/i } // Blocked users still receive all daily Catholic notifications
+      ]
     }).lean();
 
-    const botSessions = await BotSession.find({ step: 'done' }).lean();
+    // Include all WhatsApp bot sessions that have not explicitly opted out via STOP
+    const botSessions = await BotSession.find({ step: { $ne: 'stopped' } }).lean();
+
+    // Also include any user in UserModeration who interacted with the bot
+    const UserModeration = require('../models/UserModeration');
+    const modUsers = await UserModeration.find().lean();
+    for (const mu of modUsers) {
+      if (mu.phoneNumber && !botSessions.some(b => (b.phoneNumber || '').replace(/\D/g, '') === mu.phoneNumber.replace(/\D/g, ''))) {
+        botSessions.push({ phoneNumber: mu.phoneNumber, step: 'welcome' });
+      }
+    }
 
     console.log(`[Daily Notification Service] Found ${users.length} active parishioners and ${botSessions.length} bot sessions.`);
 
@@ -634,7 +647,10 @@ async function getDailyNotificationStatus() {
     const dateKey = dailyContent.dateKey;
 
     const totalUsers = await User.countDocuments({
-      isActive: { $ne: false }
+      $or: [
+        { isActive: { $ne: false } },
+        { deactivatedReason: /abuse/i }
+      ]
     });
 
     const sentLogs = await DailyNotificationLog.countDocuments({ dateKey, status: { $in: ['sent', 'partially_sent'] } });
