@@ -25,17 +25,19 @@ const protect = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'User account not found or deactivated' });
     }
 
+    const isStaffOrAdmin = req.user.role === 'admin' || req.user.role === 'priest' || req.user.isTechnicalTeam;
+
     // Check multi-device session invalidation (authVersion / tokenVersion)
     const tokenVer = decoded.authVersion !== undefined ? decoded.authVersion : (decoded.tokenVersion !== undefined ? decoded.tokenVersion : 0);
     const userVer = req.user.authVersion !== undefined ? req.user.authVersion : (req.user.tokenVersion !== undefined ? req.user.tokenVersion : 0);
 
-    if (tokenVer < userVer) {
+    if (!isStaffOrAdmin && tokenVer < userVer) {
       return res.status(401).json({ success: false, message: 'Session expired due to security reset. Please log in again.' });
     }
 
     // Direct check against moderation phone status
     const { isPhoneBlocked } = require('../services/userModerationService');
-    if (req.user.phone && await isPhoneBlocked(req.user.phone)) {
+    if (!isStaffOrAdmin && req.user.phone && await isPhoneBlocked(req.user.phone)) {
       return res.status(403).json({
         success: false,
         isBlocked: true,

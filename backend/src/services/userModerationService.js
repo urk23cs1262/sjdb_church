@@ -223,6 +223,10 @@ async function findLinkedUserByPhone(phone) {
  */
 async function deactivateWebsiteAccount(user, reason, detectedWords = []) {
   if (!user) return;
+  if (user.role === 'admin' || user.role === 'priest' || user.isTechnicalTeam) {
+    console.warn(`[Moderation] Protected administrator account (${user.name} / ${user.email}) will NOT be deactivated.`);
+    return;
+  }
   try {
     user.isActive = false;
     user.deactivatedReason = reason || 'WhatsApp abuse';
