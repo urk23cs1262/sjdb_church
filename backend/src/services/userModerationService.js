@@ -236,10 +236,9 @@ async function processIncomingMessage({ phoneNumber, displayName = '', messageTe
       isViolation: false,
       replyMessage: `🚫 *SJDB Connect — Account Restricted*
 
-Your interactive access to SJDB Connect is currently restricted due to previous policy violations.
+Your account is currently restricted due to policy violations. All bot services, messages, and parish notifications have been suspended.
 
-📖 *Note:* You will continue to receive all daily Catholic Mass readings, Saint of the Day, Bible verses, and parish announcements.
-• To restore interactive bot messaging, please contact the church administrator.`
+• To restore your account and resume services, please contact the church administrator.`
     };
   }
 
@@ -282,8 +281,8 @@ Your message contained prohibited language:
 🚨 *Detected words:* ${wordsListStr}
 
 • *Violation Status:* Strike ${modRecord.violationCount} of 3 (BLOCKED)
-• *Action Taken:* Interactive bot commands have been suspended.
-• *Parish Notifications:* You will continue to receive all daily Catholic Mass readings, Saint of the Day, Bible verses, and church announcements.
+• *Action Taken:* All bot services and parish notifications have been suspended.
+• No notifications or messages will be sent until an administrator restores your account.
 • *Appeal:* If you believe this restriction was made in error, please contact the parish office to request reinstatement.`;
 
     // Cross-system enforcement: deactivate website account
@@ -457,14 +456,15 @@ async function blockUserManually(phoneNumber, reason = 'Manually blocked by admi
     await deactivateWebsiteAccount(linkedUser, reason);
   }
 
-  // Send manual block notification to user on WhatsApp & Email so they are informed they still get notifications
+  // Send manual block notification to user on WhatsApp & Email so they are informed access is suspended
   try {
     const wa = require('../bot/whatsapp');
     const manualBlockMsg = `🚫 *SJDB Connect — Administrative Notice*
 
-Your interactive messaging access has been restricted by the administrator.
+Your account has been restricted by the administrator.
 • *Reason:* ${reason}
-• *Parish Notifications:* You will continue to receive all daily Catholic Mass readings, Saint of the Day, Bible verses, and church announcements.
+• *Status:* All bot services and parish notifications have been suspended.
+• No notifications or messages will be sent until an administrator restores your account.
 • If you wish to appeal this decision, please contact the church office.`;
     await wa.sendWhatsAppMessage(clean, manualBlockMsg);
   } catch (waErr) {
@@ -476,14 +476,14 @@ Your interactive messaging access has been restricted by the administrator.
       const { sendMail } = require('../config/mailer');
       await sendMail({
         to: linkedUser.email,
-        subject: '🚫 Notice: SJDB Connect Interactive Access Restricted',
+        subject: '🚫 Notice: SJDB Connect Account Restricted',
         html: `<div style="font-family:sans-serif; padding:20px; color:#1e293b;">
-          <h2 style="color:#b91c1c;">SJDB Connect — Account Notice</h2>
-          <p>Your interactive access to the SJDB Connect WhatsApp bot has been restricted by the administrator.</p>
+          <h2 style="color:#b91c1c;">SJDB Connect — Account Restricted</h2>
+          <p>Your access to the SJDB Connect WhatsApp bot and website account has been restricted by the administrator.</p>
           <p><strong>Reason:</strong> ${reason}</p>
-          <div style="background:#f1f5f9; padding:12px; border-radius:8px; margin:16px 0;">
-            <p style="margin:0; font-weight:bold; color:#1e3a8a;">Spiritual Content Delivery Continues:</p>
-            <p style="margin:4px 0 0; font-size:13px; color:#475569;">You will continue to receive daily Mass readings, Saint of the Day, and church announcements.</p>
+          <div style="background:#fef2f2; border-left:4px solid #ef4444; padding:12px; border-radius:4px; margin:16px 0;">
+            <p style="margin:0; font-weight:bold; color:#991b1b;">All Services & Notifications Suspended:</p>
+            <p style="margin:4px 0 0; font-size:13px; color:#7f1d1d;">All bot messaging, daily Catholic readings, broadcasts, and church notifications are suspended until your account is reviewed and restored by an administrator.</p>
           </div>
           <p style="font-size:12px; color:#64748b;">If you believe this was in error, please contact the church office.</p>
         </div>`
@@ -497,6 +497,34 @@ Your interactive messaging access has been restricted by the administrator.
   return record;
 }
 
+/**
+ * Restore all restricted/moderated users and reactivate linked accounts
+ */
+async function restoreAllActiveUsers(adminUserId = null) {
+  const modResult = await UserModeration.updateMany({}, {
+    $set: {
+      status: 'active',
+      violationCount: 0,
+      blockedReason: null,
+      blockedAt: null,
+      unblockedAt: new Date(),
+      unblockedBy: adminUserId || null,
+      violations: []
+    }
+  });
+
+  const userResult = await User.updateMany(
+    { isActive: false },
+    { $set: { isActive: true, deactivatedReason: null } }
+  );
+
+  console.log(`[Moderation] All active users restored: ${modResult.modifiedCount} moderation records reset, ${userResult.modifiedCount} accounts reactivated.`);
+  return {
+    moderationRestored: modResult.modifiedCount,
+    usersReactivated: userResult.modifiedCount
+  };
+}
+
 module.exports = {
   cleanPhoneNumber,
   normalizeText,
@@ -505,5 +533,6 @@ module.exports = {
   isPhoneBlocked,
   unblockUser,
   blockUserManually,
-  getActiveBlockedWords
+  getActiveBlockedWords,
+  restoreAllActiveUsers
 };

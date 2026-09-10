@@ -379,6 +379,24 @@ export default function AdminWhatsApp() {
     }
   };
 
+  // Handle Restore All Users & Fresh Start
+  const handleRestoreAllUsers = async () => {
+    if (!window.confirm("Are you sure you want to restore ALL active/restricted users and reset the WhatsApp bot for a completely fresh start?")) {
+      return;
+    }
+    setActionInProgress(true);
+    try {
+      const res = await api.post('/moderation/restore-all');
+      toast.success(res.data?.message || 'All users restored and bot reset for fresh start!');
+      await fetchModerationData();
+      if (auditModalOpen) setAuditModalOpen(false);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to restore users');
+    } finally {
+      setActionInProgress(false);
+    }
+  };
+
   // Trigger Instant Spiritual Broadcast
   const handleConfirmBroadcast = async () => {
     setBroadcasting(true);
@@ -1638,14 +1656,25 @@ export default function AdminWhatsApp() {
                 </p>
               </div>
 
-              <button
-                onClick={fetchModerationData}
-                disabled={loadingModeration}
-                className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs sm:text-sm font-bold flex items-center gap-2 border border-white/10 transition-all cursor-pointer shrink-0"
-              >
-                <FiRefreshCw className={loadingModeration ? 'animate-spin' : ''} />
-                <span>Refresh Audit Logs</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  onClick={handleRestoreAllUsers}
+                  disabled={actionInProgress || loadingModeration}
+                  className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold flex items-center gap-2 border border-emerald-500/40 shadow-lg shadow-emerald-900/30 transition-all cursor-pointer"
+                  title="Restore all active users and reset the WhatsApp bot for a fresh start"
+                >
+                  <FiCheckCircle className="text-base text-emerald-200" />
+                  <span>Restore All & Fresh Start</span>
+                </button>
+                <button
+                  onClick={fetchModerationData}
+                  disabled={loadingModeration}
+                  className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs sm:text-sm font-bold flex items-center gap-2 border border-white/10 transition-all cursor-pointer"
+                >
+                  <FiRefreshCw className={loadingModeration ? 'animate-spin' : ''} />
+                  <span>Refresh Audit Logs</span>
+                </button>
+              </div>
             </div>
 
             {/* 3-Strike Policy Mini Flow */}

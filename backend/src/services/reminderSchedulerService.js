@@ -88,22 +88,32 @@ async function sendReminderToAllUsers({
 
     const fullLink = getSiteUrl(targetUrl);
 
-    // Target users
-    const users = await User.find({
-      $or: [
-        { isActive: { $ne: false } },
-        { deactivatedReason: /abuse/i }
-      ]
-    }).select('name email phone botPreferences whatsappOptIn');
+    // Fetch all currently blocked phone numbers and user IDs
+    const UserModeration = require('../models/UserModeration');
+    const blockedRecords = await UserModeration.find({ status: 'blocked' }).lean();
+    const blockedPhone10s = new Set(
+      blockedRecords.map(r => (r.phoneNumber || '').replace(/\D/g, '').slice(-10)).filter(Boolean)
+    );
+    const blockedUserIds = new Set(
+      blockedRecords.map(r => r.userId ? r.userId.toString() : null).filter(Boolean)
+    );
+
+    // Target users (active only, excluding restricted)
+    const users = await User.find({ isActive: { $ne: false } })
+      .select('name email phone botPreferences whatsappOptIn');
     const botSessions = await BotSession.find({ step: 'done' }).select('phoneNumber preferences');
 
     const phoneSet = new Set();
     const emailSet = new Set();
 
     users.forEach(u => {
+      if (blockedUserIds.has(u._id.toString())) return;
+      const clean = (u.phone || '').replace(/\D/g, '');
+      const clean10 = clean.slice(-10);
+      if (clean10 && blockedPhone10s.has(clean10)) return;
+
       if (u.email) emailSet.add(u.email);
       if (u.phone && u.whatsappOptIn !== false) {
-        const clean = u.phone.replace(/\D/g, '');
         if (clean) phoneSet.add(clean);
       }
     });
@@ -111,6 +121,9 @@ async function sendReminderToAllUsers({
     botSessions.forEach(bs => {
       if (bs.phoneNumber) {
         const clean = bs.phoneNumber.replace(/\D/g, '');
+        const clean10 = clean.slice(-10);
+        if (clean10 && blockedPhone10s.has(clean10)) return;
+
         const prefs = bs.preferences || [];
         const matchesCategory = category === 'events' ? (prefs.includes('events') || prefs.length === 0) : (prefs.includes('announcements') || prefs.length === 0);
         if (clean && matchesCategory) phoneSet.add(clean);

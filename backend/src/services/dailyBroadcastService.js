@@ -46,12 +46,11 @@ async function runWhatsAppBirthdayWishes() {
     const month = today.getMonth() + 1;
     const day = today.getDate();
 
+    const { isPhoneBlocked } = require('./userModerationService');
+
     const birthdayUsers = await User.find({
       whatsappOptIn: { $ne: false },
-      $or: [
-        { isActive: { $ne: false } },
-        { deactivatedReason: /abuse/i }
-      ],
+      isActive: { $ne: false },
       phone: { $exists: true, $ne: '' },
       $expr: {
         $and: [
@@ -64,6 +63,14 @@ async function runWhatsAppBirthdayWishes() {
     for (const user of birthdayUsers) {
       const phone = user.phone?.replace(/\D/g, '');
       if (!phone) continue;
+
+      // Strictly exclude restricted users
+      const blocked = await isPhoneBlocked(phone);
+      if (blocked) {
+        console.log(`[Birthday Service] Skipping restricted user ${user.name} (${phone})`);
+        continue;
+      }
+
       try {
         await sendWA(phone, formatBirthdayMessage(user));
         console.log(`🎂 Birthday WhatsApp sent to ${user.name}`);

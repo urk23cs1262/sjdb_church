@@ -5,6 +5,20 @@ const DailyNotificationLog = require('../models/DailyNotificationLog');
 const { getTodayDailyContent } = require('../services/dailyContentService');
 const { generateDailyCatholicMessage, generateDailyLinksMessage, generateSaintInfoMessage } = require('../services/whatsappDailyFormatter');
 const { answerChurchQuestion } = require('../bot/churchRAGService');
+const {
+  getStep1BotLanguageMessage,
+  getStep2PhoneVerificationMessage,
+  getStep3OTPVerificationMessage,
+  getStep4And5PreferencesMessage,
+  getStep6ContentLanguageMessage,
+  getStep7AllSetMessage,
+  getStep8MainMenuMessage,
+  parseBotLanguage,
+  parsePhoneNumber,
+  parseOTP,
+  parsePreferences,
+  parseContentLanguage
+} = require('../bot/botOnboardingFlow');
 
 function sendWA(phone, text) {
   return require('../bot/whatsapp').sendWhatsAppMessage(phone, text);
@@ -355,7 +369,7 @@ const sendCustomMessage = async (req, res) => {
     // Direct single message mode
     if (recipientPhone) {
       const cleanTarget = recipientPhone.replace(/\D/g, '');
-      const formatted = `*SJDB Connect*\n\n${message.trim()}\n\n_St. John de Britto Church_`;
+      const formatted = `*SJDB Connect*\n\n${message.trim()}\n\n_St. John de Britto's Church_`;
       const ok = await sendWA(cleanTarget, formatted);
       if (ok) {
         return res.json({ success: true, message: `Message delivered to +${cleanTarget}` });
@@ -384,7 +398,7 @@ const sendCustomMessage = async (req, res) => {
     setImmediate(async () => {
       let sent = 0;
       let failed = 0;
-      const formatted = `*SJDB Connect*\n\n${message.trim()}\n\n_St. John de Britto Church_`;
+      const formatted = `*SJDB Connect*\n\n${message.trim()}\n\n_St. John de Britto's Church_`;
       for (const phone of targetList) {
         try {
           const ok = await sendWA(phone, formatted);
@@ -418,7 +432,7 @@ const testDirectMessage = async (req, res) => {
     }
 
     const cleanTarget = phoneNumber.replace(/\D/g, '');
-    const textToSend = message || `🧪 *SJDB Connect — Test Message*\n\nThis is a verified test message sent from the St. John de Britto Church WhatsApp Bot.\n\n⏰ Timestamp: ${new Date().toLocaleTimeString('en-IN')}`;
+    const textToSend = message || `🧪 *SJDB Connect — Test Message*\n\nThis is a verified test message sent from the St. John de Britto's Church WhatsApp Bot.\n\n⏰ Timestamp: ${new Date().toLocaleTimeString('en-IN')}`;
 
     const ok = await sendWA(cleanTarget, textToSend);
     if (ok) {
@@ -468,143 +482,63 @@ const testBotMessage = async (req, res) => {
     if (isStartTrigger) {
       if (newIsVerified && newProvidedPhone) {
         nextStep = 'done';
-        botReply = `👋 *Welcome to SJDB Connect!*
-⛪ *St. John de Britto Church, Kalayarkoil*
-
-How can I help you today?
-
-1️⃣ 📖 *Daily Bible*
-2️⃣ ⛪ *Mass Timings*
-3️⃣ 🕊️ *Services*
-4️⃣ 📅 *Events*
-5️⃣ 📢 *Announcements*
-6️⃣ 📜 *Church Information*
-7️⃣ 🌟 *Saint of the Day*
-8️⃣ ❓ *Help*
-
-👉 *You can reply with a number or ask your question naturally.*`;
+        botReply = getStep8MainMenuMessage('Parishioner', session.botLanguage || 'en');
       } else {
-        nextStep = 'phone_verification';
-        botReply = `👋 *Welcome to SJDB Connect!*
-⛪ *St. John de Britto Church, Kalayarkoil*
-_Connecting Faith & Community_
-
-🔐 *Phone Number Verification*
-
-To start chatting and access church services, please enter your **10-digit mobile phone number** to verify your account.
-
-📱 *Please reply with your 10-digit mobile number (e.g., 9876543210):*`;
+        nextStep = 'bot_language';
+        botReply = getStep1BotLanguageMessage();
       }
-    } else if (step === 'welcome') {
-      botReply = `👋 *Welcome to SJDB Connect!*\n⛪ *St. John de Britto Church, Kalayarkoil*\n\nPlease reply with *Hi* or enter your 10-digit mobile number to verify your account.`;
-    } else if (step === 'phone_verification' || step === 'ask_phone') {
-      const rawDigits = rawText.replace(/\D/g, '');
-      if (!rawDigits || rawDigits.length < 10) {
-        botReply = `⚠️ Please enter a valid 10-digit mobile phone number (e.g., *9876543210*).\n\n📱 *Please reply with your 10-digit mobile number:*`;
+    } else if (step === 'welcome' || step === 'bot_language') {
+      const chosenBotLang = parseBotLanguage(rawText);
+      if (chosenBotLang) {
+        session.botLanguage = chosenBotLang;
+        nextStep = 'phone_verification';
+        botReply = getStep2PhoneVerificationMessage(chosenBotLang);
       } else {
-        const clean10Digits = rawDigits.slice(-10);
-        newProvidedPhone = clean10Digits;
+        nextStep = 'bot_language';
+        botReply = getStep1BotLanguageMessage();
+      }
+    } else if (step === 'phone_verification' || step === 'ask_phone') {
+      const clean10Digits = parsePhoneNumber(rawText);
+      if (!clean10Digits) {
+        botReply = getStep2PhoneVerificationMessage(session.botLanguage || 'en');
+      } else {
+        session.pendingPhone = clean10Digits;
+        const otp = '123456';
+        session.pendingOtp = otp;
+        session.otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
+        nextStep = 'otp_verification';
+        botReply = getStep3OTPVerificationMessage(clean10Digits, otp, session.botLanguage || 'en');
+      }
+    } else if (step === 'otp_verification') {
+      const inputOtp = parseOTP(rawText);
+      if (inputOtp && (inputOtp === session.pendingOtp || inputOtp === '123456')) {
+        newProvidedPhone = session.pendingPhone || '9876543210';
         newIsVerified = true;
         nextStep = 'preferences';
-
-        const parishUser = await User.findOne({ phone: { $regex: clean10Digits } });
-        let ackHeader = '';
-
-        if (parishUser) {
-          const zoneOrAnbiyam = parishUser.anbiyam || parishUser.subStation || parishUser.parishZone || 'Parishioner';
-          ackHeader = `✅ *Phone Number Verified!*\nWelcome, *${parishUser.name}* (${zoneOrAnbiyam})! 🙏\n\n`;
-        } else {
-          ackHeader = `✅ *Phone Number Verified!*\n📱 Phone: *+91 ${clean10Digits}*\n\n`;
-        }
-
-        const prefMenu = `📋 *SJDB Connect Preferences*
-
-Please select the services you would like to receive:
-
-1️⃣ Daily Bible Verse
-2️⃣ Saint of the Day
-3️⃣ Daily Mass Readings & Reflection
-4️⃣ Church Events
-5️⃣ Parish Announcements
-6️⃣ Birthday Wishes
-7️⃣ All of the above
-
-👉 Reply with numbers separated by commas (e.g. 1,2,3) or reply *7 / ALL* for all services.
-
-➡️ Type *Menu* for Quick Commands
-➡️ Type *Services* for Help Desk`;
-        botReply = `${ackHeader}${prefMenu}`;
+        const parishUser = await User.findOne({ phone: { $regex: newProvidedPhone } });
+        botReply = getStep4And5PreferencesMessage(newProvidedPhone, parishUser, session.botLanguage || 'en');
+      } else {
+        botReply = `❌ Invalid OTP. Please enter the 6-digit verification code:\n\n` + getStep3OTPVerificationMessage(session.pendingPhone || '9876543210', session.pendingOtp || '123456', session.botLanguage || 'en');
       }
     } else if (step === 'preferences') {
-      const prefMap = { '1': 'verse', '2': 'saint', '3': 'mass', '4': 'events', '5': 'announcements', '6': 'birthday' };
-      const cleanInput = rawText.toLowerCase().trim();
-      let selectedPrefs = [];
-
-      if (cleanInput === '7' || /^(all|\*|all of the above)$/i.test(cleanInput)) {
-        selectedPrefs = ['verse', 'saint', 'mass', 'events', 'announcements', 'birthday'];
-      } else {
-        const parts = rawText.split(/[,\s]+/).map(s => s.trim().replace(/[^0-9]/g, '')).filter(Boolean);
-        selectedPrefs = Array.from(new Set(parts.map(p => prefMap[p]).filter(Boolean)));
-      }
-
-      if (selectedPrefs.length > 0) {
+      const selectedPrefs = parsePreferences(rawText);
+      if (selectedPrefs) {
         newPreferences = selectedPrefs;
         nextStep = 'language';
-        botReply = `🌐 *Daily Catholic Content Language*
-
-Select your preferred language for Daily Bible Verse, Mass Readings, Reflection & Saint of the Day:
-
-1️⃣ Tamil (தமிழ்)
-2️⃣ English
-3️⃣ Both (Tamil + English)
-
-👉 Reply with *1*, *2*, or *3*.`;
+        botReply = getStep6ContentLanguageMessage(session.botLanguage || 'en');
       } else {
-        botReply = `⚠️ Invalid selection. Please reply with numbers separated by commas (e.g., *1,2,3*) or reply *7 / ALL* for all services.`;
+        botReply = `⚠️ Invalid selection. Please reply with numbers (e.g., *1,2,3*) or *7* for ALL.\n\n` + getStep4And5PreferencesMessage(session.providedPhone || '9876543210', null, session.botLanguage || 'en');
       }
     } else if (step === 'language') {
-      let chosenLang = null;
-      const cleanChoice = rawText.toLowerCase().trim();
-      if (/^(1|tamil|தமிழ்|ta)$/i.test(cleanChoice)) {
-        chosenLang = 'ta';
-      } else if (/^(2|english|eng|en)$/i.test(cleanChoice)) {
-        chosenLang = 'en';
-      } else if (/^(3|both|tamil \+ english|all)$/i.test(cleanChoice)) {
-        chosenLang = 'both';
-      }
-
+      const chosenLang = parseContentLanguage(rawText);
       if (chosenLang) {
         newLanguage = chosenLang;
         nextStep = 'done';
-
-        const prefLabels = {
-          verse: '📖 Daily Bible Verse',
-          saint: '🕊️ Saint of the Day',
-          mass: '⛪ Daily Mass Readings & Reflection',
-          events: '📅 Church Events',
-          announcements: '📢 Parish Announcements',
-          birthday: '🎂 Birthday Wishes'
-        };
-
-        const prefText = newPreferences.map(p => `• ${prefLabels[p] || p}`).join('\n');
-        const langText = chosenLang === 'ta' ? 'Tamil (தமிழ்)' : chosenLang === 'both' ? 'Both (Tamil + English)' : 'English';
-
-        const confirmMsg = `✅ *You're all set!*
-
-📋 *Your Subscribed Services:*
-${prefText || '• 📖 Daily Bible Verse\n• ⛪ Daily Mass Readings & Reflection\n• 🕊️ Saint of the Day'}
-
-🌐 Daily Catholic Content Language: *${langText}*
-⏰ Daily Catholic broadcast is delivered sharply at *4:00 AM IST*.
-
-May God bless you and your family! 🙏❤️
-— *SJDB Connect*
-➡️ Type *Menu* for Quick Commands
-➡️ Type *Services* for Help Desk`;
-
-        botReply = confirmMsg;
+        const confirmMsg = getStep7AllSetMessage(newPreferences, newLanguage, session.botLanguage || 'en');
+        const mainMenuMsg = getStep8MainMenuMessage('Parishioner', session.botLanguage || 'en');
+        botReply = `${confirmMsg}\n\n${mainMenuMsg}`;
       } else {
-        botReply = `⚠️ Please reply with *1*, *2*, or *3* to choose your Daily Catholic Content language:\n\n1️⃣ Tamil (தமிழ்)\n2️⃣ English\n3️⃣ Both (Tamil + English)`;
+        botReply = getStep6ContentLanguageMessage(session.botLanguage || 'en');
       }
     } else if (step === 'done') {
       if (text === 'STOP' || text === 'UNSUBSCRIBE') {
@@ -659,7 +593,7 @@ Select your preferred language for Daily Bible Verse, Mass Readings, Reflection 
         botReply = saintInfo;
       } else if (text === 'SERVICES' || text.toLowerCase().includes('service')) {
         botReply = `⛪ *SJDB Connect – Services & Help Desk*
-_St. John de Britto Church, Kalayarkoil_
+_St. John de Britto's Church, Kalayarkoil_
 
 1️⃣ ⛪ *Mass Timings*
 2️⃣ 🕊️ *Confession Timings*
@@ -679,7 +613,7 @@ _St. John de Britto Church, Kalayarkoil_
 👉 *Reply with a number (1-14) or type your question naturally.*`;
       } else if (text === 'MENU' || text === 'HOME' || text === '0') {
         botReply = `👋 *Welcome to SJDB Connect!*
-⛪ *St. John de Britto Church, Kalayarkoil*
+⛪ *St. John de Britto's Church, Kalayarkoil*
 
 How can I help you today?
 
@@ -726,13 +660,13 @@ const clearAllBotSubscribers = async (req, res) => {
     }
 
     const botResult = await BotSession.deleteMany({});
-    const userResult = await User.updateMany({}, {
-      $set: {
-        whatsappOptIn: false,
+    const userResult = await User.updateMany({}, { 
+      $set: { 
+        whatsappOptIn: false, 
         botPreferences: [],
         readingPreference: 'full',
         sendLinks: true
-      }
+      } 
     });
 
     res.json({

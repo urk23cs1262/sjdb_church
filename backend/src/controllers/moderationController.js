@@ -206,6 +206,26 @@ const deleteBlockedWord = async (req, res) => {
   }
 };
 
+// @POST /api/moderation/restore-all
+const restoreAllUsersAction = async (req, res) => {
+  try {
+    const adminId = req.user?._id;
+    const { restoreAllActiveUsers } = require('../services/userModerationService');
+    const { resetBotCachesAndSessions } = require('../bot/botHandler');
+
+    const modResult = await restoreAllActiveUsers(adminId);
+    await resetBotCachesAndSessions();
+
+    res.json({
+      success: true,
+      message: 'All active users restored successfully and WhatsApp bot reset for fresh start',
+      data: modResult
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   getModerationStats,
   getModeratedUsers,
@@ -214,5 +234,6 @@ module.exports = {
   blockUserAction,
   getBlockedWordsList,
   addBlockedWord,
-  deleteBlockedWord
+  deleteBlockedWord,
+  restoreAllUsersAction
 };

@@ -36,6 +36,20 @@ const {
   getCachedEvents,
   getCachedAnnouncements
 } = require('./churchDataCache');
+const {
+  getStep1BotLanguageMessage,
+  getStep2PhoneVerificationMessage,
+  getStep3OTPVerificationMessage,
+  getStep4And5PreferencesMessage,
+  getStep6ContentLanguageMessage,
+  getStep7AllSetMessage,
+  getStep8MainMenuMessage,
+  parseBotLanguage,
+  parsePhoneNumber,
+  parseOTP,
+  parsePreferences,
+  parseContentLanguage
+} = require('./botOnboardingFlow');
 
 function getWA() {
   return require('./whatsapp');
@@ -45,6 +59,8 @@ function getWA() {
 const processedMessageIdsCache = new Map();
 // Fast In-Memory Sliding Window for Raw Incoming Message Text (prevents rapid double-taps)
 const incomingMsgDeduplication = new Map();
+// Cooldown map for blocked account restriction notices (prevents spamming/duplicate replies)
+const blockedNoticeCooldown = new Map();
 // Concurrency lock set per sessionKey / event to prevent race conditions
 const activeSessionLocks = new Set();
 
@@ -93,22 +109,8 @@ const UNSUPPORTED_LANGUAGE_MSG = "Currently I'm available in only English and Ta
 /**
  * Main Menu Message (Quick Commands — English Only UI)
  */
-function getMainMenuMessage(userName) {
-  return `👋 *Welcome to SJDB Connect!*
-⛪ *St. John de Britto Church, Kalayarkoil*
-
-How can I help you today?
-
-1️⃣ 📖 *Daily Bible*
-2️⃣ ⛪ *Mass Timings*
-3️⃣ 🕊️ *Services*
-4️⃣ 📅 *Events*
-5️⃣ 📢 *Announcements*
-6️⃣ 📜 *Church Information*
-7️⃣ 🌟 *Saint of the Day*
-8️⃣ ❓ *Help*
-
-👉 *You can reply with a number or ask your question naturally.*`;
+function getMainMenuMessage(userName, isTamil = false) {
+  return getStep8MainMenuMessage(userName, isTamil ? 'ta' : 'en');
 }
 
 /**
@@ -345,6 +347,16 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
 
     if (modResult.isBlocked || modResult.isViolation) {
       if (modResult.replyMessage) {
+        if (modResult.isBlocked) {
+          const clean10 = (phone || sessionKey || '').replace(/\D/g, '').slice(-10);
+          const lastNotice = blockedNoticeCooldown.get(clean10);
+          const now = Date.now();
+          if (lastNotice && (now - lastNotice) < 30000) {
+            console.log(`⚡ [BotHandler] Dropping duplicate restricted account reply to ${clean10} (within 30s cooldown)`);
+            return;
+          }
+          blockedNoticeCooldown.set(clean10, now);
+        }
         await wa.sendWhatsAppMessage(replyTarget, modResult.replyMessage);
       }
       return;
@@ -501,179 +513,219 @@ Detected words: ${detectedWords.map(w => `\`${w}\``).join(', ')}`;
     const normalizedText = rawText.toLowerCase().replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
     const isTamilQuery = /[\u0B80-\u0BFF]/.test(rawText) || session.language === 'ta';
 
-    // ── Phone Number Verification Gate ──────────────────────────────────────────
-    const isVerifyCommand = /^(verify|reverify|சரிபார்|மீண்டும் சரிபார்)$/i.test(normalizedText);
+    // ── Re-Verification Command ────────────────────────────────────────────────
+    const isVerifyCommand = /^(verify|reverify|reset|restart|சரிபார்|மீண்டும் சரிபார்)$/i.test(normalizedText);
     if (isVerifyCommand) {
       session.isVerified = false;
-      session.step = 'phone_verification';
+      session.isOnboarded = false;
+      session.step = 'bot_language';
+      session.pendingOtp = '';
+      session.otpAttempts = 0;
       await session.save();
 
-      const verifyPrompt = `🔐 *Phone Number Verification*\n\n📱 Please enter your 10-digit mobile phone number (e.g., *9876543210*) to verify:`;
-      await wa.sendWhatsAppMessage(replyTarget, verifyPrompt);
+      await wa.sendWhatsAppMessage(replyTarget, getStep1BotLanguageMessage());
       return;
     }
 
-    // If user is not yet verified, they must verify their phone number first before chatting
-    if (!session.isVerified) {
-      const rawDigits = rawText.replace(/\D/g, '');
-      const isPhoneNumberInput = rawDigits.length >= 10;
-
-      if (isPhoneNumberInput) {
-        const clean10Digits = rawDigits.slice(-10);
-        session.providedPhone = clean10Digits;
-        session.isVerified = true;
-        session.step = 'preferences';
-
-        const parishUser = await User.findOne({ phone: { $regex: clean10Digits } });
-        if (parishUser) {
-          session.linkedUserId = parishUser._id;
-        }
-        await session.save();
-
-        let ackHeader = '';
-        if (parishUser) {
-          const zoneOrAnbiyam = parishUser.anbiyam || parishUser.subStation || parishUser.parishZone || 'Parishioner';
-          ackHeader = `✅ *Phone Number Verified!*\nWelcome, *${parishUser.name}* (${zoneOrAnbiyam})! 🙏\n\n`;
-        } else {
-          ackHeader = `✅ *Phone number verified.*\n\nYou can use SJDB Connect and access the available church information and services.\n\nFor faster and more accurate information, please create a *Parish Account*.\n\n📝 *Create Parish Account:*\n${getSiteUrl(SITE_ROUTES.REGISTER)}\n\nYou can continue using the bot without registering.\n\n`;
-        }
-
-        // Immediately send the exact Preferences message after successful number verification
-        const prefMsg = `${ackHeader}${getPreferencesMenuMessage()}`;
-        await wa.sendWhatsAppMessage(replyTarget, prefMsg);
-        return;
-      }
-
-      // User sent "Hi", "Hello", or any greeting/question without verifying their number yet
-      session.step = 'phone_verification';
-      await session.save();
-
-      const verifyPrompt = `👋 *Welcome to SJDB Connect!*
-⛪ *St. John de Britto Church, Kalayarkoil*
-_Connecting Faith & Community_
-
-🔐 *Phone Number Verification*
-
-To start chatting and access church services, please enter your **10-digit mobile phone number** to verify your account.
-
-📱 *Please reply with your 10-digit mobile number (e.g., 9876543210):*`;
-
-      await wa.sendWhatsAppMessage(replyTarget, verifyPrompt);
-      return;
-    }
-
-    // ── Step: Preferences Selection ─────────────────────────────────────────────
-    if (session.step === 'preferences') {
-      // Allow direct navigation commands even during preferences
-      if (/^(menu|0|home|quick commands)$/i.test(normalizedText)) {
-        const welcomeMenu = getMainMenuMessage();
-        await wa.sendWhatsAppMessage(replyTarget, welcomeMenu);
-        return;
-      }
-      if (/^(services|service|help desk)$/i.test(normalizedText)) {
-        const servicesMsg = getServicesMenuMessage();
-        await wa.sendWhatsAppMessage(replyTarget, servicesMsg);
-        return;
-      }
-
-      // Parse selections: 7 / ALL / all / All / 1,2,3 / 1, 2, 3 / 1,2
-      let selectedPrefs = [];
-      if (normalizedText === '7' || /^(all|\*|all of the above)$/i.test(normalizedText)) {
-        selectedPrefs = ['verse', 'saint', 'mass', 'events', 'announcements', 'birthday'];
-      } else {
-        const prefMap = {
-          '1': 'verse',
-          '2': 'saint',
-          '3': 'mass',
-          '4': 'events',
-          '5': 'announcements',
-          '6': 'birthday'
-        };
-        const parts = rawText.split(/[,\s]+/).map(s => s.trim().replace(/[^0-9]/g, '')).filter(Boolean);
-        selectedPrefs = Array.from(new Set(parts.map(p => prefMap[p]).filter(Boolean)));
-      }
-
-      if (selectedPrefs.length > 0) {
-        session.preferences = selectedPrefs;
-        session.step = 'language';
-        await session.save();
-
-        if (session.linkedUserId) {
-          try {
-            await User.findByIdAndUpdate(session.linkedUserId, {
-              botPreferences: selectedPrefs,
-              whatsappOptIn: true
-            });
-          } catch (uErr) {
-            console.warn('[BotHandler] User preferences update error:', uErr.message);
+    // ── Single Authoritative Onboarding Flow (Unonboarded Users) ────────────────
+    if (!session.isOnboarded) {
+      // 1️⃣ Step 1: Bot Language
+      if (!session.step || session.step === 'welcome' || session.step === 'bot_language') {
+        if (session.step === 'bot_language') {
+          const chosenBotLang = parseBotLanguage(rawText);
+          if (chosenBotLang) {
+            session.botLanguage = chosenBotLang;
+            session.step = 'phone_verification';
+            await session.save();
+            await wa.sendWhatsAppMessage(replyTarget, getStep2PhoneVerificationMessage(session.botLanguage));
+            return;
           }
+          // Invalid choice for bot language
+          const invalidMsg = session.botLanguage === 'ta'
+            ? `⚠️ தயவுசெய்து *1* (English) அல்லது *2* (தமிழ்) என பதிலளிக்கவும்.\n\n` + getStep1BotLanguageMessage()
+            : `⚠️ Please reply with *1* for English or *2* for தமிழ் (Tamil).\n\n` + getStep1BotLanguageMessage();
+          await wa.sendWhatsAppMessage(replyTarget, invalidMsg);
+          return;
         }
 
-        // Prompt for Daily Catholic Content Language Selection
-        const langPrompt = getDailyContentLanguagePrompt();
-        await wa.sendWhatsAppMessage(replyTarget, langPrompt);
+        // Fresh user or 'welcome': Send Step 1 Bot Language prompt
+        session.step = 'bot_language';
+        await session.save();
+        await wa.sendWhatsAppMessage(replyTarget, getStep1BotLanguageMessage());
         return;
       }
 
-      // Invalid input for preferences
-      const retryMsg = `⚠️ Invalid selection. Please reply with numbers separated by commas (e.g., *1,2,3*) or reply *7 / ALL* for all services.\n\n` + getPreferencesMenuMessage();
-      await wa.sendWhatsAppMessage(replyTarget, retryMsg);
-      return;
-    }
+      // 2️⃣ Step 2: Phone Number Verification
+      if (session.step === 'phone_verification' || session.step === 'ask_phone') {
+        const clean10 = parsePhoneNumber(rawText);
+        if (!clean10) {
+          const phoneRetryMsg = session.botLanguage === 'ta'
+            ? `⚠️ தவறான எண். தயவுசெய்து சரியான **10 இலக்க மொபைல் எண்ணை** உள்ளிடவும் (எ.கா: *9876543210*):`
+            : `⚠️ Invalid number. Please enter a valid **10-digit mobile phone number** (e.g., *9876543210*):`;
+          await wa.sendWhatsAppMessage(replyTarget, phoneRetryMsg);
+          return;
+        }
 
-    // ── Step: Catholic Content Language Selection ───────────────────────────────
-    if (session.step === 'language') {
-      // Allow direct navigation commands even during language selection
-      if (/^(menu|0|home|quick commands)$/i.test(normalizedText)) {
-        const welcomeMenu = getMainMenuMessage();
-        await wa.sendWhatsAppMessage(replyTarget, welcomeMenu);
-        return;
-      }
-      if (/^(services|service|help desk)$/i.test(normalizedText)) {
-        const servicesMsg = getServicesMenuMessage();
-        await wa.sendWhatsAppMessage(replyTarget, servicesMsg);
-        return;
-      }
+        if (await isPhoneBlocked(clean10)) {
+          const restrictedMsg = `🚫 *SJDB Connect — Account Restricted*\n\nYour account is currently restricted due to policy violations. All bot services, messages, and parish notifications have been suspended.\n\n• To restore your account and resume services, please contact the church administrator.`;
+          await wa.sendWhatsAppMessage(replyTarget, restrictedMsg);
+          return;
+        }
 
-      let chosenLang = null;
-      if (/^(1|tamil|தமிழ்|ta)$/i.test(normalizedText)) {
-        chosenLang = 'ta';
-      } else if (/^(2|english|eng|en)$/i.test(normalizedText)) {
-        chosenLang = 'en';
-      } else if (/^(3|both|tamil \+ english|தமிழ் \+ english|all)$/i.test(normalizedText)) {
-        chosenLang = 'both';
-      }
-
-      if (chosenLang) {
-        session.language = chosenLang;
-        session.step = 'done';
-        session.isOnboarded = true;
+        // 3️⃣ Generate OTP and transition to OTP Verification
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        session.pendingPhone = clean10;
+        session.pendingOtp = otp;
+        session.otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins
+        session.otpAttempts = 0;
+        session.step = 'otp_verification';
         await session.save();
 
-        if (session.linkedUserId) {
-          try {
-            await User.findByIdAndUpdate(session.linkedUserId, {
-              language: chosenLang,
-              mass_reflection_language: chosenLang,
-              preferredLanguage: chosenLang
-            });
-          } catch (lErr) {
-            console.warn('[BotHandler] User language update error:', lErr.message);
-          }
-        }
-
-        const confirmMsg = getPreferencesConfirmationMessage(session.preferences, session.language);
-        await wa.sendWhatsAppMessage(replyTarget, confirmMsg);
-
-        // Only after all setup is complete -> Send the SJDB Connect Assistance overview message
-        const assistanceMsg = getAssistanceWelcomeMessage();
-        await wa.sendWhatsAppMessage(replyTarget, assistanceMsg);
+        await wa.sendWhatsAppMessage(replyTarget, getStep3OTPVerificationMessage(clean10, otp, session.botLanguage));
         return;
       }
 
-      const langRetryMsg = `⚠️ Please reply with *1*, *2*, or *3* to choose your Daily Catholic Content language:\n\n1️⃣ Tamil (தமிழ்)\n2️⃣ English\n3️⃣ Both (Tamil + English)`;
-      await wa.sendWhatsAppMessage(replyTarget, langRetryMsg);
-      return;
+      // 3️⃣ Step 3: OTP Verification
+      if (session.step === 'otp_verification') {
+        if (/^(change|back|மாற்று|திரும்பு)$/i.test(normalizedText)) {
+          session.step = 'phone_verification';
+          await session.save();
+          await wa.sendWhatsAppMessage(replyTarget, getStep2PhoneVerificationMessage(session.botLanguage));
+          return;
+        }
+
+        if (/^(resend|resend otp|மீண்டும் அனுப்பு)$/i.test(normalizedText)) {
+          const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+          session.pendingOtp = newOtp;
+          session.otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
+          session.otpAttempts = 0;
+          await session.save();
+          const resendPrefix = session.botLanguage === 'ta' ? `🔄 புதிய OTP குறியீடு!\n\n` : `🔄 Fresh OTP code issued!\n\n`;
+          await wa.sendWhatsAppMessage(replyTarget, resendPrefix + getStep3OTPVerificationMessage(session.pendingPhone, newOtp, session.botLanguage));
+          return;
+        }
+
+        if (session.otpExpiresAt && Date.now() > new Date(session.otpExpiresAt).getTime()) {
+          const expiredMsg = session.botLanguage === 'ta'
+            ? `⌛ OTP காலாவதியாகிவிட்டது. புதிய குறியீட்டைப் பெற *RESEND* என தட்டச்சு செய்யவும்.`
+            : `⌛ This OTP has expired. Please reply with *RESEND* to receive a new code.`;
+          await wa.sendWhatsAppMessage(replyTarget, expiredMsg);
+          return;
+        }
+
+        const inputOtp = parseOTP(rawText);
+        if (inputOtp && inputOtp === session.pendingOtp) {
+          // 4️⃣ Phone Number Verified!
+          session.isVerified = true;
+          session.providedPhone = session.pendingPhone;
+          session.pendingOtp = '';
+          session.otpAttempts = 0;
+          session.step = 'preferences';
+
+          const parishUser = await User.findOne({ phone: { $regex: session.providedPhone } });
+          if (parishUser) {
+            session.linkedUserId = parishUser._id;
+          }
+          await session.save();
+
+          // Send 4️⃣ Phone Number Verified + 5️⃣ SJDB Connect Preferences
+          const step4And5Msg = getStep4And5PreferencesMessage(session.providedPhone, parishUser, session.botLanguage);
+          await wa.sendWhatsAppMessage(replyTarget, step4And5Msg);
+          return;
+        }
+
+        session.otpAttempts = (session.otpAttempts || 0) + 1;
+        if (session.otpAttempts >= 5) {
+          session.step = 'phone_verification';
+          session.pendingOtp = '';
+          session.otpAttempts = 0;
+          await session.save();
+          const maxAttemptsMsg = session.botLanguage === 'ta'
+            ? `❌ தவறான OTP அதிக முறை உள்ளிடப்பட்டது. தயவுசெய்து உங்கள் 10 இலக்க மொபைல் எண்ணை மீண்டும் உள்ளிடவும்:`
+            : `❌ Too many incorrect attempts. Please re-enter your 10-digit mobile phone number to request a new code:`;
+          await wa.sendWhatsAppMessage(replyTarget, maxAttemptsMsg);
+          return;
+        }
+
+        await session.save();
+        const remaining = 5 - session.otpAttempts;
+        const wrongOtpMsg = session.botLanguage === 'ta'
+          ? `❌ தவறான OTP குறியீடு. மேலும் ${remaining} வாய்ப்புகள் உள்ளன.\nதயவுசெய்து சரியான 6 இலக்க OTP குறியீட்டை உள்ளிடவும் (அல்லது புதிய குறியீட்டிற்கு *RESEND* என அனுப்பவும்):`
+          : `❌ Incorrect OTP code. ${remaining} attempt${remaining > 1 ? 's' : ''} remaining.\nPlease enter the 6-digit OTP code (or reply *RESEND* for a new code):`;
+        await wa.sendWhatsAppMessage(replyTarget, wrongOtpMsg);
+        return;
+      }
+
+      // 5️⃣ Step 5: Preferences Selection
+      if (session.step === 'preferences') {
+        const selectedPrefs = parsePreferences(rawText);
+        if (selectedPrefs) {
+          session.preferences = selectedPrefs;
+          session.step = 'language';
+          await session.save();
+
+          if (session.linkedUserId) {
+            try {
+              await User.findByIdAndUpdate(session.linkedUserId, {
+                botPreferences: selectedPrefs,
+                whatsappOptIn: true
+              });
+            } catch (e) { }
+          }
+
+          // 6️⃣ Daily Catholic Content Language
+          await wa.sendWhatsAppMessage(replyTarget, getStep6ContentLanguageMessage(session.botLanguage));
+          return;
+        }
+
+        const retryMsg = session.botLanguage === 'ta'
+          ? `⚠️ தவறான தேர்வு. எண்களை காற்புள்ளியுடன் அனுப்பவும் (எ.கா: *1,2,3*) அல்லது அனைத்திற்கும் *7* என அனுப்பவும்.\n\n` + getStep4And5PreferencesMessage(session.providedPhone, null, session.botLanguage)
+          : `⚠️ Invalid selection. Please reply with numbers separated by commas (e.g., *1,2,3*) or reply *7* for *ALL*.\n\n` + getStep4And5PreferencesMessage(session.providedPhone, null, session.botLanguage);
+        await wa.sendWhatsAppMessage(replyTarget, retryMsg);
+        return;
+      }
+
+      // 6️⃣ Step 6: Daily Catholic Content Language
+      if (session.step === 'language') {
+        const chosenLang = parseContentLanguage(rawText);
+        if (chosenLang) {
+          session.language = chosenLang;
+          session.step = 'done';
+          session.isOnboarded = true;
+          await session.save();
+
+          if (session.linkedUserId) {
+            try {
+              await User.findByIdAndUpdate(session.linkedUserId, {
+                language: chosenLang,
+                mass_reflection_language: chosenLang,
+                preferredLanguage: chosenLang
+              });
+            } catch (lErr) { }
+          }
+
+          // 7️⃣ Step 7: You're All Set!
+          const allSetMsg = getStep7AllSetMessage(session.preferences, session.language, session.botLanguage);
+          await wa.sendWhatsAppMessage(replyTarget, allSetMsg);
+
+          // 8️⃣ Step 8: Main Menu (sent immediately after Step 7)
+          await new Promise(r => setTimeout(r, 450));
+          let userName = '';
+          if (session.linkedUserId) {
+            const u = await User.findById(session.linkedUserId).select('name');
+            if (u) userName = u.name;
+          }
+          const menuMsg = getStep8MainMenuMessage(userName || pushName || '', session.botLanguage);
+          await wa.sendWhatsAppMessage(replyTarget, menuMsg);
+          return;
+        }
+
+        const langRetryMsg = session.botLanguage === 'ta'
+          ? `⚠️ தயவுசெய்து *1*, *2*, அல்லது *3* என பதிலளிக்கவும்:\n\n1️⃣ தமிழ் (Tamil)\n2️⃣ English\n3️⃣ Both (Tamil + English)`
+          : `⚠️ Please reply with *1*, *2*, or *3* to choose your Daily Catholic Content language:\n\n1️⃣ Tamil (Tamil)\n2️⃣ English\n3️⃣ Both (Tamil + English)`;
+        await wa.sendWhatsAppMessage(replyTarget, langRetryMsg);
+        return;
+      }
     }
 
     // ── 1. SERVICES / HELP DESK MENU COMMAND (Exact Case-Insensitive or Natural Inquiry) ─────
@@ -1081,9 +1133,22 @@ ${EXTERNAL_LINKS.GOOGLE_MAPS}
 
 module.exports = {
   handleIncomingMessage,
+  resetBotCachesAndSessions: async () => {
+    processedMessageIdsCache.clear();
+    incomingMsgDeduplication.clear();
+    blockedNoticeCooldown.clear();
+    activeSessionLocks.clear();
+    try {
+      if (require('mongoose').connection.readyState === 1) {
+        await ProcessedMessage.deleteMany({});
+        await BotSession.deleteMany({});
+      }
+    } catch (e) { }
+  },
   _clearDedupCacheForTesting: async () => {
     processedMessageIdsCache.clear();
     incomingMsgDeduplication.clear();
+    blockedNoticeCooldown.clear();
     activeSessionLocks.clear();
     try {
       if (require('mongoose').connection.readyState === 1) {

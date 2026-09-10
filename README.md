@@ -1,4 +1,4 @@
-# St. John de britto Church — Parish Management System
+# St. John de Britto's Church — Parish Management System
 ### *புனித அருளானந்தர் ஆலயம், காளையார்கோவில் / Kalayarkoil*
 
 [![Live Website](https://img.shields.io/badge/Live_Website-st--jb--church.vercel.app-blue?style=for-the-badge&logo=vercel)](https://st-jb-church.vercel.app/)
@@ -8,7 +8,7 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 
-A modern, full-stack Catholic Parish Management and Community Web Application built for **St. John de britto Church**. The system connects parishioners, priests, and administrators with online Mass intention bookings, certificate requests, daily liturgical readings, Saint of the Day calendar, interactive Holy Rosary audio prayer, WhatsApp broadcast automation, event registrations, and parishioner record management.
+A modern, full-stack Catholic Parish Management and Community Web Application built for **St. John de Britto's Church**. The system connects parishioners, priests, and administrators with online Mass intention bookings, certificate requests, daily liturgical readings, Saint of the Day calendar, interactive Holy Rosary audio prayer, WhatsApp broadcast automation, event registrations, and parishioner record management.
 
 **Production Website:** [https://st-jb-church.vercel.app/](https://st-jb-church.vercel.app/) — *(Official Parish Portal)*
 
@@ -28,7 +28,7 @@ A modern, full-stack Catholic Parish Management and Community Web Application bu
 [ Middleware & Security ] [ Automated Background Cron Services ]
  ├── JWT Auth Guard       ├── 12:00 AM IST Daily Tamil Mass Readings Sync
  ├── Maintenance Filter   ├── 12:00 AM IST Daily Bible Verse Rotation
- ├── Rate Limiters        ├── 12:00 AM IST Daily Catholic Spiritual Broadcast (Email & WhatsApp)
+ ├── Rate Limiters        ├── 06:00 AM IST Daily WhatsApp Spiritual Broadcast
  └── Helmet & CORS        ├── Automated Event & Announcement Reminders
  │                        ├── Automated Birthday Blessings Dispatcher
  ▼                        └── 60s Expired OTP Cleanup Scanner
@@ -78,7 +78,7 @@ A modern, full-stack Catholic Parish Management and Community Web Application bu
 * **Visitor & Engagement Analytics:** Visitor analytics, page view counts, device metrics, submission statistics, and parish registration trends.
 * **Member & Family ID System:** Dynamic ID generation engine with customizable prefix (e.g., `SJDB_M01`) and zero-padding configurations.
 * **Mass Bookings & Document Processing:** Approve or reject intentions, assign priests, and issue document approvals.
-* **WhatsApp Automation Bot (Baileys):** Automated 12:00 AM daily spiritual broadcasts, event reminders, and WhatsApp bot assistance via a Baileys multi-device socket.
+* **WhatsApp Automation Bot (Baileys):** Automated 6:00 AM daily spiritual broadcasts, event reminders, and WhatsApp bot assistance via a Baileys multi-device socket.
 * **Automated Scheduled Reminders:** Automated background reminder notifications via Email, WhatsApp bot, and In-App for upcoming events and announcements.
 * **Site Maintenance Control System:**
   * One-click emergency maintenance mode activation.
@@ -89,6 +89,40 @@ A modern, full-stack Catholic Parish Management and Community Web Application bu
   * Automatic account suspension on 10 failed attempts or 2 lockouts within 24 hours.
   * One-click account reactivation workflow with automated email dispatch.
   * Emergency **"Wasn't You?"** security report links in login alert emails with instant session invalidation.
+
+---
+
+### 4. SJDB Connect WhatsApp Bot — Authoritative Flow
+
+```text
+HI
+ ↓
+1️⃣ Bot Language
+ ↓
+2️⃣ Phone Number Verification
+ ↓
+3️⃣ OTP Verification
+ ↓
+4️⃣ Phone Number Verified
+ ↓
+5️⃣ SJDB Connect Preferences
+ ↓
+6️⃣ Daily Catholic Content Language
+ ↓
+7️⃣ You're All Set
+ ↓
+8️⃣ Main Menu
+```
+
+* **HI:** Initial user greeting starts the guided onboarding.
+* **1️⃣ Bot Language:** Choice between English (`1`) or Tamil (`2`).
+* **2️⃣ Phone Number Verification:** User submits their 10-digit mobile phone number.
+* **3️⃣ OTP Verification:** A 6-digit OTP code is issued with a 5-minute validity window.
+* **4️⃣ Phone Number Verified:** Successful OTP verification confirms identity and links registered parishioner profiles.
+* **5️⃣ SJDB Connect Preferences:** Selection of spiritual services (Bible Verse, Saint of the Day, Daily Mass Readings, Events, Announcements, Birthday Wishes, or ALL).
+* **6️⃣ Daily Catholic Content Language:** Selection of liturgical content language (Tamil, English, or Both).
+* **7️⃣ You're All Set:** Confirmation summary of subscribed services and 4:00 AM IST daily broadcast schedule.
+* **8️⃣ Main Menu:** Full quick commands menu with access to devotions, mass timings, and 14-service Parish Help Desk. Onboarded users return directly to Main Menu on any subsequent `HI` or `MENU`.
 
 ---
 
@@ -246,48 +280,5 @@ Frontend will be accessible on `http://localhost:5173`.
 
 ## License & Attribution
 
-Developed for **St. John de britto Church** — *"Serving God, Serving People."*  
+Developed for **St. John de Britto's Church** — *"Serving God, Serving People."*  
 All rights reserved © 2026. Dedicated to the parish community and administration.
-
-
-## 24/7 WhatsApp Bot — Production Requirement
-
-The WhatsApp bot is a **backend daemon**. The React/Admin WhatsApp page must never be required to keep the bot alive.
-
-At backend startup:
-
-1. MongoDB is connected and ready.
-2. Background workers are registered.
-3. The Baileys WhatsApp socket is started automatically.
-4. Saved MongoDB authentication credentials are restored.
-5. Incoming `messages.upsert` events are handled server-side.
-6. Unexpected WhatsApp disconnects are automatically retried with backoff.
-7. SIGTERM/SIGINT shut the socket down cleanly so the hosting platform can restart it safely.
-
-The Admin → WhatsApp Bot page is only an administration/monitoring UI. Opening it must not be necessary for receiving or replying to messages.
-
-### Deployment
-
-For Render, deploy `render.yaml` from the repository root or configure the backend service manually with:
-
-- Root directory: `backend`
-- Build command: `npm ci --omit=dev`
-- Start command: `npm start`
-- Health check: `/api/health`
-- **Always-on paid instance required** for 24/7 WhatsApp and cron execution.
-
-For a VM/server using PM2:
-
-```bash
-cd backend
-npm ci
-pm2 start ecosystem.config.js --env production
-pm2 save
-pm2 startup
-```
-
-Do not deploy `backend/.env`, WhatsApp session files, `node_modules`, or frontend `dist` as source artifacts. Configure secrets in the hosting provider.
-
-### Important limitation
-
-No application can truthfully guarantee 365/365 availability from code alone. WhatsApp can disconnect, a host can fail, MongoDB can become unavailable, or the internet can fail. This project therefore uses persistent MongoDB auth state, automatic reconnects, health checks, and a process manager/always-on host. The hosting environment must also be configured for continuous operation.

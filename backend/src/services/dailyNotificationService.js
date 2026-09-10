@@ -253,24 +253,40 @@ async function sendDailyChurchNotifications({
 
     console.log(`[Daily Notification Service] 4:00 AM IST Multi-Channel Daily Broadcast started for ${dailyContent.dateKey}...`);
 
-    const users = await User.find({
-      $or: [
-        { isActive: { $ne: false } },
-        { deactivatedReason: /abuse/i } // Blocked users still receive all daily Catholic notifications
-      ]
-    }).lean();
-
-    // Include all WhatsApp bot sessions that have not explicitly opted out via STOP
-    const botSessions = await BotSession.find({ step: { $ne: 'stopped' } }).lean();
-
-    // Also include any user in UserModeration who interacted with the bot
+    // Fetch all currently blocked phone numbers and user IDs to strictly exclude restricted users
     const UserModeration = require('../models/UserModeration');
-    const modUsers = await UserModeration.find().lean();
-    for (const mu of modUsers) {
-      if (mu.phoneNumber && !botSessions.some(b => (b.phoneNumber || '').replace(/\D/g, '') === mu.phoneNumber.replace(/\D/g, ''))) {
-        botSessions.push({ phoneNumber: mu.phoneNumber, step: 'welcome' });
+    const blockedRecords = await UserModeration.find({ status: 'blocked' }).lean();
+    const blockedPhone10s = new Set(
+      blockedRecords
+        .map(r => (r.phoneNumber || '').replace(/\D/g, '').slice(-10))
+        .filter(Boolean)
+    );
+    const blockedUserIds = new Set(
+      blockedRecords
+        .map(r => r.userId ? r.userId.toString() : null)
+        .filter(Boolean)
+    );
+
+    // Active website users only (strictly excluding deactivated/restricted accounts)
+    const rawUsers = await User.find({ isActive: { $ne: false } }).lean();
+    const users = rawUsers.filter(u => {
+      if (blockedUserIds.has(u._id.toString())) return false;
+      const phone10 = (u.phone || '').replace(/\D/g, '').slice(-10);
+      if (phone10 && blockedPhone10s.has(phone10)) return false;
+      return true;
+    });
+
+    // WhatsApp bot sessions that have not stopped AND are NOT restricted/blocked
+    const rawBotSessions = await BotSession.find({ step: { $ne: 'stopped' } }).lean();
+    const botSessions = rawBotSessions.filter(session => {
+      const phone10 = (session.phoneNumber || '').replace(/\D/g, '').slice(-10);
+      if (!phone10) return false;
+      if (blockedPhone10s.has(phone10)) {
+        console.log(`[Daily Notification Service] Skipping restricted user phone ${phone10} from 4 AM broadcast.`);
+        return false;
       }
-    }
+      return true;
+    });
 
     console.log(`[Daily Notification Service] Found ${users.length} active parishioners and ${botSessions.length} bot sessions.`);
 
@@ -646,12 +662,7 @@ async function getDailyNotificationStatus() {
     const dailyContent = await getTodayDailyContent(today);
     const dateKey = dailyContent.dateKey;
 
-    const totalUsers = await User.countDocuments({
-      $or: [
-        { isActive: { $ne: false } },
-        { deactivatedReason: /abuse/i }
-      ]
-    });
+    const totalUsers = await User.countDocuments({ isActive: { $ne: false } });
 
     const sentLogs = await DailyNotificationLog.countDocuments({ dateKey, status: { $in: ['sent', 'partially_sent'] } });
     const failedLogs = await DailyNotificationLog.countDocuments({ dateKey, status: 'failed' });

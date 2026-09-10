@@ -7,8 +7,10 @@ const botSessionSchema = new mongoose.Schema({
     type: String,
     enum: [
       'welcome',
+      'bot_language',
       'ask_phone',
       'phone_verification',
+      'otp_verification',
       'select_preferences',
       'preferences',
       'select_language',
@@ -21,9 +23,14 @@ const botSessionSchema = new mongoose.Schema({
     ],
     default: 'welcome'
   },
+  botLanguage: { type: String, enum: ['en', 'ta'], default: 'en' },
   isVerified: { type: Boolean, default: false },
   isOnboarded: { type: Boolean, default: false },
   providedPhone: { type: String, default: '' },
+  pendingPhone: { type: String, default: '' },
+  pendingOtp: { type: String, default: '' },
+  otpExpiresAt: { type: Date },
+  otpAttempts: { type: Number, default: 0 },
   preferences: [{
     type: String,
     enum: ['verse', 'saint', 'mass', 'events', 'announcements', 'birthday', 'maintenance', 'info']
