@@ -9,8 +9,10 @@ import { useForm } from 'react-hook-form';
 import MemberSettingsModal from '../../components/admin/admin_member_settings_modal';
 import AddUserModal from '../../components/admin/admin_add_user_modal';
 import MessageUserModal from '../../components/admin/admin_message_user_modal';
+import { useAuth } from '../../context/context_auth_context';
 
 export default function AdminUsers() {
+  const { user: currentAuthUser, fetchMe } = useAuth();
   const [searchParams] = useSearchParams();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +54,8 @@ export default function AdminUsers() {
   const [familyIdStatus, setFamilyIdStatus] = useState(null);
   const [isResolvingFamily, setIsResolvingFamily] = useState(false);
 
-  const { register, handleSubmit, reset, setValue, formState: { isSubmitting } } = useForm();
+  const { register, handleSubmit, reset, setValue, watch, formState: { isSubmitting } } = useForm();
+  const watchRole = watch('role');
 
   const fetchExistingFamilies = async () => {
     try {
@@ -273,6 +276,9 @@ export default function AdminUsers() {
 
   const onUpdateUser = async (data) => {
     try {
+      const isPromotingToAdmin = ['admin', 'priest', 'staff', 'technical_team'].includes(data.role) && editingUser.role === 'user';
+      const isDemotingFromAdmin = data.role === 'user' && editingUser.role !== 'user';
+
       const payload = {
         name: data.name,
         email: data.email,
@@ -300,8 +306,22 @@ export default function AdminUsers() {
           spouseName: data.spouseName
         }
       };
-      await api.put(`/users/${editingUser._id}`, payload);
-      toast.success('User details & sacraments updated successfully');
+      const res = await api.put(`/users/${editingUser._id}`, payload);
+      if (res.data?.success) {
+        if (isPromotingToAdmin) {
+          toast.success(`Role updated to "${data.role.toUpperCase()}"! Member now has full admin access.`);
+        } else if (isDemotingFromAdmin) {
+          toast.success(`Role updated to "USER". Admin access removed.`);
+        } else {
+          toast.success('User records & role updated successfully');
+        }
+      }
+
+      // If the current logged-in admin updated their own account, refresh auth context immediately
+      if (currentAuthUser && editingUser._id === currentAuthUser._id) {
+        await fetchMe();
+      }
+
       setEditingUser(null);
       fetchUsers();
     } catch (err) {
@@ -535,7 +555,11 @@ export default function AdminUsers() {
                             {u.memberStatus || (u.isActive ? 'Active' : 'Inactive')}
                           </span>
                         </td>
-                        <td className="py-3 px-4"><span className={`badge ${u.role === 'admin' ? 'badge-red' : 'badge-blue'} capitalize`}>{u.role}</span></td>
+                        <td className="py-3 px-4">
+                          <span className={`badge ${['admin', 'priest', 'staff', 'technical_team'].includes((u.role || '').toLowerCase()) ? 'badge-red' : 'badge-blue'} capitalize font-bold`}>
+                            {u.role === 'technical_team' ? 'Tech Team' : (u.role || 'user')}
+                          </span>
+                        </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1">
                             <button onClick={() => setMessageUser(u)} className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600 hover:text-amber-700 transition-colors cursor-pointer" title="Send Message to Member">
@@ -662,6 +686,13 @@ export default function AdminUsers() {
                         <FiCheckCircle className="text-[11px]" /> Verified
                       </span>
                     )}
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                      ['admin', 'priest', 'staff', 'technical_team'].includes((editingUser.role || '').toLowerCase())
+                        ? 'bg-red-100 text-red-800 border border-red-200'
+                        : 'bg-blue-100 text-blue-800 border border-blue-200'
+                    }`}>
+                      Role: {editingUser.role || 'user'}
+                    </span>
                   </div>
                   <p className="text-xs text-gray-500">Update member personal profile, sacraments & role information</p>
                 </div>
@@ -690,6 +721,51 @@ export default function AdminUsers() {
 
               <form onSubmit={handleSubmit(onUpdateUser)} className="flex flex-col flex-1 overflow-hidden min-h-0">
                 <div className="p-5 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+                  {/* Account Role & System Access Option (Kept Prominently at the Top for Admin) */}
+                  <div className="p-4 rounded-xl border bg-gradient-to-r from-amber-50/90 via-blue-50/60 to-amber-50/90 border-amber-300 shadow-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <FiShield className="text-church-royal-blue text-lg shrink-0" />
+                          <span className="text-xs font-bold uppercase tracking-wider text-church-royal-blue">
+                            User Role & System Access *
+                          </span>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wide border shadow-2xs ${
+                            (watchRole || editingUser.role) === 'admin' ? 'bg-red-100 text-red-700 border-red-300' :
+                            (watchRole || editingUser.role) === 'priest' ? 'bg-purple-100 text-purple-700 border-purple-300' :
+                            (watchRole || editingUser.role) === 'staff' ? 'bg-blue-100 text-blue-700 border-blue-300' :
+                            (watchRole || editingUser.role) === 'technical_team' ? 'bg-emerald-100 text-emerald-700 border-emerald-300' :
+                            'bg-gray-100 text-gray-700 border-gray-300'
+                          }`}>
+                            {(watchRole || editingUser.role) === 'admin' ? 'Administrator Access' :
+                             (watchRole || editingUser.role) === 'priest' ? 'Priest / Clergy Access' :
+                             (watchRole || editingUser.role) === 'staff' ? 'Staff Access' :
+                             (watchRole || editingUser.role) === 'technical_team' ? 'Tech Team Access' :
+                             'Parish Member Access'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-600">
+                          Change this user's role. Selecting <strong>Admin</strong> immediately grants full administrative access to this management portal.
+                        </p>
+                      </div>
+                      <div className="sm:w-64 shrink-0">
+                        <label className="church-label text-[10px] text-gray-600 uppercase font-bold mb-1 block">
+                          Change Role Option *
+                        </label>
+                        <select
+                          {...register('role', { required: true })}
+                          className="church-select font-bold text-xs bg-white border-2 border-church-royal-blue text-gray-800 shadow-xs focus:ring-2 focus:ring-church-royal-blue cursor-pointer py-2"
+                        >
+                          <option value="user">User (Parish Member)</option>
+                          <option value="admin">Admin (Full System Access)</option>
+                          {/* <option value="priest">⛪ Priest (Parish Clergy)</option>
+                          <option value="staff">💼 Staff (Parish Office Staff)</option>
+                          <option value="technical_team">💻 Technical Team (Support)</option> */}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="church-label">Full Name *</label>
@@ -816,14 +892,6 @@ export default function AdminUsers() {
                     <div>
                       <label className="church-label">Wedding Date (Anniversary)</label>
                       <input type="date" {...register('weddingDate')} placeholder="dd - mm - yyyy" className="church-input" />
-                    </div>
-
-                    <div>
-                      <label className="church-label">User Role *</label>
-                      <select {...register('role', { required: true })} className="church-select">
-                        <option value="user">User (Parish Member)</option>
-                        <option value="admin">Admin (Full System Access)</option>
-                      </select>
                     </div>
 
                     <div className="md:col-span-2">

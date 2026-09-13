@@ -76,49 +76,12 @@ const create = async (req, res) => {
     if (req.user) data.createdBy = req.user._id;
     const event = await Event.create(data);
 
-    // Notify all users in background
+    // Multi-Channel Broadcast across WhatsApp, Email, In-App, and Push
     if (event.isPublished !== false) {
-      const { formatEventWhatsApp, broadcastEventCreated } = require('../services/whatsappBroadcastHelper');
-      const msg = formatEventWhatsApp(event);
-
-      broadcastEventCreated(event).catch(err => console.error("Error auto-broadcasting event to WhatsApp:", err));
-
-      User.find({ isVerified: true }).then(users => {
-        users.forEach(user => {
-          if (user.phone) {
-            sendSMS(user.phone, msg).catch(() => { });
-          }
-        });
-      }).catch(err => console.error("Error notifying users:", err));
-
-      // In-app broadcast notification for all users
-      createNotification({
-        isBroadcast: true,
-        recipient: 'user',
-        title: `📅 New Event: ${event.title}`,
-        message: `A new church event has been announced: ${event.title}${event.date ? ' on ' + new Date(event.date).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' }) : ''}${event.venue ? ' at ' + event.venue : ''}.`,
-        type: 'event',
-        category: 'events',
-        priority: 'medium',
-        actionUrl: '/events',
-        relatedId: event._id,
-        relatedModel: 'Event',
-        channels: []
-      }).catch(e => console.error('Event broadcast notification error:', e.message));
-
-      // Admin in-app notification
-      createNotification({
-        recipient: 'admin',
-        title: `📅 New Event Created: ${event.title}`,
-        message: `A new event "${event.title}" has been published.${event.date ? ' Date: ' + new Date(event.date).toLocaleDateString('en-IN') : ''}`,
-        type: 'event',
-        category: 'events',
-        priority: 'low',
-        actionUrl: '/admin/events',
-        relatedId: event._id,
-        relatedModel: 'Event',
-        channels: []
-      }).catch(e => console.error('Event admin notification error:', e.message));
+      const { broadcastEventPublished } = require('../services/broadcastNotificationService');
+      broadcastEventPublished({ event, action: 'created' }).catch(err => {
+        console.error('[EventController] Error broadcasting new event:', err.message);
+      });
     }
 
     res.status(201).json({ success: true, event });
@@ -166,19 +129,12 @@ const update = async (req, res) => {
     }
     const event = await Event.findByIdAndUpdate(req.params.id, data, { new: true });
 
-    // Notify all users about Updated Event in background
+    // Multi-Channel Broadcast for Updated Event
     if (event && event.isPublished !== false) {
-      const { formatEventWhatsApp } = require('../services/whatsappBroadcastHelper');
-      const msg = formatEventWhatsApp(event);
-
-      User.find({ isVerified: true }).then(users => {
-        users.forEach(user => {
-          if (user.phone) {
-            sendSMS(user.phone, msg).catch(() => { });
-            sendWA(user.phone, msg);
-          }
-        });
-      }).catch(err => console.error("Error notifying users on event update:", err));
+      const { broadcastEventPublished } = require('../services/broadcastNotificationService');
+      broadcastEventPublished({ event, action: 'updated' }).catch(err => {
+        console.error('[EventController] Error broadcasting updated event:', err.message);
+      });
     }
 
     res.json({ success: true, event });
@@ -188,11 +144,20 @@ const update = async (req, res) => {
   }
 };
 
-
 const remove = async (req, res) => {
   try {
-    await Event.findByIdAndDelete(req.params.id);
-    res.json({ success: true, message: 'Event deleted' });
+    const event = await Event.findByIdAndDelete(req.params.id);
+    if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
+
+    // Multi-Channel Broadcast for Cancelled Event
+    if (event.isPublished !== false) {
+      const { broadcastEventPublished } = require('../services/broadcastNotificationService');
+      broadcastEventPublished({ event, action: 'cancelled' }).catch(err => {
+        console.error('[EventController] Error broadcasting cancelled event:', err.message);
+      });
+    }
+
+    res.json({ success: true, message: 'Event deleted and cancellation broadcast dispatched' });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 

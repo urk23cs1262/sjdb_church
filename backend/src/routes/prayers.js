@@ -1,9 +1,10 @@
 const router = require('express').Router();
-const { getPublic, getAll, create, updateStatus, incrementPrayer, deletePrayer, deleteAllByStatus } = require('../controllers/prayerController');
+const { getPublic, getAll, getPrayerById, create, updateStatus, incrementPrayer, deletePrayer, deleteAllByStatus } = require('../controllers/prayerController');
 const { protect, adminOnly, optionalAuth } = require('../middleware/auth');
 
 router.get('/public', getPublic);
 router.get('/', protect, adminOnly, getAll);
+router.get('/:id', protect, getPrayerById);
 router.post('/', optionalAuth, create);
 router.put('/:id/status', protect, adminOnly, updateStatus);
 router.delete('/all', protect, adminOnly, deleteAllByStatus);

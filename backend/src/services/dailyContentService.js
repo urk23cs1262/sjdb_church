@@ -36,7 +36,7 @@ async function fetchImageBuffer(imageUrl) {
       const response = await axios.get(imageUrl, {
         responseType: 'arraybuffer',
         headers: {
-          'User-Agent': 'SJDBChurchApp/1.0 (Catholic Parish Management; contact: parish@sjdb.org)',
+          'User-Agent': 'SJDBChurchApp/1.0 (Catholic Parish Management; contact: stjdbchurch@gmail.com)',
           'Accept': '*/*'
         },
         timeout: 10000
@@ -261,8 +261,8 @@ async function getTodayDailyContent(targetDate = new Date()) {
     sourceUrl: saintData?.sourceUrl || saintData?.link || 'https://www.vaticannews.va/en/saints.html'
   };
 
-  const frontendUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:5173';
-  const readingsUrl = `${frontendUrl.replace(/\/$/, '')}/bible-verse`;
+  const { getSiteUrl } = require('../config/siteRoutes');
+  const readingsUrl = getSiteUrl('/bible-verse');
 
   return {
     dateKey,

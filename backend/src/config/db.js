@@ -19,7 +19,7 @@ const connectDB = async () => {
       { 
         $or: [
           { role: { $in: ['admin', 'priest', 'technical_team', 'staff'] } },
-          { email: 'arndas777@gmail.com' },
+          { email: { $in: ['stjdbchurch@gmail.com', 'arndas777@gmail.com'] } },
           { isTechnicalTeam: true }
         ] 
       },

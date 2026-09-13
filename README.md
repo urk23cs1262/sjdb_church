@@ -218,9 +218,9 @@ CLIENT_URL=https://st-jb-church.vercel.app
 # SMTP Mailer Settings
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=your_parish_email@gmail.com
+SMTP_USER=stjdbchurch@gmail.com
 SMTP_PASS=your_gmail_app_password
-SMTP_FROM=your_parish_email@gmail.com
+SMTP_FROM=stjdbchurch@gmail.com
 
 # AI Content Assistant (Optional)
 GEMINI_API_KEY=your_gemini_api_key

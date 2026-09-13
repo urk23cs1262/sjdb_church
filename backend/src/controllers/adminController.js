@@ -317,7 +317,8 @@ const forceGlobalOtpReverification = async (req, res) => {
     }
 
     // 5. Send Security Advisory Email to All Registered Users
-    const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
+    const { getSiteUrl } = require('../config/siteRoutes');
+    const clientUrl = getSiteUrl('');
 
     // Fetch all users with valid email
     const usersWithEmail = await User.find({

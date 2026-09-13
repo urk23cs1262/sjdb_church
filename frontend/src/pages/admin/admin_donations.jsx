@@ -523,7 +523,7 @@ export default function AdminDonations() {
                   <div style={{ marginTop: '26px', textAlign: 'center', fontSize: '12px', lineHeight: '1.7', color: '#555' }}>
                     Contact Details :<br />
                     Parish Office Phone : +91 96291 95484 <br />
-                    Parish Office Email : arndas777@gmail.com <br />
+                    Parish Office Email : stjdbchurch@gmail.com <br />
                     Parish Office Website : www.stjohnchurch.com
                   </div>
 

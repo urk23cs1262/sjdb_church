@@ -37,7 +37,7 @@ const SJDB_OFFICIAL_KNOWLEDGE = {
     address: "St. John de Britto Church, Church Road, Kalayarkoil - 630551, Sivagangai District, Tamil Nadu, India",
     addressTa: "புனித அருளானந்தர் திருத்தலம், தேவாலய சாலை, காளையார்கோவில் - 630551, சிவகங்கை மாவட்டம், தமிழ்நாடு, இந்தியா",
     phone: "+91 96556 39144",
-    email: "arndas777@gmail.com",
+    email: "stjdbchurch@gmail.com",
     mapUrl: "https://maps.google.com/?q=St.+John+de+Britto+Church+Kalayarkoil+Tamil+Nadu+630551",
     services: "Daily Mass, Family blessings, Anbiyam meetings, Catechism, Youth movement, Vincent de Paul Society",
     website: process.env.CLIENT_URL || "https://stjb-church.vercel.app"

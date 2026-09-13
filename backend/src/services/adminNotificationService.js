@@ -6,6 +6,7 @@ const Notification = require('../models/Notification');
 const User = require('../models/User');
 const { generateUserReportPdf } = require('./userReportPdfService');
 const { formatPhoneDisplay } = require('../utils/phoneUtils');
+const { getSiteUrl } = require('../config/siteRoutes');
 
 /**
  * Parses client IP address and location cleanly from request.
@@ -325,8 +326,9 @@ const notifyAdmin = async (event) => {
     if (sendEmailAlert) {
       const admins = await User.find({ role: 'admin' }).select('email phone name');
       const adminList = [...admins];
-      if (!adminList.some(a => (a.email || '').toLowerCase() === 'arndas777@gmail.com')) {
-        adminList.push({ email: 'arndas777@gmail.com', name: 'Parish Administrator' });
+      const primaryAdminEmail = process.env.ADMIN_EMAIL || 'stjdbchurch@gmail.com';
+      if (!adminList.some(a => (a.email || '').toLowerCase() === primaryAdminEmail.toLowerCase())) {
+        adminList.push({ email: primaryAdminEmail, name: 'Parish Administrator' });
       }
       const attachments = [];
 
@@ -607,7 +609,7 @@ const notifyAdmin = async (event) => {
 
         <!-- ACTION BUTTON -->
         <div style="text-align:center; margin-top:24px;">
-          <a class="action-btn" href="${process.env.CLIENT_URL || 'http://localhost:5173'}${type === 'WHATSAPP_ABUSE_ALERT' ? '/admin/whatsapp' : '/admin/notifications'}" style="background:linear-gradient(135deg,#1e3a8a,#1e40af); color:#ffffff; text-decoration:none; padding:13px 28px; border-radius:12px; font-weight:800; font-size:13.5px; display:inline-block; box-shadow:0 4px 14px rgba(30,58,138,0.35);">
+          <a class="action-btn" href="${getSiteUrl(type === 'WHATSAPP_ABUSE_ALERT' ? '/admin/whatsapp' : '/admin/notifications')}" style="background:linear-gradient(135deg,#1e3a8a,#1e40af); color:#ffffff; text-decoration:none; padding:13px 28px; border-radius:12px; font-weight:800; font-size:13.5px; display:inline-block; box-shadow:0 4px 14px rgba(30,58,138,0.35);">
             ${type === 'WHATSAPP_ABUSE_ALERT' ? 'Open Abuse & Moderation Center →' : 'Open Admin Notification Center →'}
           </a>
         </div>

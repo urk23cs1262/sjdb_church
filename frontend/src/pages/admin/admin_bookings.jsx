@@ -1,11 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { FiCheck, FiX, FiCalendar, FiClock, FiPaperclip, FiEdit3 } from 'react-icons/fi';
+import { FiCheck, FiX, FiCalendar, FiClock, FiPaperclip, FiEdit3, FiEye } from 'react-icons/fi';
 import api, { UPLOADS_URL } from '../../services/api';
 import { SectionLoader } from '../../components/common/common_loader';
 
 export default function AdminBookings() {
+  const { id: paramId } = useParams();
+  const [searchParams] = useSearchParams();
+  const targetId = paramId || searchParams.get('id') || searchParams.get('highlight');
+
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('pending');
@@ -13,6 +18,32 @@ export default function AdminBookings() {
   const [suggestedDate, setSuggestedDate] = useState('');
   const [suggestedTime, setSuggestedTime] = useState('6:00 AM');
   const [adminNote, setAdminNote] = useState('');
+  const [targetBooking, setTargetBooking] = useState(null);
+  const targetCardRef = useRef(null);
+
+  useEffect(() => {
+    if (targetId) {
+      // Fetch specific booking immediately for direct review
+      setLoading(true);
+      api.get(`/bookings/${targetId}`)
+        .then(r => {
+          if (r.data.booking) {
+            setTargetBooking(r.data.booking);
+            if (r.data.booking.status) setStatus(r.data.booking.status);
+          }
+        })
+        .catch(() => {
+          // Fallback query
+          api.get(`/bookings?id=${targetId}`).then(r => {
+            if (r.data.bookings?.[0]) {
+              setTargetBooking(r.data.bookings[0]);
+              if (r.data.bookings[0].status) setStatus(r.data.bookings[0].status);
+            }
+          }).catch(() => {});
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [targetId]);
 
   useEffect(() => {
     fetchBookings();
@@ -21,8 +52,21 @@ export default function AdminBookings() {
   const fetchBookings = () => {
     setLoading(true);
     api.get(`/bookings?status=${status}&limit=50`)
-      .then(r => setBookings(r.data.bookings || []))
-      .finally(() => setLoading(false));
+      .then(r => {
+        let list = r.data.bookings || [];
+        if (targetBooking && !list.some(b => b._id === targetBooking._id)) {
+          list = [targetBooking, ...list];
+        }
+        setBookings(list);
+      })
+      .finally(() => {
+        setLoading(false);
+        if (targetId) {
+          setTimeout(() => {
+            targetCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 300);
+        }
+      });
   };
 
   const updateStatus = async (id, newStatus, payloadData = {}) => {
@@ -79,16 +123,35 @@ export default function AdminBookings() {
           </div>
         ) : (
           <div className="space-y-4">
-            {bookings.map((b, i) => (
-              <motion.div key={b._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }} className="glass-card p-4 sm:p-5">
-                <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-                  <div className="flex items-start gap-4">
-                    <div className="min-w-14 sm:min-w-16 h-14 sm:h-16 rounded-2xl bg-church-gradient flex flex-col items-center justify-center flex-shrink-0 text-white shadow-xs">
-                      <span className="font-extrabold text-base sm:text-lg">{new Date(b.massDate).getDate()}</span>
-                      <span className="text-gold-300 text-[10px] font-bold uppercase tracking-wider">{new Date(b.massDate).toLocaleString('default', { month: 'short' })}</span>
+            {bookings.map((b, i) => {
+              const isTarget = Boolean(targetId && (b._id === targetId || b.bookingNumber === targetId || b._id.endsWith(targetId)));
+              return (
+                <motion.div
+                  key={b._id}
+                  ref={isTarget ? targetCardRef : null}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                  className={`glass-card p-4 sm:p-5 transition-all ${
+                    isTarget ? 'border-2 border-amber-500 ring-4 ring-amber-200/60 shadow-xl bg-amber-50/20' : ''
+                  }`}
+                >
+                  {isTarget && (
+                    <div className="mb-3 pb-2 border-b border-amber-200 flex items-center justify-between flex-wrap gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500 to-amber-600 text-white flex items-center gap-1.5 shadow-xs">
+                        <span>🎯 Targeted Request for Review</span>
+                      </span>
+                      <span className="text-xs text-amber-900 font-bold">Direct Deep Link Active</span>
                     </div>
+                  )}
+                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+                    <div className="flex items-start gap-4">
+                      <div className="min-w-14 sm:min-w-16 h-14 sm:h-16 rounded-2xl bg-church-gradient flex flex-col items-center justify-center flex-shrink-0 text-white shadow-xs">
+                        <span className="font-extrabold text-base sm:text-lg">{new Date(b.massDate).getDate()}</span>
+                        <span className="text-gold-300 text-[10px] font-bold uppercase tracking-wider">{new Date(b.massDate).toLocaleString('default', { month: 'short' })}</span>
+                      </div>
 
-                    <div className="space-y-1">
+                      <div className="space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono text-xs font-bold text-church-gold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
                           {b.bookingNumber || `MB-${b._id.slice(-6).toUpperCase()}`}
@@ -174,7 +237,7 @@ export default function AdminBookings() {
 
                 </div>
               </motion.div>
-            ))}
+            ); })}
           </div>
         )}
       </div>

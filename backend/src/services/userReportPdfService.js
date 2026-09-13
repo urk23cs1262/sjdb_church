@@ -59,8 +59,8 @@ const generateUserReportPdf = async (user, sessionInfo = {}) => {
         { expiresIn: '30d' }
       );
 
-      const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-      const qrReportWebUrl = `${clientUrl}/member-report/${secureToken}`;
+      const { getSiteUrl } = require('../config/siteRoutes');
+      const qrReportWebUrl = getSiteUrl(`/member-report/${secureToken}`);
 
       const qrDataUrl = await QRCode.toDataURL(qrReportWebUrl);
       const qrImageBuffer = Buffer.from(qrDataUrl.split(',')[1], 'base64');

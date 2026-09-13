@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { FiCheck, FiX, FiClock, FiMessageSquare, FiTrash2, FiCheckCircle } from 'react-icons/fi';
@@ -15,19 +16,56 @@ const STATUS_COLORS = {
 };
 
 export default function AdminPrayers() {
+  const { id: paramId } = useParams();
+  const [searchParams] = useSearchParams();
+  const targetId = paramId || searchParams.get('id') || searchParams.get('highlight');
+
   const [prayers, setPrayers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('pending');
+  const [targetPrayer, setTargetPrayer] = useState(null);
+  const targetCardRef = useRef(null);
+
+  useEffect(() => {
+    if (targetId) {
+      setLoading(true);
+      api.get(`/prayers/${targetId}`)
+        .then(r => {
+          if (r.data.prayer) {
+            setTargetPrayer(r.data.prayer);
+            if (r.data.prayer.status) setFilter(r.data.prayer.status);
+          }
+        })
+        .catch(() => {
+          api.get(`/prayers?id=${targetId}`).then(r => {
+            if (r.data.prayers?.[0]) {
+              setTargetPrayer(r.data.prayers[0]);
+              if (r.data.prayers[0].status) setFilter(r.data.prayers[0].status);
+            }
+          }).catch(() => {});
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [targetId]);
 
   const fetchPrayers = async () => {
     setLoading(true);
     try {
       const res = await api.get(`/prayers?status=${filter}`);
-      setPrayers(res.data.prayers || []);
+      let list = res.data.prayers || [];
+      if (targetPrayer && !list.some(p => p._id === targetPrayer._id)) {
+        list = [targetPrayer, ...list];
+      }
+      setPrayers(list);
     } catch { 
       toast.error('Failed to load prayers'); 
     } finally { 
-      setLoading(false); 
+      setLoading(false);
+      if (targetId) {
+        setTimeout(() => {
+          targetCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 300);
+      }
     }
   };
 
@@ -107,15 +145,27 @@ export default function AdminPrayers() {
             {prayers.map((prayer, i) => {
               const isExpired = prayer.preferredDate && new Date(prayer.preferredDate).setHours(0,0,0,0) < new Date().setHours(0,0,0,0);
               const displayStatus = (isExpired || prayer.status === 'completed') ? 'completed' : prayer.status;
+              const isTarget = Boolean(targetId && (prayer._id === targetId || prayer._id.endsWith(targetId) || targetId.includes(prayer._id.slice(-6))));
 
               return (
                 <motion.div
                   key={prayer._id}
+                  ref={isTarget ? targetCardRef : null}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  className="church-card p-6 border-l-4 border-church-gold hover:shadow-gold transition-all"
+                  className={`church-card p-6 border-l-4 border-church-gold hover:shadow-gold transition-all ${
+                    isTarget ? 'border-2 border-l-4 border-amber-500 ring-4 ring-amber-200/60 shadow-xl bg-amber-50/20' : ''
+                  }`}
                 >
+                  {isTarget && (
+                    <div className="mb-3 pb-2 border-b border-amber-200 flex items-center justify-between flex-wrap gap-2">
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-gradient-to-r from-amber-500 to-amber-600 text-white flex items-center gap-1.5 shadow-xs">
+                        <span>🎯 Targeted Prayer Request</span>
+                      </span>
+                      <span className="text-xs text-amber-900 font-bold">Direct Deep Link Active</span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-church-royal-blue text-white flex items-center justify-center font-bold text-lg shadow-sm">

@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const { sendMail } = require('../config/mailer');
+const { getSiteUrl } = require('../config/siteRoutes');
 
 // Parse User-Agent string into friendly Device, OS, and Browser names
 function parseUserAgent(ua = '') {
@@ -75,9 +76,7 @@ async function sendLoginAlertEmail({ user, req, loginMethod = 'Password' }) {
     const uaInfo = parseUserAgent(req.headers['user-agent']);
     const ipInfo = parseClientIpAndLocation(req);
     const securityToken = generateSecurityReportToken(user._id);
-
-    const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
-    const reportUrl = `${clientUrl}/security/report-unauthorized?token=${securityToken}&userId=${user._id}`;
+    const reportUrl = getSiteUrl(`/security/report-unauthorized?token=${securityToken}&userId=${user._id}`);
 
     const formattedTime = new Date().toLocaleString('en-IN', {
       timeZone: 'Asia/Kolkata',
@@ -199,7 +198,7 @@ async function sendPasswordUpdatedEmail({ user }) {
   if (!user || !user.email) return;
 
   try {
-    const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
+    const clientUrl = getSiteUrl('');
 
     const emailHtml = `
 <div style="background-color:#f1f5f9; padding:20px 10px; font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
@@ -279,8 +278,7 @@ async function sendUserSuspensionEmail({ user, incident, ipDetails = {} }) {
   try {
     if (!user?.email) return;
 
-    const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
-    const contactUrl = `${clientUrl}/contact`;
+    const contactUrl = getSiteUrl('/contact');
 
     const formattedSuspensionTime = new Date(incident.createdAt || Date.now()).toLocaleString('en-IN', {
       timeZone: 'Asia/Kolkata',
@@ -692,8 +690,7 @@ async function sendUserTemporaryLockoutEmail({ user, lockMinutes = 15, ipDetails
   if (!user || !user.email) return;
 
   try {
-    const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
-    const resetUrl = `${clientUrl}/login`;
+    const resetUrl = getSiteUrl('/login');
 
     const emailHtml = `
 <div style="background:#f8fafc; padding:30px 15px; font-family:'Segoe UI',Arial,sans-serif;">

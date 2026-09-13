@@ -152,7 +152,7 @@ const generateDonationReceipt = async (donation, user) => {
       doc.fontSize(9).fillColor('#555555').font('Helvetica');
       doc.text("Contact Details :", 40, contactY, { align: 'center', width: 515 });
       doc.text("Parish Office Phone : +91 96291 95484", 40, contactY + 14, { align: 'center', width: 515 });
-      doc.text("Parish Office Email : arndas777@gmail.com", 40, contactY + 26, { align: 'center', width: 515 });
+      doc.text("Parish Office Email : stjdbchurch@gmail.com", 40, contactY + 26, { align: 'center', width: 515 });
       doc.text("Parish Office Website : www.stjohnchurch.com", 40, contactY + 38, { align: 'center', width: 515 });
 
       // ─── 8. Bottom Statement (Properly Centered Without Overlap) ───────────

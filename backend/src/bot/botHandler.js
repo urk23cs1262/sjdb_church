@@ -824,25 +824,44 @@ _Kalayarkoil, Sivagangai Diocese_
       return;
     }
 
-    // Option 4: Church Events (Main Menu 4) OR Verse (Services 4)
+    // ── 4. Church Events Query (Option 4, "What are the events?", "Upcoming events", "Any events this week?", "Show church events") ──
     const isEventsChoice = normalizedText === '4' ||
-      /\b(events|upcoming events|church events)\b/i.test(normalizedText) ||
-      /(நிகழ்வுகள்|நிகழ்ச்சிகள்)/.test(rawText);
+      /\b(events?|upcoming events?|church events?|parish events?|show events?|list events?|what are the events|any events|what events|events this week)\b/i.test(normalizedText) ||
+      normalizedText.includes('what are the events') ||
+      normalizedText.includes('upcoming events') ||
+      normalizedText.includes('any events this week') ||
+      normalizedText.includes('show church events') ||
+      normalizedText.includes('show events') ||
+      /(நிகழ்வுகள்|நிகழ்ச்சிகள்|அடுத்த நிகழ்வு|பங்கு நிகழ்வுகள்)/.test(rawText);
 
     if (isEventsChoice) {
       try {
-        const events = await getCachedEvents();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Fetch live directly from MongoDB to guarantee 100% real-time accuracy
+        const events = await Event.find({
+          isPublished: { $ne: false },
+          date: { $gte: today }
+        })
+        .sort({ date: 1 })
+        .limit(5)
+        .lean();
+
+        const eventsUrl = `${getSiteUrl(SITE_ROUTES.EVENTS)}`;
 
         let eventsMsg = '';
         if (events && events.length > 0) {
-          const lines = events.map(ev => {
-            const dt = new Date(ev.date).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
-            return `📌 *${ev.title}*\n📅 ${dt} ${ev.time ? `• ⏰ ${ev.time}` : ''}\n📍 ${ev.venue || 'Church Premises'}\n`;
-          }).join('\n');
-          eventsMsg = `📅 *Upcoming Church Events:*\n\n${lines}\n🔗 ${getSiteUrl(SITE_ROUTES.EVENTS)}`;
+          const items = events.map((ev, idx) => {
+            const dt = new Date(ev.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+            return `${idx + 1}. *${ev.title}*\n   📅 ${dt}\n   🕐 ${ev.time || 'Schedule TBA'}\n   📍 ${ev.venue || 'Church Grounds'}\n   🔗 View Event: ${eventsUrl}`;
+          }).join('\n\n');
+
+          eventsMsg = `📅 *Upcoming Church Events*\n\n${items}\n\n🌐 *Complete Calendar:* ${eventsUrl}`;
         } else {
-          eventsMsg = `📅 *Church Events:*\n\nNo special upcoming events scheduled currently.\n\n🌐 ${getSiteUrl(SITE_ROUTES.EVENTS)}`;
+          eventsMsg = `📅 *Upcoming Church Events*\n\nNo upcoming church events are scheduled at the moment. Please check back soon or visit our website calendar.\n\n🌐 *View Events Calendar:* ${eventsUrl}`;
         }
+
         await wa.sendWhatsAppMessage(replyTarget, eventsMsg);
         return;
       } catch (eErr) {
@@ -850,26 +869,141 @@ _Kalayarkoil, Sivagangai Diocese_
       }
     }
 
-    // Option 5: Parish Announcements (Main Menu 5 & Services 9)
+    // ── 5. Parish Announcements Query (Option 5, "Any announcements?", "Latest announcement", "What is new?", "Show announcements") ──
     const isAnnouncementsChoice = normalizedText === '5' || normalizedText === '9' ||
-      /\b(announcements?|notices?|parish announcements?)\b/i.test(normalizedText) ||
-      /(அறிவிப்புகள்|பங்கு அறிவிப்பு)/.test(rawText);
+      /\b(announcements?|notices?|parish announcements?|what is new|what\'?s new|latest announcements?|show announcements?|any announcements?)\b/i.test(normalizedText) ||
+      normalizedText.includes('any announcements') ||
+      normalizedText.includes('latest announcement') ||
+      normalizedText.includes('what is new') ||
+      normalizedText.includes('show announcements') ||
+      /(அறிவிப்புகள்|பங்கு அறிவிப்பு|புதிய அறிவிப்பு)/.test(rawText);
 
     if (isAnnouncementsChoice) {
       try {
-        const announcements = await getCachedAnnouncements();
+        const nowDate = new Date();
+        const announcements = await Announcement.find({
+          isPublished: { $ne: false },
+          $or: [
+            { expiresAt: { $gt: nowDate } },
+            { expiresAt: null },
+            { expiresAt: { $exists: false } }
+          ]
+        })
+        .sort({ priority: -1, createdAt: -1 })
+        .limit(5)
+        .lean();
+
+        const annUrl = `${getSiteUrl(SITE_ROUTES.ANNOUNCEMENTS)}`;
 
         let annMsg = '';
         if (announcements && announcements.length > 0) {
-          const lines = announcements.map(a => `📢 *${a.title}*\n${(a.content || a.description || '').slice(0, 120)}...\n`).join('\n');
-          annMsg = `📢 *Parish Announcements:*\n\n${lines}\n🌐 ${getSiteUrl(SITE_ROUTES.ANNOUNCEMENTS)}`;
+          const items = announcements.map((a, idx) => {
+            const dt = a.createdAt ? new Date(a.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '';
+            const snippet = (a.content || a.description || '').replace(/\s+/g, ' ').slice(0, 110);
+            return `${idx + 1}. *${a.title}*${dt ? ` (${dt})` : ''}\n   📝 ${snippet}${snippet.length >= 110 ? '...' : ''}\n   🔗 Read Announcement: ${annUrl}`;
+          }).join('\n\n');
+
+          annMsg = `📢 *Latest Parish Announcements*\n\n${items}\n\n🌐 *All Announcements:* ${annUrl}`;
         } else {
-          annMsg = `📢 *Parish Announcements:*\n\nThere are no new announcements at this moment.\n\n🌐 ${getSiteUrl(SITE_ROUTES.ANNOUNCEMENTS)}`;
+          annMsg = `📢 *Parish Announcements*\n\nThere are no new announcements at this moment. You can check our website for updates.\n\n🌐 *View Announcements:* ${annUrl}`;
         }
+
         await wa.sendWhatsAppMessage(replyTarget, annMsg);
         return;
       } catch (aErr) {
         console.error('[BotHandler] Announcements error:', aErr.message);
+      }
+    }
+
+    // ── Maintenance Query ("Is there any maintenance?", "Website maintenance", "Any downtime?", "When will maintenance finish?") ──
+    const isMaintenanceQuery =
+      /\b(maintenance|downtime|server status|website status|site down|down time|system maintenance)\b/i.test(normalizedText) ||
+      normalizedText.includes('is there any maintenance') ||
+      normalizedText.includes('website maintenance') ||
+      normalizedText.includes('any downtime') ||
+      normalizedText.includes('when will maintenance finish') ||
+      normalizedText.includes('maintenance status') ||
+      normalizedText.includes('is the site down') ||
+      normalizedText.includes('is website down') ||
+      /(பராமரிப்பு|வலைத்தள பராமரிப்பு|தடை|இணையதள பராமரிப்பு)/.test(rawText);
+
+    if (isMaintenanceQuery) {
+      try {
+        const { getSystemState } = require('../services/systemStateService');
+        const systemState = await getSystemState(true);
+        const MaintenanceSetting = require('../models/MaintenanceSetting');
+        const settings = await MaintenanceSetting.findOne({ key: 'site_maintenance' }).lean();
+
+        const maintenanceUrl = `${getSiteUrl('/maintenance')}`;
+        const siteUrl = `${getSiteUrl('/')}`;
+
+        const format12H = (dateVal) => {
+          if (!dateVal) return 'TBA';
+          const d = new Date(dateVal);
+          if (isNaN(d.getTime())) return 'TBA';
+          return d.toLocaleString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            day: 'numeric',
+            month: 'short',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          }) + ' IST';
+        };
+
+        const isUnderMaintenance = systemState && (systemState.status === 'maintenance' || systemState.status === 'emergency');
+        const hasUpcomingNotice = settings && (settings.noticeBanner?.isEnabled || settings.scheduler?.isEnabled);
+
+        let maintMsg = '';
+        if (isUnderMaintenance) {
+          const expectedEnd = format12H(systemState.expectedCompletion || settings?.expectedCompletion);
+          const category = systemState.category || settings?.category || 'General Maintenance';
+          const details = systemState.message || settings?.message || 'Scheduled system maintenance and performance upgrades.';
+
+          maintMsg = `🛠️ *Church Website Maintenance Status*
+
+⚠️ *Status:* Active System Maintenance
+🔧 *Category:* ${category}
+📝 *Details:* ${details}
+🕒 *Expected Completion:* ${expectedEnd}
+
+🌐 *View Maintenance Notice:*
+${maintenanceUrl}
+
+Our technical team is working to restore services as quickly as possible. Thank you for your patience and prayers! 🙏`;
+        } else if (hasUpcomingNotice && (settings.scheduler?.scheduledStart || settings.noticeBanner?.scheduledStartTime)) {
+          const startTime = format12H(settings.scheduler?.scheduledStart || settings.noticeBanner?.scheduledStartTime);
+          const endTime = format12H(settings.scheduler?.scheduledEnd || settings.noticeBanner?.scheduledEndTime || settings.expectedCompletion);
+          const category = settings.category || 'Scheduled Update';
+          const details = settings.noticeBanner?.message || settings.message || 'Scheduled system maintenance.';
+
+          maintMsg = `🛠️ *Scheduled Church Website Maintenance*
+
+⚠️ *Status:* Upcoming Maintenance Notice
+🔧 *Category:* ${category}
+📝 *Details:* ${details}
+📅 *Start Time:* ${startTime}
+⏳ *Expected End:* ${endTime}
+
+🌐 *View Maintenance Notice:*
+${maintenanceUrl}
+
+The church website is currently live and operational. Please note the scheduled window above for planned updates.`;
+        } else {
+          maintMsg = `✅ *Church Website Status: All Systems Operational*
+
+There is currently no maintenance or downtime scheduled for the church website. All online services (Holy Mass bookings, prayer petitions, certificate requests, and online offertory) are active 24x7.
+
+🌐 *Visit Church Website:*
+${siteUrl}
+
+— *St. John de Britto Church, Kalayarkoil*`;
+        }
+
+        await wa.sendWhatsAppMessage(replyTarget, maintMsg);
+        return;
+      } catch (mErr) {
+        console.error('[BotHandler] Maintenance query error:', mErr.message);
       }
     }
 
@@ -1056,7 +1190,7 @@ Church Road, Kalayarkoil — 630551,
 Sivagangai District, Tamil Nadu, India.
 
 📱 *Phone:* +91 96556 39144
-📧 *Email:* arndas777@gmail.com
+📧 *Email:* stjdbchurch@gmail.com
 🕒 *Office Hours:* 9:00 AM – 1:00 PM & 4:00 PM – 7:00 PM
 
 📍 *Google Maps Location Link:*

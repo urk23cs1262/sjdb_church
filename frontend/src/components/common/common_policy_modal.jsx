@@ -225,7 +225,7 @@ export default function PolicyModal({ isOpen, onClose, initialTab = 'terms' }) {
         {/* Footer */}
         <div className="px-4 sm:px-6 py-3 sm:py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-3 flex-shrink-0">
           <p className="text-[10px] sm:text-[11px] text-gray-500 text-center sm:text-left">
-            Questions? Contact <span className="font-bold text-gray-700">sjdbchurch@gmail.com</span>
+            Questions? Contact <span className="font-bold text-gray-700">stjdbchurch@gmail.com</span>
           </p>
           <button
             onClick={onClose}

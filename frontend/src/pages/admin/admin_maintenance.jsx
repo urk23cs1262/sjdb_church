@@ -593,7 +593,7 @@ export default function MaintenanceAdmin() {
                     value={settings.contactEmail || ''}
                     onChange={(e) => setSettings({ ...settings, contactEmail: e.target.value })}
                     className="church-input"
-                    placeholder="support@stjb-church.vercel.app"
+                    placeholder="stjdbchurch@gmail.com"
                   />
                 </div>
               </div>

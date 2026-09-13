@@ -59,7 +59,8 @@ exports.createRequest = async (req, res) => {
       relatedModel: 'PermissionRequest'
     });
 
-    const clientUrl = process.env.CLIENT_URL?.replace('http://localhost:5173', 'https://stjb-church.vercel.app') || 'https://stjb-church.vercel.app';
+    const { getSiteUrl } = require('../config/siteRoutes');
+    const clientUrl = getSiteUrl('');
 
     // Send immediate WhatsApp notification to target user via WhatsApp bot (session-aware)
     const changeList = Object.values(requestedChanges).map(d => `• *${d.label}*: ${String(d.old)} ${String(d.new)}`).join('\n');
@@ -273,7 +274,8 @@ exports.respondToRequest = async (req, res) => {
     // Send WhatsApp & Email notifications to Admin if admin user exists
     try {
       const adminUser = await User.findById(request.adminId);
-      const clientUrl = process.env.CLIENT_URL?.replace('http://localhost:5173', 'https://stjb-church.vercel.app') || 'https://stjb-church.vercel.app';
+      const { getSiteUrl } = require('../config/siteRoutes');
+      const clientUrl = getSiteUrl('');
       const isApproved = status === 'approved';
 
       if (adminUser) {

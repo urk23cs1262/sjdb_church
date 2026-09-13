@@ -1,6 +1,7 @@
 const PrayerRequest = require('../models/PrayerRequest');
 const User = require('../models/User');
 const { notifyAdmins, createNotification } = require('../services/notificationService');
+const { emitRequestCreated, emitRequestStatusChanged } = require('../services/requestNotificationService');
 const { sendMail } = require('../config/mailer');
 
 function sendWA(phone, text) {
@@ -27,14 +28,46 @@ const getPublic = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
+const getPrayerById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let query;
+    if (id.match(/^[0-9a-fA-F]{24}$/)) {
+      query = { _id: id };
+    } else {
+      const rawHex = id.replace(/^PR-/i, '');
+      query = { _id: { $regex: rawHex + '$', $options: 'i' } };
+    }
+    const prayer = await PrayerRequest.findOne(query).populate('userId', 'name email phone parishMemberId familyId anbiyam');
+    if (!prayer) return res.status(404).json({ success: false, message: 'Prayer request not found' });
+    
+    // Authorization check: Admin OR Owner OR matching contact
+    const isOwner = prayer.userId && (prayer.userId._id ? prayer.userId._id.toString() : prayer.userId.toString()) === req.user?._id?.toString();
+    const phoneMatch = req.user?.phone && prayer.contactPhone && req.user.phone.replace(/\D/g, '') === prayer.contactPhone.replace(/\D/g, '');
+    const emailMatch = req.user?.email && prayer.email && req.user.email.toLowerCase() === prayer.email.toLowerCase();
+
+    if (req.user?.role !== 'admin' && !isOwner && !phoneMatch && !emailMatch && !prayer.isPublic) {
+      return res.status(403).json({ success: false, message: 'Access denied. You can only view your own requests.' });
+    }
+
+    res.json({ success: true, prayer });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+};
+
 const getAll = async (req, res) => {
   try {
-    const { status } = req.query;
+    const { status, id } = req.query;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const query = {};
-    if (status === 'completed') {
+    if (id) {
+      if (id.match(/^[0-9a-fA-F]{24}$/)) {
+        query._id = id;
+      } else {
+        query._id = { $regex: id.replace(/^PR-/i, '') + '$', $options: 'i' };
+      }
+    } else if (status === 'completed') {
       query.$or = [
         { status: 'completed' },
         { preferredDate: { $lt: today } }
@@ -50,7 +83,7 @@ const getAll = async (req, res) => {
       query.status = status;
     }
 
-    const prayers = await PrayerRequest.find(query).populate('userId', 'name email phone').sort({ createdAt: -1 });
+    const prayers = await PrayerRequest.find(query).populate('userId', 'name email phone parishMemberId familyId anbiyam').sort({ createdAt: -1 });
     res.json({ success: true, prayers });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
@@ -91,7 +124,8 @@ const create = async (req, res) => {
     });
 
     const notifTitle = isConfession ? ' New Confession Request' : ' New Prayer Request';
-    const clientBaseUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
+    const { getSiteUrl } = require('../config/siteRoutes');
+    const clientBaseUrl = getSiteUrl('');
     const userActionUrl = isConfession ? '/dashboard' : '/prayer-requests';
 
     // 1. Admin In-App Notification (ActionUrl: /admin/prayers)
@@ -151,6 +185,14 @@ Your ${isConfession ? 'confidential confession request' : 'prayer intention'} ha
       }
     }
 
+    // 4. Central Admin Request Notification (WhatsApp Bot, Email, Push, In-App)
+    emitRequestCreated({
+      module: 'prayer_request',
+      request: prayer,
+      user: req.user,
+      req
+    });
+
     res.status(201).json({ success: true, prayer });
   } catch (err) {
     console.error('Prayer creation error:', err);
@@ -161,7 +203,10 @@ Your ${isConfession ? 'confidential confession request' : 'prayer intention'} ha
 const updateStatus = async (req, res) => {
   try {
     const { status } = req.body;
-    const prayer = await PrayerRequest.findByIdAndUpdate(req.params.id, { status }, { new: true }).populate('userId', 'name email phone');
+    const previousPrayer = await PrayerRequest.findById(req.params.id);
+    const previousStatus = previousPrayer?.status || 'pending';
+
+    const prayer = await PrayerRequest.findByIdAndUpdate(req.params.id, { status }, { new: true }).populate('userId', 'name email phone parishMemberId familyId anbiyam');
 
     if (prayer) {
       const userObj = prayer.userId;
@@ -169,7 +214,8 @@ const updateStatus = async (req, res) => {
       const userPhone = prayer.contactPhone || userObj?.phone;
       const isConfession = prayer.type === 'Confession Request';
       const isApproved = status === 'approved';
-      const clientBaseUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
+      const { getSiteUrl } = require('../config/siteRoutes');
+      const clientBaseUrl = getSiteUrl('');
       const userActionUrl = isConfession ? '/dashboard' : '/prayer-requests';
 
       // 1. User In-App Notification
@@ -197,7 +243,7 @@ const updateStatus = async (req, res) => {
         }).catch(e => console.error('Status update in-app notification error:', e.message));
       }
 
-      // 3. User WhatsApp Bot
+      // 2. User WhatsApp Bot
       if (userPhone) {
         sendWA(userPhone, `*${prayer.type} Status Update*
 
@@ -210,6 +256,17 @@ ${isApproved ? 'May God bless you and grant your prayer intentions.' : 'Thank yo
 
 _St. John de Britto Church, Kalayarkoil_`);
       }
+
+      // 3. Central Admin Status Change Notification
+      emitRequestStatusChanged({
+        module: 'prayer_request',
+        request: prayer,
+        previousStatus,
+        newStatus: status,
+        user: prayer.userId,
+        updatedBy: req.user,
+        req
+      });
     }
 
     res.json({ success: true, prayer });
@@ -256,4 +313,4 @@ const incrementPrayer = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
-module.exports = { getPublic, getAll, create, updateStatus, incrementPrayer, deletePrayer, deleteAllByStatus };
+module.exports = { getPublic, getAll, getPrayerById, create, updateStatus, incrementPrayer, deletePrayer, deleteAllByStatus };

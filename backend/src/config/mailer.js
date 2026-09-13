@@ -48,7 +48,7 @@ const sendMail = async ({ to, subject, html, attachments = [] }) => {
     return { success: false, error: 'SMTP not configured' };
   }
   try {
-    const fromEmail = process.env.SMTP_FROM || 'arndas777@gmail.com';
+    const fromEmail = process.env.SMTP_FROM || 'stjdbchurch@gmail.com';
     const emailAttachments = [...attachments];
 
     // Automatically inject a fresh, dynamic bilingual Bible verse into all outgoing emails

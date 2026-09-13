@@ -706,14 +706,14 @@ function buildContactSection(isTamil) {
   const body = isTamil
     ? `• *பங்கு அலுவலகம்:* சர்ச் ரோடு, காளையார்கோவில் - 630551
 • *தொலைபேசி:* +91 96556 39144 / பங்கு அலுவலகம்
-• *மின்னஞ்சல்:* arndas777@gmail.com
+• *மின்னஞ்சல்:* stjdbchurch@gmail.com
 • *அலுவலக நேரம்:* திங்கள் முதல் சனி வரை: காலை 9:00 – பிற்பகல் 1:00 & மாலை 4:00 – 7:00 (ஞாயிறு திருப்பலிக்குப் பின் விடுமுறை)
 
 📍 *கூகுள் மேப் (Google Maps):*
 ${EXTERNAL_LINKS.GOOGLE_MAPS}\n`
     : `• *Parish Office:* Church Road, Kalayarkoil - 630551
 • *Phone:* +91 96556 39144 / Parish Office
-• *Email:* arndas777@gmail.com
+• *Email:* stjdbchurch@gmail.com
 • *Office Hours:* Monday – Saturday: 9:00 AM – 1:00 PM & 4:00 PM – 7:00 PM (Closed Sunday afternoons)
 
 📍 *Google Maps Location:*

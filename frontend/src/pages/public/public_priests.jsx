@@ -10,8 +10,8 @@ import { SectionLoader } from '../../components/common/common_loader';
 import PageHero from '../../components/common/common_page_hero';
 
 const PLACEHOLDER_PRIESTS = [
-  { _id: '1', name: 'Rev. Fr. A. Arockiaraj', designation: 'Parish Priest', isCurrent: true, order: 1, phone: '+91 98765 XXXXX', email: 'priest@sjdb.in', bio: 'Currently serving as the Parish Priest of St. John de Britto\'s Church, Kalayarkoil. Dedicated to pastoral ministry and community service.' },
-  { _id: '2', name: 'Rev. Fr. S. Raj Kumar', designation: 'Assistant Priest', isCurrent: true, order: 2, phone: '+91 87654 XXXXX', email: 'asst@sjdb.in', bio: 'Assisting the parish priest in all sacramental and pastoral activities of the parish.' },
+  { _id: '1', name: 'Rev. Fr. A. Arockiaraj', designation: 'Parish Priest', isCurrent: true, order: 1, phone: '+91 98765 XXXXX', email: 'stjdbchurch@gmail.com', bio: 'Currently serving as the Parish Priest of St. John de Britto\'s Church, Kalayarkoil. Dedicated to pastoral ministry and community service.' },
+  { _id: '2', name: 'Rev. Fr. S. Raj Kumar', designation: 'Assistant Priest', isCurrent: true, order: 2, phone: '+91 87654 XXXXX', email: 'stjdbchurch@gmail.com', bio: 'Assisting the parish priest in all sacramental and pastoral activities of the parish.' },
   { _id: '3', name: 'Rev. Fr. M. Xavier', designation: 'Former Parish Priest', isCurrent: false, order: 3, startDate: '2010-01-01', endDate: '2018-12-31', bio: 'Served the parish faithfully for 8 years with great devotion and love.' },
   { _id: '4', name: 'Rev. Fr. P. Antony', designation: 'Former Parish Priest', isCurrent: false, order: 4, startDate: '2002-01-01', endDate: '2009-12-31', bio: 'Led the parish during a period of significant growth and community development.' },
 ];

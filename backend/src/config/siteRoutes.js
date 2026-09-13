@@ -3,11 +3,45 @@
  * Used across Frontend, Backend Bot Handlers, RAG Engine, Schedulers, and Notification Formatter.
  */
 
+/**
+ * Resolves the canonical public production website base URL.
+ * Prioritizes centrally configured environment variables:
+ * - PUBLIC_FRONTEND_BASE_URL
+ * - FRONTEND_BASE_URL
+ * - PUBLIC_URL
+ * - PRODUCTION_CLIENT_URL
+ * - CLIENT_URL
+ * - FRONTEND_URL
+ *
+ * Automatically guards against localhost/127.0.0.1 in public notifications,
+ * falling back to the canonical production domain: https://st-jb-church.vercel.app
+ */
 function getBaseClientUrl() {
-  const envUrl = process.env.CLIENT_URL || process.env.FRONTEND_URL || '';
-  if (envUrl && !envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
-    return envUrl.replace(/\/$/, '');
+  const candidates = [
+    process.env.PUBLIC_FRONTEND_BASE_URL,
+    process.env.FRONTEND_BASE_URL,
+    process.env.PUBLIC_URL,
+    process.env.PRODUCTION_CLIENT_URL,
+    process.env.CLIENT_URL,
+    process.env.FRONTEND_URL
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate && typeof candidate === 'string') {
+      const trimmed = candidate.trim().replace(/\/+$/, '');
+      if (
+        trimmed &&
+        trimmed !== 'undefined' &&
+        trimmed !== 'null' &&
+        (trimmed.startsWith('http://') || trimmed.startsWith('https://')) &&
+        !trimmed.includes('localhost') &&
+        !trimmed.includes('127.0.0.1')
+      ) {
+        return trimmed;
+      }
+    }
   }
+
   return 'https://st-jb-church.vercel.app';
 }
 

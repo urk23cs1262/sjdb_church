@@ -674,7 +674,7 @@ export default function UserDashboard() {
               <div style={{ marginTop: '45px', textAlign: 'center', fontSize: '14px', lineHeight: '1.8', color: '#555' }}>
                 Contact Details :<br />
                 Parish Office Phone : +91 96291 95484 <br />
-                Parish Office Email : sjdbchurch@gmail.com <br />
+                Parish Office Email : stjdbchurch@gmail.com <br />
                 Parish Office Website : www.stjohnchurch.com
               </div>
 

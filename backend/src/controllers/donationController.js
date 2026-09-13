@@ -212,7 +212,7 @@ const sendDonationReceiptEmails = async (donation, { force = false } = {}) => {
       <td align="center" style="padding:10px 20px 14px;text-align:center;font-size:11px;color:#666666;line-height:18px;">
         <p style="margin:0;font-weight:bold;color:#444444;">Contact Details :</p>
         <p style="margin:0;">Parish Office Phone : +91 96291 95484</p>
-        <p style="margin:0;">Parish Office Email : arndas777@gmail.com</p>
+        <p style="margin:0;">Parish Office Email : stjdbchurch@gmail.com</p>
         <p style="margin:0;">Parish Office Website : www.stjohnchurch.com</p>
       </td>
     </tr>

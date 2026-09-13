@@ -271,9 +271,9 @@ export default function Maintenance({ isPreview = false }) {
             <FiPhone className="text-amber-600" />
             <span>{status?.contactPhone || '+91 94431 00000'}</span>
           </a>
-          <a href={`mailto:${status?.contactEmail || 'support@stjohndebrittochurch.org'}`} className="inline-flex items-center gap-1.5 hover:text-amber-700 font-semibold transition-colors">
+          <a href={`mailto:${status?.contactEmail || 'stjdbchurch@gmail.com'}`} className="inline-flex items-center gap-1.5 hover:text-amber-700 font-semibold transition-colors">
             <FiMail className="text-amber-600" />
-            <span>{status?.contactEmail || 'support@stjohndebrittochurch.org'}</span>
+            <span>{status?.contactEmail || 'stjdbchurch@gmail.com'}</span>
           </a>
         </div>
 

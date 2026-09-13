@@ -50,6 +50,7 @@ const UserTickets = lazy(() => import('./pages/user/user_tickets'));
 const UserProfile = lazy(() => import('./pages/user/user_profile'));
 const UserSettings = lazy(() => import('./pages/user/user_settings'));
 const UserNotifications = lazy(() => import('./pages/user/user_notifications'));
+const UserRequestDetail = lazy(() => import('./pages/user/user_request_detail'));
 
 // Admin dashboard
 const AdminDashboard = lazy(() => import('./pages/admin/admin_dashboard'));
@@ -157,6 +158,13 @@ function AppRoutes() {
               <Route path="/notifications" element={<ProtectedRoute><Navigate to="/dashboard/notifications" replace /></ProtectedRoute>} />
               <Route path="/settings" element={<ProtectedRoute><Navigate to="/dashboard/settings" replace /></ProtectedRoute>} />
 
+              {/* Dedicated User Request-Status Review Deep Links */}
+              <Route path="/my-requests/:module/:id" element={<ProtectedRoute><UserRequestDetail /></ProtectedRoute>} />
+              <Route path="/my-requests/mass-intentions/:id" element={<ProtectedRoute><UserRequestDetail module="mass-intentions" /></ProtectedRoute>} />
+              <Route path="/my-requests/prayer-requests/:id" element={<ProtectedRoute><UserRequestDetail module="prayer-requests" /></ProtectedRoute>} />
+              <Route path="/my-requests/document-requests/:id" element={<ProtectedRoute><UserRequestDetail module="document-requests" /></ProtectedRoute>} />
+              <Route path="/my-requests/tickets/:id" element={<ProtectedRoute><UserRequestDetail module="tickets" /></ProtectedRoute>} />
+
             </Route>
 
             {/* Public Maintenance Page */}
@@ -176,10 +184,20 @@ function AppRoutes() {
               <Route path="gallery" element={<AdminGallery />} />
               <Route path="announcements" element={<AdminAnnouncements />} />
               <Route path="bookings" element={<AdminBookings />} />
+              <Route path="bookings/:id" element={<AdminBookings />} />
+              <Route path="mass-intentions" element={<AdminBookings />} />
+              <Route path="mass-intentions/:id" element={<AdminBookings />} />
               <Route path="documents" element={<AdminDocuments />} />
+              <Route path="documents/:id" element={<AdminDocuments />} />
+              <Route path="document-requests" element={<AdminDocuments />} />
+              <Route path="document-requests/:id" element={<AdminDocuments />} />
               <Route path="donations" element={<AdminDonations />} />
               <Route path="tickets" element={<AdminTickets />} />
+              <Route path="tickets/:id" element={<AdminTickets />} />
               <Route path="prayers" element={<AdminPrayers />} />
+              <Route path="prayers/:id" element={<AdminPrayers />} />
+              <Route path="prayer-requests" element={<AdminPrayers />} />
+              <Route path="prayer-requests/:id" element={<AdminPrayers />} />
               <Route path="anbiyam" element={<AdminAnbiyam />} />
               <Route path="maintenance" element={<AdminMaintenance />} />
               <Route path="settings" element={<AdminSettings />} />

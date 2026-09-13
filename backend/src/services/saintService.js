@@ -131,7 +131,7 @@ async function fetchWikipediaSummary(saintName) {
     try {
       const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(slug)}`;
       const res = await axios.get(summaryUrl, {
-        headers: { 'User-Agent': 'SJDBChurchApp/1.0 (Catholic Parish Management; contact: info@sjdbchurch.org)' },
+        headers: { 'User-Agent': 'SJDBChurchApp/1.0 (Catholic Parish Management; contact: stjdbchurch@gmail.com)' },
         timeout: 5000
       });
       if (res.data && res.data.extract && res.data.extract.length > 30) {

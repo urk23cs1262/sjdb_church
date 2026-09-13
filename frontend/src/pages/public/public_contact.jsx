@@ -56,7 +56,7 @@ export default function Contact() {
                 {[
                   { icon: <FiMapPin />, title: 'Address', content: 'RJWM+XQ4, Murthi Nagar, Kalayarkoil, Tamil Nadu 630551, India' },
                   { icon: <FiPhone />, title: 'Phone', content: '+91 04577 XXXXXX', link: 'tel:+9104577' },
-                  { icon: <FiMail />, title: 'Email', content: 'sjdbchurch@gmail.com', link: 'mailto:sjdbchurch@gmail.com' },
+                  { icon: <FiMail />, title: 'Email', content: 'stjdbchurch@gmail.com', link: 'mailto:stjdbchurch@gmail.com' },
                   { icon: <FiClock />, title: 'Office Hours', content: 'Monday – Saturday: 9:00 AM – 5:00 PM\nClosed on Sundays and public holidays' },
                 ].map((item, i) => (
                   <div key={i} className="flex items-start gap-4">

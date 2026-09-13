@@ -78,50 +78,12 @@ const create = async (req, res) => {
     }
     const ann = await Announcement.create(data);
 
-    // Notify all users in background
+    // Multi-Channel Broadcast across WhatsApp, Email, In-App, and Push
     if (ann.isPublished !== false) {
-      const publicUrl = 'https://stjb-church.vercel.app';
-      const { formatAnnouncementWhatsApp, broadcastAnnouncementCreated } = require('../services/whatsappBroadcastHelper');
-      
-      const msg = formatAnnouncementWhatsApp(ann);
-      broadcastAnnouncementCreated(ann).catch(err => console.error("Error auto-broadcasting announcement to WhatsApp:", err));
-
-      User.find({ isVerified: true }).then(users => {
-        users.forEach(user => {
-          if (user.phone) {
-            sendSMS(user.phone, msg).catch(() => { });
-          }
-        });
-      }).catch(err => console.error("Error notifying users:", err));
-
-      // In-app broadcast notification for all users
-      createNotification({
-        isBroadcast: true,
-        recipient: 'user',
-        title: `📢 ${ann.title}`,
-        message: ann.content ? (ann.content.length > 150 ? ann.content.slice(0, 150) + '...' : ann.content) : 'A new announcement from the church.',
-        type: 'announcement',
-        category: 'announcements',
-        priority: 'medium',
-        actionUrl: '/announcements',
-        relatedId: ann._id,
-        relatedModel: 'Announcement',
-        channels: []
-      }).catch(e => console.error('Announcement broadcast notification error:', e.message));
-
-      // Admin confirmation in-app
-      createNotification({
-        recipient: 'admin',
-        title: `📢 Announcement Published: ${ann.title}`,
-        message: `The announcement "${ann.title}" has been published successfully.`,
-        type: 'announcement',
-        category: 'announcements',
-        priority: 'low',
-        actionUrl: '/admin/announcements',
-        relatedId: ann._id,
-        relatedModel: 'Announcement',
-        channels: []
-      }).catch(e => console.error('Announcement admin notification error:', e.message));
+      const { broadcastAnnouncementPublished } = require('../services/broadcastNotificationService');
+      broadcastAnnouncementPublished({ announcement: ann, action: 'created' }).catch(err => {
+        console.error('[AnnouncementController] Error broadcasting new announcement:', err.message);
+      });
     }
 
     res.status(201).json({ success: true, announcement: ann });
@@ -152,19 +114,12 @@ const update = async (req, res) => {
     }
     const ann = await Announcement.findByIdAndUpdate(req.params.id, data, { new: true });
 
-    // Notify all users about Updated Announcement in background
+    // Multi-Channel Broadcast for Updated Announcement
     if (ann && ann.isPublished !== false) {
-      const { formatAnnouncementWhatsApp } = require('../services/whatsappBroadcastHelper');
-      const msg = formatAnnouncementWhatsApp(ann);
-
-      User.find({ isVerified: true }).then(users => {
-        users.forEach(user => {
-          if (user.phone) {
-            sendSMS(user.phone, msg).catch(() => { });
-            sendWA(user.phone, msg);
-          }
-        });
-      }).catch(err => console.error("Error notifying users on announcement update:", err));
+      const { broadcastAnnouncementPublished } = require('../services/broadcastNotificationService');
+      broadcastAnnouncementPublished({ announcement: ann, action: 'updated' }).catch(err => {
+        console.error('[AnnouncementController] Error broadcasting updated announcement:', err.message);
+      });
     }
 
     res.json({ success: true, announcement: ann });

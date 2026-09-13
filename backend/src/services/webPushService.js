@@ -4,7 +4,7 @@ const User = require('../models/User');
 
 let activeVapidPublicKey = process.env.VAPID_PUBLIC_KEY;
 let activeVapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-const vapidEmail = process.env.VAPID_EMAIL || 'mailto:parish@sjdbchurch.org';
+const vapidEmail = process.env.VAPID_EMAIL || 'mailto:stjdbchurch@gmail.com';
 
 if (activeVapidPublicKey && activeVapidPrivateKey) {
   try {
@@ -150,10 +150,59 @@ async function sendPushBroadcast(payload) {
   }
 }
 
+/**
+ * Dispatch an immediate push notification to all administrator devices
+ */
+async function sendPushToAdmins(payload) {
+  try {
+    const adminUsers = await User.find({ role: 'admin' }).select('_id');
+    const adminIds = adminUsers.map(u => u._id);
+    if (!adminIds.length) return { success: false, reason: 'No admin accounts' };
+
+    const subscriptions = await PushSubscription.find({ userId: { $in: adminIds } }).lean();
+    if (!subscriptions.length) {
+      return { success: false, reason: 'No active push subscriptions for admins' };
+    }
+
+    const jsonPayload = JSON.stringify(payload);
+    let sentCount = 0;
+
+    for (const sub of subscriptions) {
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: sub.endpoint,
+            keys: sub.keys
+          },
+          jsonPayload,
+          {
+            TTL: 86400,
+            urgency: 'high'
+          }
+        );
+        sentCount++;
+      } catch (err) {
+        if (err.statusCode === 404 || err.statusCode === 410) {
+          await removeSubscription(sub.endpoint);
+        } else {
+          console.warn(`[WebPush] Admin push failed for endpoint:`, err.message);
+        }
+      }
+    }
+
+    return { success: sentCount > 0, sentCount, total: subscriptions.length };
+  } catch (err) {
+    console.error('[WebPush] Error sending push to admins:', err.message);
+    return { success: false, error: err.message };
+  }
+}
+
 module.exports = {
   getVapidPublicKey,
   saveSubscription,
   removeSubscription,
   sendPushToUser,
-  sendPushBroadcast
+  sendPushBroadcast,
+  sendPushToAdmins
 };
+

@@ -68,6 +68,10 @@ const dispatchPreMaintenanceNotice = async (settings, options = {}) => {
     await settings.save();
     updateCacheFromSettings(settings);
 
+    // Multi-Channel Broadcast across WhatsApp, Email, In-App, and Push
+    const { broadcastMaintenanceScheduled } = require('../services/broadcastNotificationService');
+    broadcastMaintenanceScheduled({ settings, action: 'scheduled' }).catch(e => console.error('[MaintenanceController] Pre-maintenance broadcast error:', e.message));
+
     // Run notifications asynchronously in background
     setImmediate(async () => {
       try {
@@ -265,6 +269,14 @@ const toggleMaintenanceMode = async (req, res) => {
       changedById: req.user ? req.user._id : null
     });
 
+    // Multi-Channel Broadcast for Maintenance Started or Completed
+    const settings = await getOrCreateSettings();
+    const { broadcastMaintenanceScheduled } = require('../services/broadcastNotificationService');
+    broadcastMaintenanceScheduled({
+      settings,
+      action: isEnabled ? 'started' : 'completed'
+    }).catch(err => console.error('[MaintenanceController] Broadcast error:', err.message));
+
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -282,6 +294,13 @@ const triggerEmergencyShutdown = async (req, res) => {
       changedBy: req.user ? (req.user.name || req.user.email) : 'System Admin',
       changedById: req.user ? req.user._id : null
     });
+
+    const settings = await getOrCreateSettings();
+    const { broadcastMaintenanceScheduled } = require('../services/broadcastNotificationService');
+    broadcastMaintenanceScheduled({
+      settings,
+      action: 'emergency'
+    }).catch(err => console.error('[MaintenanceController] Emergency broadcast error:', err.message));
 
     res.json(result);
   } catch (err) {

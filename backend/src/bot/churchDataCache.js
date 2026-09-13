@@ -125,11 +125,8 @@ async function getCachedEvents() {
     today.setHours(0, 0, 0, 0);
 
     const events = await Event.find({
-      status: { $nin: ['completed', 'cancelled', 'deleted'] },
-      $or: [
-        { date: { $gte: today } },
-        { isRecurring: true }
-      ]
+      isPublished: { $ne: false },
+      date: { $gte: today }
     })
     .sort({ date: 1 })
     .limit(10)
@@ -155,9 +152,14 @@ async function getCachedAnnouncements() {
 
   cache.stats.misses++;
   try {
+    const nowDate = new Date();
     const announcements = await Announcement.find({
-      isActive: { $ne: false },
-      status: { $nin: ['completed', 'cancelled', 'deleted'] }
+      isPublished: { $ne: false },
+      $or: [
+        { expiresAt: { $gt: nowDate } },
+        { expiresAt: null },
+        { expiresAt: { $exists: false } }
+      ]
     })
     .sort({ priority: -1, createdAt: -1 })
     .limit(10)

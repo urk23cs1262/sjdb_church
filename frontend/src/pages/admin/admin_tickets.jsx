@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { FiCheck, FiMessageSquare, FiSend, FiMoreVertical, FiTrash2 } from 'react-icons/fi';
+import { FiCheck, FiMessageSquare, FiSend, FiMoreVertical, FiTrash2, FiLifeBuoy } from 'react-icons/fi';
 import api from '../../services/api';
 import { SectionLoader } from '../../components/common/common_loader';
 import { useAuth } from '../../context/context_auth_context';
@@ -17,6 +18,10 @@ const CATEGORY_LABELS = {
 
 export default function AdminTickets() {
   const { user } = useAuth();
+  const { id: paramId } = useParams();
+  const [searchParams] = useSearchParams();
+  const targetId = paramId || searchParams.get('id') || searchParams.get('highlight');
+
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('open');
@@ -25,9 +30,41 @@ export default function AdminTickets() {
   const [openMenuId, setOpenMenuId] = useState(null);
 
   useEffect(() => {
-    setLoading(true);
-    api.get(`/tickets?status=${status}&limit=50`).then(r => setTickets(r.data.tickets || [])).finally(() => setLoading(false));
+    if (targetId) {
+      setLoading(true);
+      api.get(`/tickets/${targetId}`)
+        .then(r => {
+          if (r.data.ticket) {
+            setActive(r.data.ticket);
+            if (r.data.ticket.status) setStatus(r.data.ticket.status);
+          }
+        })
+        .catch(() => {
+          api.get(`/tickets?id=${targetId}`).then(r => {
+            if (r.data.tickets?.[0]) {
+              setActive(r.data.tickets[0]);
+              if (r.data.tickets[0].status) setStatus(r.data.tickets[0].status);
+            }
+          }).catch(() => {});
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [targetId]);
+
+  useEffect(() => {
+    fetchTickets();
   }, [status]);
+
+  const fetchTickets = () => {
+    setLoading(true);
+    api.get(`/tickets?status=${status}&limit=50`).then(r => {
+      let list = r.data.tickets || [];
+      if (active && !list.some(t => t._id === active._id)) {
+        list = [active, ...list];
+      }
+      setTickets(list);
+    }).finally(() => setLoading(false));
+  };
 
   useEffect(() => {
     const handleOutsideClick = () => setOpenMenuId(null);
@@ -86,10 +123,26 @@ export default function AdminTickets() {
           </div>
           {loading ? <SectionLoader /> : (
             <div className="space-y-2 overflow-y-auto max-h-[300px] lg:max-h-none flex-1">
-              {tickets.map((t) => (
-                <div key={t._id} onClick={() => setActive(t)} className={`church-card cursor-pointer transition-all p-3 sm:p-4 relative ${active?._id === t._id ? 'border-church-gold shadow-gold' : ''}`}>
-                  <div className="flex items-start justify-between mb-1 gap-1">
-                    <p className="font-semibold text-gray-800 text-sm truncate flex-1">{t.subject}</p>
+              {tickets.map((t) => {
+                const isTarget = Boolean(targetId && (t._id === targetId || t.ticketNumber === targetId || t._id.endsWith(targetId)));
+                return (
+                  <div
+                    key={t._id}
+                    onClick={() => setActive(t)}
+                    className={`church-card cursor-pointer transition-all p-3 sm:p-4 relative ${
+                      active?._id === t._id ? 'border-church-gold shadow-gold ring-2 ring-church-gold/40' : ''
+                    } ${isTarget ? 'border-2 border-amber-500 bg-amber-50/30 shadow-md' : ''}`}
+                  >
+                    {isTarget && (
+                      <div className="mb-2 pb-1 border-b border-amber-200 flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                          🎯 Target Ticket
+                        </span>
+                        <span className="text-[10px] text-amber-800 font-mono font-bold">{t.ticketNumber || `TKT-${t._id.slice(-6).toUpperCase()}`}</span>
+                      </div>
+                    )}
+                    <div className="flex items-start justify-between mb-1 gap-1">
+                      <p className="font-semibold text-gray-800 text-sm truncate flex-1">{t.subject}</p>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <span className={`badge ${STATUS_COLORS[t.status]} text-xs`}>{t.status?.replace('_', ' ')}</span>
                       <div className="relative">
@@ -127,8 +180,9 @@ export default function AdminTickets() {
                     <p className="text-gray-400 text-xs">{t.replies?.length || 0} replies</p>
                   </div>
                 </div>
-              ))}
-              {tickets.length === 0 && <p className="text-center text-gray-400 py-10 text-sm">No {status} tickets</p>}
+              );
+            })}
+            {tickets.length === 0 && <p className="text-center text-gray-400 py-10 text-sm">No {status} tickets</p>}
             </div>
           )}
         </div>

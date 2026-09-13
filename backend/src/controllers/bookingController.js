@@ -1,5 +1,6 @@
 const Booking = require('../models/Booking');
 const { createNotification, notifyAdmins } = require('../services/notificationService');
+const { emitRequestCreated, emitRequestStatusChanged } = require('../services/requestNotificationService');
 
 const getMyBookings = async (req, res) => {
   try {
@@ -8,13 +9,35 @@ const getMyBookings = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
+const getBookingById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const query = id.match(/^[0-9a-fA-F]{24}$/) ? { _id: id } : { bookingNumber: id };
+    const booking = await Booking.findOne(query).populate('userId', 'name phone email parishMemberId familyId anbiyam');
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+    
+    // Authorization check: Admin or Request Owner
+    const isOwner = booking.userId && (booking.userId._id ? booking.userId._id.toString() : booking.userId.toString()) === req.user._id.toString();
+    if (req.user.role !== 'admin' && !isOwner) {
+      return res.status(403).json({ success: false, message: 'Access denied. You can only view your own requests.' });
+    }
+
+    res.json({ success: true, booking });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+};
+
 const getAllBookings = async (req, res) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
+    const { status, page = 1, limit = 20, id } = req.query;
     const query = {};
-    if (status) query.status = status;
+    if (id) {
+      if (id.match(/^[0-9a-fA-F]{24}$/)) query._id = id;
+      else query.bookingNumber = id;
+    } else if (status) {
+      query.status = status;
+    }
     const total = await Booking.countDocuments(query);
-    const bookings = await Booking.find(query).populate('userId', 'name phone email').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(Number(limit));
+    const bookings = await Booking.find(query).populate('userId', 'name phone email parishMemberId familyId anbiyam').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(Number(limit));
     res.json({ success: true, total, bookings });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
@@ -71,11 +94,13 @@ const createBooking = async (req, res) => {
       channels: []
     }).catch(e => console.error('Booking admin notification error:', e.message));
     
-    // Also email/WhatsApp admins
-    notifyAdmins({
-      title: `New Mass Booking (${booking.bookingNumber})`,
-      message: `A new mass booking has been requested:\n\n Ref ID: ${booking.bookingNumber}\n User: ${req.user.name}\n For Person/Family: ${personName || familyName || 'N/A'}\n Phone: ${req.user.phone || 'N/A'}\n Date: ${formattedDate}\n Time: ${massTime || 'Any time'}\n Intention: ${intentionType}\n Details: ${intentionDetails || 'None'}\n Voluntary Offering: ₹${offertory || 0}\n\nView details: ${process.env.CLIENT_URL || 'http://localhost:5173'}/admin/bookings`
-    }).catch(e => console.error('Booking notification error:', e.message));
+    // Trigger central admin request notification (WhatsApp Bot, Email, Push, In-App)
+    emitRequestCreated({
+      module: 'mass_intention',
+      request: booking,
+      user: req.user,
+      req
+    });
 
     res.status(201).json({ success: true, booking });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -84,11 +109,14 @@ const createBooking = async (req, res) => {
 const updateBookingStatus = async (req, res) => {
   try {
     const { status, adminNote, suggestedDate, suggestedTime } = req.body;
+    const previousBooking = await Booking.findById(req.params.id).populate('userId', 'name phone email parishMemberId familyId anbiyam');
+    const previousStatus = previousBooking?.status || 'pending';
+
     const updateData = { status, adminNote, confirmedBy: req.user._id };
     if (suggestedDate) updateData.suggestedDate = suggestedDate;
     if (suggestedTime) updateData.suggestedTime = suggestedTime;
 
-    const booking = await Booking.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    const booking = await Booking.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate('userId', 'name phone email parishMemberId familyId anbiyam');
     
     const statusText = status === 'approved' ? 'Approved ' : status === 'completed' ? 'Completed ' : 'Rejected ';
     let msg = `Your mass booking (${booking.bookingNumber || 'Ref'}) for ${new Date(booking.massDate).toLocaleDateString()} has been ${status}.`;
@@ -98,7 +126,7 @@ const updateBookingStatus = async (req, res) => {
     if (adminNote) msg += ` Note: ${adminNote}`;
 
     createNotification({ 
-        userId: booking.userId, 
+        userId: booking.userId?._id || booking.userId, 
         recipient: 'user',
         title: `Mass Booking ${statusText}`, 
         message: msg, 
@@ -111,6 +139,18 @@ const updateBookingStatus = async (req, res) => {
         channels: ['email'] 
     }).catch(e => console.error('Booking status notification error:', e.message));
     
+    // Trigger central admin notification for status change
+    emitRequestStatusChanged({
+      module: 'mass_intention',
+      request: booking,
+      previousStatus,
+      newStatus: status,
+      user: booking.userId,
+      updatedBy: req.user,
+      note: adminNote || (suggestedDate ? `Alternative date suggested: ${new Date(suggestedDate).toLocaleDateString()}` : null),
+      req
+    });
+
     res.json({ success: true, booking });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
@@ -122,4 +162,4 @@ const deleteBooking = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
-module.exports = { getMyBookings, getAllBookings, createBooking, updateBookingStatus, deleteBooking };
+module.exports = { getMyBookings, getAllBookings, getBookingById, createBooking, updateBookingStatus, deleteBooking };

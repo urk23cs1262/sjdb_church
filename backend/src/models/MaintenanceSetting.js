@@ -47,7 +47,7 @@ const maintenanceSettingSchema = new mongoose.Schema({
 
   // Contact & Social Details
   contactPhone: { type: String, default: '+91 94431 00000' },
-  contactEmail: { type: String, default: 'support@stjohndebrittochurch.org' },
+  contactEmail: { type: String, default: 'stjdbchurch@gmail.com' },
   socialLinks: {
     facebook: { type: String, default: 'https://facebook.com' },
     instagram: { type: String, default: 'https://instagram.com' },

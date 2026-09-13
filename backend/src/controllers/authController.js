@@ -299,6 +299,7 @@ const login = async (req, res) => {
     const isStaffOrAdmin = user.role === 'admin' || 
                            user.role === 'priest' || 
                            user.isTechnicalTeam || 
+                           (user.email || '').toLowerCase() === 'stjdbchurch@gmail.com' ||
                            (user.email || '').toLowerCase() === 'arndas777@gmail.com';
 
     if (isStaffOrAdmin) {

@@ -228,6 +228,7 @@ async function deactivateWebsiteAccount(user, reason, detectedWords = []) {
   const isProtectedAdmin = user.role === 'admin' || 
                            user.role === 'priest' || 
                            user.isTechnicalTeam || 
+                           (user.email || '').toLowerCase() === 'stjdbchurch@gmail.com' ||
                            (user.email || '').toLowerCase() === 'arndas777@gmail.com' ||
                            adminPhones.some(p => userPhoneDigits.endsWith(p.slice(-10)));
 
@@ -255,7 +256,7 @@ async function deactivateWebsiteAccount(user, reason, detectedWords = []) {
         category: 'security',
         priority: 'critical',
         title: '🚫 Account Deactivated & Restricted',
-        message: `Your SJDB Connect account has been deactivated due to prohibited language on WhatsApp. To appeal or restore your access, please contact the parish office at +91 9655639144 or arndas777@gmail.com.`,
+        message: `Your SJDB Connect account has been deactivated due to prohibited language on WhatsApp. To appeal or restore your access, please contact the parish office at +91 9655639144 or stjdbchurch@gmail.com.`,
         actionUrl: '/contact'
       });
     } catch (notifErr) {
@@ -335,7 +336,7 @@ async function deactivateWebsiteAccount(user, reason, detectedWords = []) {
           <div style="font-size:13px; color:#1e293b; line-height:1.9;">
             <div>• <strong>Parish Office:</strong> St. John de Britto Church, Kalayarkoil - 630551</div>
             <div>• <strong>Parish Priest / Admin Phone:</strong> <a href="tel:+919655639144" style="color:#2563eb; font-weight:bold; text-decoration:none;">+91 9655639144</a> / <a href="tel:+919443123456" style="color:#2563eb; text-decoration:none;">+91 9443123456</a></div>
-            <div>• <strong>Administrator Email:</strong> <a href="mailto:arndas777@gmail.com" style="color:#2563eb; font-weight:bold; text-decoration:none;">arndas777@gmail.com</a></div>
+            <div>• <strong>Administrator Email:</strong> <a href="mailto:stjdbchurch@gmail.com" style="color:#2563eb; font-weight:bold; text-decoration:none;">stjdbchurch@gmail.com</a></div>
             <div>• <strong>Office Hours:</strong> Monday – Saturday, 9:00 AM – 5:00 PM IST</div>
             <div>• <strong>Parish Website:</strong> <a href="https://st-jb-church.vercel.app" style="color:#2563eb; text-decoration:none;">st-jb-church.vercel.app</a></div>
           </div>
@@ -409,7 +410,7 @@ Your account is currently restricted and deactivated due to previous policy viol
 📞 *Parish Administrator Contact Details:*
 • ⛪ *Parish:* St. John de Britto Church, Kalayarkoil
 • 📱 *Admin / Parish Phone:* +91 9655639144 / +91 9443123456
-• 📧 *Admin Email:* arndas777@gmail.com
+• 📧 *Admin Email:* stjdbchurch@gmail.com
 • 🏛️ *Office Hours:* Monday – Saturday, 9:00 AM – 5:00 PM IST
 • 🌐 *Website:* https://st-jb-church.vercel.app
 
@@ -489,7 +490,7 @@ Your message contained prohibited language:
 If you wish to appeal or request account reactivation, please contact the church administration directly:
 • ⛪ *Parish:* St. John de Britto Church, Kalayarkoil
 • 📱 *Admin / Parish Phone:* +91 9655639144 / +91 9443123456
-• 📧 *Admin Email:* arndas777@gmail.com
+• 📧 *Admin Email:* stjdbchurch@gmail.com
 • 🏛️ *Office Hours:* Monday – Saturday, 9:00 AM – 5:00 PM IST
 • 🌐 *Parish Website:* https://st-jb-church.vercel.app
 
@@ -582,7 +583,7 @@ Your message contained prohibited language:
     const formattedTimestamp = now.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'medium' });
 
     await sendMail({
-      to: 'arndas777@gmail.com',
+      to: process.env.ADMIN_EMAIL || process.env.SMTP_FROM || 'stjdbchurch@gmail.com',
       subject: shouldBlock
         ? `🚨 URGENT: User Blocked & Deactivated for Abusive Language — ${displayName || formattedPhone}`
         : `⚠️ WhatsApp Abuse Warning Issued — ${displayName || formattedPhone}`,
@@ -999,7 +1000,7 @@ Your account has been restricted by the administrator.
           </div>
           <div>• <strong>Parish Office:</strong> St. John de Britto Church, Kalayarkoil - 630551</div>
           <div>• <strong>Admin Phone:</strong> <a href="tel:+919655639144" style="color:#2563eb; font-weight:bold; text-decoration:none;">+91 9655639144</a> / <a href="tel:+919443123456" style="color:#2563eb; text-decoration:none;">+91 9443123456</a></div>
-          <div>• <strong>Admin Email:</strong> <a href="mailto:arndas777@gmail.com" style="color:#2563eb; font-weight:bold; text-decoration:none;">arndas777@gmail.com</a></div>
+          <div>• <strong>Admin Email:</strong> <a href="mailto:stjdbchurch@gmail.com" style="color:#2563eb; font-weight:bold; text-decoration:none;">stjdbchurch@gmail.com</a></div>
           <div>• <strong>Office Hours:</strong> Monday – Saturday, 9:00 AM – 5:00 PM IST</div>
           <div>• <strong>Parish Website:</strong> <a href="https://st-jb-church.vercel.app" style="color:#2563eb; text-decoration:none;">st-jb-church.vercel.app</a></div>
         </div>

@@ -28,6 +28,7 @@ const protect = async (req, res, next) => {
     const isStaffOrAdmin = req.user.role === 'admin' || 
                            req.user.role === 'priest' || 
                            req.user.isTechnicalTeam || 
+                           (req.user.email || '').toLowerCase() === 'stjdbchurch@gmail.com' ||
                            (req.user.email || '').toLowerCase() === 'arndas777@gmail.com';
 
     // Administrator and staff accounts must NEVER be locked out by deactivation flags

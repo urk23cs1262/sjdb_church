@@ -85,8 +85,8 @@ const createNotification = async ({ userId, isBroadcast, title, message, type, c
           }
         }
 
-        const clientUrl = (process.env.CLIENT_URL || 'https://stjb-church.vercel.app').replace('http://localhost:5173', 'https://stjb-church.vercel.app');
-        const targetUrl = actionUrl ? (actionUrl.startsWith('http') ? actionUrl : `${clientUrl}${actionUrl}`) : `${clientUrl}/dashboard`;
+        const { getSiteUrl } = require('../config/siteRoutes');
+        const targetUrl = actionUrl ? (actionUrl.startsWith('http') ? actionUrl : getSiteUrl(actionUrl)) : getSiteUrl('/dashboard');
 
         recipientEmails.forEach(toEmail => {
           sendMail({
@@ -162,7 +162,9 @@ const createNotification = async ({ userId, isBroadcast, title, message, type, c
           formattedPhone = `+${formattedPhone}`;
         }
         const fullFileUrl = fileUrl ? `${process.env.BACKEND_URL || 'http://localhost:5000'}${fileUrl}` : null;
-        const waMsg = `*${title}*\n\n${message}${actionUrl ? `\n\n ${process.env.CLIENT_URL || 'http://localhost:5173'}${actionUrl}` : ''}`;
+        const { getSiteUrl } = require('../config/siteRoutes');
+        const viewLink = actionUrl ? (actionUrl.startsWith('http') ? actionUrl : getSiteUrl(actionUrl)) : '';
+        const waMsg = `*${title}*\n\n${message}${viewLink ? `\n\n👉 View Details:\n${viewLink}` : ''}`;
         sendWhatsApp(formattedPhone, waMsg, fullFileUrl)
           .then(res => console.log(res.success ? ` WhatsApp sent to ${formattedPhone}` : ` WhatsApp failed: ${res.error}`))
           .catch(err => console.error(` WhatsApp error:`, err.message));
@@ -227,4 +229,18 @@ const notifyAdmins = async ({ title, message, fileUrl }) => {
   }
 };
 
-module.exports = { createNotification, notifyAdmins };
+const {
+  emitRequestCreated,
+  emitRequestStatusChanged,
+  notifyAdminRequest,
+  requestEvents
+} = require('./requestNotificationService');
+
+module.exports = {
+  createNotification,
+  notifyAdmins,
+  emitRequestCreated,
+  emitRequestStatusChanged,
+  notifyAdminRequest,
+  requestEvents
+};

@@ -676,7 +676,7 @@ export default function Donate() {
                         Thank you for your generous contribution<br />towards the ministry and mission of<br /><strong>St. John de Britto Church.</strong><br /><br />May God bless you abundantly.
                       </div>
                       <div style={{ marginTop: '45px', textAlign: 'center', fontSize: '14px', lineHeight: '1.8', color: '#555' }}>
-                        Contact Details :<br />Parish Office Phone : +91 96291 95484 <br />Parish Office Email : arndas777@gmail.com <br />Parish Office Website : www.stjohnchurch.com
+                        Contact Details :<br />Parish Office Phone : +91 96291 95484 <br />Parish Office Email : stjdbchurch@gmail.com <br />Parish Office Website : www.stjohnchurch.com
                       </div>
                       <div style={{ marginTop: '40px', textAlign: 'center', fontSize: '24px', fontWeight: 'bold' }}>
                         Computer Generated Receipt. <span style={{ color: 'red' }}>SIGNATURE NOT REQUIRED</span>

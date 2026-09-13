@@ -11,7 +11,7 @@ const { getSaintForDate } = require('../data/catholic_saints_calendar');
  */
 
 const HTTP_HEADERS = {
-  'User-Agent': 'SJDBChurchApp/1.0 (https://sjdbchurch.org; contact@sjdbchurch.org)',
+  'User-Agent': 'SJDBChurchApp/1.0 (https://sjdbchurch.org; contact: stjdbchurch@gmail.com)',
   'Accept': 'application/json, text/html, */*'
 };
 

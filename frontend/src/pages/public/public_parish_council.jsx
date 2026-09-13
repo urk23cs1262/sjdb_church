@@ -752,8 +752,8 @@ export default function ParishCouncil() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                   <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200">
                     <p className="text-gray-500 font-medium">Official Council Email:</p>
-                    <a href="mailto:council@sjdbchurch.org" className="font-bold text-church-royal-blue text-sm mt-0.5 block hover:underline">
-                      council@sjdbchurch.org
+                    <a href="mailto:stjdbchurch@gmail.com" className="font-bold text-church-royal-blue text-sm mt-0.5 block hover:underline">
+                      stjdbchurch@gmail.com
                     </a>
                   </div>
                   <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200">

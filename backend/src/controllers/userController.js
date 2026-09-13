@@ -120,7 +120,24 @@ const updateUser = async (req, res) => {
     } = req.body;
 
     const updateData = {};
-    if (role !== undefined) updateData.role = role;
+    if (role !== undefined) {
+      updateData.role = role;
+      // If promoted to admin or staff/clergy, automatically ensure account is active, verified and unrestricted
+      if (['admin', 'priest', 'staff', 'technical_team'].includes(role)) {
+        updateData.isActive = true;
+        updateData.isVerified = true;
+        updateData.account_verified = true;
+        updateData.isSuspended = false;
+        updateData.deactivatedReason = null;
+        updateData.failedLoginAttempts = 0;
+        updateData.isLockedUntil = null;
+        if (role === 'technical_team') {
+          updateData.isTechnicalTeam = true;
+        }
+      } else if (role === 'user') {
+        updateData.isTechnicalTeam = false;
+      }
+    }
     if (isActive !== undefined) updateData.isActive = isActive;
     if (isVerified !== undefined) updateData.isVerified = isVerified;
     if (name !== undefined) updateData.name = name;
@@ -156,6 +173,24 @@ const updateUser = async (req, res) => {
     if (sacraments !== undefined) updateData.sacraments = sacraments;
 
     const user = await User.findByIdAndUpdate(req.params.id, updateData, { new: true }).select('-passwordHash');
+
+    // If role changed to admin/clergy/staff, ensure any moderation phone blocks are also cleared
+    if (user && ['admin', 'priest', 'staff', 'technical_team'].includes(user.role) && user.phone) {
+      try {
+        const UserModeration = require('../models/UserModeration');
+        const digits = user.phone.replace(/\D/g, '');
+        const phone10 = digits.slice(-10);
+        if (phone10) {
+          await UserModeration.updateMany(
+            { phoneNumber: { $regex: phone10 } },
+            { $set: { strikes: 0, isBlocked: false, blockReason: null, unblockedAt: new Date() } }
+          );
+        }
+      } catch (modErr) {
+        console.warn('[updateUser] Could not auto-clear UserModeration for new admin:', modErr.message);
+      }
+    }
+
     res.json({ success: true, user });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
@@ -293,8 +328,8 @@ const generateComprehensiveUserPdfStream = async (user, res, isDownload = false)
     { expiresIn: '30d' }
   );
 
-  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-  const qrReportWebUrl = `${clientUrl}/member-report/${secureToken}`;
+  const { getSiteUrl } = require('../config/siteRoutes');
+  const qrReportWebUrl = getSiteUrl(`/member-report/${secureToken}`);
 
   const qrDataUrl = await QRCode.toDataURL(qrReportWebUrl);
   const qrImageBuffer = Buffer.from(qrDataUrl.split(',')[1], 'base64');

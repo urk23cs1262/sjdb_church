@@ -53,7 +53,8 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  const isAdmin = user?.role === 'admin';
+  const userRole = (user?.role || '').toLowerCase();
+  const isAdmin = ['admin', 'priest', 'staff', 'technical_team'].includes(userRole) || !!user?.isTechnicalTeam;
   const isAuthenticated = !!user;
 
   return (

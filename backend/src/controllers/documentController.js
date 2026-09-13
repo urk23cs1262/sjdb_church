@@ -1,5 +1,6 @@
 const Document = require('../models/Document');
 const { createNotification, notifyAdmins } = require('../services/notificationService');
+const { emitRequestCreated, emitRequestStatusChanged } = require('../services/requestNotificationService');
 const User = require('../models/User');
 const { sendMail } = require('../config/mailer');
 const { sendWhatsApp } = require('../config/twilio');
@@ -11,14 +12,45 @@ const getMyDocuments = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
+const getDocumentById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let query;
+    if (id.match(/^[0-9a-fA-F]{24}$/)) {
+      query = { _id: id };
+    } else {
+      const rawHex = id.replace(/^DOC-/i, '');
+      query = { _id: { $regex: rawHex + '$', $options: 'i' } };
+    }
+    const doc = await Document.findOne(query).populate('userId', 'name phone email parishMemberId familyId anbiyam');
+    if (!doc) return res.status(404).json({ success: false, message: 'Document not found' });
+    
+    // Authorization check: Admin OR Owner
+    const isOwner = doc.userId && (doc.userId._id ? doc.userId._id.toString() : doc.userId.toString()) === req.user._id.toString();
+    if (req.user.role !== 'admin' && !isOwner) {
+      return res.status(403).json({ success: false, message: 'Access denied. You can only view your own requests.' });
+    }
+
+    res.json({ success: true, document: doc });
+  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+};
+
 const getAllDocuments = async (req, res) => {
   try {
-    const { status, type, page = 1, limit = 20 } = req.query;
+    const { status, type, page = 1, limit = 20, id } = req.query;
     const query = {};
-    if (status) query.status = status;
-    if (type) query.type = type;
+    if (id) {
+      if (id.match(/^[0-9a-fA-F]{24}$/)) {
+        query._id = id;
+      } else {
+        query._id = { $regex: id.replace(/^DOC-/i, '') + '$', $options: 'i' };
+      }
+    } else {
+      if (status) query.status = status;
+      if (type) query.type = type;
+    }
     const total = await Document.countDocuments(query);
-    const docs = await Document.find(query).populate('userId', 'name phone email').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(Number(limit));
+    const docs = await Document.find(query).populate('userId', 'name phone email parishMemberId familyId anbiyam').sort({ createdAt: -1 }).skip((page - 1) * limit).limit(Number(limit));
     res.json({ success: true, total, documents: docs });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
@@ -42,25 +74,13 @@ const requestDocument = async (req, res) => {
       channels: ['email'] 
     }).catch(e => console.error('Doc notification error:', e.message));
     
-    // Admin in-app notification
-    createNotification({
-      recipient: 'admin',
-      title: ` New Document Request`,
-      message: `${req.user.name} requested a ${type.replace('_', ' ')} certificate. Details: ${requestDetails || 'None'}.`,
-      type: 'document',
-      category: 'documents',
-      priority: 'medium',
-      actionUrl: '/admin/documents',
-      relatedId: doc._id,
-      relatedModel: 'Document',
-      channels: []
-    }).catch(e => console.error('Doc admin notification error:', e.message));
-    
-    // Also email/WhatsApp admins
-    notifyAdmins({
-      title: 'New Document Request',
-      message: `A new document request has been received:\n\n User: ${req.user.name}\n Phone: ${req.user.phone || 'N/A'}\n Email: ${req.user.email}\n Type: ${type.replace('_', ' ')}\n Details: ${requestDetails || 'None'}\n\nView details: ${process.env.CLIENT_URL || 'http://localhost:5173'}/admin/documents`
-    }).catch(e => console.error('Doc request notification error:', e.message));
+    // Central Admin Request Notification (WhatsApp Bot, Email, Push, In-App)
+    emitRequestCreated({
+      module: 'document_request',
+      request: doc,
+      user: req.user,
+      req
+    });
 
     res.status(201).json({ success: true, document: doc });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -69,6 +89,9 @@ const requestDocument = async (req, res) => {
 const updateDocumentStatus = async (req, res) => {
   try {
     const { status, adminNote } = req.body;
+    const previousDoc = await Document.findById(req.params.id);
+    const previousStatus = previousDoc?.status || 'pending';
+
     const updateData = { status, adminNote, processedBy: req.user._id, processedAt: new Date() };
     if (req.file) {
       const { uploadToGridFS } = require('../services/gridfsService');
@@ -78,10 +101,11 @@ const updateDocumentStatus = async (req, res) => {
         updateData.uploadedFile = fileInfo.url;
       }
     }
-    const doc = await Document.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    const doc = await Document.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate('userId', 'name phone email parishMemberId familyId anbiyam');
+    
     // Notify user and admins (Async)
     createNotification({ 
-      userId: doc.userId, 
+      userId: doc.userId?._id || doc.userId, 
       recipient: 'user',
       title: `Document ${status === 'approved' ? 'Ready for Download ' : 'Status Updated'}`, 
       message: `Your ${doc.type.replace('_', ' ')} certificate request has been ${status}.${status === 'approved' ? ' You can now download it from your dashboard.' : ''}`, 
@@ -95,8 +119,20 @@ const updateDocumentStatus = async (req, res) => {
       channels: ['email', 'whatsapp'] 
     }).catch(e => console.error('Doc status notification error:', e.message));
 
+    // Central Admin Status Change Notification
+    emitRequestStatusChanged({
+      module: 'document_request',
+      request: doc,
+      previousStatus,
+      newStatus: status,
+      user: doc.userId,
+      updatedBy: req.user,
+      note: adminNote,
+      req
+    });
+
     res.json({ success: true, document: doc });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
-module.exports = { getMyDocuments, getAllDocuments, requestDocument, updateDocumentStatus };
+module.exports = { getMyDocuments, getAllDocuments, getDocumentById, requestDocument, updateDocumentStatus };
