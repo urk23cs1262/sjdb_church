@@ -302,11 +302,12 @@ async function sendWhatsAppMedia(phone, mediaArg, optionalCaption) {
   const jid = formatJid(phone);
   if (!jid) return false;
 
-  let url, caption, mimetype, fileName;
+  let url, caption, mimetype, fileName, buffer;
   if (typeof mediaArg === 'object' && mediaArg !== null) {
     url = mediaArg.url;
+    buffer = mediaArg.buffer;
     caption = mediaArg.caption || '';
-    mimetype = mediaArg.mimetype || (url?.match(/\.(jpe?g|png|webp)/i) ? 'image/jpeg' : 'image/jpeg');
+    mimetype = mediaArg.mimetype || (buffer || url?.match(/\.pdf$/i) ? 'application/pdf' : 'image/jpeg');
     fileName = mediaArg.fileName;
   } else {
     url = mediaArg;
@@ -314,22 +315,28 @@ async function sendWhatsAppMedia(phone, mediaArg, optionalCaption) {
     mimetype = url?.match(/\.pdf$/i) ? 'application/pdf' : 'image/jpeg';
   }
 
-  if (!url) return false;
+  if (!url && !buffer) return false;
 
-  if (isDuplicateOutgoing(jid, `${url}:${caption || ''}`)) {
+  const dupKey = buffer ? `buf:${fileName || 'doc'}:${caption || ''}` : `${url}:${caption || ''}`;
+  if (isDuplicateOutgoing(jid, dupKey)) {
     console.log(`⚡ [WhatsApp] Suppressed duplicate outgoing media to ${jid}`);
     return true;
   }
 
   try {
-    if (mimetype?.startsWith('image') || url.match(/\.(jpe?g|png|webp|gif)/i)) {
-      await sock.sendMessage(jid, { image: { url }, caption });
-    } else if (mimetype === 'application/pdf' || url.match(/\.pdf$/i)) {
-      await sock.sendMessage(jid, { document: { url }, mimetype: 'application/pdf', fileName: fileName || 'document.pdf', caption });
-    } else if (mimetype?.startsWith('audio') || url.match(/\.(mp3|m4a|wav|ogg)/i)) {
-      await sock.sendMessage(jid, { audio: { url }, mimetype: 'audio/mp4', ptt: false });
+    const isPdf = mimetype === 'application/pdf' || (url && url.match(/\.pdf$/i)) || (fileName && fileName.endsWith('.pdf'));
+    if (isPdf) {
+      const docPayload = buffer ? buffer : { url };
+      await sock.sendMessage(jid, { document: docPayload, mimetype: 'application/pdf', fileName: fileName || 'document.pdf', caption });
+    } else if (mimetype?.startsWith('image') || (url && url.match(/\.(jpe?g|png|webp|gif)/i))) {
+      const imgPayload = buffer ? buffer : { url };
+      await sock.sendMessage(jid, { image: imgPayload, caption });
+    } else if (mimetype?.startsWith('audio') || (url && url.match(/\.(mp3|m4a|wav|ogg)/i))) {
+      const audioPayload = buffer ? buffer : { url };
+      await sock.sendMessage(jid, { audio: audioPayload, mimetype: 'audio/mp4', ptt: false });
     } else {
-      await sock.sendMessage(jid, { image: { url }, caption });
+      const docPayload = buffer ? buffer : { url };
+      await sock.sendMessage(jid, { document: docPayload, mimetype: mimetype || 'application/octet-stream', fileName: fileName || 'file', caption });
     }
     console.log(`📎 WhatsApp media sent to ${jid}`);
     return true;
@@ -337,6 +344,13 @@ async function sendWhatsAppMedia(phone, mediaArg, optionalCaption) {
     console.error(`❌ Failed to send media to ${jid}:`, err.message);
     return false;
   }
+}
+
+async function sendWhatsAppDocument(phone, docOptions) {
+  if (typeof docOptions === 'string') {
+    return sendWhatsAppMedia(phone, { url: docOptions, mimetype: 'application/pdf' });
+  }
+  return sendWhatsAppMedia(phone, { ...docOptions, mimetype: 'application/pdf' });
 }
 
 async function sendWhatsAppToUser(userObjOrId, text) {
@@ -495,6 +509,7 @@ module.exports = {
   requestPairingCode,
   sendWhatsAppMessage,
   sendWhatsAppMedia,
+  sendWhatsAppDocument,
   sendWhatsAppToUser,
   getConnectionStatus,
   getQR

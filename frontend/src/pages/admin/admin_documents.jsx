@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { FiCheck, FiX, FiUpload, FiFileText } from 'react-icons/fi';
-import api from '../../services/api';
+import { FiCheck, FiX, FiUpload, FiFileText, FiDownload, FiExternalLink, FiCheckCircle, FiClock } from 'react-icons/fi';
+import api, { getMediaUrl } from '../../services/api';
 import { SectionLoader } from '../../components/common/common_loader';
 
 export default function AdminDocuments() {
@@ -13,6 +13,7 @@ export default function AdminDocuments() {
 
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [processingId, setProcessingId] = useState(null);
   const [status, setStatus] = useState('pending');
   const [targetDoc, setTargetDoc] = useState(null);
   const fileRefs = useRef({});
@@ -64,13 +65,31 @@ export default function AdminDocuments() {
 
   const updateDoc = async (id, newStatus, file) => {
     try {
+      setProcessingId(id);
+      const isApproving = newStatus === 'approved';
+      if (isApproving && file) {
+        toast.loading('Converting file to PDF & delivering to Parishioner...', { id: `doc-${id}` });
+      } else {
+        toast.loading(`Updating document to ${newStatus}...`, { id: `doc-${id}` });
+      }
+
       const formData = new FormData();
       formData.append('status', newStatus);
       if (file) formData.append('file', file);
-      await api.put(`/documents/${id}/status`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      
+      const res = await api.put(`/documents/${id}/status`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       setDocs(prev => prev.filter(d => d._id !== id));
-      toast.success(`Document ${newStatus}`);
-    } catch { toast.error('Failed'); }
+
+      if (isApproving) {
+        toast.success('Document approved & final PDF delivered via Email attachment & WhatsApp!', { id: `doc-${id}`, duration: 5000 });
+      } else {
+        toast.success(`Document marked as ${newStatus}`, { id: `doc-${id}` });
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update document', { id: `doc-${id}` });
+    } finally {
+      setProcessingId(null);
+    }
   };
 
   return (
@@ -85,7 +104,15 @@ export default function AdminDocuments() {
           </div>
           <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 max-w-full">
             {['pending', 'processing', 'approved', 'rejected'].map(s => (
-              <button key={s} onClick={() => setStatus(s)} className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold capitalize whitespace-nowrap transition-all ${status === s ? 'bg-church-gold text-white shadow-sm' : 'bg-white text-gray-500 border border-gray-200'}`}>{s}</button>
+              <button
+                key={s}
+                onClick={() => setStatus(s)}
+                className={`px-3 py-1.5 rounded-xl text-xs sm:text-sm font-semibold capitalize whitespace-nowrap transition-all ${
+                  status === s ? 'bg-church-gold text-white shadow-sm' : 'bg-white text-gray-500 border border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                {s}
+              </button>
             ))}
           </div>
         </div>
@@ -94,6 +121,8 @@ export default function AdminDocuments() {
           <div className="space-y-4">
             {docs.map((d, i) => {
               const isTarget = Boolean(targetId && (d._id === targetId || d._id.endsWith(targetId) || targetId.includes(d._id.slice(-6))));
+              const isWorking = processingId === d._id;
+
               return (
                 <motion.div
                   key={d._id}
@@ -113,32 +142,151 @@ export default function AdminDocuments() {
                       <span className="text-xs text-amber-900 font-bold">Direct Deep Link Active</span>
                     </div>
                   )}
+
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                    <div>
+                    <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-xs font-bold text-church-gold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
                           {`DOC-${d._id.slice(-6).toUpperCase()}`}
                         </span>
-                        <h3 className="font-bold text-gray-800 text-sm sm:text-base capitalize">{d.type?.replace('_', ' ')}</h3>
+                        <h3 className="font-bold text-gray-800 text-sm sm:text-base capitalize">
+                          {d.type?.replace(/_/g, ' ')} Certificate
+                        </h3>
+                        {status === 'processing' && (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                            <FiClock className="animate-spin text-blue-500 text-[10px]" /> In Processing
+                          </span>
+                        )}
+                        {status === 'approved' && (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-green-50 text-green-700 border border-green-200 flex items-center gap-1">
+                            <FiCheckCircle className="text-green-600" /> Approved & Delivered
+                          </span>
+                        )}
                       </div>
-                      <p className="text-gray-600 text-xs sm:text-sm mt-1">
-                        <strong className="text-gray-800">{d.userId?.name || 'Parishioner'}</strong> — {d.userId?.phone || 'No phone'}
+
+                      <p className="text-gray-600 text-xs sm:text-sm">
+                        <strong className="text-gray-800">{d.userId?.name || 'Parishioner'}</strong>
+                        {d.userId?.phone ? ` — ${d.userId.phone}` : ''}
+                        {d.userId?.email ? ` • ${d.userId.email}` : ''}
                       </p>
-                      {d.requestDetails && <p className="text-gray-500 text-xs mt-1 italic bg-gray-50 p-2 rounded-lg border border-gray-100">"{d.requestDetails}"</p>}
-                      <p className="text-gray-400 text-xs mt-1">Requested: {new Date(d.createdAt).toLocaleDateString()}</p>
+
+                      {d.requestDetails && (
+                        <p className="text-gray-600 text-xs italic bg-gray-50 p-2.5 rounded-lg border border-gray-100 max-w-xl">
+                          "{d.requestDetails}"
+                        </p>
+                      )}
+
+                      <div className="flex items-center gap-3 text-gray-400 text-xs pt-1">
+                        <span>Requested: {new Date(d.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        {d.processedAt && <span>• Processed: {new Date(d.processedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</span>}
+                      </div>
+
+                      {/* Approved multi-channel delivery banner */}
+                      {status === 'approved' && (
+                        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-2 flex-wrap text-xs text-gray-500">
+                          <span className="font-semibold text-gray-700">Delivered via:</span>
+                          <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-medium">✉️ Email (PDF Attachment)</span>
+                          <span className="px-2 py-0.5 rounded bg-green-50 text-green-800 border border-green-200 font-medium">💬 WhatsApp Bot (PDF Document)</span>
+                          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-800 border border-blue-200 font-medium">🌐 User Portal</span>
+                        </div>
+                      )}
                     </div>
-                    {status === 'pending' && (
-                      <div className="flex flex-col gap-2 items-start sm:items-end">
-                        <div className="flex flex-wrap gap-2">
-                          <input type="file" ref={el => fileRefs.current[d._id] = el} className="hidden" accept=".pdf,.jpg,.png" onChange={e => updateDoc(d._id, 'approved', e.target.files[0])} />
-                          <button onClick={() => { updateDoc(d._id, 'processing'); }} className="px-3 py-1.5 bg-blue-100 text-blue-600 rounded-xl text-xs sm:text-sm hover:bg-blue-200 transition-colors font-semibold">Processing</button>
-                          <button onClick={() => fileRefs.current[d._id]?.click()} className="flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-700 rounded-xl text-xs sm:text-sm hover:bg-green-200 transition-colors font-semibold">
+
+                    {/* Action Controls */}
+                    <div className="flex flex-col gap-2 items-start sm:items-end shrink-0">
+                      {/* Hidden File Input for PDF / Images */}
+                      <input
+                        type="file"
+                        ref={el => fileRefs.current[d._id] = el}
+                        className="hidden"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp"
+                        onChange={e => {
+                          if (e.target.files && e.target.files[0]) {
+                            updateDoc(d._id, 'approved', e.target.files[0]);
+                          }
+                        }}
+                      />
+
+                      {/* Pending Tab Controls */}
+                      {status === 'pending' && (
+                        <div className="flex flex-wrap gap-2 items-center">
+                          <button
+                            disabled={isWorking}
+                            onClick={() => updateDoc(d._id, 'processing')}
+                            className="px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100 rounded-xl text-xs sm:text-sm transition-colors font-semibold disabled:opacity-50"
+                          >
+                            Move to Processing
+                          </button>
+                          <button
+                            disabled={isWorking}
+                            onClick={() => fileRefs.current[d._id]?.click()}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs sm:text-sm transition-colors font-semibold shadow-xs disabled:opacity-50"
+                            title="Upload PDF or Image (automatically converts to PDF and delivers to parishioner)"
+                          >
                             <FiUpload /> Upload & Approve
                           </button>
-                          <button onClick={() => updateDoc(d._id, 'rejected')} className="p-1.5 sm:p-2 rounded-xl bg-red-100 text-red-600 hover:bg-red-200 transition-colors"><FiX /></button>
+                          <button
+                            disabled={isWorking}
+                            onClick={() => updateDoc(d._id, 'rejected')}
+                            className="p-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 transition-colors"
+                            title="Reject request"
+                          >
+                            <FiX />
+                          </button>
                         </div>
-                      </div>
-                    )}
+                      )}
+
+                      {/* Processing Tab Controls */}
+                      {status === 'processing' && (
+                        <div className="flex flex-wrap gap-2 items-center">
+                          <button
+                            disabled={isWorking}
+                            onClick={() => fileRefs.current[d._id]?.click()}
+                            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-xl text-xs sm:text-sm transition-colors font-semibold shadow-xs disabled:opacity-50"
+                            title="Upload PDF or Image (automatically converts to PDF and delivers to parishioner)"
+                          >
+                            <FiUpload /> Upload & Approve
+                          </button>
+                          <button
+                            disabled={isWorking}
+                            onClick={() => updateDoc(d._id, 'rejected')}
+                            className="p-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 transition-colors"
+                            title="Reject request"
+                          >
+                            <FiX />
+                          </button>
+                          <button
+                            disabled={isWorking}
+                            onClick={() => updateDoc(d._id, 'pending')}
+                            className="px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                            title="Move back to pending"
+                          >
+                            Reset to Pending
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Approved Tab Controls: View and Download Final PDF */}
+                      {status === 'approved' && d.uploadedFile && (
+                        <div className="flex flex-wrap gap-2 items-center">
+                          <a
+                            href={getMediaUrl(d.uploadedFile)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 px-3 py-1.5 bg-church-royal-blue text-white hover:bg-blue-900 rounded-xl text-xs sm:text-sm font-semibold transition-colors shadow-xs"
+                          >
+                            <FiExternalLink /> View Approved PDF
+                          </a>
+                          <a
+                            href={`${getMediaUrl(d.uploadedFile)}?download=true`}
+                            download
+                            className="flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs sm:text-sm font-semibold transition-colors border border-gray-200"
+                          >
+                            <FiDownload /> Download PDF
+                          </a>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </motion.div>
               );

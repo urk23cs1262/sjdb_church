@@ -99,9 +99,28 @@ const deleteFromGridFS = async (idOrFilename) => {
   }
 };
 
+/**
+ * Retrieve file buffer from GridFS
+ */
+const getGridFSBuffer = async (idOrFilename) => {
+  return new Promise((resolve, reject) => {
+    try {
+      const cleanId = String(idOrFilename).replace(/^\/api\/files\//, '');
+      const stream = getGridFSStream(cleanId);
+      const chunks = [];
+      stream.on('data', chunk => chunks.push(chunk));
+      stream.on('end', () => resolve(Buffer.concat(chunks)));
+      stream.on('error', err => reject(err));
+    } catch (err) {
+      reject(err);
+    }
+  });
+};
+
 module.exports = {
   uploadToGridFS,
   getGridFSStream,
   getGridFSFileDoc,
+  getGridFSBuffer,
   deleteFromGridFS
 };

@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { FiFileText, FiArrowLeft, FiDownload } from 'react-icons/fi';
-import api, { UPLOADS_URL } from '../../services/api';
+import api, { getMediaUrl } from '../../services/api';
 import { SectionLoader } from '../../components/common/common_loader';
 
 const DOC_TYPES = [
@@ -36,25 +36,28 @@ export default function Documents() {
 
   const statusColor = (s) => ({ pending: 'badge-gold', processing: 'badge-blue', approved: 'badge-green', rejected: 'badge-red' }[s] || 'badge-gray');
 
-  const forceFileDownload = async (e, fileUrl, type) => {
+  const forceFileDownload = async (e, rawUrl, type) => {
     e.preventDefault();
+    const downloadUrl = getMediaUrl(rawUrl);
+    if (!downloadUrl) return;
+
     try {
-      toast.loading("Starting download...", { id: "download" });
-      const response = await fetch(fileUrl);
+      toast.loading("Preparing download...", { id: "download" });
+      const response = await fetch(`${downloadUrl}${downloadUrl.includes('?') ? '&' : '?'}download=true`);
+      if (!response.ok) throw new Error('Download request failed');
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = blobUrl;
-      const ext = fileUrl.split('.').pop() || 'pdf';
-      link.download = `${type?.replace('_', '-')}-document.${ext}`;
+      link.download = `${(type || 'document').replace(/_/g, '-')}-certificate.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
-      toast.success("Download complete", { id: "download" });
+      toast.success("Download ready!", { id: "download" });
     } catch (err) {
-      toast.error("Download failed, opening directly.", { id: "download" });
-      window.open(fileUrl, '_blank');
+      toast.dismiss("download");
+      window.open(downloadUrl, '_blank');
     }
   };
 
@@ -111,7 +114,7 @@ export default function Documents() {
                   <div className="flex flex-col items-end gap-2">
                     <span className={`badge ${statusColor(d.status)} capitalize`}>{d.status}</span>
                     {d.status === 'approved' && d.uploadedFile && (
-                      <button onClick={(e) => forceFileDownload(e, d.uploadedFile.startsWith('http') ? d.uploadedFile : `${UPLOADS_URL.replace('/uploads', '')}${d.uploadedFile.startsWith('/') ? '' : '/'}${d.uploadedFile}`, d.type)} className="flex items-center gap-1 text-church-gold text-sm hover:underline"><FiDownload /> Download</button>
+                      <button onClick={(e) => forceFileDownload(e, d.uploadedFile, d.type)} className="flex items-center gap-1 text-church-gold text-sm hover:underline"><FiDownload /> Download Certificate</button>
                     )}
                   </div>
                 </div>

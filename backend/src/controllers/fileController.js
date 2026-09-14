@@ -58,11 +58,16 @@ const getFile = async (req, res) => {
         });
         return stream.pipe(res);
       } else {
+        const isDownload = req.query.download === 'true';
+        const dispositionType = isDownload ? 'attachment' : 'inline';
+        const safeName = (doc.filename || 'document.pdf').replace(/["\r\n]/g, '');
+
         res.set({
-          'Content-Type': doc.contentType || 'audio/mpeg',
+          'Content-Type': doc.contentType || 'application/octet-stream',
           'Content-Length': fileSize,
           'Accept-Ranges': 'bytes',
-          'Cache-Control': 'public, max-age=31536000, immutable'
+          'Cache-Control': 'public, max-age=31536000, immutable',
+          'Content-Disposition': `${dispositionType}; filename="${safeName}"`
         });
 
         const stream = getGridFSStream(doc._id);

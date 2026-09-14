@@ -90,46 +90,74 @@ const updateDocumentStatus = async (req, res) => {
   try {
     const { status, adminNote } = req.body;
     const previousDoc = await Document.findById(req.params.id);
-    const previousStatus = previousDoc?.status || 'pending';
+    if (!previousDoc) {
+      return res.status(404).json({ success: false, message: 'Document request not found' });
+    }
+    const previousStatus = previousDoc.status || 'pending';
 
     const updateData = { status, adminNote, processedBy: req.user._id, processedAt: new Date() };
+    let preparedPdf = null;
+
     if (req.file) {
       const { uploadToGridFS } = require('../services/gridfsService');
-      const buffer = req.file.buffer || (req.file.path ? fs.readFileSync(req.file.path) : null);
-      if (buffer) {
-        const fileInfo = await uploadToGridFS(buffer, req.file.originalname, req.file.mimetype);
-        updateData.uploadedFile = fileInfo.url;
-      }
-    }
-    const doc = await Document.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate('userId', 'name phone email parishMemberId familyId anbiyam');
-    
-    // Notify user and admins (Async)
-    createNotification({ 
-      userId: doc.userId?._id || doc.userId, 
-      recipient: 'user',
-      title: `Document ${status === 'approved' ? 'Ready for Download ' : 'Status Updated'}`, 
-      message: `Your ${doc.type.replace('_', ' ')} certificate request has been ${status}.${status === 'approved' ? ' You can now download it from your dashboard.' : ''}`, 
-      type: 'document', 
-      category: 'documents',
-      priority: status === 'approved' ? 'high' : 'medium',
-      actionUrl: '/dashboard/documents',
-      relatedId: doc._id, 
-      relatedModel: 'Document',
-      fileUrl: doc.uploadedFile,
-      channels: ['email', 'whatsapp'] 
-    }).catch(e => console.error('Doc status notification error:', e.message));
+      const { prepareFinalDocumentPdf } = require('../services/documentDeliveryService');
 
-    // Central Admin Status Change Notification
-    emitRequestStatusChanged({
-      module: 'document_request',
-      request: doc,
-      previousStatus,
-      newStatus: status,
-      user: doc.userId,
-      updatedBy: req.user,
-      note: adminNote,
-      req
-    });
+      preparedPdf = await prepareFinalDocumentPdf(req.file, previousDoc.type);
+      const fileInfo = await uploadToGridFS(preparedPdf.buffer, preparedPdf.filename, 'application/pdf');
+      updateData.uploadedFile = fileInfo.url;
+    }
+
+    const doc = await Document.findByIdAndUpdate(req.params.id, updateData, { new: true })
+      .populate('userId', 'name phone email parishMemberId familyId anbiyam settings whatsappOptIn');
+
+    if (status === 'approved') {
+      const { deliverApprovedDocument } = require('../services/documentDeliveryService');
+      deliverApprovedDocument({
+        document: doc,
+        user: doc.userId,
+        finalPdfBuffer: preparedPdf?.buffer,
+        filename: preparedPdf?.filename,
+        adminNote
+      }).catch(e => console.error('[DocumentController] Document delivery error:', e.message));
+
+      emitRequestStatusChanged({
+        module: 'document_request',
+        request: doc,
+        previousStatus,
+        newStatus: status,
+        user: doc.userId,
+        updatedBy: req.user,
+        note: adminNote,
+        req
+      });
+    } else {
+      createNotification({ 
+        userId: doc.userId?._id || doc.userId, 
+        recipient: 'user',
+        title: `Document Request: ${status === 'processing' ? 'Processing' : 'Status Updated'}`, 
+        message: status === 'processing' 
+          ? `Your ${doc.type.replace(/_/g, ' ')} certificate request is now being processed by the parish administration.`
+          : `Your ${doc.type.replace(/_/g, ' ')} certificate request has been ${status}.${adminNote ? ` Note: ${adminNote}` : ''}`, 
+        type: 'document', 
+        category: 'documents',
+        priority: status === 'rejected' ? 'high' : 'medium',
+        actionUrl: `/my-requests/document-requests/DOC-${doc._id.toString().slice(-6).toUpperCase()}`,
+        relatedId: doc._id, 
+        relatedModel: 'Document',
+        channels: ['email', 'whatsapp', 'push', 'inApp'] 
+      }).catch(e => console.error('Doc status notification error:', e.message));
+
+      emitRequestStatusChanged({
+        module: 'document_request',
+        request: doc,
+        previousStatus,
+        newStatus: status,
+        user: doc.userId,
+        updatedBy: req.user,
+        note: adminNote,
+        req
+      });
+    }
 
     res.json({ success: true, document: doc });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
