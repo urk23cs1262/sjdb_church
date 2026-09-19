@@ -12,7 +12,7 @@ export default function Layout() {
   const [videoAdOpen, setVideoAdOpen] = useState(true);
 
   // "Hey Connect" voice assistant — mounted once, persists across all routes
-  const { state, transcript, destination, audioLevel, isSpeaking, dismiss } = useVoiceAssistant();
+  const { state, transcript, spokenText, destination, audioLevel, isSpeaking, errorMessage, dismiss } = useVoiceAssistant();
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -30,9 +30,11 @@ export default function Layout() {
       <VoiceOrb
         state={state}
         transcript={transcript}
+        spokenText={spokenText}
         destination={destination}
         audioLevel={audioLevel}
         isSpeaking={isSpeaking}
+        errorMessage={errorMessage}
         dismiss={dismiss}
       />
     </div>

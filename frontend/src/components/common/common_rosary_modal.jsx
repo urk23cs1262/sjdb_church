@@ -13,6 +13,36 @@ import RosaryAudioPlayer from './common_rosary_audio_player';
 import { MYSTERIES } from '../../data/rosary_prayers';
 import api, { getMediaUrl } from '../../services/api';
 
+// ── Devotional Song Persistence ───────────────────────────────────────────────
+const DEVOTIONAL_STORAGE_KEY = 'sjdb_devotionalSong_lastPlayed';
+
+/** Save the currently playing song's stable ID to localStorage */
+function saveLastPlayedSong(song) {
+  if (!song || !song._id) return;
+  try {
+    localStorage.setItem(
+      DEVOTIONAL_STORAGE_KEY,
+      JSON.stringify({ songId: song._id, fileUrl: song.fileUrl || '', savedAt: Date.now() })
+    );
+  } catch (_) {}
+}
+
+/**
+ * Load the persisted last-played song record from localStorage.
+ * Returns null if nothing is saved or the value is malformed.
+ */
+function loadLastPlayedSong() {
+  try {
+    const raw = localStorage.getItem(DEVOTIONAL_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.songId) return parsed;
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function formatTime(seconds) {
   if (!seconds || isNaN(seconds) || seconds === Infinity) return '0:00';
   const mins = Math.floor(seconds / 60);
@@ -32,6 +62,10 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
   const [songsList, setSongsList] = useState([]);
   const [currentSongIndex, setCurrentSongIndex] = useState(0);
   const [loadingSongs, setLoadingSongs] = useState(false);
+
+  // Guard: true once we have attempted to restore the persisted song.
+  // Prevents the default index-0 from overwriting the saved song during init.
+  const restoredRef = useRef(false);
 
   // Modal View Mode: 'rosary' | 'finished' | 'songs'
   const [viewMode, setViewMode] = useState('rosary');
@@ -98,6 +132,10 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
     setDevotionalPlaylistStarted(true);
 
     const song = songs[index];
+
+    // ── Persist last played song whenever the song actually changes ───────────
+    saveLastPlayedSong(song);
+
     const audio = devotionalAudioRef.current;
     if (audio) {
       const songUrl = getMediaUrl(song.fileUrl);
@@ -146,8 +184,34 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
       songsListRef.current = fetchedSongs;
 
       if (shouldAutoPlay && fetchedSongs.length > 0) {
+        // shouldAutoPlay (Rosary finished countdown) → play song 1, do not restore last-played
         playDevotionalSong(0, fetchedSongs);
+        restoredRef.current = true;
+      } else if (fetchedSongs.length > 0) {
+        // ── Restore last-played song (no auto-play) ────────────────────────
+        const saved = loadLastPlayedSong();
+        if (saved && saved.songId) {
+          const savedIdx = fetchedSongs.findIndex((s) => s._id === saved.songId);
+          if (savedIdx !== -1) {
+            // Found the saved song → restore selection + load audio without playing
+            setCurrentSongIndex(savedIdx);
+            const audio = devotionalAudioRef.current;
+            if (audio) {
+              const songUrl = getMediaUrl(fetchedSongs[savedIdx].fileUrl);
+              audio.src = songUrl;
+              audio.load();
+            }
+          } else {
+            // Saved song no longer exists → fall back to Song 1, clean up stale entry
+            localStorage.removeItem(DEVOTIONAL_STORAGE_KEY);
+            setCurrentSongIndex(0);
+          }
+        } else {
+          setCurrentSongIndex(0);
+        }
+        restoredRef.current = true;
       }
+
       return fetchedSongs;
     } catch {
       setSongsList([]);
@@ -188,7 +252,7 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
       if (initialMode === 'songs') {
         setViewMode('songs');
         setAutoPlayRosary(false);
-        fetchActiveSongs(true);
+        fetchActiveSongs(false); // false = restore last-played, not auto-play from song 1
       } else {
         setViewMode('rosary');
         setAutoPlayRosary(true);
@@ -209,6 +273,8 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
       setSongCurrentTime(0);
       setSongSeekValue(0);
       setAutoPlayRosary(false);
+      // Reset restoration guard so next open re-loads the persisted song
+      restoredRef.current = false;
     }
   }, [isOpen, initialMode]); // Stably dependent only on isOpen and initialMode
 

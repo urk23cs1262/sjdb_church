@@ -105,16 +105,20 @@ function SaturnRing() {
 export default function VoiceOrb({
   state,
   transcript,
+  spokenText,
   destination,
   audioLevel,
   isSpeaking,
+  errorMessage,
   dismiss,
 }) {
   const isVisible = state !== VA_STATE.IDLE;
-  const isWake = state === VA_STATE.WAKE;
+  const isError = state === VA_STATE.ERROR || Boolean(errorMessage);
+  const isSpeakingState = state === VA_STATE.SPEAKING || isSpeaking;
   const isListening = state === VA_STATE.LISTENING;
   const isProcessing = state === VA_STATE.PROCESSING;
-  const isNavigating = state === VA_STATE.NAVIGATING;
+  const isWake = state === VA_STATE.WAKE;
+  const isNavigating = Boolean(destination) && isSpeakingState;
 
   const prevVisibleRef = useRef(false);
 
@@ -136,6 +140,10 @@ export default function VoiceOrb({
   }, [dismiss]);
 
   const isTamil = (() => {
+    // Dynamically check if the current turn has spoken/recognized Tamil text
+    if (/[\u0B80-\u0BFF]/.test(spokenText || transcript || '')) {
+      return true;
+    }
     try {
       return localStorage.getItem('lang') === 'ta';
     } catch {
@@ -145,13 +153,158 @@ export default function VoiceOrb({
 
   // Resolve bubble content based on state
   const renderBubbleContent = () => {
-    if (isNavigating && destination) {
-      const pageName = isTamil ? destination.labelTa : destination.labelEn;
+    if (isError) {
       return (
         <>
-          <p className="cv-bubble-sub">{isTamil ? 'செல்கிறேன்' : 'Going to'}</p>
-          <p className="cv-bubble-title">{pageName}</p>
-          <FiNavigation className="cv-bubble-nav-icon" />
+          <p className="cv-bubble-title text-red-600 font-bold">
+            {isTamil ? 'அனுமதி தேவை' : 'Permission Required'}
+          </p>
+          <p className="cv-bubble-sub text-xs text-gray-700 leading-snug">
+            {errorMessage || (isTamil ? 'மைக்ரோஃபோன் அனுமதியை அனுமதிக்கவும்.' : 'Microphone permission is required.')}
+          </p>
+        </>
+      );
+    }
+
+    if (isSpeakingState) {
+      if (destination && !spokenText?.includes('Saint of the Day') && !spokenText?.includes('Today’s Bible verse') && !spokenText?.includes('இன்றைய புனிதர்')) {
+        const pageName = isTamil ? destination.labelTa : destination.labelEn;
+        return (
+          <>
+            <p className="cv-bubble-sub">{isTamil ? 'திறக்கிறேன்' : 'Opening'}</p>
+            <p className="cv-bubble-title">{pageName}</p>
+            <FiNavigation className="cv-bubble-nav-icon" />
+          </>
+        );
+      }
+      // Greeting presentation: "Hello, {name}. I'm Connect." + faded "How can I help you?"
+      if (
+        spokenText?.includes("Connect") &&
+        (spokenText?.includes("help") || spokenText?.includes("உதவ"))
+      ) {
+        const match = spokenText.match(/Hello,\s*([^.]+)\.\s*I'm Connect\./i);
+        const nameClean = match && match[1]
+          ? match[1].trim().split(/\s+/).map((w) => (w.length === 1 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())).join(' ')
+          : '';
+        const topGreeting = nameClean
+          ? `Hello, ${nameClean}. I'm Connect.`
+          : (isTamil ? (spokenText.includes("வணக்கம்,") ? spokenText.split('.')[0] + '.' : "வணக்கம்! நான் Connect.") : "Hello, I'm Connect.");
+
+        return (
+          <>
+            <p className="cv-bubble-title font-semibold text-sm sm:text-base text-white">
+              {topGreeting}
+            </p>
+            <p className="cv-bubble-sub text-xs sm:text-sm text-slate-300/80 font-normal mt-0.5">
+              {isTamil ? "எப்படி உதவட்டுமா?" : "How can I help you?"}
+            </p>
+            <BubbleWaveform audioLevel={50} active={true} />
+          </>
+        );
+      }
+
+      // Consequential Action Confirmation dialogue presentation
+      if (
+        spokenText?.includes("Would you like me to submit") ||
+        spokenText?.includes("சமர்ப்பிக்கட்டுமா")
+      ) {
+        return (
+          <>
+            <p className="cv-bubble-title font-semibold text-sm sm:text-base text-amber-200">
+              {isTamil ? "சமர்ப்பிக்கட்டுமா?" : "Submit this request?"}
+            </p>
+            <p className="cv-bubble-sub text-xs sm:text-sm text-slate-300/90 font-normal mt-0.5">
+              {isTamil ? 'ஆம் என்றால் "சரி", வேண்டாம் என்றால் "ரத்து" எனக்கூறுங்கள்.' : 'Say "Yes" to submit or "No" to cancel.'}
+            </p>
+            <BubbleWaveform audioLevel={50} active={true} />
+          </>
+        );
+      }
+
+      // Inappropriate language warning presentation (Sections 24 & 38)
+      if (
+        spokenText?.includes("respectful language") ||
+        spokenText?.includes("மரியாதையான")
+      ) {
+        return (
+          <>
+            <p className="cv-bubble-title font-semibold text-sm sm:text-base text-amber-300">
+              {isTamil ? "மரியாதையான வார்த்தைகளைப் பயன்படுத்துங்கள்" : "Please use respectful language."}
+            </p>
+            <p className="cv-bubble-sub text-xs sm:text-sm text-slate-300/90 font-normal mt-0.5">
+              {isTamil
+                ? "இந்த தேவாலய இணையதளத்தை வழிநடத்த நான் உதவுகிறேன்."
+                : "I’m here to help you navigate the church website."}
+            </p>
+            <BubbleWaveform audioLevel={50} active={true} />
+          </>
+        );
+      }
+
+      // Unclear speech presentation (Sections 25 & 37)
+      if (
+        spokenText?.includes("Please try again") ||
+        spokenText?.includes("மீண்டும் முயற்சி") ||
+        spokenText?.includes("எனக்கு புரியவில்லை")
+      ) {
+        return (
+          <>
+            <p className="cv-bubble-title font-semibold text-sm sm:text-base text-white">
+              {isTamil ? "மன்னிக்கவும், எனக்கு புரியவில்லை." : "Sorry, I didn't understand that."}
+            </p>
+            <p className="cv-bubble-sub text-xs sm:text-sm text-slate-300/80 font-normal mt-0.5">
+              {isTamil ? "தயவுசெய்து மீண்டும் முயற்சி செய்யுங்கள்." : "Please try again."}
+            </p>
+            <BubbleWaveform audioLevel={50} active={true} />
+          </>
+        );
+      }
+
+      // Unsupported / Irrelevant speech presentation (Section 24)
+      if (
+        spokenText?.includes("Please say a valid command") ||
+        spokenText?.includes("சரியான கட்டளையைக் கூறுங்கள்")
+      ) {
+        return (
+          <>
+            <p className="cv-bubble-title font-semibold text-sm sm:text-base text-white">
+              {isTamil ? "மன்னிக்கவும், அது புரியவில்லை." : "Sorry, I didn't understand that."}
+            </p>
+            <p className="cv-bubble-sub text-xs text-slate-300/80 font-normal mt-0.5 max-w-[300px]">
+              {isTamil
+                ? "திருப்பலி முன்பதிவு, ஆவணக் கோரிக்கை, ஜெப வேண்டுதல் அல்லது நிகழ்வுகள் போன்ற கட்டளையைக் கூறுங்கள்."
+                : "Please say a command like Book a Mass, Request a Document, Prayer Request, or Open Events."}
+            </p>
+            <BubbleWaveform audioLevel={50} active={true} />
+          </>
+        );
+      }
+
+      // Farewell / Closing message presentation
+      if (
+        spokenText?.includes("closing Connect") ||
+        spokenText?.includes("God bless you") ||
+        spokenText?.includes("Thank you. God bless")
+      ) {
+        return (
+          <>
+            <p className="cv-bubble-title font-semibold text-sm sm:text-base text-amber-200">
+              🙏 I'm closing Connect.
+            </p>
+            <p className="cv-bubble-sub text-xs sm:text-sm text-slate-300/90 font-normal mt-0.5">
+              Thank you. God bless you!
+            </p>
+            <BubbleWaveform audioLevel={50} active={true} />
+          </>
+        );
+      }
+
+      return (
+        <>
+          <p className="cv-bubble-title font-semibold text-sm sm:text-base leading-snug max-w-[320px]">
+            {spokenText ? (spokenText.length > 120 ? `${spokenText.slice(0, 117)}...` : spokenText) : (isTamil ? 'பேசுகிறேன்…' : 'Speaking…')}
+          </p>
+          <BubbleWaveform audioLevel={50} active={true} />
         </>
       );
     }
@@ -159,7 +312,8 @@ export default function VoiceOrb({
     if (isProcessing) {
       return (
         <>
-          <p className="cv-bubble-title">{isTamil ? 'புரிந்துகொள்கிறேன்…' : 'Understanding…'}</p>
+          <p className="cv-bubble-title">{isTamil ? 'செயலாக்குகிறது…' : 'Processing…'}</p>
+          {transcript && <p className="cv-bubble-sub text-xs text-gray-500">"{transcript}"</p>}
           <BubbleDots />
         </>
       );
@@ -171,21 +325,10 @@ export default function VoiceOrb({
           <p className="cv-bubble-title">
             {transcript ? `"${transcript}"` : (isTamil ? 'கேட்கிறேன்…' : "I'm listening…")}
           </p>
+          <p className="cv-bubble-sub text-[11px] text-gray-500">
+            {isTamil ? 'உங்கள் கட்டளையை சொல்லுங்கள்' : 'Say a command...'}
+          </p>
           <BubbleWaveform audioLevel={audioLevel} active={true} />
-        </>
-      );
-    }
-
-    if (isWake) {
-      return (
-        <>
-          <p className="cv-bubble-title">
-            {isTamil ? 'வணக்கம்! நான் Connect.' : "Hello! I'm Connect."}
-          </p>
-          <p className="cv-bubble-sub">
-            {isTamil ? 'எப்படி உதவட்டுமா?' : 'How can I help you?'}
-          </p>
-          <BubbleWaveform audioLevel={50} active={isSpeaking} />
         </>
       );
     }
@@ -210,7 +353,7 @@ export default function VoiceOrb({
             {/* Speech Bubble */}
             <AnimatePresence mode="wait">
               <motion.div
-                key={state + (destination?.route || '')}
+                key={state + (destination?.route || '') + (spokenText?.slice(0, 15) || '') + (errorMessage || '')}
                 className="cv-bubble"
                 initial={{ opacity: 0, y: 12, scale: 0.94 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}

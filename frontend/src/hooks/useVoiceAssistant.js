@@ -1,55 +1,64 @@
 /**
- * useVoiceAssistant.js — Production-Hardened Voice Assistant Hook (v6)
+ * useVoiceAssistant.js — Production Voice Assistant Hook for SJDB Church
  *
- * Designed specifically to eliminate intermittent production failures:
- * 1. Single Authoritative State Machine (IDLE, ACTIVATING, WAKE, LISTENING, PROCESSING, CLARIFYING, NAVIGATING, CLOSING, ERROR)
- * 2. Session ID Stale-Callback Immunity (Every activation gets a new sessionId; stale callbacks are ignored)
- * 3. Safe, Idempotent Recognition Lifecycle (safeStartRecognition, safeStopRecognition, safeAbortRecognition)
- * 4. Zero TTS <-> Microphone Conflict (Mic is suspended during TTS; TTS is flushed and buffered before mic opens)
- * 5. Full Interruption Support (User speech or tap cancels TTS and transitions straight to LISTENING)
- * 6. One-Step & Two-Step Wake Handling ("Hey Connect" or "Hey Connect show mass timings")
- * 7. Atomic Navigation with Strict Route-Boundary Verification (matchesRoute)
- * 8. Same-Page Navigation Handling ("You are already on the [Page Name] page.")
- * 9. Idempotent Microphone, AudioContext & Timer Cleanup
- * 10. Structured Production Debug Logging ([Connect][session:N])
+ * Full Feature Set:
+ * 1. Global voice accessibility across every navigable page, action, modal, and button
+ * 2. Multi-turn continuous conversation (LISTEN -> UNDERSTAND -> ACTION/NAVIGATE -> SPEAK -> RETURN TO LISTEN)
+ * 3. Dashboard actions: Book a Mass, Request Document, Raise a Ticket, Prayer Request, My Bookings, My Documents, etc.
+ * 4. Safe modal closing ("Close" closes open modals before closing assistant)
+ * 5. Safe form submission ("Submit this booking", "Submit ticket") with validation guard
+ * 6. Document downloading ("Download document", "Get file", "Download receipt")
+ * 7. Ambiguity handling & clarification ("Open documents" -> Ask "Do you want to request a new document or view your existing documents?")
+ * 8. Context-aware help suggestions for unrecognized commands
+ * 9. Anti-truncation SpeechSynthesis (sentence chunking + watchdog)
+ * 10. Robust SpeechRecognition lifecycle & cleanup
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/context_auth_context';
 import {
-  resolveIntent,
-  resolveControl,
-  isAffirmative,
-  isNegative,
-  CONFIDENCE_THRESHOLD,
+  resolveVoiceCommand,
+  resolveClarificationResponse,
+  getContextAwareHelp,
   matchesRoute,
+  isReadCommand,
+  detectSpokenLanguage,
+  getPageDescription,
+  getPageCapabilities,
+  getArrivalConfirmation,
+  toPronounceableName,
+  sanitizeForSpeechSynthesis,
+  isWakeWord,
+  extractWakeCommand,
+  WAKE_WORD_REGEX,
 } from '../services/voice_intent_map';
+export { toPronounceableName, sanitizeForSpeechSynthesis };
+import { readTargetContent } from '../services/page_content_reader';
+import {
+  closeOpenModal,
+  submitActiveForm,
+  triggerDocumentDownload,
+  toggleNewItemForm,
+  focusFormField,
+  getFormFieldsGuidance,
+  controlAudioPlayer,
+  getPendingItemDetails,
+  openPendingItem,
+} from '../services/voice_action_handler';
 
 // ─── Authoritative States ──────────────────────────────────────────────────────
-
 export const VA_STATE = {
   IDLE: 'idle',
-  ACTIVATING: 'activating',
-  WAKE: 'wake',
-  GREETING: 'wake', // Backwards-compatible alias for common_voice_orb
   LISTENING: 'listening',
   PROCESSING: 'processing',
-  CLARIFYING: 'clarifying',
-  NAVIGATING: 'navigating',
-  CLOSING: 'closing',
-  ERROR: 'error'
+  SPEAKING: 'speaking',
+  NAVIGATING: 'speaking',
+  WAKE: 'speaking',
+  ERROR: 'error',
 };
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const WAKE_PHRASES = ['hey connect', 'hey, connect', 'hey connected', 'connect', 'ஹே கனெக்ட்'];
-const COMMAND_TIMEOUT_MS = 9000;
-const WAKE_DEBOUNCE_MS = 1200;
-const MAX_ONEND_RESTARTS = 4;
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
 function detectLang() {
   try {
     return localStorage.getItem('lang') === 'ta' ? 'ta-IN' : 'en-IN';
@@ -77,14 +86,32 @@ function stripWakePhrase(text) {
 }
 
 /**
- * Select a crisp, energetic, pleasant female voice across all browsers/platforms.
+ * Split text into full sentences to prevent browser speech truncation on long responses
+ */
+function splitIntoSentences(text) {
+  if (!text) return [];
+  const sentences = text
+    .split(/(?<=[.?!;:\n])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+
+  if (sentences.length === 0 && text.trim().length > 0) {
+    return [text.trim()];
+  }
+  return sentences;
+}
+
+/**
+ * Select a crisp, energetic, loud, and pleasant lady/female voice.
+ * Prioritizes modern neural voices (Jenny, Aria), followed by standard
+ * high-quality female voices (Zira, Samantha, Google Female).
  */
 function findCatchyLadyVoice(lang) {
   if (typeof window === 'undefined' || !window.speechSynthesis) return null;
   const voices = window.speechSynthesis.getVoices?.() || [];
   if (voices.length === 0) return null;
 
-  const isTamil = lang === 'ta-IN' || lang === 'ta';
+  const isTamil = lang === 'ta-IN' || lang === 'ta' || lang.startsWith('ta');
 
   if (isTamil) {
     const taFemale = voices.find(
@@ -99,6 +126,7 @@ function findCatchyLadyVoice(lang) {
     if (taVoice) return taVoice;
   }
 
+  // Filter English-capable voices
   const enVoices = voices.filter(
     (v) =>
       v.lang.startsWith('en') ||
@@ -107,9 +135,20 @@ function findCatchyLadyVoice(lang) {
       v.lang.includes('IN')
   );
 
+  // Ranked high-fidelity catchy lady voices
   const preferredFemaleKeywords = [
-    'jenny', 'aria', 'zira', 'samantha', 'victoria', 'karen',
-    'neerja', 'heera', 'female', 'ava', 'emma', 'sara'
+    'jenny',     // Microsoft Jenny Online (Natural) - ultra catchy and upbeat
+    'aria',      // Microsoft Aria Online (Natural) - vibrant and expressive
+    'zira',      // Microsoft Zira - universal clear Windows female voice
+    'samantha',  // Apple Samantha - clean natural female
+    'victoria',  // Apple Victoria
+    'karen',     // Australian / Global female
+    'neerja',    // Indian English female natural
+    'heera',     // Indian English female
+    'female',    // Explicitly labeled female (Google UK English Female, etc.)
+    'ava',
+    'emma',
+    'sara',
   ];
 
   for (const kw of preferredFemaleKeywords) {
@@ -117,6 +156,7 @@ function findCatchyLadyVoice(lang) {
     if (found) return found;
   }
 
+  // Pick any non-male English voice
   const nonMale = enVoices.find((v) => {
     const n = v.name.toLowerCase();
     return (
@@ -139,56 +179,58 @@ function findCatchyLadyVoice(lang) {
 export default function useVoiceAssistant() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
 
   const [state, setState] = useState(VA_STATE.IDLE);
   const [transcript, setTranscript] = useState('');
+  const [spokenText, setSpokenText] = useState('');
   const [destination, setDestination] = useState(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [isSupported] = useState(isSpeechAPISupported);
 
   // ── Session & State Machine Refs ───────────────────────────────────────────
   const sessionIdRef = useRef(0);
   const stateRef = useRef(VA_STATE.IDLE);
   const isAuthRef = useRef(isAuthenticated);
+  const userRef = useRef(user);
   const isUnmountedRef = useRef(false);
+  const isContinuousActiveRef = useRef(false);
+  const pendingClarificationRef = useRef(null); // 'DOCUMENTS' | 'BOOKINGS'
+  const pendingActionConfirmationRef = useRef(null); // { action: 'submit-form' }
+  const currentSpeechLangRef = useRef(detectLang()); // Dynamic per turn: 'en-IN' or 'ta-IN'
 
-  // Recognition state tracking (strictly prevents duplicate sessions)
+  // Recognition tracking
   const recognitionRef = useRef(null);
   const isRecognitionActiveRef = useRef(false);
   const isStartingRecognitionRef = useRef(false);
-  const isStoppingRecognitionRef = useRef(false);
-  const restartCountRef = useRef(0);
 
-  // Processing & Navigation locks
+  // Background Wake Word Recognition (Passive "Hey Connect" Listener)
+  const wakeWordRecognitionRef = useRef(null);
+  const isWakeWordActiveRef = useRef(false);
+  const wakeWordRestartTimerRef = useRef(null);
+  const hasMicPermissionRef = useRef(true);
+
+  // Locks & Timers
   const isProcessingRef = useRef(false);
-  const isNavigatingRef = useRef(false);
-  const speechFinishedRef = useRef(false);
-  const routeVerifiedRef = useRef(false);
-  const intendedRouteRef = useRef(null);
-  const pendingClarificationRef = useRef(null);
-  const latestTranscriptRef = useRef('');
-  const wakeDebounceRef = useRef(false);
+  const isSpeakingRef = useRef(false);
+  const activeUtterancesRef = useRef([]);
+  const ttsWatchdogTimerRef = useRef(null);
+  const recognitionRestartTimerRef = useRef(null);
+  const locationRef = useRef(location.pathname);
 
-  // Timers
-  const commandTimerRef = useRef(null);
-  const navTimerRef = useRef(null);
-  const interimTimerRef = useRef(null);
-  const ttsSafetyTimerRef = useRef(null);
-
-  // Audio Analyser & Mic
+  // Audio Analyser
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
   const micStreamRef = useRef(null);
   const rafRef = useRef(null);
-  const currentUtteranceRef = useRef(null);
 
-  // Dynamic references to break circular dependencies
-  const startCommandRecognitionRef = useRef(null);
+  // Dynamic References
+  const startListeningRef = useRef(null);
   const processTranscriptRef = useRef(null);
+  const activateRef = useRef(null);
 
-  // Synchronize state and auth refs immediately
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -197,32 +239,39 @@ export default function useVoiceAssistant() {
     isAuthRef.current = isAuthenticated;
   }, [isAuthenticated]);
 
-  // ── Production Logging Helper ──────────────────────────────────────────────
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    locationRef.current = location.pathname;
+  }, [location.pathname]);
+
+  const getUserDisplayName = useCallback(() => {
+    const u = userRef.current;
+    if (!u) return '';
+    const raw = u.name || u.fullName || u.displayName || (u.email ? u.email.split('@')[0] : '');
+    return toPronounceableName(raw);
+  }, []);
+
+  // ── Log Helper ─────────────────────────────────────────────────────────────
   const log = useCallback((event, data = '') => {
     if (process.env.NODE_ENV !== 'production' || window.__DEBUG_HEY_CONNECT__) {
-      console.log(`[Connect][session:${sessionIdRef.current}] ${event}`, data);
+      console.log(`[HeyConnect][session:${sessionIdRef.current}] ${event}`, data);
     }
   }, []);
 
-  // ── Safe State Transition Helper ───────────────────────────────────────────
+  // ── Safe State Transition ──────────────────────────────────────────────────
   const transitionTo = useCallback((nextState, sessionId = null) => {
     if (sessionId !== null && sessionId !== sessionIdRef.current) return false;
     if (isUnmountedRef.current) return false;
 
-    const current = stateRef.current;
-    if (current === nextState) return true;
-
-    // Disallow illegal transitions from closing/navigating back to listening
-    if (current === VA_STATE.NAVIGATING && nextState === VA_STATE.LISTENING) return false;
-    if (current === VA_STATE.CLOSING && nextState !== VA_STATE.IDLE) return false;
-
-    log('STATE_TRANSITION', `${current} -> ${nextState}`);
     stateRef.current = nextState;
     setState(nextState);
     return true;
-  }, [log]);
+  }, []);
 
-  // ── Audio Analyser & Mic Stream Management ─────────────────────────────────
+  // ── Audio Analyser & Mic Stream ────────────────────────────────────────────
 
   const stopAudioAnalyser = useCallback(() => {
     if (rafRef.current) {
@@ -277,24 +326,30 @@ export default function useVoiceAssistant() {
       };
       rafRef.current = requestAnimationFrame(tick);
     } catch {
-      // AudioContext / Mic permission denied or unavailable
+      // Audio stream unavailable
     }
   }, []);
 
-  // ── Speech Synthesis (TTS) with Guaranteed Clean Release ───────────────────
+  // ── Speech Synthesis (TTS) with Guaranteed Clean Completion & Anti-Truncation ──
 
   const cancelSpeech = useCallback(() => {
-    clearTimeout(ttsSafetyTimerRef.current);
+    clearInterval(ttsWatchdogTimerRef.current);
+    ttsWatchdogTimerRef.current = null;
+
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
         window.speechSynthesis.cancel();
       } catch {}
     }
-    currentUtteranceRef.current = null;
+    activeUtterancesRef.current = [];
+    isSpeakingRef.current = false;
     setIsSpeaking(false);
   }, []);
 
-  const speakText = useCallback((text, sessionId, onEnd = null) => {
+  /**
+   * Speak complete text sequentially across multiple sentences if needed
+   */
+  const speakText = useCallback((fullText, sessionId, onEnd = null, langOverride = null) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) {
       onEnd?.();
       return;
@@ -304,55 +359,95 @@ export default function useVoiceAssistant() {
 
     cancelSpeech();
 
-    const utt = new SpeechSynthesisUtterance(text);
-    const lang = detectLang();
-    utt.lang = lang;
-    utt.volume = 1.0;
-    utt.pitch = 1.15;
-    utt.rate = 1.02;
+    const sentences = splitIntoSentences(fullText);
+    if (!sentences.length) {
+      onEnd?.();
+      return;
+    }
 
-    const ladyVoice = findCatchyLadyVoice(lang);
-    if (ladyVoice) utt.voice = ladyVoice;
+    // Determine language from fullText content or explicit override
+    const isTamilText = /[\u0B80-\u0BFF]/.test(fullText) || (langOverride && langOverride.startsWith('ta'));
+    const defaultLang = isTamilText ? 'ta-IN' : 'en-IN';
+    const ladyVoice = findCatchyLadyVoice(defaultLang);
 
-    currentUtteranceRef.current = utt;
+    isSpeakingRef.current = true;
     setIsSpeaking(true);
-    log('TTS_START', text);
+    setSpokenText(fullText);
+    transitionTo(VA_STATE.SPEAKING, sessionId);
+    log('TTS_START', { sentenceCount: sentences.length, fullText, defaultLang });
 
-    let finished = false;
-    const finish = () => {
-      if (finished) return;
-      finished = true;
-      clearTimeout(ttsSafetyTimerRef.current);
-      if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
-        setIsSpeaking(false);
+    // Anti-truncation Chrome watchdog
+    clearInterval(ttsWatchdogTimerRef.current);
+    ttsWatchdogTimerRef.current = setInterval(() => {
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+          window.speechSynthesis.pause();
+          window.speechSynthesis.resume();
+        }
       }
-      currentUtteranceRef.current = null;
-      log('TTS_END', text);
-      if (sessionId === sessionIdRef.current) {
-        onEnd?.();
+    }, 4500);
+
+    let currentIndex = 0;
+
+    const speakNextChunk = () => {
+      if (sessionId !== sessionIdRef.current || isUnmountedRef.current) {
+        cancelSpeech();
+        return;
+      }
+
+      if (currentIndex >= sentences.length) {
+        cancelSpeech();
+        log('TTS_FINISHED_ALL');
+        if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
+          onEnd?.();
+        }
+        return;
+      }
+
+      const chunkText = sentences[currentIndex];
+      currentIndex++;
+
+      const isChunkTamil = /[\u0B80-\u0BFF]/.test(chunkText) || isTamilText;
+      const chunkLang = isChunkTamil ? 'ta-IN' : 'en-IN';
+      const chunkLadyVoice = findCatchyLadyVoice(chunkLang);
+
+      const spokenChunk = sanitizeForSpeechSynthesis(chunkText);
+      const utt = new SpeechSynthesisUtterance(spokenChunk);
+      utt.lang = chunkLang;
+      utt.volume = 1.0; // Maximum loudness
+      utt.pitch = 1.15; // Bright, pleasant, feminine pitch
+      utt.rate = 1.02;  // Catchy, energetic, engaging delivery
+      if (chunkLadyVoice) utt.voice = chunkLadyVoice;
+      else if (ladyVoice) utt.voice = ladyVoice;
+
+      // Keep active reference
+      activeUtterancesRef.current.push(utt);
+
+      utt.onend = () => {
+        activeUtterancesRef.current = activeUtterancesRef.current.filter((u) => u !== utt);
+        speakNextChunk();
+      };
+
+      utt.onerror = (e) => {
+        activeUtterancesRef.current = activeUtterancesRef.current.filter((u) => u !== utt);
+        log('TTS_CHUNK_ERROR', e);
+        speakNextChunk();
+      };
+
+      try {
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
+        window.speechSynthesis.speak(utt);
+      } catch {
+        speakNextChunk();
       }
     };
 
-    utt.onend = finish;
-    utt.onerror = finish;
+    speakNextChunk();
+  }, [cancelSpeech, log, transitionTo]);
 
-    // Safety fallback timer so state machine never hangs waiting for onend
-    const safetyMs = Math.max(1500, Math.min(6000, text.length * 85 + 700));
-    ttsSafetyTimerRef.current = setTimeout(() => {
-      if (!finished) finish();
-    }, safetyMs);
-
-    try {
-      if (window.speechSynthesis.paused) {
-        window.speechSynthesis.resume();
-      }
-      window.speechSynthesis.speak(utt);
-    } catch {
-      finish();
-    }
-  }, [cancelSpeech, log]);
-
-  // ── Safe, Idempotent Speech Recognition Lifecycle ──────────────────────────
+  // ── Speech Recognition Lifecycle ──────────────────────────────────────────
 
   const safeAbortRecognition = useCallback(() => {
     if (recognitionRef.current) {
@@ -364,13 +459,11 @@ export default function useVoiceAssistant() {
     }
     isRecognitionActiveRef.current = false;
     isStartingRecognitionRef.current = false;
-    isStoppingRecognitionRef.current = false;
   }, [log]);
 
   const safeStopRecognition = useCallback(() => {
     if (recognitionRef.current && isRecognitionActiveRef.current) {
       log('RECOGNITION_STOP');
-      isStoppingRecognitionRef.current = true;
       try {
         recognitionRef.current.stop();
       } catch {
@@ -379,610 +472,1009 @@ export default function useVoiceAssistant() {
     }
   }, [log, safeAbortRecognition]);
 
-  const buildRecognition = useCallback((lang, continuous, interimResults) => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return null;
-    const r = new SR();
-    r.lang = lang;
-    r.continuous = continuous;
-    r.interimResults = interimResults;
-    r.maxAlternatives = 1;
-    return r;
+  // ── Background Wake-Word Recognition (Passive "Hey Connect" Listener) ───────
+
+  const safeAbortWakeWord = useCallback(() => {
+    if (wakeWordRestartTimerRef.current) {
+      clearTimeout(wakeWordRestartTimerRef.current);
+      wakeWordRestartTimerRef.current = null;
+    }
+    if (wakeWordRecognitionRef.current) {
+      try {
+        wakeWordRecognitionRef.current.onstart = null;
+        wakeWordRecognitionRef.current.onresult = null;
+        wakeWordRecognitionRef.current.onerror = null;
+        wakeWordRecognitionRef.current.onend = null;
+        wakeWordRecognitionRef.current.abort();
+      } catch {}
+      wakeWordRecognitionRef.current = null;
+    }
+    isWakeWordActiveRef.current = false;
   }, []);
 
-  // ── Dismiss Voice Assistant Completely ─────────────────────────────────────
+  const startWakeWordListening = useCallback(() => {
+    if (isUnmountedRef.current) return;
+    if (stateRef.current !== VA_STATE.IDLE) return;
+    if (isContinuousActiveRef.current) return;
+    if (isWakeWordActiveRef.current || wakeWordRecognitionRef.current) return;
+    if (!hasMicPermissionRef.current) return;
+
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+
+    try {
+      const wr = new SR();
+      wr.continuous = true;
+      wr.interimResults = true;
+      wr.maxAlternatives = 3;
+      wr.lang = isTamilLang() ? 'ta-IN' : 'en-IN';
+
+      wr.onstart = () => {
+        isWakeWordActiveRef.current = true;
+        log('WAKE_WORD_LISTENER_STARTED');
+      };
+
+      wr.onresult = (e) => {
+        if (stateRef.current !== VA_STATE.IDLE || isContinuousActiveRef.current) {
+          safeAbortWakeWord();
+          return;
+        }
+
+        const results = Array.from(e.results);
+        for (let i = e.resultIndex || 0; i < results.length; i++) {
+          const res = results[i];
+          for (let a = 0; a < res.length; a++) {
+            const transcript = res[a]?.transcript || '';
+            const wakeCheck = extractWakeCommand(transcript);
+            if (wakeCheck.hasWakeWord) {
+              log('WAKE_WORD_DETECTED_BACKGROUND', { transcript, command: wakeCheck.command });
+              safeAbortWakeWord();
+              activateRef.current?.(wakeCheck.command);
+              return;
+            }
+          }
+        }
+      };
+
+      wr.onerror = (e) => {
+        log('WAKE_WORD_ERROR', e.error);
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          hasMicPermissionRef.current = false;
+          safeAbortWakeWord();
+          return;
+        }
+      };
+
+      wr.onend = () => {
+        isWakeWordActiveRef.current = false;
+        wakeWordRecognitionRef.current = null;
+        log('WAKE_WORD_LISTENER_ENDED');
+
+        if (
+          stateRef.current === VA_STATE.IDLE &&
+          !isContinuousActiveRef.current &&
+          !isUnmountedRef.current &&
+          hasMicPermissionRef.current
+        ) {
+          clearTimeout(wakeWordRestartTimerRef.current);
+          wakeWordRestartTimerRef.current = setTimeout(() => {
+            if (stateRef.current === VA_STATE.IDLE && !isContinuousActiveRef.current) {
+              startWakeWordListening();
+            }
+          }, 450);
+        }
+      };
+
+      wakeWordRecognitionRef.current = wr;
+      wr.start();
+    } catch (err) {
+      log('WAKE_WORD_START_EXCEPTION', err);
+      isWakeWordActiveRef.current = false;
+      wakeWordRecognitionRef.current = null;
+    }
+  }, [log, safeAbortWakeWord]);
+
+  // ── Dismiss Voice Assistant Completely (User Said Cancel / Stop / Closed) ──
+
+  /**
+   * Finishes cleanup after farewell speech ends. Resets all state and restarts
+   * the background wake-word listener so the user can say "Hey Connect" again.
+   */
+  const finaliseDismiss = useCallback(() => {
+    if (isUnmountedRef.current) return;
+    stateRef.current = VA_STATE.IDLE;
+    setState(VA_STATE.IDLE);
+    setTranscript('');
+    setSpokenText('');
+    setDestination(null);
+    setErrorMessage('');
+
+    // Restart background wake-word listener
+    if (hasMicPermissionRef.current) {
+      clearTimeout(wakeWordRestartTimerRef.current);
+      wakeWordRestartTimerRef.current = setTimeout(() => {
+        if (stateRef.current === VA_STATE.IDLE && !isContinuousActiveRef.current) {
+          startWakeWordListening();
+        }
+      }, 450);
+    }
+  }, [startWakeWordListening]);
 
   const dismiss = useCallback(() => {
-    log('CLEANUP_DISMISS');
-    // Invalidate current session so any pending timers or callbacks die
+    log('DISMISS');
+    isContinuousActiveRef.current = false;
+    pendingClarificationRef.current = null;
+    pendingActionConfirmationRef.current = null;
     sessionIdRef.current++;
 
-    clearTimeout(commandTimerRef.current);
-    clearTimeout(navTimerRef.current);
-    clearTimeout(interimTimerRef.current);
-    clearTimeout(ttsSafetyTimerRef.current);
-
-    cancelSpeech();
+    clearTimeout(recognitionRestartTimerRef.current);
     safeAbortRecognition();
     stopAudioAnalyser();
-
     isProcessingRef.current = false;
-    isNavigatingRef.current = false;
-    speechFinishedRef.current = false;
-    routeVerifiedRef.current = false;
-    pendingClarificationRef.current = null;
-    intendedRouteRef.current = null;
-    latestTranscriptRef.current = '';
-    restartCountRef.current = 0;
 
+    // ── Farewell Message ─────────────────────────────────────────────────────
+    // Speak the farewell using a raw utterance that bypasses the session-ID
+    // guard (since we just bumped the session above).
+    // The orb stays visible in SPEAKING state so the user can both SEE and
+    // HEAR the goodbye. finaliseDismiss() closes the orb after speech ends.
+    const FAREWELL = "I'm closing Connect. Thank you. God bless you.";
+    const farewell_utt = new SpeechSynthesisUtterance(FAREWELL);
+    farewell_utt.lang    = 'en-IN';
+    farewell_utt.volume  = 1.0;
+    farewell_utt.pitch   = 1.15;
+    farewell_utt.rate    = 1.02;
+    const ladyVoice = findCatchyLadyVoice('en-IN');
+    if (ladyVoice) farewell_utt.voice = ladyVoice;
+
+    // Cancel any in-progress speech before playing farewell
+    try { window.speechSynthesis.cancel(); } catch {}
+
+    // After speech finishes (or 3.5 s safety fallback), close the orb
+    let cleanupDone = false;
+    const doCleanup = () => {
+      if (cleanupDone) return;
+      cleanupDone = true;
+      clearTimeout(fallbackTimer);
+      finaliseDismiss();
+    };
+    const fallbackTimer = setTimeout(doCleanup, 3500);
+
+    farewell_utt.onend   = doCleanup;
+    farewell_utt.onerror = doCleanup;
+
+    try {
+      window.speechSynthesis.speak(farewell_utt);
+    } catch {
+      doCleanup();
+    }
+
+    // Keep orb VISIBLE in SPEAKING state so the farewell text is printed
+    // in the bubble while the voice plays. Do NOT go to IDLE yet.
     if (!isUnmountedRef.current) {
-      stateRef.current = VA_STATE.IDLE;
-      setState(VA_STATE.IDLE);
+      stateRef.current = VA_STATE.SPEAKING;
+      setState(VA_STATE.SPEAKING);
       setTranscript('');
+      setSpokenText(FAREWELL);   // ← prints the closing words in the bubble
       setDestination(null);
+      setErrorMessage('');
     }
-  }, [cancelSpeech, log, safeAbortRecognition, stopAudioAnalyser]);
+  }, [finaliseDismiss, log, safeAbortRecognition, startWakeWordListening, stopAudioAnalyser]);
 
-  // ── Navigation Completion & Dismissal Check ────────────────────────────────
+  // ── Start Listening (Continuous Conversation Loop) ─────────────────────────
 
-  const checkCompletionAndDismiss = useCallback((sessionId) => {
-    if (sessionId !== sessionIdRef.current) return;
-    if (
-      stateRef.current === VA_STATE.NAVIGATING &&
-      routeVerifiedRef.current &&
-      speechFinishedRef.current
-    ) {
-      log('ROUTE_AND_SPEECH_COMPLETE_DISMISS');
-      setTimeout(() => {
-        if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
-          dismiss();
-        }
-      }, 350);
+  const startListening = useCallback((sessionId) => {
+    if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+    if (!isContinuousActiveRef.current) return;
+
+    if (isRecognitionActiveRef.current || isStartingRecognitionRef.current) {
+      log('RECOGNITION_ALREADY_ACTIVE');
+      return;
     }
-  }, [dismiss, log]);
 
-  // ── Post-Navigation Route Verification (Route Change Listener) ─────────────
+    isStartingRecognitionRef.current = true;
+    isProcessingRef.current = false;
 
-  useEffect(() => {
-    if (stateRef.current === VA_STATE.NAVIGATING) {
-      const intended = intendedRouteRef.current;
-      const current = location.pathname;
-      const isMatched = matchesRoute(current, intended);
-      const sessionId = sessionIdRef.current;
+    transitionTo(VA_STATE.LISTENING, sessionId);
+    setTranscript('');
+    startAudioAnalyser(sessionId);
 
-      if (isMatched) {
-        log('ROUTE_VERIFIED', `${current} matches ${intended}`);
-        routeVerifiedRef.current = true;
-        if (speechFinishedRef.current) {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      const errText = isTamilLang()
+        ? 'உங்கள் உலாவியில் குரல் அறிதல் ஆதரிக்கப்படவில்லை.'
+        : 'Speech recognition is not supported in this browser.';
+      setErrorMessage(errText);
+      transitionTo(VA_STATE.ERROR, sessionId);
+      return;
+    }
+
+    const lang = currentSpeechLangRef.current || detectLang();
+    let r = null;
+    try {
+      safeAbortRecognition();
+      r = new SR();
+      try {
+        r.lang = lang;
+      } catch {
+        r.lang = 'en-IN';
+      }
+      r.continuous = false;
+      r.interimResults = true;
+      r.maxAlternatives = 1;
+    } catch (err) {
+      log('RECOGNITION_INIT_ERROR', err);
+      return;
+    }
+
+    recognitionRef.current = r;
+
+    r.onstart = () => {
+      if (sessionId !== sessionIdRef.current) {
+        try { r.abort(); } catch {}
+        return;
+      }
+      isRecognitionActiveRef.current = true;
+      isStartingRecognitionRef.current = false;
+      log('RECOGNITION_STARTED');
+    };
+
+    r.onresult = (e) => {
+      if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+
+      // Interruption: cancel speech immediately if user speaks
+      if (isSpeakingRef.current) {
+        cancelSpeech();
+      }
+
+      const results = Array.from(e.results);
+      const raw = results.map((res) => res[0].transcript).join(' ');
+      setTranscript(raw);
+
+      const isFinal = results[results.length - 1].isFinal;
+
+      // Handle "stop speaking" command instantly
+      if (/\b(stop speaking|be quiet|silence)\b/i.test(raw)) {
+        cancelSpeech();
+        return;
+      }
+
+      // Handle "cancel" / "close" command instantly to close voice navigation
+      if (
+        /^(cancel|close|dismiss|exit|ரத்து)$/i.test(raw.trim()) ||
+        /\b(cancel voice|close voice|cancel navigation|stop voice)\b/i.test(raw)
+      ) {
+        log('INSTANT_CANCEL_TRIGGERED', raw);
+        dismiss();
+        return;
+      }
+
+      if (isFinal && raw.trim() && !isProcessingRef.current) {
+        isProcessingRef.current = true;
+        safeStopRecognition();
+        transitionTo(VA_STATE.PROCESSING, sessionId);
+
+        setTimeout(() => {
+          if (sessionId === sessionIdRef.current) {
+            processTranscriptRef.current?.(raw, sessionId);
+          }
+        }, 100);
+      }
+    };
+
+    r.onerror = (e) => {
+      if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+      log('RECOGNITION_ERROR', e.error);
+
+      if (e.error === 'no-speech') {
+        return; // Handled in onend
+      }
+
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        const permError = isTamilLang()
+          ? 'ஹே கனெக்ட் குரல் வழிசெலுத்தலுக்கு மைக்ரோஃபோன் அனுமதி தேவை. உங்கள் உலாவி அமைப்புகளில் அணுகலை அனுமதிக்கவும்.'
+          : 'Microphone permission is required for Hey Connect voice navigation. Please allow microphone access in your browser settings.';
+        setErrorMessage(permError);
+        transitionTo(VA_STATE.ERROR, sessionId);
+        speakText(permError, sessionId, () => {
           setTimeout(() => {
-            if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
-              dismiss();
-            }
-          }, 300);
-        }
+            if (sessionId === sessionIdRef.current) dismiss();
+          }, 3500);
+        });
+        return;
       }
+    };
+
+    r.onend = () => {
+      isRecognitionActiveRef.current = false;
+      isStartingRecognitionRef.current = false;
+      log('RECOGNITION_ENDED');
+
+      if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+
+      // Gracefully resume listening if session is still active
+      if (
+        isContinuousActiveRef.current &&
+        !isProcessingRef.current &&
+        !isSpeakingRef.current &&
+        stateRef.current === VA_STATE.LISTENING
+      ) {
+        clearTimeout(recognitionRestartTimerRef.current);
+        recognitionRestartTimerRef.current = setTimeout(() => {
+          if (
+            sessionId === sessionIdRef.current &&
+            isContinuousActiveRef.current &&
+            !isProcessingRef.current &&
+            !isSpeakingRef.current
+          ) {
+            startListening(sessionId);
+          }
+        }, 180);
+      }
+    };
+
+    try {
+      r.start();
+    } catch (err) {
+      log('RECOGNITION_START_EXCEPTION', err);
+      isStartingRecognitionRef.current = false;
     }
-  }, [location.pathname, dismiss, log]);
+  }, [cancelSpeech, dismiss, log, safeAbortRecognition, safeStopRecognition, speakText, startAudioAnalyser, transitionTo]);
 
-  // ── Control Command Actions ────────────────────────────────────────────────
+  startListeningRef.current = startListening;
 
-  const executeControl = useCallback(
-    (action, route) => {
-      switch (action) {
-        case 'back':
-          window.history.back();
-          break;
-        case 'home':
-          navigate('/');
-          break;
-        case 'scroll-down':
-          window.scrollBy({ top: window.innerHeight * 0.75, behavior: 'smooth' });
-          break;
-        case 'scroll-up':
-          window.scrollBy({ top: -window.innerHeight * 0.75, behavior: 'smooth' });
-          break;
-        default:
-          if (route) navigate(route);
-      }
-    },
-    [navigate]
-  );
-
-  // ── Process Spoken Command & Perform Navigation ────────────────────────────
+  // ── Universal Process Spoken Transcript ───────────────────────────────────
 
   const processTranscript = useCallback(
-    (raw, sessionId) => {
+    async (raw, sessionId) => {
       if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
-      if (isProcessingRef.current || isNavigatingRef.current) return;
 
-      isProcessingRef.current = true;
-      clearTimeout(commandTimerRef.current);
-      clearTimeout(interimTimerRef.current);
+      const clean = stripWakePhrase(raw);
+      log('PROCESSING_COMMAND', { raw, clean });
 
-      safeAbortRecognition();
-      stopAudioAnalyser();
+      const spokenLang = detectSpokenLanguage(clean);
 
-      const isTamil = isTamilLang();
-      const cleanRaw = stripWakePhrase(raw);
+      // ── Step A: Check if answering a pending clarification question ────────
+      if (pendingClarificationRef.current) {
+        const clarificationType = pendingClarificationRef.current;
+        const clarifiedIntent = resolveClarificationResponse(clean, clarificationType);
 
-      log('PROCESSING_COMMAND', { raw, cleanRaw });
+        if (clarifiedIntent) {
+          log('CLARIFICATION_RESOLVED', clarifiedIntent);
+          pendingClarificationRef.current = null;
 
-      // ── Sub-routine: Execute Navigation with Spoken Confirmation & Verification
-      const executeNavigation = (targetIntent) => {
-        if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+          const isTamil = spokenLang === 'ta';
+          currentSpeechLangRef.current = isTamil ? 'ta-IN' : 'en-IN';
 
-        isNavigatingRef.current = true;
-        transitionTo(VA_STATE.NAVIGATING, sessionId);
+          // Proceed with the chosen intent
+          executeNavigationIntent(clarifiedIntent, sessionId, isTamil);
+          return;
+        }
 
-        const destLabel = isTamil ? targetIntent.labelTa : targetIntent.labelEn;
+        // If reply wasn't an answer to the clarification, clear and proceed as normal
+        pendingClarificationRef.current = null;
+      }
 
-        // 1. Check Protected Route for unauthenticated users
-        if (targetIntent.requiresAuth && !isAuthRef.current) {
-          const authText = isTamil
-            ? `${destLabel} பக்கத்திற்கு உள்நுழைவு தேவை. உள்நுழைவு பக்கத்திற்கு செல்கிறேன்.`
-            : `${destLabel} requires you to sign in. Going to Login.`;
+      // ── Step B: Check if answering an action confirmation question ────────
+      const isAwaitingActionConfirmation = Boolean(pendingActionConfirmationRef.current);
+      const cmd = resolveVoiceCommand(clean, { awaitingConfirmation: isAwaitingActionConfirmation });
+      const isTamil = cmd?.detectedLang === 'ta' || spokenLang === 'ta';
+      currentSpeechLangRef.current = isTamil ? 'ta-IN' : 'en-IN';
 
-          intendedRouteRef.current = '/login';
-          setDestination({ id: 'LOGIN', route: '/login', labelEn: 'Login', labelTa: 'உள்நுழைவு' });
+      if (isAwaitingActionConfirmation) {
+        if (cmd?.type === 'CONFIRM_YES') {
+          log('ACTION_CONFIRMED_YES');
+          const pendingAction = pendingActionConfirmationRef.current.action;
+          pendingActionConfirmationRef.current = null;
 
-          speakText(authText, sessionId, () => {
-            speechFinishedRef.current = true;
-            checkCompletionAndDismiss(sessionId);
-          });
-
-          setTimeout(() => {
-            if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
-              navigate('/login');
+          if (pendingAction === 'submit-form') {
+            const confirmSubmitText = isTamil ? 'இப்போது சமர்ப்பிக்கிறேன்.' : 'Submitting now.';
+            speakText(confirmSubmitText, sessionId, () => {
+              const res = submitActiveForm();
+              const resultText = isTamil ? res.messageTa : res.messageEn;
+              speakText(resultText, sessionId, () => {
+                isProcessingRef.current = false;
+                if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+                  startListeningRef.current?.(sessionId);
+                }
+              });
+            });
+            return;
+          }
+        } else if (cmd?.type === 'CONFIRM_NO') {
+          log('ACTION_CONFIRMED_NO');
+          pendingActionConfirmationRef.current = null;
+          if (/\b(cancel|ரத்து)\b/i.test(clean)) {
+            dismiss();
+            return;
+          }
+          const cancelMsg = isTamil ? 'சரி, நான் சமர்ப்பிக்கவில்லை.' : "Okay, I won't submit it.";
+          speakText(cancelMsg, sessionId, () => {
+            isProcessingRef.current = false;
+            if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+              startListeningRef.current?.(sessionId);
             }
-          }, 350);
-          return;
-        }
-
-        // 2. Check Same-Page Navigation (User is already on the requested page)
-        if (matchesRoute(location.pathname, targetIntent.route)) {
-          log('SAME_PAGE_DETECTED', targetIntent.route);
-          intendedRouteRef.current = targetIntent.route;
-          setDestination(targetIntent);
-          routeVerifiedRef.current = true;
-
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-
-          const alreadyHereText = isTamil
-            ? `நீங்கள் ஏற்கனவே ${destLabel} பக்கத்தில் உள்ளீர்கள்.`
-            : `You are already on the ${destLabel} page.`;
-
-          speakText(alreadyHereText, sessionId, () => {
-            speechFinishedRef.current = true;
-            setTimeout(() => {
-              if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
-                dismiss();
-              }
-            }, 400);
           });
           return;
+        } else {
+          // If user gave another command, reset confirmation and proceed
+          pendingActionConfirmationRef.current = null;
         }
+      }
 
-        // 3. Standard Navigation to requested page: "Going to [Page Name]."
-        const navText = isTamil
-          ? `${destLabel} பக்கத்திற்கு செல்கிறேன்.`
-          : `Going to ${destLabel}.`;
+      // 0. Priority 0: Bad / Inappropriate speech (Section 24 & 26)
+      if (cmd && cmd.type === 'INAPPROPRIATE') {
+        log('INAPPROPRIATE_SPEECH_DETECTED');
+        // Do NOT store raw transcript or save anywhere (Section 29)
+        setTranscript('');
+        const warningMsg = isTamil ? cmd.warningTa : cmd.warningEn;
 
-        intendedRouteRef.current = targetIntent.route;
-        setDestination(targetIntent);
-        speechFinishedRef.current = false;
-        routeVerifiedRef.current = false;
-
-        log('NAVIGATION_START', { target: targetIntent.route, label: destLabel });
-
-        // Speak destination confirmation
-        speakText(navText, sessionId, () => {
-          speechFinishedRef.current = true;
-          log('NAVIGATION_SPEECH_FINISHED');
-          if (routeVerifiedRef.current) {
-            setTimeout(() => {
-              if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
-                dismiss();
-              }
-            }, 300);
+        speakText(warningMsg, sessionId, () => {
+          isProcessingRef.current = false;
+          if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+            startListeningRef.current?.(sessionId);
           }
         });
+        return;
+      }
 
-        // Trigger route transition
-        navTimerRef.current = setTimeout(() => {
-          if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
-          try {
-            navigate(targetIntent.route);
-          } catch {
-            const failText = isTamil
-              ? 'மன்னிக்கவும், அந்த பக்கத்தை திறக்க முடியவில்லை.'
-              : "Sorry, I couldn't open that page.";
-            speakText(failText, sessionId, () => dismiss());
+      // 1. Control Commands (Priority 1 & 2: stop, close, back, forward, scroll)
+      if (cmd && cmd.type === 'CONTROL') {
+        log('CONTROL_COMMAND_RESOLVED', cmd.action);
+
+        if (cmd.action === 'stop-speaking') {
+          cancelSpeech();
+          isProcessingRef.current = false;
+          startListeningRef.current?.(sessionId);
+          return;
+        }
+
+        // Cancel command: Closes voice navigation immediately
+        if (cmd.action === 'cancel') {
+          log('VOICE_NAVIGATION_CANCELLED');
+          dismiss();
+          return;
+        }
+
+        // Stop Listening: Closes voice navigation immediately
+        if (cmd.action === 'stop-listening') {
+          log('VOICE_NAVIGATION_STOPPED');
+          dismiss();
+          return;
+        }
+
+        // Close command: Check if an on-screen modal is open first!
+        if (cmd.action === 'close') {
+          // If explicitly refers to assistant or navigation, close assistant directly
+          if (/\b(voice|assistant|navigation|orb)\b/i.test(clean)) {
+            dismiss();
             return;
           }
 
-          // Safety timeout: dismiss if route navigation or confirmation gets stuck
-          setTimeout(() => {
-            if (sessionId === sessionIdRef.current && !isUnmountedRef.current && stateRef.current === VA_STATE.NAVIGATING) {
-              const current = location.pathname;
-              if (matchesRoute(current, intendedRouteRef.current)) {
-                dismiss();
-              } else {
-                log('NAVIGATION_TIMEOUT_FALLBACK_DISMISS');
-                dismiss();
+          const modalWasClosed = closeOpenModal();
+          if (modalWasClosed) {
+            log('MODAL_CLOSED_BY_VOICE');
+            const closeConfirm = isTamil ? 'மூடப்பட்டது.' : 'Closing.';
+            speakText(closeConfirm, sessionId, () => {
+              isProcessingRef.current = false;
+              if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+                startListeningRef.current?.(sessionId);
               }
-            }
-          }, 3500);
-        }, 150);
-      };
+            });
+            return;
+          }
 
-      // ── Step A: Check for Pending Clarification Response ("Yes", "No", or page name)
-      if (pendingClarificationRef.current) {
-        const pending = pendingClarificationRef.current;
-        if (isAffirmative(cleanRaw)) {
-          pendingClarificationRef.current = null;
-          executeNavigation(pending);
-          return;
-        }
-        if (isNegative(cleanRaw)) {
-          pendingClarificationRef.current = null;
-          const cancelText = isTamil ? 'சரி.' : 'Alright.';
-          speakText(cancelText, sessionId, () => dismiss());
-          return;
-        }
-        pendingClarificationRef.current = null;
-      }
-
-      // ── Step B: Check for Control Command (back, home, scroll, close)
-      const control = resolveControl(cleanRaw);
-      if (control) {
-        if (control.action === 'close') {
+          // If no modal was open, close the voice assistant
           dismiss();
           return;
         }
 
-        const ctrlText = isTamil ? control.labelTa || control.labelEn : control.labelEn;
-        transitionTo(VA_STATE.NAVIGATING, sessionId);
-
-        speakText(ctrlText, sessionId, () => {
-          setTimeout(() => {
-            if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
-              dismiss();
-            }
-          }, 300);
-        });
-
-        setTimeout(() => {
-          if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
-            executeControl(control.action, control.route);
-          }
-        }, 180);
-        return;
-      }
-
-      // ── Step C: Resolve Navigation Intent with Confidence Check
-      const intent = resolveIntent(cleanRaw);
-
-      // Ambiguous / Low-Confidence Intent -> Clarify
-      if (
-        intent &&
-        (intent.needsClarification ||
-          intent.confidence < CONFIDENCE_THRESHOLD ||
-          intent.isAmbiguous)
-      ) {
-        log('INTENT_NEEDS_CLARIFICATION', intent);
-        if (intent.id && intent.id !== 'AMBIGUOUS') {
-          pendingClarificationRef.current = intent;
-        } else {
-          pendingClarificationRef.current = null;
+        if (cmd.action === 'back') {
+          const backMsg = isTamil ? 'சரி, முந்தைய பக்கத்திற்கு செல்கிறேன்.' : "Okay, I'm going back.";
+          speakText(backMsg, sessionId, () => {
+            window.history.back();
+            isProcessingRef.current = false;
+            setTimeout(() => {
+              if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+                const arrivedMsg = isTamil
+                  ? 'நாம் முந்தைய பக்கத்திற்கு திரும்பிவிட்டோம். நான் உங்களுக்கு எப்படி உதவ முடியும்?'
+                  : "We're back on the previous page. How can I help you?";
+                speakText(arrivedMsg, sessionId, () => {
+                  if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+                    startListeningRef.current?.(sessionId);
+                  }
+                });
+              }
+            }, 600);
+          });
+          return;
         }
 
-        const clarifyText = isTamil
-          ? intent.clarifyPromptTa || 'எந்த பக்கத்திற்கு செல்ல வேண்டும்?'
-          : intent.clarifyPromptEn || 'Which page would you like me to open?';
+        if (cmd.action === 'forward') {
+          const fwdMsg = isTamil ? cmd.confirmTa : cmd.confirmEn;
+          speakText(fwdMsg, sessionId, () => {
+            window.history.forward();
+            isProcessingRef.current = false;
+            setTimeout(() => {
+              if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+                startListeningRef.current?.(sessionId);
+              }
+            }, 600);
+          });
+          return;
+        }
 
-        setTranscript(cleanRaw);
-        isProcessingRef.current = false;
-        transitionTo(VA_STATE.CLARIFYING, sessionId);
+        if (cmd.action === 'refresh') {
+          const refreshMsg = isTamil ? cmd.confirmTa : cmd.confirmEn;
+          speakText(refreshMsg, sessionId, () => {
+            window.location.reload();
+          });
+          return;
+        }
 
-        speakText(clarifyText, sessionId, () => {
-          if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
-            startCommandRecognitionRef.current?.(sessionId);
+        if (cmd.action === 'scroll-down') {
+          const scrollMsg = isTamil ? cmd.confirmTa : cmd.confirmEn;
+          window.scrollBy({ top: window.innerHeight * 0.75, behavior: 'smooth' });
+          speakText(scrollMsg, sessionId, () => {
+            isProcessingRef.current = false;
+            if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+              startListeningRef.current?.(sessionId);
+            }
+          });
+          return;
+        }
+
+        if (cmd.action === 'scroll-up') {
+          const scrollMsg = isTamil ? cmd.confirmTa : cmd.confirmEn;
+          window.scrollBy({ top: -window.innerHeight * 0.75, behavior: 'smooth' });
+          speakText(scrollMsg, sessionId, () => {
+            isProcessingRef.current = false;
+            if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+              startListeningRef.current?.(sessionId);
+            }
+          });
+          return;
+        }
+
+        if (cmd.action === 'scroll-top') {
+          const scrollMsg = isTamil ? cmd.confirmTa : cmd.confirmEn;
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          speakText(scrollMsg, sessionId, () => {
+            isProcessingRef.current = false;
+            if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+              startListeningRef.current?.(sessionId);
+            }
+          });
+          return;
+        }
+
+        if (cmd.action === 'scroll-bottom') {
+          const scrollMsg = isTamil ? cmd.confirmTa : cmd.confirmEn;
+          window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+          speakText(scrollMsg, sessionId, () => {
+            isProcessingRef.current = false;
+            if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+              startListeningRef.current?.(sessionId);
+            }
+          });
+          return;
+        }
+      }
+
+      // 1.5. Conversational Assistance Queries
+      if (cmd && cmd.type === 'WHAT_CAN_YOU_DO') {
+        log('CONVERSATIONAL_WHAT_CAN_YOU_DO');
+        const resp = isTamil ? cmd.responseTa : cmd.responseEn;
+        speakText(resp, sessionId, () => {
+          isProcessingRef.current = false;
+          if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+            startListeningRef.current?.(sessionId);
           }
         });
         return;
       }
 
-      // Confident Navigation Intent -> Execute
-      if (intent && !intent.needsClarification && intent.confidence >= CONFIDENCE_THRESHOLD) {
-        log('INTENT_RESOLVED_CONFIDENT', intent);
-        pendingClarificationRef.current = null;
-        executeNavigation(intent);
+      if (cmd && cmd.type === 'WHAT_IS_THIS_PAGE') {
+        log('CONVERSATIONAL_WHAT_IS_THIS_PAGE');
+        const pageDesc = getPageDescription(locationRef.current, isTamil);
+        speakText(pageDesc, sessionId, () => {
+          isProcessingRef.current = false;
+          if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+            startListeningRef.current?.(sessionId);
+          }
+        });
         return;
       }
 
-      // Unrecognized Command -> Provide Helpful Prompt & Re-listen
-      log('INTENT_UNRECOGNIZED', cleanRaw);
-      const unknownText = isTamil
-        ? 'மன்னிக்கவும், புரியவில்லை. திருப்பலி நேரம், நிகழ்வுகள், வாசகங்கள் அல்லது அறிவிப்புகள் என்று கேளுங்கள்.'
-        : "I'm not sure which page you mean. Try asking for Mass Timings, Events, Daily Readings, or Announcements.";
+      if (cmd && cmd.type === 'WHAT_CAN_I_DO_HERE') {
+        log('CONVERSATIONAL_WHAT_CAN_I_DO_HERE');
+        const caps = getPageCapabilities(locationRef.current, isTamil);
+        speakText(caps, sessionId, () => {
+          isProcessingRef.current = false;
+          if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+            startListeningRef.current?.(sessionId);
+          }
+        });
+        return;
+      }
 
-      isProcessingRef.current = false;
-      transitionTo(VA_STATE.CLARIFYING, sessionId);
+      if (cmd && cmd.type === 'FORM_WHAT_TO_FILL') {
+        log('CONVERSATIONAL_FORM_WHAT_TO_FILL');
+        const guidance = getFormFieldsGuidance(locationRef.current, isTamil);
+        speakText(guidance, sessionId, () => {
+          isProcessingRef.current = false;
+          if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+            startListeningRef.current?.(sessionId);
+          }
+        });
+        return;
+      }
 
-      speakText(unknownText, sessionId, () => {
-        if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
-          startCommandRecognitionRef.current?.(sessionId);
+      if (cmd && cmd.type === 'FORM_FOCUS_FIELD') {
+        log('CONVERSATIONAL_FORM_FOCUS_FIELD', cmd.fieldName);
+        const res = focusFormField(cmd.fieldName);
+        const focusMsg = isTamil
+          ? (res.success ? `${cmd.fieldName} கட்டத்திற்கு நகர்த்தியுள்ளேன்.` : `${cmd.fieldName} கட்டம் இந்தப் பக்கத்தில் காணப்படவில்லை.`)
+          : (res.success ? `Focused on the ${cmd.fieldName} field.` : `Could not find the ${cmd.fieldName} field on this page.`);
+        speakText(focusMsg, sessionId, () => {
+          isProcessingRef.current = false;
+          if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+            startListeningRef.current?.(sessionId);
+          }
+        });
+        return;
+      }
+
+      if (cmd && cmd.type === 'AUDIO_CONTROL') {
+        log('CONVERSATIONAL_AUDIO_CONTROL', cmd.action);
+        const res = controlAudioPlayer(cmd.action);
+        const audioMsg = isTamil ? res.messageTa : res.messageEn;
+        speakText(audioMsg, sessionId, () => {
+          isProcessingRef.current = false;
+          if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+            startListeningRef.current?.(sessionId);
+          }
+        });
+        return;
+      }
+
+      if (cmd && cmd.type === 'PENDING_QUERY') {
+        log('CONVERSATIONAL_PENDING_QUERY');
+        const res = getPendingItemDetails(isTamil);
+        speakText(res.description, sessionId, () => {
+          isProcessingRef.current = false;
+          if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+            startListeningRef.current?.(sessionId);
+          }
+        });
+        return;
+      }
+
+      if (cmd && cmd.type === 'OPEN_THAT_ITEM') {
+        log('CONVERSATIONAL_OPEN_THAT_ITEM');
+        const opened = openPendingItem();
+        const openMsg = isTamil
+          ? (opened ? 'பதிவு விவரங்களை திறக்கிறேன்.' : 'திறப்பதற்கு நிலுவை பதிவுகள் எதுவும் இல்லை.')
+          : (opened ? 'Opening the item details.' : 'No pending items found to open.');
+        speakText(openMsg, sessionId, () => {
+          isProcessingRef.current = false;
+          if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+            startListeningRef.current?.(sessionId);
+          }
+        });
+        return;
+      }
+
+      // 2. Action Commands (Buttons, Form Submits, Downloads)
+      if (cmd && cmd.type === 'ACTION') {
+        log('ACTION_COMMAND_RESOLVED', cmd.action);
+
+        if (cmd.action === 'submit-form') {
+          // Explicit Consequential Action Confirmation
+          pendingActionConfirmationRef.current = { action: 'submit-form' };
+          const confirmPrompt = isTamil
+            ? 'உங்கள் பதிவு சமர்ப்பிக்க தயாராக உள்ளது. இதை நான் சமர்ப்பிக்கட்டுமா?'
+            : 'Your request is ready to be submitted. Would you like me to submit it?';
+          speakText(confirmPrompt, sessionId, () => {
+            isProcessingRef.current = false;
+            if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+              startListeningRef.current?.(sessionId);
+            }
+          });
+          return;
+        }
+
+        if (cmd.action === 'download-document') {
+          const res = triggerDocumentDownload();
+          const dlText = isTamil ? res.messageTa : res.messageEn;
+          speakText(dlText, sessionId, () => {
+            isProcessingRef.current = false;
+            if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+              startListeningRef.current?.(sessionId);
+            }
+          });
+          return;
+        }
+
+        if (cmd.action === 'toggle-new') {
+          const toggled = toggleNewItemForm();
+          if (toggled) {
+            const toggleText = isTamil ? 'படிவம் திறக்கப்படுகிறது.' : 'Opening form.';
+            speakText(toggleText, sessionId, () => {
+              isProcessingRef.current = false;
+              if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+                startListeningRef.current?.(sessionId);
+              }
+            });
+            return;
+          }
+          // Fallback: if not already on form page, navigate to dashboard booking
+          navigate('/dashboard/booking');
+          const navText = isTamil ? 'திருப்பலி முன்பதிவு பக்கத்தை திறக்கிறேன்.' : 'Opening Book a Mass.';
+          speakText(navText, sessionId, () => {
+            isProcessingRef.current = false;
+            if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+              startListeningRef.current?.(sessionId);
+            }
+          });
+          return;
+        }
+      }
+
+      // 3. Ambiguity Check (Asks clarifying question e.g. "Open documents")
+      if (cmd && cmd.type === 'AMBIGUOUS') {
+        log('AMBIGUITY_DETECTED', cmd.clarificationType);
+        pendingClarificationRef.current = cmd.clarificationType;
+        const clarifyMsg = isTamil ? cmd.clarifyPromptTa : cmd.clarifyPromptEn;
+
+        speakText(clarifyMsg, sessionId, () => {
+          isProcessingRef.current = false;
+          if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+            startListeningRef.current?.(sessionId);
+          }
+        });
+        return;
+      }
+
+      // 4. Specific Navigation & Reading Intent
+      if (cmd && (cmd.type === 'NAVIGATION' || cmd.type === 'READ_CURRENT')) {
+        executeNavigationIntent(cmd, sessionId, isTamil);
+        return;
+      }
+
+      // 5. Unclear Speech (Section 25)
+      if (cmd && cmd.type === 'UNCLEAR') {
+        log('UNCLEAR_SPEECH_DETECTED', clean);
+        const msg = isTamil ? cmd.messageTa : cmd.messageEn;
+        speakText(msg, sessionId, () => {
+          isProcessingRef.current = false;
+          if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+            startListeningRef.current?.(sessionId);
+          }
+        });
+        return;
+      }
+
+      // 6. Irrelevant / Unsupported Speech (Section 24)
+      if (cmd && cmd.type === 'UNSUPPORTED') {
+        log('UNSUPPORTED_SPEECH_DETECTED', clean);
+        const msg = isTamil ? cmd.messageTa : cmd.messageEn;
+        speakText(msg, sessionId, () => {
+          isProcessingRef.current = false;
+          if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+            startListeningRef.current?.(sessionId);
+          }
+        });
+        return;
+      }
+
+      // 7. Generic Unrecognized Fallback
+      log('UNRECOGNIZED_COMMAND', clean);
+      const helpMsg = getContextAwareHelp(locationRef.current, isTamil);
+
+      speakText(helpMsg, sessionId, () => {
+        isProcessingRef.current = false;
+        if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+          startListeningRef.current?.(sessionId);
         }
       });
     },
-    [checkCompletionAndDismiss, dismiss, executeControl, location.pathname, log, navigate, safeAbortRecognition, speakText, stopAudioAnalyser, transitionTo]
+    [cancelSpeech, dismiss, log, navigate, speakText]
+  );
+
+  /**
+   * Subroutine: Execute Navigation or Read Intent
+   */
+  const executeNavigationIntent = useCallback(
+    async (intent, sessionId, isTamil) => {
+      if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+
+      log('EXECUTE_NAVIGATION_INTENT', intent);
+      setDestination(intent);
+
+      // Generic read current page command
+      if (intent.type === 'READ_CURRENT') {
+        const content = await readTargetContent('current', isTamil);
+        speakText(content, sessionId, () => {
+          isProcessingRef.current = false;
+          if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+            startListeningRef.current?.(sessionId);
+          }
+        });
+        return;
+      }
+
+      // Check Protected Route for unauthenticated user
+      if (intent.requiresAuth && !isAuthRef.current) {
+        const authNotice = isTamil
+          ? `${intent.labelTa} பக்கத்திற்கு உள்நுழைவு தேவை. உள்நுழைவு பக்கத்தை திறக்கிறேன்.`
+          : `${intent.labelEn} requires you to sign in. Opening the Login page.`;
+
+        speakText(authNotice, sessionId, () => {
+          navigate('/login');
+          isProcessingRef.current = false;
+          setTimeout(() => {
+            if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+              startListeningRef.current?.(sessionId);
+            }
+          }, 500);
+        });
+        return;
+      }
+
+      const isCurrentlyHere = matchesRoute(locationRef.current, intent.route);
+      const shouldRead = intent.shouldRead || (intent.readTarget && isReadCommand(transcript));
+
+      const performRead = async (target) => {
+        log('PERFORMING_PAGE_READ', target);
+        const content = await readTargetContent(target, isTamil);
+        if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+          speakText(content, sessionId, () => {
+            isProcessingRef.current = false;
+            if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+              startListeningRef.current?.(sessionId);
+            }
+          });
+        }
+      };
+
+      // If user is already on the requested page:
+      if (isCurrentlyHere) {
+        if (shouldRead && intent.readTarget) {
+          await performRead(intent.readTarget);
+          return;
+        }
+
+        // Same-page confirmation
+        const alreadyHere = isTamil
+          ? `நீங்கள் ஏற்கனவே ${intent.labelTa} பக்கத்தில் உள்ளீர்கள்.`
+          : `You are already on the ${intent.labelEn} page.`;
+
+        speakText(alreadyHere, sessionId, () => {
+          isProcessingRef.current = false;
+          if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+            startListeningRef.current?.(sessionId);
+          }
+        });
+        return;
+      }
+
+      // Standard navigation: speak natural confirmation, navigate, then arrival message
+      const confirmPhrase = isTamil
+        ? intent.confirmTa || `${intent.labelTa} பக்கத்தை திறக்கிறேன்.`
+        : intent.confirmEn || `Opening the ${intent.labelEn} page.`;
+
+      speakText(confirmPhrase, sessionId, async () => {
+        if (sessionId !== sessionIdRef.current || !isContinuousActiveRef.current) return;
+
+        try {
+          navigate(intent.route);
+        } catch (e) {
+          log('NAVIGATION_ERROR', e);
+        }
+
+        if (shouldRead && intent.readTarget) {
+          setTimeout(async () => {
+            await performRead(intent.readTarget);
+          }, 400);
+        } else {
+          // Two-Phase Spoken Navigation: Arrival confirmation message once page mounted
+          setTimeout(() => {
+            if (sessionId !== sessionIdRef.current || !isContinuousActiveRef.current) return;
+            const arrivalMsg = getArrivalConfirmation(intent.id || intent.intentId, isTamil);
+            speakText(arrivalMsg, sessionId, () => {
+              isProcessingRef.current = false;
+              if (sessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+                startListeningRef.current?.(sessionId);
+              }
+            });
+          }, 500);
+        }
+      });
+    },
+    [log, navigate, speakText, transcript]
   );
 
   processTranscriptRef.current = processTranscript;
 
-  // ── Start Command Recognition (Listening State) ─────────────────────────────
+  // ── Enter Wake / Activate Assistant ────────────────────────────────────────
 
-  const startCommandRecognition = useCallback(
-    (sessionId) => {
-      if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
-      if (isRecognitionActiveRef.current || isStartingRecognitionRef.current) {
-        log('RECOGNITION_ALREADY_ACTIVE_OR_STARTING');
-        return;
-      }
-
-      isStartingRecognitionRef.current = true;
-      isProcessingRef.current = false;
-      latestTranscriptRef.current = '';
-
-      transitionTo(VA_STATE.LISTENING, sessionId);
-      setTranscript('');
-      startAudioAnalyser(sessionId);
-
-      // Ensure any ongoing TTS is completely silent before listening
-      if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.speaking) {
-        cancelSpeech();
-      }
-
-      const lang = detectLang();
-      let r = null;
-      try {
-        safeAbortRecognition();
-        r = buildRecognition(lang, false, true);
-      } catch (err) {
-        log('RECOGNITION_BUILD_FAILED', err.message);
-        dismiss();
-        return;
-      }
-
-      if (!r) {
-        dismiss();
-        return;
-      }
-      recognitionRef.current = r;
-
-      // Command timeout: dismiss if user stays silent across full window
-      clearTimeout(commandTimerRef.current);
-      commandTimerRef.current = setTimeout(() => {
-        if (sessionId === sessionIdRef.current && stateRef.current === VA_STATE.LISTENING) {
-          if (latestTranscriptRef.current.trim()) {
-            processTranscript(latestTranscriptRef.current, sessionId);
-          } else {
-            log('COMMAND_SILENCE_TIMEOUT_DISMISS');
-            dismiss();
-          }
-        }
-      }, COMMAND_TIMEOUT_MS);
-
-      r.onstart = () => {
-        if (sessionId !== sessionIdRef.current) {
-          try { r.abort(); } catch {}
-          return;
-        }
-        isRecognitionActiveRef.current = true;
-        isStartingRecognitionRef.current = false;
-        log('RECOGNITION_START');
-      };
-
-      r.onresult = (e) => {
-        if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
-        cancelSpeech();
-
-        const results = Array.from(e.results);
-        const raw = results.map((res) => res[0].transcript).join(' ');
-        latestTranscriptRef.current = raw;
-        setTranscript(raw);
-
-        const isFinal = results[results.length - 1].isFinal;
-
-        // Process immediately on final result
-        if (isFinal && raw.trim()) {
-          clearTimeout(interimTimerRef.current);
-          clearTimeout(commandTimerRef.current);
-          transitionTo(VA_STATE.PROCESSING, sessionId);
-          setTimeout(() => {
-            if (sessionId === sessionIdRef.current) {
-              processTranscript(raw, sessionId);
-            }
-          }, 120);
-          return;
-        }
-
-        // Fast-track: interim speech confidently matches an intent or control command
-        clearTimeout(interimTimerRef.current);
-        interimTimerRef.current = setTimeout(() => {
-          if (sessionId === sessionIdRef.current && stateRef.current === VA_STATE.LISTENING && raw.trim()) {
-            const clean = stripWakePhrase(raw);
-            const matchedIntent = resolveIntent(clean);
-            const matchedCtrl = resolveControl(clean);
-            if (
-              matchedCtrl ||
-              (matchedIntent &&
-                !matchedIntent.needsClarification &&
-                matchedIntent.confidence >= CONFIDENCE_THRESHOLD)
-            ) {
-              log('FAST_TRACK_INTERIM_MATCH', clean);
-              clearTimeout(commandTimerRef.current);
-              safeStopRecognition();
-              transitionTo(VA_STATE.PROCESSING, sessionId);
-              setTimeout(() => {
-                if (sessionId === sessionIdRef.current) {
-                  processTranscript(raw, sessionId);
-                }
-              }, 120);
-            }
-          }
-        }, 450);
-      };
-
-      r.onerror = (e) => {
-        if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
-        log('RECOGNITION_ERROR', e.error);
-
-        if (e.error === 'no-speech') {
-          // Brief pause — let onend handle graceful restart if within command window
-          return;
-        }
-        if (e.error === 'not-allowed') {
-          setTranscript(
-            isTamilLang()
-              ? 'மைக் அனுமதி மறுக்கப்பட்டுள்ளது.'
-              : 'Microphone permission blocked.'
-          );
-          setTimeout(() => dismiss(), 2500);
-          return;
-        }
-        if (e.error === 'aborted') {
-          // Intentionally aborted
-          return;
-        }
-        dismiss();
-      };
-
-      r.onend = () => {
-        isRecognitionActiveRef.current = false;
-        isStartingRecognitionRef.current = false;
-        isStoppingRecognitionRef.current = false;
-        log('RECOGNITION_END');
-
-        if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
-
-        // If user spoke something valid while listening, process it
-        if (stateRef.current === VA_STATE.LISTENING) {
-          if (latestTranscriptRef.current.trim() && !isProcessingRef.current) {
-            transitionTo(VA_STATE.PROCESSING, sessionId);
-            setTimeout(() => {
-              if (sessionId === sessionIdRef.current) {
-                processTranscript(latestTranscriptRef.current, sessionId);
-              }
-            }, 120);
-          } else if (!isProcessingRef.current && restartCountRef.current < MAX_ONEND_RESTARTS) {
-            // Graceful restart on silence/pause
-            restartCountRef.current++;
-            log('ONEND_GRACEFUL_RESTART', `attempt ${restartCountRef.current}`);
-            setTimeout(() => {
-              if (sessionId === sessionIdRef.current && stateRef.current === VA_STATE.LISTENING && !isProcessingRef.current) {
-                startCommandRecognition(sessionId);
-              }
-            }, 180);
-          }
-        }
-      };
-
-      try {
-        r.start();
-      } catch (err) {
-        log('RECOGNITION_START_EXCEPTION', err.message);
-        isStartingRecognitionRef.current = false;
-        if (err.name !== 'InvalidStateError') {
-          dismiss();
-        }
-      }
-    },
-    [buildRecognition, cancelSpeech, dismiss, log, processTranscript, safeAbortRecognition, safeStopRecognition, startAudioAnalyser, transitionTo]
-  );
-
-  startCommandRecognitionRef.current = startCommandRecognition;
-
-  // ── Enter Wake State ("Hey Connect" or Mic Button) ─────────────────────────
-
-  const enterWake = useCallback(
-    (immediateCommand = '') => {
-      if (wakeDebounceRef.current) return;
-      wakeDebounceRef.current = true;
-      setTimeout(() => {
-        wakeDebounceRef.current = false;
-      }, WAKE_DEBOUNCE_MS);
-
-      // Increment sessionId to invalidate any prior session callbacks
+  const activate = useCallback(
+    async (initialCommand = '') => {
+      safeAbortWakeWord();
+      hasMicPermissionRef.current = true;
       const currentSessionId = ++sessionIdRef.current;
-      log('NEW_SESSION_STARTED', { immediateCommand });
+      isContinuousActiveRef.current = true;
+      pendingClarificationRef.current = null;
+      log('HEY_CONNECT_ACTIVATED', { initialCommand });
 
       cancelSpeech();
       safeAbortRecognition();
       stopAudioAnalyser();
 
       isProcessingRef.current = false;
-      isNavigatingRef.current = false;
-      speechFinishedRef.current = false;
-      routeVerifiedRef.current = false;
-      restartCountRef.current = 0;
-      latestTranscriptRef.current = '';
+      setErrorMessage('');
+      setDestination(null);
 
-      // Check if command was spoken directly with wake word (one-step: "Hey Connect show events")
-      const cleanImmediate = stripWakePhrase(immediateCommand);
-      if (cleanImmediate && cleanImmediate.trim()) {
-        log('ONE_STEP_WAKE_DETECTED', cleanImmediate);
-        setTranscript(cleanImmediate);
-        transitionTo(VA_STATE.PROCESSING, currentSessionId);
-        setTimeout(() => {
-          if (currentSessionId === sessionIdRef.current) {
-            processTranscriptRef.current?.(cleanImmediate, currentSessionId);
-          }
-        }, 180);
+      // Verify microphone access via getUserMedia first
+      try {
+        if (navigator.mediaDevices?.getUserMedia) {
+          const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          testStream.getTracks().forEach((t) => t.stop());
+        }
+      } catch (err) {
+        log('MIC_PERMISSION_DENIED', err);
+        const permError = isTamilLang()
+          ? 'ஹே கனெக்ட் குரல் வழிசெலுத்தலுக்கு மைக்ரோஃபோன் அனுமதி தேவை. உங்கள் உலாவி அமைப்புகளில் அணுகலை அனுமதிக்கவும்.'
+          : 'Microphone permission is required for Hey Connect voice navigation. Please allow microphone access in your browser settings.';
+        setErrorMessage(permError);
+        transitionTo(VA_STATE.ERROR, currentSessionId);
+        speakText(permError, currentSessionId, () => {
+          setTimeout(() => {
+            if (currentSessionId === sessionIdRef.current) dismiss();
+          }, 3500);
+        });
         return;
       }
 
-      // Two-step flow: Greet in catchy lady voice, then start listening
-      transitionTo(VA_STATE.WAKE, currentSessionId);
-      setTranscript('');
+      // If an initial direct command was passed
+      const cleanCmd = stripWakePhrase(initialCommand);
+      if (cleanCmd) {
+        setTranscript(cleanCmd);
+        transitionTo(VA_STATE.PROCESSING, currentSessionId);
+        setTimeout(() => {
+          if (currentSessionId === sessionIdRef.current) {
+            processTranscriptRef.current?.(cleanCmd, currentSessionId);
+          }
+        }, 150);
+        return;
+      }
 
-      const greeting = isTamilLang()
-        ? 'வணக்கம்! நான் Connect. எப்படி உதவட்டுமா?'
-        : "Hello! I'm Connect. How can I help you?";
-
-      let hasTransitioned = false;
-      const proceedToListening = () => {
-        if (hasTransitioned || isUnmountedRef.current || currentSessionId !== sessionIdRef.current) return;
-        hasTransitioned = true;
-        if (stateRef.current === VA_STATE.WAKE) {
-          // Small safety buffer (120ms) before opening mic to avoid speaker echo
-          setTimeout(() => {
-            if (currentSessionId === sessionIdRef.current) {
-              startCommandRecognitionRef.current?.(currentSessionId);
-            }
-          }, 120);
-        }
-      };
+      // Standard activation greeting with personalized user name
+      const userName = getUserDisplayName();
+      const isTamil = isTamilLang();
+      let greeting = '';
+      if (userName) {
+        greeting = isTamil
+          ? `வணக்கம், ${userName}. நான் Connect. எப்படி உதவட்டுமா?`
+          : `Hello, ${userName}. I'm Connect. How can I help you?`;
+      } else {
+        greeting = isTamil
+          ? 'வணக்கம். நான் Connect. எப்படி உதவட்டுமா?'
+          : "Hello. I'm Connect. How can I help you?";
+      }
 
       speakText(greeting, currentSessionId, () => {
-        proceedToListening();
+        if (currentSessionId === sessionIdRef.current && isContinuousActiveRef.current) {
+          startListeningRef.current?.(currentSessionId);
+        }
       });
-
-      // Safety fallback: if speech onend is delayed by browser, proceed after timeout
-      setTimeout(() => {
-        proceedToListening();
-      }, 2600);
     },
-    [cancelSpeech, log, safeAbortRecognition, speakText, stopAudioAnalyser, transitionTo]
+    [cancelSpeech, dismiss, getUserDisplayName, log, safeAbortRecognition, safeAbortWakeWord, speakText, stopAudioAnalyser, transitionTo]
   );
 
-  // ── Manual Activate (Navbar Mic Button) ────────────────────────────────────
+  activateRef.current = activate;
 
-  const activate = useCallback(() => {
-    enterWake();
-  }, [enterWake]);
-
-  // ── Mount / Unmount Lifecycle ──────────────────────────────────────────────
+  // ── Mount & Global Window Binding ──────────────────────────────────────────
 
   useEffect(() => {
     isUnmountedRef.current = false;
@@ -995,41 +1487,69 @@ export default function useVoiceAssistant() {
       window.speechSynthesis.addEventListener?.('voiceschanged', onVoicesChanged);
     }
 
-    const handleActivate = () => activate();
-    window.addEventListener('hey-connect-activate', handleActivate);
+    const handleActivateEvent = (e) => {
+      const initialText = e?.detail?.command || '';
+      activate(initialText);
+    };
+    window.addEventListener('hey-connect-activate', handleActivateEvent);
 
-    // Global console testing helper: window.heyConnect("show mass timings")
-    window.heyConnect = (commandText) => {
-      if (commandText && typeof commandText === 'string') {
-        const clean = stripWakePhrase(commandText);
-        enterWake(clean || commandText);
+    // Global testing helper: window.heyConnect("book a mass")
+    window.heyConnect = (cmd) => {
+      if (cmd && typeof cmd === 'string') {
+        activate(cmd);
       } else {
         activate();
       }
     };
 
+    // Check microphone permission and start passive wake-word listener
+    if (typeof navigator !== 'undefined' && navigator.permissions?.query) {
+      navigator.permissions
+        .query({ name: 'microphone' })
+        .then((status) => {
+          if (status.state === 'granted') {
+            hasMicPermissionRef.current = true;
+            startWakeWordListening();
+          }
+          status.onchange = () => {
+            if (status.state === 'granted') {
+              hasMicPermissionRef.current = true;
+              if (stateRef.current === VA_STATE.IDLE) {
+                startWakeWordListening();
+              }
+            }
+          };
+        })
+        .catch(() => {
+          startWakeWordListening();
+        });
+    } else {
+      startWakeWordListening();
+    }
+
     return () => {
       isUnmountedRef.current = true;
+      isContinuousActiveRef.current = false;
       sessionIdRef.current++;
-      clearTimeout(commandTimerRef.current);
-      clearTimeout(navTimerRef.current);
-      clearTimeout(interimTimerRef.current);
-      clearTimeout(ttsSafetyTimerRef.current);
+      clearTimeout(recognitionRestartTimerRef.current);
+      safeAbortWakeWord();
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       cancelSpeech();
       stopAudioAnalyser();
       safeAbortRecognition();
-      window.removeEventListener('hey-connect-activate', handleActivate);
+      window.removeEventListener('hey-connect-activate', handleActivateEvent);
       delete window.heyConnect;
     };
-  }, [activate, cancelSpeech, enterWake, safeAbortRecognition, stopAudioAnalyser]);
+  }, [activate, cancelSpeech, safeAbortRecognition, safeAbortWakeWord, startWakeWordListening, stopAudioAnalyser]);
 
   return {
     state,
     transcript,
+    spokenText,
     destination,
     audioLevel,
     isSpeaking,
+    errorMessage,
     isSupported,
     activate,
     dismiss,
