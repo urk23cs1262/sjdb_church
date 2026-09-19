@@ -10,7 +10,7 @@ import toast from 'react-hot-toast';
 import Maintenance from '../public/public_maintenance';
 
 export default function MaintenanceAdmin() {
-  const [activeTab, setActiveTab] = useState('control'); // 'control', 'scheduler', 'logs'
+  const [activeTab, setActiveTab] = useState('control'); // 'control' | 'scheduler' | 'logs' | 'notifications'
   const [settings, setSettings] = useState(null);
   const [history, setHistory] = useState([]);
   const [analytics, setAnalytics] = useState({ accessAttemptsCount: 0, totalMaintenanceSessions: 0 });
@@ -386,19 +386,38 @@ export default function MaintenanceAdmin() {
         </div>
       </div>
 
-      {/* Multi-Channel Notification Status Widget (Non-Blocking Independent Dispatch) */}
+      {/* Multi-Channel Notification Status Widget (Real Delivery Tracking) */}
       {activeEvent && (
         <div className="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 shadow-xs space-y-3">
-          <div className="flex items-center justify-between border-b pb-2.5">
-            <span className="text-xs sm:text-sm font-bold text-gray-900 flex items-center gap-2">
-              <FiSend className="text-church-royal-blue" /> Latest State Transition Notification Status ({(activeEvent.previousStatus || 'LIVE').toUpperCase()} → {(activeEvent.newStatus || activeEvent.eventType || 'MAINTENANCE').toUpperCase()})
-            </span>
-            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1.5 ${
-              activeEvent.notificationSent ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b pb-2.5 gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs sm:text-sm font-bold text-gray-900 flex items-center gap-2">
+                <FiSend className="text-church-royal-blue" /> Latest State Transition Notification Status
+              </span>
+              <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                {activeEvent.eventType === 'PRE_MAINTENANCE' 
+                  ? '⚠️ Pre-Maintenance Notice' 
+                  : (activeEvent.eventType === 'MAINTENANCE_STARTED' || activeEvent.newStatus === 'maintenance'
+                    ? '🔧 Maintenance Started' 
+                    : (activeEvent.eventType === 'MAINTENANCE_COMPLETED' || activeEvent.newStatus === 'live'
+                      ? '🎉 Website Live (Completed)' 
+                      : '🚨 Emergency Shutdown'))}
+              </span>
+            </div>
+            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1.5 self-start sm:self-auto ${
+              activeEvent.status === 'DISPATCH_COMPLETE' || (activeEvent.notificationSent && !activeEvent.status)
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' 
+                : (activeEvent.status === 'PARTIALLY_COMPLETE'
+                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                  : 'bg-blue-100 text-blue-800 border border-blue-200')
             }`}>
-              {activeEvent.notificationSent ? (
+              {activeEvent.status === 'DISPATCH_COMPLETE' || (activeEvent.notificationSent && !activeEvent.status) ? (
                 <>
                   <FiCheckCircle className="text-xs" /> Dispatch Complete
+                </>
+              ) : activeEvent.status === 'PARTIALLY_COMPLETE' ? (
+                <>
+                  <FiAlertCircle className="text-xs" /> Partially Complete
                 </>
               ) : (
                 <>
@@ -413,36 +432,64 @@ export default function MaintenanceAdmin() {
               <span className="text-blue-950 font-bold flex items-center gap-1.5">
                 ✉️ Mail
               </span>
-              <span className="font-extrabold text-blue-900 bg-white px-2.5 py-0.5 rounded-md border border-blue-200 text-xs">
-                {activeEvent.deliveries?.email?.count || activeEvent.emailSentCount || 0} sent
-              </span>
+              <div className="text-right">
+                <span className="font-extrabold text-blue-900 bg-white px-2.5 py-0.5 rounded-md border border-blue-200 text-xs">
+                  {activeEvent.deliveries?.email?.sentCount ?? activeEvent.deliveries?.email?.count ?? 0} sent
+                </span>
+                {activeEvent.deliveries?.email?.failedCount > 0 && (
+                  <span className="block text-[10px] text-red-600 font-bold mt-0.5">
+                    {activeEvent.deliveries.email.failedCount} failed
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="p-3 rounded-xl bg-purple-50/60 border border-purple-100 flex items-center justify-between">
               <span className="text-purple-950 font-bold flex items-center gap-1.5">
                 🔔 Web Push
               </span>
-              <span className="font-extrabold text-purple-900 bg-white px-2.5 py-0.5 rounded-md border border-purple-200 text-xs">
-                {activeEvent.deliveries?.push?.count || 0} sent
-              </span>
+              <div className="text-right">
+                <span className="font-extrabold text-purple-900 bg-white px-2.5 py-0.5 rounded-md border border-purple-200 text-xs">
+                  {activeEvent.deliveries?.push?.sentCount ?? activeEvent.deliveries?.push?.count ?? 0} sent
+                </span>
+                {activeEvent.deliveries?.push?.failedCount > 0 && (
+                  <span className="block text-[10px] text-red-600 font-bold mt-0.5">
+                    {activeEvent.deliveries.push.failedCount} failed
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-100 flex items-center justify-between">
               <span className="text-amber-950 font-bold flex items-center gap-1.5">
                 📱 In-App
               </span>
-              <span className="font-extrabold text-amber-900 bg-white px-2.5 py-0.5 rounded-md border border-amber-200 text-xs">
-                {activeEvent.deliveries?.inApp?.count || activeEvent.notifSentCount || 0} sent
-              </span>
+              <div className="text-right">
+                <span className="font-extrabold text-amber-900 bg-white px-2.5 py-0.5 rounded-md border border-amber-200 text-xs">
+                  {activeEvent.deliveries?.inApp?.sentCount ?? activeEvent.deliveries?.inApp?.count ?? 0} sent
+                </span>
+                {activeEvent.deliveries?.inApp?.failedCount > 0 && (
+                  <span className="block text-[10px] text-red-600 font-bold mt-0.5">
+                    {activeEvent.deliveries.inApp.failedCount} failed
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="p-3 rounded-xl bg-emerald-50/60 border border-emerald-100 flex items-center justify-between">
               <span className="text-emerald-950 font-bold flex items-center gap-1.5">
                 💬 WhatsApp
               </span>
-              <span className="font-extrabold text-emerald-900 bg-white px-2.5 py-0.5 rounded-md border border-emerald-200 text-xs">
-                {activeEvent.deliveries?.whatsApp?.count || 0} sent
-              </span>
+              <div className="text-right">
+                <span className="font-extrabold text-emerald-900 bg-white px-2.5 py-0.5 rounded-md border border-emerald-200 text-xs">
+                  {activeEvent.deliveries?.whatsApp?.sentCount ?? activeEvent.deliveries?.whatsApp?.count ?? 0} sent
+                </span>
+                {activeEvent.deliveries?.whatsApp?.failedCount > 0 && (
+                  <span className="block text-[10px] text-red-600 font-bold mt-0.5">
+                    {activeEvent.deliveries.whatsApp.failedCount} failed
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -481,6 +528,16 @@ export default function MaintenanceAdmin() {
           }`}
         >
           <FiList className="text-base" /> Audit Logs & History
+        </button>
+        <button
+          onClick={() => setActiveTab('notifications')}
+          className={`pb-3 px-4 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
+            activeTab === 'notifications' 
+              ? 'border-church-royal-blue text-church-royal-blue' 
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <FiSend className="text-base" /> Notification Preview
         </button>
       </div>
 
@@ -1001,6 +1058,214 @@ export default function MaintenanceAdmin() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Tab 4: Notification Preview — 3 Independent Notification Events */}
+      {activeTab === 'notifications' && (
+        <div className="space-y-6">
+          <div className="bg-blue-50/80 border border-blue-200 p-4 rounded-2xl flex items-center gap-3 text-xs text-blue-900 font-medium">
+            <FiInfo className="text-blue-600 text-lg flex-shrink-0" />
+            <span>
+              <strong>3 Independent Notification Events:</strong> Pre-Maintenance Notice, Maintenance Started, and Maintenance Completed are dispatched as three separate notification events with automatic duplicate protection, lead-time scheduling, and multi-channel delivery (Email, WhatsApp Bot, Web Push, In-App).
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            {/* EVENT 1: Pre-Maintenance Notice */}
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl overflow-hidden flex flex-col">
+              <div className="px-5 py-4 bg-amber-100 border-b border-amber-200 flex items-center gap-2">
+                <span className="text-xl">⚠️</span>
+                <div>
+                  <h3 className="font-extrabold text-amber-950 text-sm">1. Pre-Maintenance Notice</h3>
+                  <p className="text-[10px] text-amber-800 font-medium">Dispatched at scheduled lead time or via "Showcase Notice Banner"</p>
+                </div>
+              </div>
+
+              <div className="p-5 space-y-4 flex-1">
+                <div className="bg-white border border-amber-200 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-900 border-b border-amber-100 pb-2">
+                    ✉️ <span>Email Notification</span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 font-semibold">Subject:</p>
+                  <p className="text-xs font-bold text-gray-800">⚠️ Scheduled Maintenance Notice — St. John de Britto Church</p>
+                  <p className="text-[11px] text-gray-500 font-semibold mt-2">Body:</p>
+                  <pre className="text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed font-sans bg-gray-50 rounded-lg p-3 border border-gray-100">{`Dear Parishioner,
+
+Please be informed that scheduled website maintenance has been planned to optimize our parish systems.
+
+📅 Maintenance Start: ${settings?.noticeBanner?.scheduledStartTime ? new Date(settings.noticeBanner.scheduledStartTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) + ' IST' : 'Scheduled Start Date/Time'}
+⏳ Expected Completion: ${settings?.noticeBanner?.scheduledEndTime ? new Date(settings.noticeBanner.scheduledEndTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) + ' IST' : 'Expected Completion Date/Time'}
+📝 Details: ${settings?.noticeBanner?.message || 'Scheduled system maintenance and upgrades.'}
+
+During this window, online services and mass bookings may be temporarily unavailable.
+
+— St. John de Britto Church, Kalayarkoil`}</pre>
+                </div>
+
+                <div className="bg-white border border-emerald-200 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-900 border-b border-emerald-100 pb-2">
+                    💬 <span>WhatsApp Message</span>
+                  </div>
+                  <pre className="text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed font-sans bg-emerald-50/60 rounded-lg p-3 border border-emerald-100">{`⚠️ *Scheduled Maintenance Notice*
+
+Dear Parishioner,
+
+Please be informed that scheduled website maintenance is planned for the *St. John de Britto Church* portal.
+
+📅 *Maintenance Start:* ${settings?.noticeBanner?.scheduledStartTime ? new Date(settings.noticeBanner.scheduledStartTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) + ' IST' : '31 Aug 2026, 04:00 PM IST'}
+⏳ *Expected Completion:* ${settings?.noticeBanner?.scheduledEndTime ? new Date(settings.noticeBanner.scheduledEndTime).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) + ' IST' : '31 Aug 2026, 06:00 PM IST'}
+
+During this window, website services and mass bookings will be temporarily unavailable.
+
+— *St. John de Britto Church, Kalayarkoil*`}</pre>
+                </div>
+              </div>
+            </div>
+
+            {/* EVENT 2: Maintenance Started */}
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl overflow-hidden flex flex-col">
+              <div className="px-5 py-4 bg-blue-100 border-b border-blue-200 flex items-center gap-2">
+                <span className="text-xl">🔧</span>
+                <div>
+                  <h3 className="font-extrabold text-blue-950 text-sm">2. Maintenance Started</h3>
+                  <p className="text-[10px] text-blue-800 font-medium">Dispatched immediately when Maintenance Mode is enabled</p>
+                </div>
+              </div>
+
+              <div className="p-5 space-y-4 flex-1">
+                <div className="bg-white border border-blue-200 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-blue-900 border-b border-blue-100 pb-2">
+                    ✉️ <span>Email Notification</span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 font-semibold">Subject:</p>
+                  <p className="text-xs font-bold text-gray-800">🔧 Website Maintenance Has Started — St. John de Britto Church</p>
+                  <p className="text-[11px] text-gray-500 font-semibold mt-2">Body:</p>
+                  <pre className="text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed font-sans bg-gray-50 rounded-lg p-3 border border-gray-100">{`Dear Parishioner,
+
+Our church website is currently undergoing maintenance. Regular website access and online services are temporarily paused.
+
+🛠️ Status: Under Maintenance
+⏳ Expected Completion: ${settings?.expectedCompletion ? new Date(settings.expectedCompletion).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) + ' IST' : 'Expected Completion Date/Time'}
+📝 Details: ${settings?.message || 'Scheduled system updates'}
+
+We appreciate your patience.
+
+— St. John de Britto Church, Kalayarkoil`}</pre>
+                </div>
+
+                <div className="bg-white border border-emerald-200 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-900 border-b border-emerald-100 pb-2">
+                    💬 <span>WhatsApp Message</span>
+                  </div>
+                  <pre className="text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed font-sans bg-emerald-50/60 rounded-lg p-3 border border-emerald-100">{`🔧 *Website Maintenance Has Started*
+
+Dear Parishioner,
+
+The *St. John de Britto Church* website is currently undergoing maintenance.
+
+🛠️ *Status:* Under Maintenance
+⏳ *Expected Completion:* ${settings?.expectedCompletion ? new Date(settings.expectedCompletion).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) + ' IST' : 'Expected Completion Time'}
+
+Public access and online mass bookings are temporarily unavailable. Our technical team is working swiftly.
+
+— *St. John de Britto Church, Kalayarkoil*`}</pre>
+                </div>
+              </div>
+            </div>
+
+            {/* EVENT 3: Maintenance Completed */}
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl overflow-hidden flex flex-col">
+              <div className="px-5 py-4 bg-emerald-100 border-b border-emerald-200 flex items-center gap-2">
+                <span className="text-xl">🎉</span>
+                <div>
+                  <h3 className="font-extrabold text-emerald-950 text-sm">3. Maintenance Completed</h3>
+                  <p className="text-[10px] text-emerald-800 font-medium">Dispatched immediately when Maintenance Mode is disabled (Live)</p>
+                </div>
+              </div>
+
+              <div className="p-5 space-y-4 flex-1">
+                <div className="bg-white border border-emerald-200 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-900 border-b border-emerald-100 pb-2">
+                    ✉️ <span>Email Notification</span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 font-semibold">Subject:</p>
+                  <p className="text-xs font-bold text-gray-800">🎉 The Website Is Live Again! — St. John de Britto Church</p>
+                  <p className="text-[11px] text-gray-500 font-semibold mt-2">Body:</p>
+                  <pre className="text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed font-sans bg-gray-50 rounded-lg p-3 border border-gray-100">{`Dear Parishioner,
+
+We are pleased to inform you that website maintenance has been successfully completed and our church platform is now fully live.
+
+✅ Online Mass Bookings are active
+✅ Parishioner Accounts are fully accessible
+✅ All Church Services restored
+
+👉 Visit: https://stjb-church.vercel.app
+
+Thank you for your patience and prayers.
+
+— St. John de Britto Church, Kalayarkoil`}</pre>
+                </div>
+
+                <div className="bg-white border border-emerald-200 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-bold text-emerald-900 border-b border-emerald-100 pb-2">
+                    💬 <span>WhatsApp Message</span>
+                  </div>
+                  <pre className="text-[11px] text-gray-700 whitespace-pre-wrap leading-relaxed font-sans bg-emerald-50/60 rounded-lg p-3 border border-emerald-100">{`🎉 *The Website Is Live Again!*
+
+Dear Parishioner,
+
+The *St. John de Britto Church* platform is now live and fully operational!
+
+✅ *Online Mass Bookings* are open
+✅ *Prayer Requests & Services* are active
+✅ *Account & Portal Access* restored
+
+🌐 Visit: https://stjb-church.vercel.app
+
+Thank you for your patience, support, and prayers. 🙏
+
+— *St. John de Britto Church, Kalayarkoil*`}</pre>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Channel Info */}
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+            <h3 className="text-sm font-bold text-gray-900 border-b pb-3 mb-4 flex items-center gap-2">
+              <FiShield className="text-church-royal-blue" /> Multi-Channel Delivery Channels & Duplicate Protection
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="p-3 bg-blue-50 rounded-xl border border-blue-100 text-center">
+                <div className="text-xl mb-1">✉️</div>
+                <div className="font-bold text-blue-900">Email</div>
+                <div className="text-blue-700 text-[10px] mt-0.5">Active users with email</div>
+              </div>
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 text-center">
+                <div className="text-xl mb-1">💬</div>
+                <div className="font-bold text-emerald-900">WhatsApp</div>
+                <div className="text-emerald-700 text-[10px] mt-0.5">Opted-in WhatsApp users</div>
+              </div>
+              <div className="p-3 bg-purple-50 rounded-xl border border-purple-100 text-center">
+                <div className="text-xl mb-1">🔔</div>
+                <div className="font-bold text-purple-900">Web Push</div>
+                <div className="text-purple-700 text-[10px] mt-0.5">Subscribed push devices</div>
+              </div>
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-100 text-center">
+                <div className="text-xl mb-1">📱</div>
+                <div className="font-bold text-amber-900">In-App</div>
+                <div className="text-amber-700 text-[10px] mt-0.5">All parishioner accounts</div>
+              </div>
+            </div>
+            <p className="text-[11px] text-gray-500 mt-4 leading-relaxed">
+              <strong>Strict Duplicate Protection:</strong> Backed by unique database compound index on <code className="bg-gray-100 px-1 py-0.5 rounded text-gray-800">maintenanceEventId + userId + channel</code>. Re-submitting or page refreshes will never trigger duplicate messages.
+              <br />
+              <strong>Non-Blocking Dispatch:</strong> State transition requests return immediately (<code className="bg-gray-100 px-1 py-0.5 rounded text-gray-800">&lt; 50ms</code>) while notifications execute in background workers.
+            </p>
+          </div>
         </div>
       )}
 

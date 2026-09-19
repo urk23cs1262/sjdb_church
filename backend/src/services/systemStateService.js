@@ -126,51 +126,59 @@ async function dispatchTransitionNotificationsBackground(settings, event) {
       : 'Shortly';
 
     if (isLive) {
-      emailSubject = `✅ SJDB Connect Services Restored — St. John de Britto Church`;
-      emailBody = `Dear Parishioner,\n\nMaintenance has been completed successfully.\n\nThe SJDB Connect website, WhatsApp Bot, and digital services are now available again.\n\nThank you for your patience.\n\nVisit Website: ${siteUrl}`;
-      smsBody = `✅ SJDB Connect Services Restored: Maintenance completed successfully. All online services & WhatsApp Bot are available. ${siteUrl}`;
-      waMsg = `✅ *SJDB Connect Services Restored*
+      // ✅ Maintenance Completed / Services Restored
+      emailSubject = `✅ Church Website Is Live Again — St. John de Britto's Church`;
+      emailBody = `Dear User,\n\nWe are happy to inform you that the maintenance has been completed and the St. John de Britto's Church website and services are now live again.\n\nYou can now access the website/app and use the available services normally.\n\n👉 Visit: ${siteUrl}\n\nThank you for your patience and understanding.\n\n— St. John de Britto's Church`;
+      smsBody = `✅ Church Website Is Live Again! The St. John de Britto's Church website maintenance is complete. All services are now available. Visit: ${siteUrl}`;
+      waMsg = `✅ *Services Are Live Again*
 
-Maintenance has been completed successfully.
+Dear User,
 
-The SJDB Connect website, WhatsApp Bot, and digital services are now available again.
+The St. John de Britto's Church website and services are now live again.
 
-Thank you for your patience.
+The maintenance has been completed, and you can now access the website/app and use the available services normally.
 
-— *St. John de Britto Church, Kalayarkoil*
-_SJDB Connect_`;
+🌐 Visit: ${siteUrl}
+
+Thank you for your patience and understanding.
+
+— *St. John de Britto's Church*`;
     } else if (isEmergency) {
-      emailSubject = `🚨 EMERGENCY NOTICE: St. John de Britto Church Website Temporary Shutdown`;
-      emailBody = `Dear Parishioner,\n\nOur church website and WhatsApp Bot have been temporarily locked by the Technical Team due to an emergency system event:\n${settings.emergencyReason || settings.message}\n\nWe are working swiftly to restore normal operation. We apologize for any inconvenience.`;
-      smsBody = `🚨 Emergency Shutdown: Website and digital services temporarily locked due to emergency maintenance. We are restoring services.`;
-      waMsg = `🚨 *SJDB Connect Emergency Lockdown*
+      // 🚨 Emergency Shutdown
+      emailSubject = `🚨 Emergency Notice — St. John de Britto's Church Website`;
+      emailBody = `Dear User,\n\nThe St. John de Britto's Church website and services are currently under emergency maintenance.\n\nReason: ${settings.emergencyReason || settings.message || 'Emergency system event'}\n\nDuring this period, the website/app and some services will be temporarily unavailable.\n\nWe are working swiftly to restore services. We apologize for the inconvenience and thank you for your patience.\n\n— St. John de Britto's Church`;
+      smsBody = `🚨 Emergency Notice: St. John de Britto's Church website is temporarily down due to emergency maintenance. We will notify you once services are restored.`;
+      waMsg = `🚨 *Emergency Maintenance Notice*
 
-Our church digital services and WhatsApp Bot are temporarily locked due to an emergency system event.
+Dear User,
 
-*Reason:* ${settings.emergencyReason || settings.message || 'Emergency maintenance in progress'}
+The St. John de Britto's Church website and services are currently under emergency maintenance.
+
+*Reason:* ${settings.emergencyReason || settings.message || 'Emergency system event'}
+
+The website/app and services will be temporarily unavailable during this period.
 
 We are working swiftly to restore normal operation. Thank you for your prayers and understanding. 🙏
 
-— *St. John de Britto Church, Kalayarkoil*
-_SJDB Connect_`;
+— *St. John de Britto's Church*`;
     } else {
-      emailSubject = settings.notificationTemplate?.emailSubject || `🔧 Website Maintenance Started — St. John de Britto Church`;
-      emailBody = settings.notificationTemplate?.emailBody
-        ? settings.notificationTemplate.emailBody.replace(/\{EXPECTED_COMPLETION\}/g, formattedCompletion)
-        : `Dear Parishioner,\n\nOur church website and WhatsApp Bot are currently undergoing scheduled maintenance:\n${settings.message}\n\nExpected completion: ${formattedCompletion}. Some online services may be temporarily unavailable. We will notify you when the portal is back online.`;
-      smsBody = `🔧 Website Maintenance Started: ${settings.message} Expected completion: ${formattedCompletion}.`;
-      waMsg = `🔧 *SJDB Connect is Temporarily Unavailable*
+      // 🔧 Maintenance Started / In Progress
+      emailSubject = `🔧 Church Website Maintenance Notice — St. John de Britto's Church`;
+      emailBody = `Dear User,\n\nThe St. John de Britto's Church website and services are currently under maintenance.\n\nDuring this maintenance period, the website/app and some services may be temporarily unavailable.\n\nWe apologize for the inconvenience and appreciate your patience. We will notify you once the services are available again.\n\n— St. John de Britto's Church`;
+      smsBody = `🔧 Maintenance Notice: The St. John de Britto's Church website is currently under maintenance. We will notify you once services are available again.`;
+      waMsg = `🔧 *Maintenance Notice*
 
-Our church digital services are currently under maintenance.
+Dear User,
 
-The WhatsApp Bot is temporarily unavailable while we carry out scheduled maintenance and improvements.
+The St. John de Britto's Church website and services are currently under maintenance.
 
-Please try again later.
+The website/app and some services may be temporarily unavailable during this period.
 
 We apologize for the inconvenience and thank you for your patience.
 
-— *St. John de Britto Church, Kalayarkoil*
-_SJDB Connect_`;
+We will notify you once the services are live again.
+
+— *St. John de Britto's Church*`;
     }
 
     const users = await User.find({ isActive: { $ne: false } }).select('name email phone role whatsappOptIn');
@@ -294,6 +302,23 @@ async function setSystemState(targetStatus, options = {}) {
   const settings = await getOrCreateSettings();
   const previousStatus = settings.status || (settings.isEnabled ? (settings.isEmergency ? 'emergency' : 'maintenance') : 'live');
 
+  // ✅ No-op guard: if status hasn't changed, return immediately without
+  // creating a new event or dispatching duplicate notifications.
+  if (previousStatus === newStatus) {
+    console.log(`[SystemControl] No-op: system is already '${newStatus}'. Skipping transition & notifications.`);
+    return {
+      success: true,
+      changed: false,
+      status: newStatus.toUpperCase(),
+      changedBy: options.changedBy || 'Admin',
+      changedAt: new Date().toISOString(),
+      notificationDispatch: 'SKIPPED_NO_CHANGE',
+      settings,
+      activeEvent: null,
+      message: `System is already in '${newStatus}' state. No changes made, no notifications sent.`
+    };
+  }
+
   const isLive = newStatus === 'live';
   const isEmergency = newStatus === 'emergency';
   const isMaintenance = newStatus === 'maintenance';
@@ -309,30 +334,34 @@ async function setSystemState(targetStatus, options = {}) {
   if (options.category) settings.category = options.category;
   if (options.expectedCompletion) settings.expectedCompletion = options.expectedCompletion;
 
-  // Create immutable Audit Log Event
-  const event = await MaintenanceEvent.create({
-    eventType: newStatus,
-    previousStatus,
-    newStatus,
-    notificationSent: false,
-    startedAt: new Date(),
-    endedAt: isLive ? new Date() : null,
-    enabledBy: options.changedBy || 'Admin',
-    enabledById: options.changedById || null,
-    reason: options.reason || (isEmergency ? 'Emergency Shutdown Triggered' : (isLive ? 'Maintenance Ended' : 'Maintenance Mode Enabled')),
-    category: options.category || settings.category || 'General Maintenance',
-    deliveries: {
-      email: { status: 'pending', count: 0 },
-      push: { status: 'pending', count: 0 },
-      inApp: { status: 'pending', count: 0 },
-      whatsApp: { status: 'pending', count: 0 }
-    }
-  });
+  const {
+    dispatchMaintenanceStartedEvent,
+    dispatchMaintenanceCompletedEvent
+  } = require('./maintenanceNotificationService');
+
+  let activeEvent = null;
 
   if (isLive) {
-    settings.activeEventId = null;
+    // 3. Maintenance Completed Event
+    const res = await dispatchMaintenanceCompletedEvent({
+      settings,
+      changedBy: options.changedBy || 'Admin',
+      changedById: options.changedById || null
+    });
+    activeEvent = res?.event || null;
   } else {
-    settings.activeEventId = event._id;
+    // 2. Maintenance Started / Emergency Event
+    // If a pre-maintenance banner was active or scheduled, mark it completed/superseded
+    if (settings.noticeBanner) {
+      settings.noticeBanner.isNoticeSent = true;
+    }
+    const res = await dispatchMaintenanceStartedEvent({
+      settings,
+      changedBy: options.changedBy || 'Admin',
+      changedById: options.changedById || null,
+      isEmergency
+    });
+    activeEvent = res?.event || null;
   }
 
   await settings.save();
@@ -340,23 +369,16 @@ async function setSystemState(targetStatus, options = {}) {
 
   console.log(`[SystemControl] System state atomically changed: ${previousStatus.toUpperCase()} → ${newStatus.toUpperCase()} by ${options.changedBy || 'Admin'}`);
 
-  // Dispatch multi-channel notifications asynchronously in background
-  setImmediate(() => {
-    dispatchTransitionNotificationsBackground(settings, event).catch(err => {
-      console.error('[SystemControl] Background worker error:', err.message);
-    });
-  });
-
-  // Fast response returned immediately
+  // Fast response returned immediately (< 50ms)
   return {
     success: true,
     changed: previousStatus !== newStatus,
     status: newStatus.toUpperCase(),
     changedBy: options.changedBy || 'Admin',
     changedAt: new Date().toISOString(),
-    notificationDispatch: 'QUEUED',
+    notificationDispatch: 'DISPATCHING',
     settings,
-    activeEvent: event,
+    activeEvent,
     message: isLive
       ? 'Maintenance Mode Disabled (Website is Live)'
       : (isEmergency ? 'Emergency Shutdown Activated' : 'Maintenance Mode Enabled')

@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
-import { FiCalendar, FiArrowLeft, FiClock, FiFileText, FiCheckCircle, FiInfo, FiPaperclip, FiX, FiCheck } from 'react-icons/fi';
+import { FiCalendar, FiArrowLeft, FiCheckCircle, FiPaperclip, FiCheck } from 'react-icons/fi';
 import { HiSparkles } from 'react-icons/hi2';
-import { GiChurch, GiCrucifix, GiPrayer } from 'react-icons/gi';
+import { GiCrucifix, GiPrayer } from 'react-icons/gi';
 import { Link } from 'react-router-dom';
-import api, { UPLOADS_URL } from '../../services/api';
-import { SectionLoader } from '../../components/common/common_loader';
+import api from '../../services/api';
 
 const INTENTION_TYPES = [
   { value: 'thanksgiving', label: 'Thanksgiving Mass' },
@@ -61,9 +60,6 @@ export default function Booking() {
 
   const [submittedBooking, setSubmittedBooking] = useState(null);
   const [myBookings, setMyBookings] = useState([]);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [historyFilter, setHistoryFilter] = useState('all');
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
 
@@ -83,11 +79,9 @@ export default function Booking() {
 
   const fetchMyBookings = async () => {
     try {
-      setLoadingHistory(true);
       const r = await api.get('/bookings/my');
       setMyBookings(r.data.bookings || []);
     } catch { }
-    finally { setLoadingHistory(false); }
   };
 
   const generateAIPrayer = () => {
@@ -135,10 +129,6 @@ export default function Booking() {
     }
   };
 
-  const filteredHistory = myBookings.filter(b => {
-    if (historyFilter === 'all') return true;
-    return b.status === historyFilter;
-  });
 
   return (
     <div className="min-h-screen pt-20 bg-church-cream pb-16">
@@ -155,8 +145,8 @@ export default function Booking() {
               </div>
               <p className="text-gray-300 text-xs sm:text-sm mt-0.5">Submit your mass intention for parish priest review & approval</p>
             </div>
-            <button
-              onClick={() => { fetchMyBookings(); setShowHistoryModal(true); }}
+            <Link
+              to="/dashboard/bookings"
               className="btn-gold py-2 px-4 text-xs sm:text-sm shadow-sm flex items-center gap-2 self-start sm:self-auto"
             >
               <FiCalendar /> My Mass Bookings
@@ -165,7 +155,7 @@ export default function Booking() {
                   {myBookings.length}
                 </span>
               )}
-            </button>
+            </Link>
           </div>
         </div>
       </div>
@@ -238,7 +228,9 @@ export default function Booking() {
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button onClick={() => setSubmittedBooking(null)} className="btn-gold text-xs sm:text-sm py-2.5 px-5">Book Another Mass</button>
-              <button onClick={() => { setSubmittedBooking(null); setShowHistoryModal(true); }} className="btn-outline-gold text-xs sm:text-sm py-2.5 px-5">View My Bookings</button>
+              <Link to="/dashboard/bookings" className="btn-outline-gold text-xs sm:text-sm py-2.5 px-5 flex items-center justify-center gap-2">
+                <FiCalendar /> View My Bookings
+              </Link>
             </div>
           </motion.div>
         ) : (
@@ -390,121 +382,6 @@ export default function Booking() {
           </motion.div>
         )}
       </div>
-
-      {/* History Modal */}
-      <AnimatePresence>
-        {showHistoryModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowHistoryModal(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-            <motion.div initial={{ scale: 0.95, opacity: 0, y: 15 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0, y: 15 }} className="relative bg-white w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
-              
-              <div className="bg-church-royal-blue p-5 text-white flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <FiCalendar className="text-church-gold text-xl" />
-                  <h3 className="font-bold font-display text-lg">My Mass Bookings</h3>
-                </div>
-                <button onClick={() => setShowHistoryModal(false)} className="p-1.5 hover:bg-white/10 rounded-full transition-colors">
-                  <FiX size={20} />
-                </button>
-              </div>
-
-              {/* Filter Tabs */}
-              <div className="px-5 py-3.5 bg-gray-50 border-b border-gray-100 flex items-center gap-2 overflow-x-auto no-scrollbar">
-                {[
-                  { id: 'all', label: 'All' },
-                  { id: 'pending', label: 'Pending' },
-                  { id: 'approved', label: 'Approved' },
-                  { id: 'completed', label: 'Completed' },
-                  { id: 'rejected', label: 'Rejected' }
-                ].map(tab => {
-                  const isActive = historyFilter === tab.id;
-                  const count = tab.id === 'all' ? myBookings.length : myBookings.filter(b => b.status === tab.id).length;
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setHistoryFilter(tab.id)}
-                      className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                        isActive
-                          ? 'bg-church-gold text-white shadow-sm ring-2 ring-church-gold/20'
-                          : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
-                      }`}
-                    >
-                      <span>{tab.label}</span>
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
-                        isActive ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-500'
-                      }`}>
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Booking List */}
-              <div className="p-5 overflow-y-auto space-y-3 flex-1">
-                {loadingHistory ? <SectionLoader /> : filteredHistory.length === 0 ? (
-                  <div className="text-center py-12 text-gray-400">
-                    <GiChurch className="text-5xl mx-auto mb-2 opacity-30" />
-                    <p className="text-sm">No {historyFilter === 'all' ? '' : historyFilter} mass bookings found.</p>
-                  </div>
-                ) : (
-                  filteredHistory.map(b => (
-                    <div key={b._id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <span className="text-[10px] font-mono text-gray-400 block">{b.bookingNumber}</span>
-                          <h4 className="font-bold text-gray-800 text-sm">{b.name}</h4>
-                        </div>
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                          b.status === 'approved' ? 'bg-green-100 text-green-700 border border-green-200' :
-                          b.status === 'completed' ? 'bg-blue-100 text-blue-700 border border-blue-200' :
-                          b.status === 'rejected' ? 'bg-red-100 text-red-700 border border-red-200' :
-                          'bg-amber-100 text-amber-800 border border-amber-200'
-                        }`}>
-                          {b.status}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 mt-2 bg-gray-50 p-2.5 rounded-xl">
-                        <div>
-                          <span className="text-gray-400 block text-[10px]">Mass Date & Time:</span>
-                          <span className="font-semibold">{new Date(b.massDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} • {b.massTime || 'Any time'}</span>
-                        </div>
-                        <div>
-                          <span className="text-gray-400 block text-[10px]">Intention Type:</span>
-                          <span className="font-semibold capitalize">{b.intentionType?.replace('_', ' ')}</span>
-                        </div>
-                      </div>
-
-                      {b.intentionDetails && (
-                        <p className="text-xs text-gray-600 italic mt-2">"{b.intentionDetails}"</p>
-                      )}
-
-                      {b.suggestedDate && (
-                        <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-center gap-1.5">
-                          <FiInfo className="text-blue-600 flex-shrink-0" />
-                          <span><strong className="font-bold">Reschedule Suggestion:</strong> {new Date(b.suggestedDate).toLocaleDateString()} ({b.suggestedTime || 'Any time'})</span>
-                        </div>
-                      )}
-
-                      {b.adminNote && (
-                        <p className="text-xs text-amber-800 mt-1 font-medium">Note: {b.adminNote}</p>
-                      )}
-
-                      {b.attachmentUrl && (
-                        <a href={b.attachmentUrl.startsWith('http') ? b.attachmentUrl : `${UPLOADS_URL.replace('/uploads', '')}${b.attachmentUrl}`} target="_blank" rel="noreferrer" className="text-[11px] text-church-gold hover:underline flex items-center gap-1 mt-2 font-semibold">
-                          <FiPaperclip /> View Attachment
-                        </a>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
     </div>
   );

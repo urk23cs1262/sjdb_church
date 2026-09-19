@@ -3,8 +3,16 @@ const mongoose = require('mongoose');
 const channelDeliverySchema = new mongoose.Schema({
   status: {
     type: String,
-    enum: ['pending', 'sent', 'failed', 'skipped'],
+    enum: ['pending', 'sent', 'failed', 'skipped', 'in_progress'],
     default: 'pending'
+  },
+  sentCount: {
+    type: Number,
+    default: 0
+  },
+  failedCount: {
+    type: Number,
+    default: 0
   },
   count: {
     type: Number,
@@ -19,10 +27,20 @@ const channelDeliverySchema = new mongoose.Schema({
 }, { _id: false });
 
 const maintenanceEventSchema = new mongoose.Schema({
+  cycleId: {
+    type: String,
+    index: true
+  },
   eventType: {
     type: String,
-    enum: ['upcoming', 'maintenance', 'live', 'emergency'],
-    default: 'maintenance'
+    enum: ['PRE_MAINTENANCE', 'MAINTENANCE_STARTED', 'MAINTENANCE_COMPLETED', 'EMERGENCY', 'upcoming', 'maintenance', 'live', 'emergency'],
+    default: 'MAINTENANCE_STARTED',
+    index: true
+  },
+  status: {
+    type: String,
+    enum: ['SCHEDULED', 'DISPATCHING', 'DISPATCH_COMPLETE', 'PARTIALLY_COMPLETE', 'FAILED', 'CANCELLED'],
+    default: 'SCHEDULED'
   },
   previousStatus: {
     type: String,
@@ -42,10 +60,17 @@ const maintenanceEventSchema = new mongoose.Schema({
     type: Date
   },
   deliveries: {
-    email: { type: channelDeliverySchema, default: () => ({ status: 'pending', count: 0 }) },
-    push: { type: channelDeliverySchema, default: () => ({ status: 'pending', count: 0 }) },
-    inApp: { type: channelDeliverySchema, default: () => ({ status: 'pending', count: 0 }) },
-    whatsApp: { type: channelDeliverySchema, default: () => ({ status: 'pending', count: 0 }) }
+    email: { type: channelDeliverySchema, default: () => ({ status: 'pending', sentCount: 0, failedCount: 0, count: 0 }) },
+    push: { type: channelDeliverySchema, default: () => ({ status: 'pending', sentCount: 0, failedCount: 0, count: 0 }) },
+    inApp: { type: channelDeliverySchema, default: () => ({ status: 'pending', sentCount: 0, failedCount: 0, count: 0 }) },
+    whatsApp: { type: channelDeliverySchema, default: () => ({ status: 'pending', sentCount: 0, failedCount: 0, count: 0 }) }
+  },
+  metadata: {
+    startTime: { type: Date },
+    endTime: { type: Date },
+    expectedCompletion: { type: Date },
+    bannerMessage: { type: String },
+    noticeLeadTime: { type: String }
   },
   startedAt: {
     type: Date,

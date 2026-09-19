@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
@@ -5,11 +6,12 @@ const OTPVerification = require('../models/OTPVerification');
 const { sendMail } = require('../config/mailer');
 const { sendSMS } = require('../config/twilio');
 const { notifyAdmin } = require('./adminNotificationService');
+const { logSecurityEvent } = require('./securityAuditService');
 
 /**
- * Generates a cryptographically sound 6-digit numeric OTP code.
+ * Generates a cryptographically secure 6-digit numeric OTP code.
  */
-const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
+const generateOTP = () => crypto.randomInt(100000, 1000000).toString();
 
 /**
  * Creates a fresh, hashed OTP verification session and dispatches the plain OTP to the user.
@@ -17,7 +19,7 @@ const generateOTP = () => Math.floor(100000 + Math.random() * 900000).toString()
  * - Invalids any previous pending OTP sessions (status = 'replaced')
  * - Stores ONLY the bcrypt hash of the OTP in the database
  * - Sets a strict 5-minute expiration time
- * - Dispatches plain OTP via SMS & Email directly to the parishioner
+ * - Dispatches plain OTP via Email & WhatsApp Bot directly to the parishioner
  * - Notifies administrators of event (excluding plain OTP from logs)
  */
 const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }) => {
@@ -79,7 +81,7 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
     );
   }
 
-  // 2. Generate new 6-digit OTP and calculate bcrypt hash
+  // 2. Generate new cryptographically secure 6-digit OTP and calculate bcrypt hash
   const otp = generateOTP();
   const salt = await bcrypt.genSalt(10);
   const otpHash = await bcrypt.hash(otp, salt);
@@ -107,6 +109,7 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
   if (user) {
     await User.findByIdAndUpdate(userId, {
       otpGeneratedAt: now,
+      otpExpiresAt: otpExpiresAt,
       otpNotifiedExpired: false
     });
   }
@@ -125,7 +128,17 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
     }
   }).catch(e => console.warn('Admin OTP notification error:', e.message));
 
-  // 6. Send OTP via SMS
+  // Log security event
+  logSecurityEvent({
+    userId: user?._id || userId,
+    eventType: purpose === 'registration' ? 'REGISTRATION_OTP_GENERATED' : 'REVERIFICATION_OTP_GENERATED',
+    req,
+    source: purpose === 'registration' ? 'REGISTER' : 'LOGIN',
+    success: true,
+    details: { purpose, targetEmail: targetEmail ? true : false, targetPhone: targetPhone ? true : false }
+  });
+
+  // 6. Send OTP via SMS fallback
   if (targetPhone) {
     let formattedPhone = targetPhone;
     if (!formattedPhone.startsWith('+')) {
@@ -140,11 +153,26 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
     }).catch(err => console.error(` SMS Error: ${err.message}`));
   }
 
-  // 7. Send OTP via Email
+  const userName = user?.name || 'Parishioner';
+
+  // 7. Send OTP via WhatsApp Bot
+  if (targetPhone) {
+    try {
+      const { sendWhatsAppMessage } = require('../bot/whatsapp');
+      const waMsg = `*Account Verification Required*\n\nDear *${userName}*,\n\nYour St. John De Britto Church account requires verification.\n\n*Your OTP is: ${otp}*\n\n⏱️ OTP expires in 5 minutes.\n⚠️ Do not share this OTP with anyone.\n\n_St. John de Britto Church, Kalayarkoil_`;
+      sendWhatsAppMessage(targetPhone, waMsg).then(sent => {
+        if (sent) console.log(`✉️ OTP WhatsApp delivered to ${targetPhone}`);
+      }).catch(err => console.error(`❌ OTP WhatsApp error: ${err.message}`));
+    } catch (waErr) {
+      console.error('WhatsApp Bot OTP dispatch error:', waErr.message);
+    }
+  }
+
+  // 8. Send OTP via Email
   if (targetEmail) {
     sendMail({
       to: targetEmail,
-      subject: 'Your Verification Code — St. John de Britto\'s Church',
+      subject: 'Account Verification Required - St. John De Britto Church',
       html: `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -152,7 +180,7 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
-  <title>Verification Code</title>
+  <title>Account Verification Required</title>
   <style>
     body, table, td, div, p, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
     body { margin: 0; padding: 0; width: 100% !important; background-color: #f1f5f9; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif; }
@@ -179,23 +207,22 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
 
       <!-- Body -->
       <div class="email-content" style="padding:32px 24px; text-align:center;">
-        <h2 style="color:#1e3a8a; margin-top:0; font-size:22px; font-weight:800; margin-bottom:8px;">One-Time Verification Code</h2>
-        <p style="color:#4b5563; font-size:14px; line-height:1.6; margin-bottom:20px;">Use the following code to securely complete your ${purpose === 'registration' ? 'registration' : purpose === 'password_reset' ? 'password reset' : 'sign-in'}.</p>
+        <h2 style="color:#1e3a8a; margin-top:0; font-size:22px; font-weight:800; margin-bottom:8px;">Account Verification Required</h2>
+        <p style="color:#4b5563; font-size:14px; line-height:1.6; margin-bottom:12px;">Dear <strong>${userName}</strong>,</p>
+        <p style="color:#4b5563; font-size:14px; line-height:1.6; margin-bottom:20px;">To keep your church account secure, periodic verification is required. Use the 6-digit one-time code below to complete your sign-in.</p>
         
         <div style="background:linear-gradient(135deg,#fef3c7,#fff7ed); border:2px dashed #f59e0b; border-radius:16px; padding:20px 16px; margin:20px 0;">
           <div class="otp-code" style="font-size:38px; font-weight:900; letter-spacing:10px; color:#92400e; font-family:Consolas, Monaco, monospace;">${otp}</div>
         </div>
 
-        <p style="color:#dc2626; font-weight:700; margin-top:16px; font-size:13.5px;"> This OTP is valid for 5 minutes only.</p>
-        <p style="color:#6b7280; font-size:12.5px; line-height:1.6; margin-top:8px;">Do not share this code with anyone for your account security.</p>
-        
-        <!-- DYNAMIC_BIBLE_VERSE -->
+        <p style="color:#dc2626; font-weight:700; margin-top:16px; font-size:13.5px;">⏱️ This OTP is valid for 5 minutes only.</p>
+        <p style="color:#6b7280; font-size:12.5px; line-height:1.6; margin-top:8px;">⚠️ For your security, do not share this code with anyone.</p>
       </div>
 
       <!-- Footer -->
       <div style="background-color:#111827; padding:18px 16px; text-align:center; color:#9ca3af; font-size:11.5px; line-height:1.6;">
         <p style="margin:0 0 4px; color:#e5e7eb; font-weight:700;">St. John de Britto Church, Kalayarkoil - 630551</p>
-        <p style="margin:0; color:#6b7280;">Automated System Message • Do not reply</p>
+        <p style="margin:0; color:#6b7280;">Automated Security Notification • Do not reply</p>
       </div>
     </div>
   </div>
@@ -203,9 +230,6 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
 </html>`
     }).catch(err => console.error(` Mail Error: ${err.message}`));
   }
-
-  // Dev log
-  console.log(` OTP generated for ${targetPhone || targetEmail} [${purpose}]: ${otp}`);
 
   return { session, otp };
 };
@@ -314,6 +338,15 @@ const verifyOTPSession = async (argsOrUserId, maybeOtp, maybePurpose, maybeReq) 
         extra: { purpose: session.purpose }
       }).catch(e => console.warn('Admin MULTIPLE_FAILED_OTP notification error:', e.message));
 
+      logSecurityEvent({
+        userId,
+        eventType: 'INVALID_OTP',
+        req,
+        source: session.purpose === 'registration' ? 'REGISTER' : 'LOGIN',
+        success: false,
+        details: { purpose: session.purpose, attempts: session.attempts, maxAttemptsExceeded: true }
+      });
+
       return {
         valid: false,
         message: 'Maximum OTP verification attempts exceeded. Please request a new OTP.'
@@ -321,6 +354,16 @@ const verifyOTPSession = async (argsOrUserId, maybeOtp, maybePurpose, maybeReq) 
     }
 
     await session.save();
+
+    logSecurityEvent({
+      userId,
+      eventType: 'INVALID_OTP',
+      req,
+      source: session.purpose === 'registration' ? 'REGISTER' : 'LOGIN',
+      success: false,
+      details: { purpose: session.purpose, attempts: session.attempts, attemptsRemaining: 5 - session.attempts }
+    });
+
     return {
       valid: false,
       message: `Invalid OTP code. ${5 - session.attempts} attempts remaining.`
@@ -335,12 +378,22 @@ const verifyOTPSession = async (argsOrUserId, maybeOtp, maybePurpose, maybeReq) 
   // Mark user as verified, active, unsuspended and clear all failure/lockout counters
   // Preserve all existing account records and profile details completely
   let user = null;
+  const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+  const verifiedNow = new Date();
+  const nextCycle = new Date(verifiedNow.getTime() + THIRTY_DAYS_MS);
+
   if (userId && mongoose.Types.ObjectId.isValid(userId)) {
     user = await User.findByIdAndUpdate(userId, {
       isVerified: true,
       isActive: true,
       isSuspended: false,
       suspensionReason: undefined,
+      lastVerifiedAt: verifiedNow,
+      nextVerificationAt: nextCycle,
+      verificationStatus: 'Verified',
+      otpVerificationRequired: false,
+      otpVerified: true,
+      otpVerifiedAt: verifiedNow,
       failedLoginAttempts: 0,
       firstFailedAttempt: null,
       lastFailedAttempt: null,
@@ -372,6 +425,15 @@ const verifyOTPSession = async (argsOrUserId, maybeOtp, maybePurpose, maybeReq) 
     req,
     extra: { purpose: session.purpose }
   }).catch(e => console.warn('Admin OTP_VERIFIED notification error:', e.message));
+
+  logSecurityEvent({
+    userId: user?._id || userId,
+    eventType: session.purpose === 'registration' ? 'REGISTRATION_OTP_VERIFIED' : 'REVERIFICATION_OTP_VERIFIED',
+    req,
+    source: session.purpose === 'registration' ? 'REGISTER' : 'LOGIN',
+    success: true,
+    details: { purpose: session.purpose }
+  });
 
   return { valid: true, user, session };
 };

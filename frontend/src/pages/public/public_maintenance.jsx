@@ -74,10 +74,15 @@ export default function Maintenance({ isPreview = false }) {
         setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
         clearInterval(interval);
         if (!isPreview) {
-          toast.success('Maintenance period completed! Redirecting to home page...', { id: 'maint-complete' });
-          setTimeout(() => {
-            navigate('/', { replace: true });
-          }, 1500);
+          // Check whether maintenance was actually disabled by the admin or scheduled end
+          api.get('/maintenance/status').then(res => {
+            if (res.data?.success && !res.data.isEnabled) {
+              toast.success('Website is back online! Redirecting to home page...', { id: 'maint-complete' });
+              setTimeout(() => {
+                navigate('/', { replace: true });
+              }, 1500);
+            }
+          }).catch(() => { });
         }
       } else {
         const days = Math.floor(difference / (1000 * 60 * 60 * 24));
@@ -89,7 +94,7 @@ export default function Maintenance({ isPreview = false }) {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [status, navigate]);
+  }, [status, navigate, isPreview]);
 
   const formattedDate = status?.expectedCompletion
     ? new Date(status.expectedCompletion).toLocaleString('en-GB', {
@@ -237,7 +242,11 @@ export default function Maintenance({ isPreview = false }) {
 
                 <div className="pt-3 border-t border-amber-100 flex items-center justify-between text-xs text-gray-600">
                   <span>Expected Completion:</span>
-                  <span className="font-bold text-church-royal-blue">{formattedDate}</span>
+                  {timeLeft.days === 0 && timeLeft.hours === 0 && timeLeft.minutes === 0 && timeLeft.seconds === 0 && status?.expectedCompletion && new Date(status.expectedCompletion).getTime() <= Date.now() ? (
+                    <span className="font-bold text-amber-600 animate-pulse">Finalizing Maintenance...</span>
+                  ) : (
+                    <span className="font-bold text-church-royal-blue">{formattedDate}</span>
+                  )}
                 </div>
               </div>
             )}

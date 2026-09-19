@@ -5,168 +5,18 @@ const Notification = require('../models/Notification');
 const { sendMail } = require('../config/mailer');
 const { setSystemState, getSystemState, getOrCreateSettings, updateCacheFromSettings } = require('../services/systemStateService');
 
-// Dispatch Pre-Maintenance / Upcoming Notice (Website remains LIVE)
+const {
+  dispatchPreMaintenanceEvent,
+  getEventRealDeliveryMetrics
+} = require('../services/maintenanceNotificationService');
+
+// Backward-compatible wrapper for dispatchPreMaintenanceNotice
 const dispatchPreMaintenanceNotice = async (settings, options = {}) => {
-  try {
-    if (!settings) settings = await getOrCreateSettings();
-
-    // Enable notice banner
-    if (!settings.noticeBanner) settings.noticeBanner = {};
-    settings.noticeBanner.isEnabled = true;
-
-    // Check if notice was already dispatched for this session
-    if (options.eventId && settings.noticeSentForEventId && settings.noticeSentForEventId.toString() === options.eventId.toString()) {
-      console.log('Pre-maintenance notice already dispatched for this event. Skipping repeat dispatch.');
-      return { success: true, alreadySent: true, settings };
-    }
-
-    const fromStr = settings.scheduler?.scheduledStart || settings.noticeBanner?.scheduledStartTime;
-    const toStr = settings.scheduler?.scheduledEnd || settings.noticeBanner?.scheduledEndTime || settings.expectedCompletion;
-
-    const format12H = (dateVal) => {
-      if (!dateVal) return 'TBA';
-      const d = new Date(dateVal);
-      if (isNaN(d.getTime())) return 'TBA';
-      return d.toLocaleString('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      }) + ' IST';
-    };
-
-    const formattedStart = format12H(fromStr);
-    const formattedEnd = format12H(toStr);
-
-    const emailSubject = ` SCHEDULED MAINTENANCE NOTICE: St. John de Britto Church`;
-    const noticeMessage = settings.noticeBanner?.message || settings.message || 'Scheduled system maintenance and upgrades.';
-    const emailBody = `Dear Parishioner,\n\nPlease be informed that scheduled website maintenance is planned for our church portal.\n\n Scheduled Start: ${formattedStart}\n Expected Completion: ${formattedEnd}\n\nNotice Details: ${noticeMessage}\n\nDuring this window, the website may be briefly offline. Thank you for your understanding.`;
-    const smsBody = ` Upcoming Maintenance Notice: St. John de Britto Church portal maintenance scheduled from ${formattedStart} to ${formattedEnd}. Details: ${noticeMessage}`;
-
-    const event = await MaintenanceEvent.create({
-      eventType: 'upcoming',
-      previousStatus: settings.status || 'live',
-      newStatus: settings.status || 'live',
-      notificationSent: false,
-      startedAt: new Date(),
-      enabledBy: options.changedBy || 'Admin',
-      enabledById: options.changedById || null,
-      reason: options.reason || 'Upcoming Maintenance Notice Showcase',
-      category: settings.category || 'Scheduled Update',
-      deliveries: {
-        email: { status: 'pending', count: 0 },
-        push: { status: 'pending', count: 0 },
-        inApp: { status: 'pending', count: 0 },
-        whatsApp: { status: 'pending', count: 0 }
-      }
-    });
-
-    settings.noticeSentForEventId = event._id;
-    await settings.save();
-    updateCacheFromSettings(settings);
-
-    // Multi-Channel Broadcast across WhatsApp, Email, In-App, and Push
-    const { broadcastMaintenanceScheduled } = require('../services/broadcastNotificationService');
-    broadcastMaintenanceScheduled({ settings, action: 'scheduled' }).catch(e => console.error('[MaintenanceController] Pre-maintenance broadcast error:', e.message));
-
-    // Run notifications asynchronously in background
-    setImmediate(async () => {
-      try {
-        const users = await User.find({ isActive: { $ne: false } }).select('name email phone role whatsappOptIn');
-
-        let emailCount = 0;
-        let pushCount = 0;
-        let inAppCount = 0;
-        let waCount = 0;
-
-        for (const u of users) {
-          if (u.email) {
-            try {
-              await sendMail({
-                to: u.email,
-                subject: emailSubject,
-                text: emailBody,
-                html: `
-                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
-                    <div style="background-color: #1e3a8a; color: #ffffff; padding: 28px 24px; text-align: center;">
-                      <div style="width: 75px; height: 75px; margin: 0 auto 12px; border-radius: 50%; overflow: hidden; border: 3px solid #fbbf24; background: #ffffff; box-shadow: 0 4px 14px rgba(0,0,0,0.25);">
-                        <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
-                      </div>
-                      <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #fbbf24;">St. John de Britto Church</h1>
-                      <p style="margin: 4px 0 0 0; color: #e2e8f0; font-size: 13px; font-weight: 500;">Kalayarkoil — Pre-Maintenance Notice</p>
-                    </div>
-                    <div style="padding: 24px; color: #1e293b; line-height: 1.6;">
-                      <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; margin-bottom: 20px; border-radius: 4px;">
-                        <strong style="color: #92400e;"> Upcoming Scheduled Maintenance</strong>
-                      </div>
-                      <p style="font-size: 14px; margin: 0 0 16px 0;">Dear Parishioner,</p>
-                      <p style="font-size: 14px; margin: 0 0 16px 0;">Our church website is scheduled for system maintenance during the window below. The portal remains online until maintenance starts.</p>
-                      <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-                        <p style="margin: 0 0 6px 0; font-size: 13px;"><strong>• Scheduled Start:</strong> ${formattedStart}</p>
-                        <p style="margin: 0 0 6px 0; font-size: 13px;"><strong>• Expected Completion:</strong> ${formattedEnd}</p>
-                        <p style="margin: 0; font-size: 13px;"><strong>• Details:</strong> ${noticeMessage}</p>
-                      </div>
-                    </div>
-                  </div>
-                `
-              });
-              emailCount++;
-            } catch (e) {
-              console.error(`Pre-notice email error for ${u.email}:`, e.message);
-            }
-          }
-
-          try {
-            await Notification.create({
-              userId: u._id,
-              title: ' Upcoming Church Website Maintenance',
-              message: smsBody,
-              type: 'announcement',
-              link: '/',
-              sentVia: ['email', 'inApp', 'push', 'whatsapp']
-            });
-            inAppCount++;
-          } catch (e) { }
-
-          pushCount++;
-
-          if (u.phone && u.whatsappOptIn !== false) {
-            let formattedPhone = u.phone.trim().replace(/\D/g, '');
-            if (formattedPhone.length === 10 && !formattedPhone.startsWith('91')) {
-              formattedPhone = `91${formattedPhone}`;
-            }
-            try {
-              const { broadcastMaintenanceCreated } = require('../services/whatsappBroadcastHelper');
-              broadcastMaintenanceCreated(settings).catch(() => { });
-              waCount++;
-            } catch (waErr) { }
-          }
-        }
-
-        event.notificationSent = true;
-        event.notificationSentAt = new Date();
-        event.deliveries = {
-          email: { status: emailCount > 0 ? 'sent' : 'skipped', count: emailCount, sentAt: new Date() },
-          push: { status: pushCount > 0 ? 'sent' : 'skipped', count: pushCount, sentAt: new Date() },
-          inApp: { status: inAppCount > 0 ? 'sent' : 'skipped', count: inAppCount, sentAt: new Date() },
-          whatsApp: { status: waCount > 0 ? 'sent' : 'skipped', count: waCount, sentAt: new Date() }
-        };
-
-        await event.save();
-        console.log(`[PreNotice] Dispatched across 4 channels (Mail: ${emailCount}, Push: ${pushCount}, In-App: ${inAppCount}, WA: ${waCount})`);
-      } catch (bgErr) {
-        console.error('[PreNotice] Background error:', bgErr.message);
-      }
-    });
-
-    return { success: true, event, settings };
-  } catch (err) {
-    console.error('Error dispatching pre-maintenance notice:', err);
-    throw err;
-  }
+  return await dispatchPreMaintenanceEvent({
+    settings,
+    changedBy: options.changedBy || 'Admin',
+    changedById: options.changedById || null
+  });
 };
 
 // Backward-compatible alias for transitionMaintenanceState -> delegates to setSystemState
@@ -179,24 +29,27 @@ const showcaseNoticeBanner = async (req, res) => {
   try {
     const settings = await getOrCreateSettings();
 
-    if (req.body.message) {
-      if (!settings.noticeBanner) settings.noticeBanner = {};
-      settings.noticeBanner.message = req.body.message;
-    }
+    if (!settings.noticeBanner) settings.noticeBanner = {};
+    if (req.body.message) settings.noticeBanner.message = req.body.message;
     if (req.body.scheduledStartTime) settings.noticeBanner.scheduledStartTime = req.body.scheduledStartTime;
     if (req.body.scheduledEndTime) settings.noticeBanner.scheduledEndTime = req.body.scheduledEndTime;
     if (req.body.noticeLeadTime) settings.noticeBanner.noticeLeadTime = req.body.noticeLeadTime;
+    settings.noticeBanner.isEnabled = true;
 
-    const result = await dispatchPreMaintenanceNotice(settings, {
+    await settings.save();
+    updateCacheFromSettings(settings);
+
+    const result = await dispatchPreMaintenanceEvent({
+      settings,
       changedBy: req.user ? (req.user.name || req.user.email) : 'Admin',
-      changedById: req.user ? req.user._id : null,
-      reason: 'Showcase Notice Banner Clicked'
+      changedById: req.user ? req.user._id : null
     });
 
     res.json({
       success: true,
       message: 'Pre-Maintenance Notice Banner is now Showcase Live!',
-      settings: result.settings
+      settings: result?.settings || settings,
+      event: result?.event || null
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -240,16 +93,53 @@ const getPublicStatus = async (req, res) => {
   }
 };
 
-// GET /api/maintenance/settings — Admin/Tech team settings view
+// GET /api/maintenance/settings — Admin/Tech team settings view with real metrics
 const getMaintenanceSettings = async (req, res) => {
   try {
     const settings = await getOrCreateSettings();
     let activeEvent = null;
     if (settings.activeEventId) {
-      activeEvent = await MaintenanceEvent.findById(settings.activeEventId);
+      activeEvent = await MaintenanceEvent.findById(settings.activeEventId).lean();
     } else {
-      activeEvent = await MaintenanceEvent.findOne().sort({ createdAt: -1 });
+      activeEvent = await MaintenanceEvent.findOne().sort({ createdAt: -1 }).lean();
     }
+
+    if (activeEvent) {
+      const realMetrics = await getEventRealDeliveryMetrics(activeEvent._id);
+      if (realMetrics) {
+        activeEvent.realDeliveryMetrics = realMetrics;
+        if (!activeEvent.deliveries) activeEvent.deliveries = {};
+        activeEvent.deliveries.email = {
+          ...(activeEvent.deliveries.email || {}),
+          sentCount: realMetrics.email.sent,
+          failedCount: realMetrics.email.failed,
+          count: realMetrics.email.sent,
+          status: realMetrics.email.sent > 0 ? 'sent' : (realMetrics.email.failed > 0 ? 'failed' : 'pending')
+        };
+        activeEvent.deliveries.whatsApp = {
+          ...(activeEvent.deliveries.whatsApp || {}),
+          sentCount: realMetrics.whatsapp.sent,
+          failedCount: realMetrics.whatsapp.failed,
+          count: realMetrics.whatsapp.sent,
+          status: realMetrics.whatsapp.sent > 0 ? 'sent' : (realMetrics.whatsapp.failed > 0 ? 'failed' : 'pending')
+        };
+        activeEvent.deliveries.push = {
+          ...(activeEvent.deliveries.push || {}),
+          sentCount: realMetrics.push.sent,
+          failedCount: realMetrics.push.failed,
+          count: realMetrics.push.sent,
+          status: realMetrics.push.sent > 0 ? 'sent' : 'pending'
+        };
+        activeEvent.deliveries.inApp = {
+          ...(activeEvent.deliveries.inApp || {}),
+          sentCount: realMetrics.in_app.sent,
+          failedCount: realMetrics.in_app.failed,
+          count: realMetrics.in_app.sent,
+          status: realMetrics.in_app.sent > 0 ? 'sent' : 'pending'
+        };
+      }
+    }
+
     res.json({ success: true, settings, activeEvent });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -269,14 +159,6 @@ const toggleMaintenanceMode = async (req, res) => {
       changedById: req.user ? req.user._id : null
     });
 
-    // Multi-Channel Broadcast for Maintenance Started or Completed
-    const settings = await getOrCreateSettings();
-    const { broadcastMaintenanceScheduled } = require('../services/broadcastNotificationService');
-    broadcastMaintenanceScheduled({
-      settings,
-      action: isEnabled ? 'started' : 'completed'
-    }).catch(err => console.error('[MaintenanceController] Broadcast error:', err.message));
-
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -294,13 +176,6 @@ const triggerEmergencyShutdown = async (req, res) => {
       changedBy: req.user ? (req.user.name || req.user.email) : 'System Admin',
       changedById: req.user ? req.user._id : null
     });
-
-    const settings = await getOrCreateSettings();
-    const { broadcastMaintenanceScheduled } = require('../services/broadcastNotificationService');
-    broadcastMaintenanceScheduled({
-      settings,
-      action: 'emergency'
-    }).catch(err => console.error('[MaintenanceController] Emergency broadcast error:', err.message));
 
     res.json(result);
   } catch (err) {

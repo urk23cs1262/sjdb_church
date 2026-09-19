@@ -83,15 +83,15 @@ const getDashboardStats = async (req, res) => {
       TeamMember.countDocuments(),
       TeamMember.countDocuments({ isActive: true }),
       User.countDocuments({
-        $or: [
-          { otpVerified: false },
-          { isVerified: false },
-          { account_verified: false },
-          { otpVerifiedAt: null },
-          { otpVerifiedAt: { $lte: new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000) } }
-        ],
+        role: { $nin: ['admin', 'priest'] },
         isActive: { $ne: false },
-        role: { $ne: 'admin' }
+        $or: [
+          { otpVerificationRequired: true },
+          { verificationStatus: 'Pending Verification' },
+          { isVerified: false },
+          { nextVerificationAt: { $lte: now } },
+          { lastVerifiedAt: null }
+        ]
       }),
       Notification.countDocuments({ recipient: 'admin', category: { $in: ['security', 'auth', 'account'] }, createdAt: { $gte: startOfToday } }),
       Notification.find({ recipient: 'admin', category: { $in: ['security', 'auth', 'account', 'system'] } }).sort({ createdAt: -1 }).limit(10),
@@ -242,9 +242,10 @@ const getDashboardStats = async (req, res) => {
 
 /**
  * Forces a global OTP re-verification cycle for all parishioners and administrators.
- * Increments authVersion and tokenVersion to immediately invalidate all active JWT sessions on all devices,
- * sets otpVerified: false so the next login requires a fresh OTP,
- * and sends in-app notifications, web push notifications, and email alerts to all users.
+ * Forces a global OTP re-verification requirement for all regular parishioners.
+ * Sets otpVerificationRequired: true and verificationStatus: 'Pending Verification'
+ * WITHOUT invalidating current sessions prematurely. Admins/priests are exempt.
+ * Enforces 6-digit OTP verification upon the user's next login attempt.
  */
 const forceGlobalOtpReverification = async (req, res) => {
   try {
@@ -253,22 +254,26 @@ const forceGlobalOtpReverification = async (req, res) => {
     const { createNotification } = require('../services/notificationService');
     const { sendPushBroadcast } = require('../services/webPushService');
     const { sendMail } = require('../config/mailer');
+    const { logSecurityEvent } = require('../services/securityAuditService');
 
-    // 1. Update all users and admins: set otpVerified: false, otpVerifiedAt: null, increment authVersion & tokenVersion
+    // 1. Update all eligible non-admin parishioners (preserve active in-app session until next login)
+    const filter = {
+      role: { $nin: ['admin', 'priest'] },
+      isActive: { $ne: false }
+    };
+
     const result = await User.updateMany(
-      {},
+      filter,
       {
         $set: {
-          otpVerified: false,
-          otpVerifiedAt: null
-        },
-        $inc: {
-          tokenVersion: 1,
-          authVersion: 1
+          otpVerificationRequired: true,
+          verificationStatus: 'Pending Verification',
+          otpVerified: false
         },
         $unset: {
           otp: "",
-          otpExpires: ""
+          otpExpires: "",
+          otpExpiresAt: ""
         }
       }
     );
@@ -279,9 +284,23 @@ const forceGlobalOtpReverification = async (req, res) => {
       { $set: { status: 'replaced' } }
     );
 
-    // 3. Create In-App Notification (Broadcast to all parishioners)
+    // 3. Log security audit event
+    await logSecurityEvent({
+      userId: req.user?._id,
+      eventType: 'GLOBAL_OTP_RESET',
+      req,
+      source: 'ADMIN_DASHBOARD',
+      status: 'SUCCESS',
+      details: {
+        adminId: req.user?._id,
+        adminEmail: req.user?.email,
+        affectedCount: result.modifiedCount
+      }
+    });
+
+    // 4. Create In-App Notification (Broadcast to all parishioners)
     const notifTitle = 'Security Advisory: Account Re-verification & OTP Required';
-    const notifMessage = 'Dear Parishioners, for enhanced account security, all active sessions have been safely reset. Please log in with your credentials and verify the 6-digit OTP code to continue accessing your parish profile.';
+    const notifMessage = 'Dear Parishioners, for enhanced account security, an account re-verification requirement has been scheduled. Please verify your OTP on your next login to continue accessing your parish profile.';
 
     let inAppNotif = null;
     try {
@@ -475,25 +494,29 @@ const forceGlobalOtpReverification = async (req, res) => {
 const getPendingOtpUsers = async (req, res) => {
   try {
     const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const pendingUsers = await User.find({
-      $or: [
-        { otpVerified: false },
-        { isVerified: false },
-        { account_verified: false },
-        { otpVerifiedAt: null },
-        { otpVerifiedAt: { $lte: thirtyDaysAgo } }
-      ],
+      role: { $nin: ['admin', 'priest'] },
       isActive: { $ne: false },
-      role: { $ne: 'admin' }
+      $or: [
+        { otpVerificationRequired: true },
+        { verificationStatus: 'Pending Verification' },
+        { isVerified: false },
+        { nextVerificationAt: { $lte: now } },
+        { lastVerifiedAt: null }
+      ]
     })
-      .select('name email phone parishMemberId familyId createdAt lastLogin last_verified_at otpVerifiedAt')
+      .select('name email phone parishMemberId familyId createdAt lastLogin lastVerifiedAt nextVerificationAt verificationStatus otpVerificationRequired')
       .sort({ createdAt: -1 });
 
     const formatted = pendingUsers.map(u => {
-      const refDate = u.otpVerifiedAt || u.last_verified_at || u.createdAt || now;
+      const refDate = u.lastVerifiedAt || u.createdAt || now;
       const daysPending = Math.max(0, Math.floor((now.getTime() - new Date(refDate).getTime()) / (1000 * 60 * 60 * 24)));
+      let status = 'Pending Verification';
+      if (!u.lastVerifiedAt) status = 'Initial Verification Pending';
+      else if (u.otpVerificationRequired) status = 'Global Reset Pending';
+      else if (u.nextVerificationAt && now >= new Date(u.nextVerificationAt)) status = '30-Day Cycle Expired';
+
       return {
         _id: u._id,
         name: u.name || 'Anonymous Parishioner',
@@ -503,9 +526,11 @@ const getPendingOtpUsers = async (req, res) => {
         familyId: u.familyId || 'N/A',
         createdAt: u.createdAt,
         lastLogin: u.lastLogin,
-        otpVerifiedAt: u.otpVerifiedAt,
+        lastVerifiedAt: u.lastVerifiedAt,
+        nextVerificationAt: u.nextVerificationAt,
+        verificationStatus: u.verificationStatus || status,
         daysPending: daysPending > 30 ? daysPending - 30 : daysPending,
-        status: !u.otpVerifiedAt ? 'Initial Verification Pending' : '30-Day Window Expired'
+        status
       };
     });
 

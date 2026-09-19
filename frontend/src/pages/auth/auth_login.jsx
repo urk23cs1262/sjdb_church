@@ -10,6 +10,7 @@ import api from '../../services/api';
 import { useAuth } from '../../context/context_auth_context';
 import churchLogo from '../../assets/church_extirior.png';
 import PolicyModal from '../../components/common/common_policy_modal';
+import CommonOtpInput from '../../components/common/common_otp_input';
 
 export default function Login() {
   const { t } = useTranslation();
@@ -21,6 +22,10 @@ export default function Login() {
   const [userId, setUserId] = useState(null);
   const [devOtp, setDevOtp] = useState(null);
   const [isOtpLoading, setIsOtpLoading] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [otpErrorMessage, setOtpErrorMessage] = useState('');
+  const [otpVerificationMessage, setOtpVerificationMessage] = useState('');
+  const [isResendingOtp, setIsResendingOtp] = useState(false);
 
   // Monthly Account Verification States
   const [verifyStep, setVerifyStep] = useState('email'); // 'email' | 'otp' | 'success'
@@ -100,13 +105,16 @@ export default function Login() {
       const res = await api.post('/auth/login', { login: data.login, password: data.password });
       if (res.data?.requiresOTP || (res.data?.userId && !res.data?.token)) {
         setUserId(res.data.userId);
+        setOtpCode('');
+        setOtpErrorMessage('');
+        setOtpVerificationMessage(res.data.message || 'A 6-digit verification code has been dispatched to your registered email and WhatsApp.');
         setStage('otp');
         if (res.data.devOtp) {
           setDevOtp(res.data.devOtp);
           setIsOtpLoading(true);
           setTimeout(() => setIsOtpLoading(false), 5000);
         }
-        toast.success(res.data.message || 'Please verify your OTP');
+        toast.success('Account verification required');
         return;
       }
 
@@ -119,13 +127,16 @@ export default function Login() {
       const resData = e.response?.data;
       if (resData?.requiresOTP || resData?.userId) {
         setUserId(resData.userId);
+        setOtpCode('');
+        setOtpErrorMessage('');
+        setOtpVerificationMessage(resData.message || 'A 6-digit verification code has been dispatched to your registered email and WhatsApp.');
         setStage('otp');
         if (resData.devOtp) {
           setDevOtp(resData.devOtp);
           setIsOtpLoading(true);
           setTimeout(() => setIsOtpLoading(false), 5000);
         }
-        toast.error(resData.message || 'Please verify your OTP');
+        toast.error(resData.message || 'Account verification required');
         return;
       }
       if (resData?.isMaintenanceRestricted || e.response?.status === 503) {
@@ -144,15 +155,47 @@ export default function Login() {
     }
   };
 
-  const onVerifyOtp = async (data) => {
+  const onVerifyOtp = async (codeToVerify) => {
+    const code = typeof codeToVerify === 'string' ? codeToVerify : otpCode;
+    if (!code || code.length !== 6) {
+      setOtpErrorMessage('Please enter all 6 digits of the verification code');
+      return;
+    }
+    setOtpErrorMessage('');
+    setIsOtpLoading(true);
     try {
-      const res = await api.post('/auth/verify-otp', { userId, otp: data.otp });
+      const res = await api.post('/auth/verify-otp', { userId, otp: code, purpose: 'login' });
       sessionStorage.setItem('pwa_prompt_after_login', 'true');
       login(res.data.user, res.data.token);
-      toast.success('Verified! Welcome.');
+      toast.success('Account verified successfully! Welcome.');
       const target = getRedirectDestination(res.data.user);
       navigate(target);
-    } catch (e) { toast.error(e.response?.data?.message || 'Invalid OTP'); }
+    } catch (e) {
+      const errMsg = e.response?.data?.message || 'Invalid or expired verification code';
+      setOtpErrorMessage(errMsg);
+      toast.error(errMsg);
+    } finally {
+      setIsOtpLoading(false);
+    }
+  };
+
+  const handleResendLoginOtp = async () => {
+    setIsResendingOtp(true);
+    try {
+      const res = await api.post('/auth/resend-otp', { userId, purpose: 'login' });
+      toast.success(res.data.message || 'Fresh 6-digit code dispatched!');
+      if (res.data.devOtp) {
+        setDevOtp(res.data.devOtp);
+        setIsOtpLoading(true);
+        setTimeout(() => setIsOtpLoading(false), 5000);
+      }
+      setOtpErrorMessage('');
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Failed to resend code');
+      throw e;
+    } finally {
+      setIsResendingOtp(false);
+    }
   };
 
 
@@ -480,15 +523,29 @@ export default function Login() {
             </div>
           )}
 
-          {/* OTP Verification */}
+          {/* OTP Verification — Individual 30-Day Cycle / Global Reset */}
           {stage === 'otp' && (
-            <form onSubmit={handleSubmit(onVerifyOtp)} className="space-y-4">
-              <p className="text-center text-gray-600 text-sm mb-4">{t('auth.otpSent')}</p>
+            <div className="space-y-5">
+              <div className="text-center space-y-1">
+                <div className="w-14 h-14 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto border border-amber-200 shadow-sm mb-2">
+                  <FiShield className="text-2xl text-amber-800" />
+                </div>
+                <div className="inline-block bg-amber-100 text-amber-900 text-[10px] font-extrabold uppercase tracking-wider px-3 py-1 rounded-full border border-amber-300 mb-1">
+                  Security Check
+                </div>
+                <h2 className="text-xl font-display font-extrabold text-church-royal-blue">
+                  Account Verification
+                </h2>
+                <p className="text-gray-600 text-xs leading-relaxed max-w-sm mx-auto">
+                  {otpVerificationMessage || 'A 6-digit verification code has been dispatched to your registered email and WhatsApp.'}
+                </p>
+              </div>
+
               {devOtp && (
-                <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 flex flex-col items-center justify-center gap-2 mb-4 min-h-[76px]">
+                <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex flex-col items-center justify-center gap-2 min-h-[72px]">
                   {isOtpLoading ? (
                     <div className="flex flex-col items-center gap-2 w-full px-4 py-1">
-                      <p className="text-amber-800 text-xs font-semibold">Sending...</p>
+                      <p className="text-amber-800 text-xs font-semibold">Dispatching code...</p>
                       <div className="w-full bg-amber-200 h-1.5 rounded-full overflow-hidden">
                         <motion.div
                           className="bg-amber-500 h-full"
@@ -500,15 +557,18 @@ export default function Login() {
                     </div>
                   ) : (
                     <>
-                      <p className="text-amber-800 text-xs font-semibold text-center">OTP sent to your number/email</p>
+                      <p className="text-amber-800 text-xs font-semibold text-center">Development Preview</p>
                       <div className="flex items-center gap-3">
-                        <span className="text-amber-900 font-mono font-bold text-xl tracking-widest">{devOtp.slice(0, 2)}xxxx</span>
+                        <span className="text-amber-900 font-mono font-bold text-xl tracking-widest">{devOtp}</span>
                         <button
                           type="button"
-                          onClick={() => setValue('otp', devOtp)}
-                          className="bg-amber-400 hover:bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded transition-colors"
+                          onClick={() => {
+                            setOtpCode(devOtp);
+                            onVerifyOtp(devOtp);
+                          }}
+                          className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1 rounded-lg transition-colors shadow-xs"
                         >
-                          Auto Fill
+                          Auto Fill &amp; Verify
                         </button>
                       </div>
                     </>
@@ -516,21 +576,50 @@ export default function Login() {
                 </div>
               )}
 
-              <div>
-                <label className="church-label">{t('auth.otp')}</label>
-                <input {...register('otp', { required: true, minLength: 6, maxLength: 6 })} className="church-input text-center text-2xl tracking-widest font-bold" placeholder="000000" maxLength={6} />
+              <CommonOtpInput
+                value={otpCode}
+                onChange={(val) => {
+                  setOtpCode(val);
+                  if (otpErrorMessage) setOtpErrorMessage('');
+                }}
+                onComplete={(val) => onVerifyOtp(val)}
+                disabled={isOtpLoading}
+                isError={Boolean(otpErrorMessage)}
+                errorMessage={otpErrorMessage}
+                onResend={handleResendLoginOtp}
+                isResending={isResendingOtp}
+              />
+
+              <button
+                type="button"
+                onClick={() => onVerifyOtp(otpCode)}
+                disabled={isOtpLoading || otpCode.length !== 6}
+                className="btn-gold w-full justify-center py-3.5 text-base font-bold disabled:opacity-50 shadow-md flex items-center gap-2"
+              >
+                {isOtpLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Verifying...</span>
+                  </>
+                ) : (
+                  <span>Verify &amp; Sign In →</span>
+                )}
+              </button>
+
+              <div className="text-center pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStage('login');
+                    setOtpCode('');
+                    setOtpErrorMessage('');
+                  }}
+                  className="text-xs text-gray-500 hover:text-gray-700 underline font-medium"
+                >
+                  ← Sign in with a different account
+                </button>
               </div>
-              <button type="submit" disabled={isSubmitting} className="btn-gold w-full justify-center py-3.5">{t('auth.verifyOtp')}</button>
-              <button type="button" onClick={async () => {
-                const res = await api.post('/auth/resend-otp', { userId });
-                toast.success('OTP resent!');
-                if (res.data.devOtp) {
-                  setDevOtp(res.data.devOtp);
-                  setIsOtpLoading(true);
-                  setTimeout(() => setIsOtpLoading(false), 5000);
-                }
-              }} className="btn-ghost w-full justify-center text-sm">Resend OTP</button>
-            </form>
+            </div>
           )}
 
           {/* Forgot Password */}

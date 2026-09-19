@@ -29,7 +29,7 @@ const BIBLE_VERSES = [
 const QUICK_LINKS = [
   { icon: <GiPrayerBeads />, labelKey: 'nav.rosary', defaultLabel: 'Rosary', path: '/rosary', color: 'from-purple-600 to-indigo-800' },
   { icon: <GiAngelWings />, labelKey: 'nav.calendar', defaultLabel: 'Catholic Calendar', path: '/calendar', color: 'from-amber-600 to-orange-800' },
-  { icon: <GiSpellBook />, labelKey: 'nav.bibleVerse', defaultLabel: 'Daily Mass Readings', path: '/bible-verse', color: 'from-green-600 to-teal-800' },
+  { icon: <GiSpellBook />, labelKey: 'nav.bibleVerse', defaultLabel: 'Daily Catholic Content', path: '/bible-verse', color: 'from-green-600 to-teal-800' },
   { icon: <FiCalendar />, labelKey: 'nav.events', defaultLabel: 'Events', path: '/events', color: 'from-pink-600 to-rose-800' },
   { icon: <GiPrayer />, labelKey: 'nav.prayer', defaultLabel: 'Prayer Wall', path: '/prayers', color: 'from-blue-600 to-royal-800', requireAuth: true },
   { icon: <FaDonate />, labelKey: 'nav.donate', defaultLabel: 'Donate', path: '/donate', color: 'from-yellow-600 to-gold-800', requireAuth: true },

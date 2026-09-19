@@ -45,6 +45,8 @@ const ReportUnauthorized = lazy(() => import('./pages/security/security_report_u
 // User dashboard
 const UserDashboard = lazy(() => import('./pages/user/user_dashboard'));
 const UserBooking = lazy(() => import('./pages/user/user_mass_bookings'));
+const UserBookings = lazy(() => import('./pages/user/user_bookings'));
+const UserDonations = lazy(() => import('./pages/user/user_donations'));
 const UserDocuments = lazy(() => import('./pages/user/user_documents'));
 const UserTickets = lazy(() => import('./pages/user/user_tickets'));
 const UserProfile = lazy(() => import('./pages/user/user_profile'));
@@ -147,6 +149,8 @@ function AppRoutes() {
               {/* User dashboard routes & direct aliases */}
               <Route path="/dashboard" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
               <Route path="/dashboard/booking" element={<ProtectedRoute><UserBooking /></ProtectedRoute>} />
+              <Route path="/dashboard/bookings" element={<ProtectedRoute><UserBookings /></ProtectedRoute>} />
+              <Route path="/dashboard/donations" element={<ProtectedRoute><UserDonations /></ProtectedRoute>} />
               <Route path="/dashboard/documents" element={<ProtectedRoute><UserDocuments /></ProtectedRoute>} />
               <Route path="/dashboard/tickets" element={<ProtectedRoute><UserTickets /></ProtectedRoute>} />
               <Route path="/dashboard/settings" element={<ProtectedRoute><UserSettings /></ProtectedRoute>} />

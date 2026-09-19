@@ -36,6 +36,15 @@ const userSchema = new mongoose.Schema({
   passwordHash: { type: String, required: true },
   role: { type: String, enum: ['user', 'admin', 'priest', 'staff', 'technical_team'], default: 'user' },
   isTechnicalTeam: { type: Boolean, default: false },
+  registeredAt: { type: Date, default: Date.now },
+  lastVerifiedAt: { type: Date, default: null },
+  nextVerificationAt: { type: Date, default: null, index: true },
+  verificationStatus: {
+    type: String,
+    enum: ['Verified', 'Due Soon', 'Pending Verification', 'Overdue'],
+    default: 'Pending Verification'
+  },
+  otpVerificationRequired: { type: Boolean, default: false, index: true },
   isVerified: { type: Boolean, default: false },
   account_verified: { type: Boolean, default: false },
   last_verified_at: { type: Date, default: null },
@@ -45,6 +54,7 @@ const userSchema = new mongoose.Schema({
   otpVerifiedAt: { type: Date, default: null },
   otp: { type: String, default: null },
   otpExpires: { type: Date, default: null },
+  otpExpiresAt: { type: Date, default: null },
   otpGeneratedAt: { type: Date, default: null },
   otpNotifiedExpired: { type: Boolean, default: false },
   registrationReportPdfUrl: { type: String },
@@ -192,5 +202,8 @@ const userSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
+
+userSchema.index({ nextVerificationAt: 1, otpVerificationRequired: 1 });
+userSchema.index({ role: 1, isActive: 1, otpVerificationRequired: 1 });
 
 module.exports = mongoose.model('User', userSchema);

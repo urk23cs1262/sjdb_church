@@ -1,8 +1,10 @@
 const path = require('path');
+const fs = require('fs');
+const os = require('os');
 const AdmZip = require('adm-zip');
 const RosarySong = require('../models/RosarySong');
 const SiteSettings = require('../models/SiteSettings');
-const { uploadToGridFS, deleteFromGridFS, getGridFSFileDoc } = require('../services/gridfsService');
+const { uploadToGridFS, uploadStreamToGridFS, deleteFromGridFS, getGridFSFileDoc } = require('../services/gridfsService');
 
 const AUDIO_EXTENSIONS = new Set(['.mp3', '.wav', '.m4a', '.ogg', '.aac', '.flac', '.wma']);
 
@@ -23,6 +25,30 @@ function formatTitle(filename) {
   // Replace underscores/hyphens with spaces and trim
   const clean = base.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
   return clean || filename;
+}
+
+/**
+ * Normalizes song name for robust duplicate detection:
+ * - Strips audio extensions (.mp3, .wav, etc.)
+ * - Lowercases
+ * - Replaces hyphens/underscores with spaces
+ * - Collapses multi-spaces into single space
+ * - Trims whitespace
+ */
+function normalizeSongName(filenameOrTitle) {
+  if (!filenameOrTitle) return '';
+  let str = String(filenameOrTitle).trim();
+  // Strip audio extension (handling any spaces before/after dot)
+  str = str.replace(/\s*\.(mp3|wav|m4a|ogg|aac|flac|wma)\s*$/i, '');
+  const ext = path.extname(str);
+  if (ext && AUDIO_EXTENSIONS.has(ext.toLowerCase())) {
+    str = path.basename(str, ext);
+  }
+  return str
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
@@ -159,8 +185,10 @@ const getAllSongsAdmin = async (req, res) => {
 
 /**
  * Admin: Upload individual audio files (appended to the end of the list)
+ * Streams directly from temporary disk storage into GridFS (Zero-RAM accumulation)
  */
 const uploadIndividualSongs = async (req, res) => {
+  const tempFilesToClean = [];
   try {
     const files = req.files;
     if (!files || files.length === 0) {
@@ -176,13 +204,27 @@ const uploadIndividualSongs = async (req, res) => {
       const ext = path.extname(file.originalname).toLowerCase();
       const mimeType = file.mimetype || MIME_MAP[ext] || 'audio/mpeg';
 
-      const fileInfo = await uploadToGridFS(file.buffer, file.originalname, mimeType);
+      let fileInfo;
+      let fileSize = 0;
+
+      if (file.path && fs.existsSync(file.path)) {
+        tempFilesToClean.push(file.path);
+        const stats = fs.statSync(file.path);
+        fileSize = stats.size;
+        const readStream = fs.createReadStream(file.path);
+        fileInfo = await uploadStreamToGridFS(readStream, file.originalname, mimeType);
+      } else if (file.buffer) {
+        fileSize = file.size || file.buffer.length;
+        fileInfo = await uploadToGridFS(file.buffer, file.originalname, mimeType);
+      } else {
+        continue;
+      }
 
       const song = await RosarySong.create({
         title: formatTitle(file.originalname),
         fileUrl: fileInfo.url,
         fileName: file.originalname,
-        fileSize: file.size || file.buffer.length,
+        fileSize: fileSize || fileInfo.size,
         mimeType,
         sortOrder: nextSortOrder++,
         isActive: true
@@ -199,13 +241,35 @@ const uploadIndividualSongs = async (req, res) => {
   } catch (err) {
     console.error('Upload individual songs error:', err);
     res.status(500).json({ success: false, message: err.message });
+  } finally {
+    for (const fPath of tempFilesToClean) {
+      try {
+        if (fs.existsSync(fPath)) fs.unlinkSync(fPath);
+      } catch (_) {}
+    }
   }
 };
 
 /**
- * Admin: Upload ZIP archive containing songs (appended to the end of the list)
+ * Admin: Upload ZIP archive containing songs with Duplicate Detection
+ * Flow:
+ * 1. Multer streams ZIP straight to disk (0 MB in Node RAM)
+ * 2. AdmZip reads catalog from disk
+ * 3. Extract audio files to temporary staging folder
+ * 4. Normalize song names and compare against existing DB songs & intra-ZIP songs
+ * 5. If duplicates found:
+ *    - Save session state to session.json in staging folder
+ *    - Return duplicates list + sessionId to frontend (DO NOT import duplicates yet)
+ * 6. If no duplicates:
+ *    - Stream all files into GridFS and save records
+ *    - Clean up staging folder immediately
  */
 const uploadZipSongs = async (req, res) => {
+  const sessionId = `zip_${Date.now()}_${Math.round(Math.random() * 1e6)}`;
+  const stagingDir = path.join(os.tmpdir(), `sjdb_staging_${sessionId}`);
+  const tempFilesToClean = [];
+  if (req.file?.path) tempFilesToClean.push(req.file.path);
+
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'Please select a ZIP file' });
@@ -213,44 +277,177 @@ const uploadZipSongs = async (req, res) => {
 
     let zip;
     try {
-      zip = new AdmZip(req.file.buffer);
+      if (req.file.path && fs.existsSync(req.file.path)) {
+        zip = new AdmZip(req.file.path);
+      } else if (req.file.buffer) {
+        zip = new AdmZip(req.file.buffer);
+      } else {
+        return res.status(400).json({ success: false, message: 'Could not access uploaded ZIP file' });
+      }
     } catch (zipErr) {
       return res.status(400).json({ success: false, message: 'Invalid ZIP archive file' });
     }
 
-    const lastSong = await RosarySong.findOne().sort({ sortOrder: -1 }).select('sortOrder').lean();
-    let nextSortOrder = lastSong ? (lastSong.sortOrder || 0) + 1 : 1;
+    if (!fs.existsSync(stagingDir)) {
+      fs.mkdirSync(stagingDir, { recursive: true });
+    }
+
+    // Fetch existing songs from database for duplicate comparison
+    const existingSongs = await RosarySong.find().lean();
+    const existingMap = new Map();
+    for (const s of existingSongs) {
+      const nTitle = normalizeSongName(s.title);
+      const nFile = normalizeSongName(s.fileName);
+      if (nTitle) existingMap.set(nTitle, s);
+      if (nFile) existingMap.set(nFile, s);
+    }
 
     const zipEntries = zip.getEntries();
-    const createdSongs = [];
+    const duplicates = [];
+    const nonDuplicates = [];
+    const seenInZip = new Map();
+    let duplicateIndex = 1;
     let skippedCount = 0;
 
     for (const entry of zipEntries) {
       // Ignore directories or hidden OS files (__MACOSX, .DS_Store)
-      if (entry.isDirectory || entry.entryName.startsWith('__MACOSX') || entry.name.startsWith('.')) {
+      if (entry.isDirectory || entry.entryName.startsWith('__MACOSX') || entry.name.startsWith('.') || !entry.name) {
         continue;
       }
 
-      const ext = path.extname(entry.name).toLowerCase();
+      const cleanName = entry.name.trim();
+      const ext = path.extname(cleanName).toLowerCase();
       if (!AUDIO_EXTENSIONS.has(ext)) {
         skippedCount++;
         continue;
       }
 
-      const fileBuffer = entry.getData();
-      if (!fileBuffer || fileBuffer.length === 0) {
+      const mimeType = MIME_MAP[ext] || 'audio/mpeg';
+
+      // Extract entry to staging folder
+      try {
+        zip.extractEntryTo(entry, stagingDir, false, true);
+        const extractedFilePath = path.join(stagingDir, entry.name);
+
+        if (!fs.existsSync(extractedFilePath)) {
+          continue;
+        }
+
+        const stats = fs.statSync(extractedFilePath);
+        const fileSize = stats.size;
+        const normalized = normalizeSongName(entry.name);
+
+        // Check if duplicate of an existing song in DB
+        if (existingMap.has(normalized)) {
+          const existing = existingMap.get(normalized);
+          duplicates.push({
+            id: `dup_${duplicateIndex++}`,
+            normalizedName: normalized,
+            title: formatTitle(entry.name),
+            existingSong: {
+              id: existing._id.toString(),
+              title: existing.title || formatTitle(existing.fileName),
+              fileName: existing.fileName || 'Audio.mp3',
+              fileSize: existing.fileSize || 0,
+              fileUrl: existing.fileUrl
+            },
+            uploadedSong: {
+              tempFileName: entry.name,
+              fileName: entry.name,
+              title: formatTitle(entry.name),
+              fileSize: fileSize,
+              mimeType: mimeType,
+              previewUrl: `/api/rosary-songs/temp-preview/${sessionId}/${encodeURIComponent(entry.name)}`
+            }
+          });
+        } else if (seenInZip.has(normalized)) {
+          // Intra-ZIP duplicate
+          const firstOccur = seenInZip.get(normalized);
+          duplicates.push({
+            id: `dup_${duplicateIndex++}`,
+            normalizedName: normalized,
+            title: formatTitle(entry.name),
+            existingSong: {
+              id: null,
+              title: firstOccur.title,
+              fileName: firstOccur.fileName,
+              fileSize: firstOccur.fileSize,
+              fileUrl: `/api/rosary-songs/temp-preview/${sessionId}/${encodeURIComponent(firstOccur.tempFileName)}`
+            },
+            uploadedSong: {
+              tempFileName: entry.name,
+              fileName: entry.name,
+              title: formatTitle(entry.name),
+              fileSize: fileSize,
+              mimeType: mimeType,
+              previewUrl: `/api/rosary-songs/temp-preview/${sessionId}/${encodeURIComponent(entry.name)}`
+            }
+          });
+        } else {
+          nonDuplicates.push({
+            tempFileName: entry.name,
+            fileName: entry.name,
+            title: formatTitle(entry.name),
+            fileSize: fileSize,
+            mimeType: mimeType
+          });
+          seenInZip.set(normalized, {
+            tempFileName: entry.name,
+            fileName: entry.name,
+            title: formatTitle(entry.name),
+            fileSize: fileSize
+          });
+        }
+      } catch (entryErr) {
+        console.warn(`Error extracting entry ${entry.name}:`, entryErr.message);
         continue;
       }
+    }
 
-      const mimeType = MIME_MAP[ext] || 'audio/mpeg';
-      const fileInfo = await uploadToGridFS(fileBuffer, entry.name, mimeType);
+    if (duplicates.length === 0 && nonDuplicates.length === 0) {
+      try { fs.rmSync(stagingDir, { recursive: true, force: true }); } catch (_) {}
+      return res.status(400).json({
+        success: false,
+        message: 'No valid audio files (.mp3, .wav, .m4a, .ogg) found in the ZIP archive'
+      });
+    }
+
+    // IF DUPLICATES FOUND: Save session and return duplicate review payload without importing duplicates
+    if (duplicates.length > 0) {
+      fs.writeFileSync(
+        path.join(stagingDir, 'session.json'),
+        JSON.stringify({ sessionId, duplicates, nonDuplicates, createdAt: Date.now() })
+      );
+
+      return res.json({
+        success: true,
+        hasDuplicates: true,
+        sessionId,
+        duplicates,
+        nonDuplicatesCount: nonDuplicates.length,
+        totalAudioFound: duplicates.length + nonDuplicates.length,
+        message: `${duplicates.length} duplicate song(s) found. Please review and choose which versions to keep.`
+      });
+    }
+
+    // NO DUPLICATES FOUND: Import all directly into GridFS
+    const lastSong = await RosarySong.findOne().sort({ sortOrder: -1 }).select('sortOrder').lean();
+    let nextSortOrder = lastSong ? (lastSong.sortOrder || 0) + 1 : 1;
+    const createdSongs = [];
+
+    for (const item of nonDuplicates) {
+      const filePath = path.join(stagingDir, item.tempFileName);
+      if (!fs.existsSync(filePath)) continue;
+
+      const readStream = fs.createReadStream(filePath);
+      const fileInfo = await uploadStreamToGridFS(readStream, item.fileName, item.mimeType);
 
       const song = await RosarySong.create({
-        title: formatTitle(entry.name),
+        title: item.title,
         fileUrl: fileInfo.url,
-        fileName: entry.name,
-        fileSize: fileBuffer.length,
-        mimeType,
+        fileName: item.fileName,
+        fileSize: item.fileSize || fileInfo.size,
+        mimeType: item.mimeType,
         sortOrder: nextSortOrder++,
         isActive: true
       });
@@ -258,20 +455,255 @@ const uploadZipSongs = async (req, res) => {
       createdSongs.push(song);
     }
 
-    if (createdSongs.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'No valid audio files (.mp3, .wav, .m4a, .ogg) found in the ZIP archive'
-      });
-    }
+    // Clean up staging folder
+    try { fs.rmSync(stagingDir, { recursive: true, force: true }); } catch (_) {}
 
     res.json({
       success: true,
+      hasDuplicates: false,
       message: `Extracted & uploaded ${createdSongs.length} song(s) from ZIP${skippedCount > 0 ? ` (${skippedCount} non-audio files skipped)` : ''}`,
       songs: createdSongs
     });
   } catch (err) {
     console.error('Upload ZIP error:', err);
+    try { if (fs.existsSync(stagingDir)) fs.rmSync(stagingDir, { recursive: true, force: true }); } catch (_) {}
+    res.status(500).json({ success: false, message: err.message });
+  } finally {
+    for (const fPath of tempFilesToClean) {
+      try {
+        if (fs.existsSync(fPath)) fs.unlinkSync(fPath);
+      } catch (_) {}
+    }
+  }
+};
+
+/**
+ * Admin: Confirm ZIP Import Choices after Duplicate Review
+ */
+const confirmZipImport = async (req, res) => {
+  const { sessionId, choices } = req.body;
+  if (!sessionId) {
+    return res.status(400).json({ success: false, message: 'Session ID is required' });
+  }
+
+  const stagingDir = path.join(os.tmpdir(), `sjdb_staging_${sessionId}`);
+  const sessionFile = path.join(stagingDir, 'session.json');
+
+  if (!fs.existsSync(sessionFile)) {
+    return res.status(400).json({ success: false, message: 'Upload session expired or not found. Please upload the ZIP archive again.' });
+  }
+
+  try {
+    const sessionData = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
+    const { duplicates = [], nonDuplicates = [] } = sessionData;
+
+    const lastSong = await RosarySong.findOne().sort({ sortOrder: -1 }).select('sortOrder').lean();
+    let nextSortOrder = lastSong ? (lastSong.sortOrder || 0) + 1 : 1;
+
+    let importedCount = 0;
+    let replacedCount = 0;
+    let keptCount = 0;
+
+    // 1. Import non-duplicate songs
+    for (const item of nonDuplicates) {
+      const filePath = path.join(stagingDir, item.tempFileName);
+      if (!fs.existsSync(filePath)) continue;
+
+      const readStream = fs.createReadStream(filePath);
+      const fileInfo = await uploadStreamToGridFS(readStream, item.fileName, item.mimeType);
+
+      await RosarySong.create({
+        title: item.title,
+        fileUrl: fileInfo.url,
+        fileName: item.fileName,
+        fileSize: item.fileSize || fileInfo.size,
+        mimeType: item.mimeType,
+        sortOrder: nextSortOrder++,
+        isActive: true
+      });
+      importedCount++;
+    }
+
+    // 2. Process duplicates based on admin choices
+    for (const dup of duplicates) {
+      const choice = choices?.[dup.id] || 'existing'; // 'existing' | 'uploaded'
+
+      if (choice === 'uploaded') {
+        const filePath = path.join(stagingDir, dup.uploadedSong.tempFileName);
+        if (fs.existsSync(filePath)) {
+          const readStream = fs.createReadStream(filePath);
+          const fileInfo = await uploadStreamToGridFS(readStream, dup.uploadedSong.fileName, dup.uploadedSong.mimeType);
+
+          if (dup.existingSong?.id) {
+            const existing = await RosarySong.findById(dup.existingSong.id);
+            if (existing) {
+              // Delete old GridFS file
+              if (existing.fileUrl && existing.fileUrl.startsWith('/api/files/')) {
+                const oldId = existing.fileUrl.replace('/api/files/', '');
+                try { await deleteFromGridFS(oldId); } catch (_) {}
+              }
+
+              // Update existing record with uploaded song metadata, preserving original sortOrder
+              existing.title = dup.uploadedSong.title || existing.title;
+              existing.fileName = dup.uploadedSong.fileName;
+              existing.fileSize = dup.uploadedSong.fileSize || fileInfo.size;
+              existing.fileUrl = fileInfo.url;
+              existing.mimeType = dup.uploadedSong.mimeType;
+              await existing.save();
+              replacedCount++;
+            } else {
+              await RosarySong.create({
+                title: dup.uploadedSong.title,
+                fileUrl: fileInfo.url,
+                fileName: dup.uploadedSong.fileName,
+                fileSize: dup.uploadedSong.fileSize || fileInfo.size,
+                mimeType: dup.uploadedSong.mimeType,
+                sortOrder: nextSortOrder++,
+                isActive: true
+              });
+              importedCount++;
+            }
+          } else {
+            await RosarySong.create({
+              title: dup.uploadedSong.title,
+              fileUrl: fileInfo.url,
+              fileName: dup.uploadedSong.fileName,
+              fileSize: dup.uploadedSong.fileSize || fileInfo.size,
+              mimeType: dup.uploadedSong.mimeType,
+              sortOrder: nextSortOrder++,
+              isActive: true
+            });
+            importedCount++;
+          }
+        }
+      } else {
+        // Keep existing
+        keptCount++;
+      }
+    }
+
+    // Clean up staging directory completely
+    try {
+      fs.rmSync(stagingDir, { recursive: true, force: true });
+    } catch (_) {}
+
+    res.json({
+      success: true,
+      message: `Import complete: ${importedCount} new song(s) imported, ${replacedCount} song(s) replaced, ${keptCount} existing song(s) retained.`,
+      importedCount,
+      replacedCount,
+      keptCount
+    });
+  } catch (err) {
+    console.error('Confirm ZIP import error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  } finally {
+    try {
+      if (fs.existsSync(stagingDir)) {
+        fs.rmSync(stagingDir, { recursive: true, force: true });
+      }
+    } catch (_) {}
+  }
+};
+
+/**
+ * Admin: Cancel ZIP Import and cleanup staging files
+ */
+const cancelZipImport = async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    if (sessionId) {
+      const stagingDir = path.join(os.tmpdir(), `sjdb_staging_${sessionId}`);
+      if (fs.existsSync(stagingDir)) {
+        fs.rmSync(stagingDir, { recursive: true, force: true });
+      }
+    }
+    res.json({ success: true, message: 'Upload cancelled and temporary files removed.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * Admin: Preview Temporary Uploaded Audio in Duplicate Modal
+ */
+const previewTempAudio = (req, res) => {
+  try {
+    const { sessionId, fileName } = req.params;
+    if (!sessionId || !fileName) {
+      return res.status(400).json({ success: false, message: 'Invalid parameters' });
+    }
+
+    const safeName = path.basename(fileName);
+    const stagingDir = path.join(os.tmpdir(), `sjdb_staging_${sessionId}`);
+    const targetFile = path.join(stagingDir, safeName);
+
+    if (!fs.existsSync(targetFile)) {
+      return res.status(404).json({ success: false, message: 'Preview audio not found or expired' });
+    }
+
+    const stat = fs.statSync(targetFile);
+    const fileSize = stat.size;
+    const range = req.headers.range;
+    const ext = path.extname(safeName).toLowerCase();
+    const contentType = MIME_MAP[ext] || 'audio/mpeg';
+
+    if (range) {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+      const chunksize = (end - start) + 1;
+
+      res.status(206);
+      res.set({
+        'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunksize,
+        'Content-Type': contentType,
+      });
+
+      const stream = fs.createReadStream(targetFile, { start, end });
+      return stream.pipe(res);
+    } else {
+      res.set({
+        'Content-Type': contentType,
+        'Content-Length': fileSize,
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'no-cache'
+      });
+      return fs.createReadStream(targetFile).pipe(res);
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * Admin: Delete All Devotional Songs & Clean up GridFS
+ */
+const deleteAllSongs = async (req, res) => {
+  try {
+    const songs = await RosarySong.find();
+    
+    // Permanently remove all GridFS audio files
+    for (const song of songs) {
+      if (song.fileUrl && song.fileUrl.startsWith('/api/files/')) {
+        const fileId = song.fileUrl.replace('/api/files/', '');
+        try {
+          await deleteFromGridFS(fileId);
+        } catch (_) {}
+      }
+    }
+
+    // Delete all database records
+    await RosarySong.deleteMany({});
+
+    res.json({
+      success: true,
+      message: 'All devotional songs have been permanently deleted.'
+    });
+  } catch (err) {
+    console.error('Delete all songs error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -404,9 +836,13 @@ module.exports = {
   getAllSongsAdmin,
   uploadIndividualSongs,
   uploadZipSongs,
+  confirmZipImport,
+  cancelZipImport,
+  previewTempAudio,
   toggleSongStatus,
   updateSong,
   bulkUpdateStatus,
   reorderSongs,
-  deleteSong
+  deleteSong,
+  deleteAllSongs
 };

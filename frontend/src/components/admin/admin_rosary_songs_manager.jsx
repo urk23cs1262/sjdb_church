@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { 
-  FiMusic, FiUpload, FiTrash2, FiPlay, FiPause, 
-  FiFolderPlus, FiLoader, FiCheck, FiRefreshCw, FiClock
+import {
+  FiMusic, FiUpload, FiTrash2, FiPlay, FiPause,
+  FiFolderPlus, FiLoader, FiCheck, FiRefreshCw, FiClock,
+  FiAlertTriangle, FiX
 } from 'react-icons/fi';
 import { MdDragIndicator } from 'react-icons/md';
 import { GiPrayerBeads } from 'react-icons/gi';
@@ -12,7 +13,7 @@ import RosaryAudioPlayer from '../common/common_rosary_audio_player';
 
 export default function RosarySongsManager() {
   const { audioUrl: currentRosaryUrl, isCustom: isCustomRosary, refreshAudio } = useRosaryAudio();
-  
+
   // Rosary Audio Upload State
   const [rosaryFile, setRosaryFile] = useState(null);
   const [uploadingRosary, setUploadingRosary] = useState(false);
@@ -28,9 +29,25 @@ export default function RosarySongsManager() {
   const [uploadingZip, setUploadingZip] = useState(false);
   const [uploadingIndividual, setUploadingIndividual] = useState(false);
   const [savingChanges, setSavingChanges] = useState(false);
-  
+
   const zipInputRef = useRef(null);
   const individualInputRef = useRef(null);
+
+  // Delete All Songs Modal State
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
+
+  // Duplicate Songs Resolution Modal State
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const [duplicateSession, setDuplicateSession] = useState(null);
+  const [duplicateChoices, setDuplicateChoices] = useState({});
+  const [confirmingImport, setConfirmingImport] = useState(false);
+  const [cancellingImport, setCancellingImport] = useState(false);
+
+  // Audio Player for Duplicate Review Modal
+  const modalAudioRef = useRef(null);
+  const [modalPlayingUrl, setModalPlayingUrl] = useState(null);
+  const [modalAudioPlaying, setModalAudioPlaying] = useState(false);
 
   // Audio Preview State for individual song row
   const [previewSongId, setPreviewSongId] = useState(null);
@@ -47,7 +64,7 @@ export default function RosarySongsManager() {
         const val = parseInt(res.data.settings.rosaryAutoPlayTimer);
         if (!isNaN(val) && val > 0) setTimerSeconds(val);
       }
-    } catch (_) {}
+    } catch (_) { }
   };
 
   // Fetch all songs (admin endpoint)
@@ -102,11 +119,11 @@ export default function RosarySongsManager() {
       fd.append('file', rosaryFile);
       fd.append('key', 'rosaryAudio');
       fd.append('label', 'Tamil Rosary Audio');
-      
+
       const res = await api.post('/settings/file', fd, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      
+
       toast.success('Tamil Rosary Audio updated!');
       setRosaryFile(null);
       if (rosaryInputRef.current) rosaryInputRef.current.value = '';
@@ -134,7 +151,69 @@ export default function RosarySongsManager() {
     }
   };
 
-  // Upload Songs ZIP Archive
+  // Stop modal preview audio
+  const stopModalAudio = () => {
+    if (modalAudioRef.current) {
+      modalAudioRef.current.pause();
+      modalAudioRef.current.currentTime = 0;
+    }
+    setModalPlayingUrl(null);
+    setModalAudioPlaying(false);
+  };
+
+  // Toggle audio preview in Duplicate Modal
+  const handleToggleModalAudio = (rawUrl) => {
+    if (!rawUrl) return;
+    const fullUrl = getMediaUrl(rawUrl);
+
+    if (!modalAudioRef.current) {
+      modalAudioRef.current = new Audio();
+      modalAudioRef.current.onended = () => {
+        setModalPlayingUrl(null);
+        setModalAudioPlaying(false);
+      };
+      modalAudioRef.current.onerror = () => {
+        toast.error('Failed to play preview audio');
+        setModalPlayingUrl(null);
+        setModalAudioPlaying(false);
+      };
+    }
+
+    const audio = modalAudioRef.current;
+
+    if (modalPlayingUrl === rawUrl && modalAudioPlaying) {
+      audio.pause();
+      setModalAudioPlaying(false);
+    } else {
+      audio.src = fullUrl;
+      audio.play().then(() => {
+        setModalPlayingUrl(rawUrl);
+        setModalAudioPlaying(true);
+      }).catch(err => {
+        console.warn('Playback error:', err);
+        setModalAudioPlaying(false);
+      });
+    }
+  };
+
+  // Delete All Devotional Songs
+  const handleDeleteAllSongs = async () => {
+    setDeletingAll(true);
+    try {
+      await api.delete('/rosary-songs/all');
+      setSongs([]);
+      setPreviewSongId(null);
+      stopModalAudio();
+      toast.success('All devotional songs have been permanently deleted.');
+      setShowDeleteAllModal(false);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete all songs');
+    } finally {
+      setDeletingAll(false);
+    }
+  };
+
+  // Upload Songs ZIP Archive with Duplicate Detection Flow
   const handleZipUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -144,7 +223,7 @@ export default function RosarySongsManager() {
     }
 
     setUploadingZip(true);
-    const toastId = toast.loading('Extracting audio files from ZIP archive...');
+    const toastId = toast.loading('Extracting and inspecting audio files from ZIP archive...');
     try {
       const fd = new FormData();
       fd.append('file', file);
@@ -153,13 +232,77 @@ export default function RosarySongsManager() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      toast.success(res.data.message || 'Songs extracted and saved!', { id: toastId });
-      fetchSongs();
+      if (res.data.hasDuplicates) {
+        toast.dismiss(toastId);
+        // Do NOT silently import duplicates -> Show review dialog
+        const initialChoices = {};
+        (res.data.duplicates || []).forEach(d => {
+          initialChoices[d.id] = ''; // No default -> require explicit decision
+        });
+        setDuplicateSession({
+          sessionId: res.data.sessionId,
+          duplicates: res.data.duplicates || [],
+          nonDuplicatesCount: res.data.nonDuplicatesCount || 0,
+          totalAudioFound: res.data.totalAudioFound || 0
+        });
+        setDuplicateChoices(initialChoices);
+        setDuplicateModalOpen(true);
+      } else {
+        toast.success(res.data.message || 'Songs extracted and saved!', { id: toastId });
+        fetchSongs();
+      }
       if (zipInputRef.current) zipInputRef.current.value = '';
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to extract ZIP archive', { id: toastId });
     } finally {
       setUploadingZip(false);
+    }
+  };
+
+  // Confirm ZIP Import Choices
+  const handleConfirmDuplicateImport = async () => {
+    if (!duplicateSession || !duplicateSession.duplicates) return;
+
+    const unresolved = duplicateSession.duplicates.some(d => !duplicateChoices[d.id]);
+    if (unresolved) {
+      return toast.error('Please select a choice (Keep Existing or Keep Uploaded) for every duplicate song before confirming.');
+    }
+
+    setConfirmingImport(true);
+    const toastId = toast.loading('Importing and updating songs according to your choices...');
+    try {
+      const res = await api.post('/rosary-songs/zip/confirm', {
+        sessionId: duplicateSession.sessionId,
+        choices: duplicateChoices
+      });
+
+      toast.success(res.data.message || 'Import complete!', { id: toastId });
+      stopModalAudio();
+      setDuplicateModalOpen(false);
+      setDuplicateSession(null);
+      setDuplicateChoices({});
+      fetchSongs();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to confirm imports', { id: toastId });
+    } finally {
+      setConfirmingImport(false);
+    }
+  };
+
+  // Cancel ZIP Import & Purge Temporary Files
+  const handleCancelDuplicateImport = async () => {
+    setCancellingImport(true);
+    try {
+      if (duplicateSession?.sessionId) {
+        await api.post('/rosary-songs/zip/cancel', { sessionId: duplicateSession.sessionId });
+      }
+      toast.success('ZIP upload cancelled.');
+    } catch (_) { } finally {
+      setCancellingImport(false);
+      stopModalAudio();
+      setDuplicateModalOpen(false);
+      setDuplicateSession(null);
+      setDuplicateChoices({});
     }
   };
 
@@ -305,19 +448,18 @@ export default function RosarySongsManager() {
               Synchronized automatically across both the Navbar Rosary Modal and Dedicated Rosary Page.
             </p>
           </div>
-          <span className={`text-xs px-2.5 py-1 rounded-full font-bold self-start sm:self-auto border ${
-            isCustomRosary 
-              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+          <span className={`text-xs px-2.5 py-1 rounded-full font-bold self-start sm:self-auto border ${isCustomRosary
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
               : 'bg-blue-50 text-church-royal-blue border-blue-200'
-          }`}>
+            }`}>
             {isCustomRosary ? '● Custom Upload Active' : '● Default Audio Active'}
           </span>
         </div>
 
         {/* Rosary Preview Player */}
         <div className="bg-white p-3.5 rounded-xl border border-gray-200 shadow-2xs">
-          <RosaryAudioPlayer 
-            src={currentRosaryUrl} 
+          <RosaryAudioPlayer
+            src={currentRosaryUrl}
             title="Tamil Rosary Audio"
           />
         </div>
@@ -400,11 +542,10 @@ export default function RosarySongsManager() {
                     setTimerSeconds(preset);
                     handleSaveTimer(preset);
                   }}
-                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${
-                    timerSeconds === preset 
-                      ? 'bg-church-royal-blue text-white shadow-2xs' 
+                  className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer text-center ${timerSeconds === preset
+                      ? 'bg-church-royal-blue text-white shadow-2xs'
                       : 'text-gray-700 hover:bg-gray-100'
-                  }`}
+                    }`}
                 >
                   {preset}s
                 </button>
@@ -473,6 +614,19 @@ export default function RosarySongsManager() {
               onChange={handleIndividualUpload}
               className="hidden"
             />
+
+            {/* Delete All Songs Button (Destructive Red Style) */}
+            {songs.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteAllModal(true)}
+                className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-bold transition-all flex flex-row items-center gap-1.5 cursor-pointer border border-red-200 whitespace-nowrap active:scale-98 shadow-2xs"
+                title="Permanently delete all devotional songs"
+              >
+                <FiTrash2 className="text-sm text-red-600" />
+                <span>Delete All Songs</span>
+              </button>
+            )}
 
             {/* ZIP Upload Button */}
             <button
@@ -549,27 +703,24 @@ export default function RosarySongsManager() {
                 const isDragOver = dragOverIndex === idx && draggedIndex !== idx;
 
                 return (
-                  <div 
+                  <div
                     key={song._id}
                     draggable
                     onDragStart={(e) => handleDragStart(e, idx)}
                     onDragOver={(e) => handleDragOver(e, idx)}
                     onDragEnd={handleDragEnd}
                     onDrop={(e) => handleDrop(e, idx)}
-                    className={`p-3.5 transition-all select-none ${
-                      isDragging ? 'opacity-30 bg-blue-50 scale-[0.99]' : ''
-                    } ${
-                      isDragOver ? 'border-t-2 border-church-royal-blue bg-blue-50/40' : ''
-                    } ${
-                      song.isActive ? 'bg-white hover:bg-gray-50/70' : 'bg-gray-50/60 opacity-70'
-                    }`}
+                    className={`p-3.5 transition-all select-none ${isDragging ? 'opacity-30 bg-blue-50 scale-[0.99]' : ''
+                      } ${isDragOver ? 'border-t-2 border-church-royal-blue bg-blue-50/40' : ''
+                      } ${song.isActive ? 'bg-white hover:bg-gray-50/70' : 'bg-gray-50/60 opacity-70'
+                      }`}
                   >
                     {/* Top Row: Drag Handle, Checkbox, Title, Meta, Move Buttons, Actions */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       {/* Left: Drag Handle + Checkbox + Title + Meta */}
                       <div className="flex items-center gap-2.5 flex-1 min-w-0">
                         {/* Drag Handle */}
-                        <div 
+                        <div
                           className="cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-700 rounded-md hover:bg-gray-100 flex items-center justify-center"
                           title="Drag up or down to relocate song"
                         >
@@ -580,11 +731,10 @@ export default function RosarySongsManager() {
                         <button
                           type="button"
                           onClick={() => handleToggleSong(song._id)}
-                          className={`w-5 h-5 rounded-md flex items-center justify-center transition-all cursor-pointer flex-shrink-0 ${
-                            song.isActive 
-                              ? 'bg-church-royal-blue text-white shadow-2xs' 
+                          className={`w-5 h-5 rounded-md flex items-center justify-center transition-all cursor-pointer flex-shrink-0 ${song.isActive
+                              ? 'bg-church-royal-blue text-white shadow-2xs'
                               : 'border-2 border-gray-300 text-transparent hover:border-gray-400'
-                          }`}
+                            }`}
                           title={song.isActive ? 'Disable song' : 'Enable song'}
                         >
                           <FiCheck className="text-xs stroke-[3]" />
@@ -617,11 +767,10 @@ export default function RosarySongsManager() {
                         <button
                           type="button"
                           onClick={() => setPreviewSongId(isPreviewing ? null : song._id)}
-                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
-                            isPreviewing 
-                              ? 'bg-amber-100 text-amber-900 border border-amber-300' 
+                          className={`px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${isPreviewing
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
                               : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200'
-                          }`}
+                            }`}
                         >
                           {isPreviewing ? <FiPause className="text-xs" /> : <FiPlay className="text-xs" />}
                           <span>{isPreviewing ? 'Stop' : 'Preview'}</span>
@@ -642,8 +791,8 @@ export default function RosarySongsManager() {
                     {/* Preview Drawer */}
                     {isPreviewing && (
                       <div className="mt-3 pt-2.5 border-t border-amber-200/80">
-                        <RosaryAudioPlayer 
-                          src={fullSongUrl} 
+                        <RosaryAudioPlayer
+                          src={fullSongUrl}
                           autoPlay={true}
                           title={song.title}
                         />
@@ -669,6 +818,218 @@ export default function RosarySongsManager() {
           </div>
         )}
       </div>
+      {/* ── DELETE ALL SONGS CONFIRMATION MODAL ── */}
+      {showDeleteAllModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-100 animate-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-full bg-red-100 text-red-600 flex items-center justify-center mb-4 mx-auto">
+              <FiTrash2 className="text-2xl" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900 text-center mb-2">
+              Delete All Devotional Songs?
+            </h3>
+            <p className="text-xs text-gray-600 text-center leading-relaxed mb-6">
+              This will permanently delete all uploaded devotional songs and their stored files. This action cannot be undone.
+            </p>
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                disabled={deletingAll}
+                onClick={() => setShowDeleteAllModal(false)}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingAll}
+                onClick={handleDeleteAllSongs}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-98"
+              >
+                {deletingAll ? <FiLoader className="animate-spin text-xs" /> : <FiTrash2 className="text-xs" />}
+                <span>Delete All Songs</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── DUPLICATE SONGS REVIEW MODAL ── */}
+      {duplicateModalOpen && duplicateSession && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-gray-100 flex items-start justify-between gap-3 bg-amber-50/60">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center flex-shrink-0">
+                  <FiAlertTriangle className="text-xl" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-gray-900 leading-snug">
+                    Duplicate Songs Found
+                  </h3>
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    Some songs in the uploaded ZIP already exist. Please review the duplicates before completing the upload.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleCancelDuplicateImport}
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                title="Cancel & Close"
+              >
+                <FiX className="text-lg" />
+              </button>
+            </div>
+
+            {/* Scrollable Duplicate Songs List */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+              {duplicateSession.duplicates.map((dup, index) => {
+                const choice = duplicateChoices[dup.id];
+                const existingPlaying = modalAudioPlaying && modalPlayingUrl === dup.existingSong?.fileUrl;
+                const uploadedPlaying = modalAudioPlaying && modalPlayingUrl === dup.uploadedSong?.previewUrl;
+
+                return (
+                  <div
+                    key={dup.id}
+                    className="p-4 rounded-xl border border-gray-200 bg-gray-50/70 hover:bg-gray-50 transition-colors space-y-3"
+                  >
+                    {/* Song Title Header */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-church-royal-blue bg-blue-50 px-2 py-0.5 rounded-md">
+                        #{index + 1}
+                      </span>
+                      <h4 className="text-xs sm:text-sm font-bold text-gray-900 truncate">
+                        🎵 {dup.title}
+                      </h4>
+                    </div>
+
+                    {/* Comparative Cards: Existing vs Uploaded */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Existing Song Box */}
+                      <div className={`p-3.5 rounded-xl border transition-all ${choice === 'existing'
+                          ? 'bg-blue-50/70 border-church-royal-blue shadow-2xs'
+                          : 'bg-white border-gray-200'
+                        }`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-2xs font-bold uppercase tracking-wider text-gray-500">Existing Song</span>
+                          <span className="text-2xs font-mono font-bold text-gray-500">
+                            {(dup.existingSong.fileSize / (1024 * 1024)).toFixed(2)} MB
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold text-gray-800 truncate mb-3" title={dup.existingSong.fileName}>
+                          {dup.existingSong.fileName}
+                        </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleModalAudio(dup.existingSong.fileUrl)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${existingPlaying
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200'
+                              }`}
+                          >
+                            {existingPlaying ? <FiPause className="text-xs" /> : <FiPlay className="text-xs" />}
+                            <span>{existingPlaying ? 'Pause' : 'Play Existing'}</span>
+                          </button>
+                          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                            <input
+                              type="radio"
+                              name={`choice_${dup.id}`}
+                              value="existing"
+                              checked={choice === 'existing'}
+                              onChange={() => setDuplicateChoices(prev => ({ ...prev, [dup.id]: 'existing' }))}
+                              className="accent-church-royal-blue w-3.5 h-3.5 cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-gray-800">Keep Existing</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Uploaded Song Box */}
+                      <div className={`p-3.5 rounded-xl border transition-all ${choice === 'uploaded'
+                          ? 'bg-indigo-50/70 border-indigo-600 shadow-2xs'
+                          : 'bg-white border-gray-200'
+                        }`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-2xs font-bold uppercase tracking-wider text-indigo-600">Uploaded Song</span>
+                          <span className="text-2xs font-mono font-bold text-gray-500">
+                            {(dup.uploadedSong.fileSize / (1024 * 1024)).toFixed(2)} MB
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold text-gray-800 truncate mb-3" title={dup.uploadedSong.fileName}>
+                          {dup.uploadedSong.fileName}
+                        </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleModalAudio(dup.uploadedSong.previewUrl)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${uploadedPlaying
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200'
+                              }`}
+                          >
+                            {uploadedPlaying ? <FiPause className="text-xs" /> : <FiPlay className="text-xs" />}
+                            <span>{uploadedPlaying ? 'Pause' : 'Play Uploaded'}</span>
+                          </button>
+                          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                            <input
+                              type="radio"
+                              name={`choice_${dup.id}`}
+                              value="uploaded"
+                              checked={choice === 'uploaded'}
+                              onChange={() => setDuplicateChoices(prev => ({ ...prev, [dup.id]: 'uploaded' }))}
+                              className="accent-indigo-600 w-3.5 h-3.5 cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-gray-800">Keep Uploaded</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="text-xs text-gray-600 font-medium">
+                Decisions: <strong className="text-gray-900">{Object.values(duplicateChoices).filter(Boolean).length}</strong> of <strong className="text-gray-900">{duplicateSession.duplicates.length}</strong> resolved
+                {duplicateSession.nonDuplicatesCount > 0 && (
+                  <span className="ml-2 text-emerald-600 font-bold">
+                    (+{duplicateSession.nonDuplicatesCount} non-duplicate song(s) will be imported)
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  disabled={cancellingImport || confirmingImport}
+                  onClick={handleCancelDuplicateImport}
+                  className="px-4 py-2 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  {cancellingImport ? 'Cancelling...' : 'Cancel Upload'}
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    confirmingImport ||
+                    cancellingImport ||
+                    Object.values(duplicateChoices).filter(Boolean).length < duplicateSession.duplicates.length
+                  }
+                  onClick={handleConfirmDuplicateImport}
+                  className="px-4 py-2 bg-church-royal-blue hover:bg-blue-900 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-98"
+                >
+                  {confirmingImport ? <FiLoader className="animate-spin text-xs" /> : <FiCheck className="text-xs" />}
+                  <span>Confirm & Import</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

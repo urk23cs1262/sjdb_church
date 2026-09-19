@@ -8,6 +8,10 @@ const connectDB = async () => {
     console.log(` MongoDB Connected: ${conn.connection.host}`);
     // Auto-assign member IDs for any existing users missing them
     autoAssignMemberIds().catch(console.error);
+
+    // Initialize/migrate individual 30-day user re-verification cycles
+    const { migrateUserVerificationCycles } = require('../services/userVerificationMigrationService');
+    migrateUserVerificationCycles().catch(console.error);
     // Auto-rename sccGroup to anbiyam in users collection
     const User = require('../models/User');
     User.updateMany({ sccGroup: { $exists: true } }, { $rename: { sccGroup: 'anbiyam' } })

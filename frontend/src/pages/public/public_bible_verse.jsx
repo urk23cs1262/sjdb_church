@@ -568,7 +568,7 @@ export default function BibleVerse() {
 
   return (
     <div className="min-h-screen pt-10 bg-church-cream">
-      <PageHero title={<>Daily Catholic Devotions</>} subtitle={<>God's Word & Liturgy</>} />
+      <PageHero title={<>Daily Catholic Content</>} subtitle={<>God's Word & Liturgy</>} />
 
       <section className="py-12">
         <div className="max-w-4xl mx-auto px-4">
@@ -1042,10 +1042,10 @@ export default function BibleVerse() {
                         href={saintData.sourceUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="btn-gold text-xs sm:text-sm py-2 px-4 rounded-xl flex items-center gap-1.5 shadow-sm hover:shadow-md"
+                        className="btn-royal text-xs sm:text-sm py-2 px-4 rounded-xl flex items-center gap-1.5 shadow-sm hover:shadow-md"
                       >
                         <FiExternalLink />
-                        <span>{isTamil ? 'வத்திக்கான் அதிகாரப்பூர்வ பக்கம்' : 'Read on Vatican News'}</span>
+                        <span>{isTamil ? 'வத்திக்கான் அதிகாரப்பூர்வ பக்கம்' : 'Read on Vatican State City'}</span>
                       </a>
                     )}
                   </div>

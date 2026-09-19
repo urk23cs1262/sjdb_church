@@ -403,6 +403,13 @@ export default function UserDashboard() {
                   ))
                 )}
               </div>
+              {bookings.length > 0 && (
+                <div className="text-center mt-4">
+                  <Link to="/dashboard/bookings" className="text-church-gold text-sm font-bold hover:underline inline-flex items-center gap-1">
+                    View All Bookings <span aria-hidden>→</span>
+                  </Link>
+                </div>
+              )}
             </div>
 
             {/* My Donation History */}
@@ -418,7 +425,7 @@ export default function UserDashboard() {
                     <p className="text-gray-400 text-sm italic">No donations recorded yet</p>
                   </div>
                 ) : (
-                  donations.map((d, i) => (
+                  donations.slice(0, 3).map((d, i) => (
                     <motion.div
                       key={d._id}
                       onClick={() => setViewingDonation(d)}
@@ -451,6 +458,13 @@ export default function UserDashboard() {
                   ))
                 )}
               </div>
+              {donations.length > 0 && (
+                <div className="text-center mt-4">
+                  <Link to="/dashboard/donations" className="text-church-gold text-sm font-bold hover:underline inline-flex items-center gap-1">
+                    View All Donations <span aria-hidden>→</span>
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
 

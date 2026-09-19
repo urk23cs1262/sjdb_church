@@ -10,6 +10,7 @@ import churchLogo from '../../assets/church_extirior.png';
 
 
 import PolicyModal from '../../components/common/common_policy_modal';
+import CommonOtpInput from '../../components/common/common_otp_input';
 
 const SUB_STATIONS = [
   "Kalayarkoil (Main Parish)",
@@ -43,6 +44,8 @@ export default function Register() {
   const [userId, setUserId] = useState(null);
   const [devOtp, setDevOtp] = useState(null);
   const [isOtpLoading, setIsOtpLoading] = useState(false);
+  const [regOtpCode, setRegOtpCode] = useState('');
+  const [regOtpError, setRegOtpError] = useState('');
 
   // Policy agreements state
   const [agreeTerms, setAgreeTerms] = useState(false);
@@ -185,11 +188,19 @@ export default function Register() {
 
   const onVerifyOtp = async (data) => {
     try {
-      const res = await api.post('/auth/verify-otp', { userId, otp: data.otp });
-      toast.success('Verified! You can now log in.');
+      const code = typeof data === 'string' ? data : (data?.otp || regOtpCode);
+      if (!code || code.length !== 6) {
+        setRegOtpError('Please enter the full 6-digit verification code');
+        return;
+      }
+      setRegOtpError('');
+      const res = await api.post('/auth/verify-otp', { userId, otp: code, purpose: 'registration' });
+      toast.success('Registration verified successfully! You can now log in.');
       navigate('/login');
     } catch (e) {
-      toast.error(e.response?.data?.message || 'Invalid OTP');
+      const errMsg = e.response?.data?.message || 'Invalid or expired verification code';
+      setRegOtpError(errMsg);
+      toast.error(errMsg);
     }
   };
 
@@ -611,12 +622,17 @@ export default function Register() {
                 >
                   <div className="space-y-6 max-w-sm mx-auto">
                     <div className="text-center space-y-2">
-                      <p className="text-black font-bold">OTP Verification</p>
-                      <p className="text-black-400 text-xs">An OTP has been sent to your email for verification.</p>
+                      <div className="w-14 h-14 bg-amber-100 text-amber-700 rounded-2xl flex items-center justify-center mx-auto border border-amber-200 shadow-xs mb-2">
+                        <FiUserCheck className="text-2xl text-amber-800" />
+                      </div>
+                      <p className="text-black font-extrabold text-lg">Account Verification</p>
+                      <p className="text-gray-500 text-xs">
+                        A 6-digit verification code has been dispatched to your email and WhatsApp. Valid for 5 minutes.
+                      </p>
                     </div>
 
                     {devOtp && (
-                      <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 flex flex-col items-center justify-center gap-2 mb-4 min-h-[76px]">
+                      <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 flex flex-col items-center justify-center gap-2 mb-4 min-h-[76px]">
                         {isOtpLoading ? (
                           <div className="flex flex-col items-center gap-2 w-full px-4 py-1">
                             <p className="text-amber-800 text-xs font-semibold">Sending...</p>
@@ -631,15 +647,18 @@ export default function Register() {
                           </div>
                         ) : (
                           <>
-                            <p className="text-amber-800 text-xs font-semibold text-center">OTP sent to your email/phone</p>
+                            <p className="text-amber-800 text-xs font-semibold text-center">Development Preview</p>
                             <div className="flex items-center gap-3">
-                              <span className="text-amber-900 font-mono font-bold text-xl tracking-widest">{devOtp.slice(0, 2)}xxxx</span>
+                              <span className="text-amber-900 font-mono font-bold text-xl tracking-widest">{devOtp}</span>
                               <button
                                 type="button"
-                                onClick={() => setValue('otp', devOtp)}
-                                className="bg-amber-400 hover:bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded transition-colors"
+                                onClick={() => {
+                                  setRegOtpCode(devOtp);
+                                  onVerifyOtp(devOtp);
+                                }}
+                                className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
                               >
-                                Auto Fill
+                                Auto Fill &amp; Verify
                               </button>
                             </div>
                           </>
@@ -647,29 +666,34 @@ export default function Register() {
                       </div>
                     )}
 
-                    <div>
-                      <label className="church-label text-center block mb-2 font-bold text-church-gold">Enter 6-Digit OTP</label>
-                      <input
-                        {...register('otp', { required: true, minLength: 6, maxLength: 6 })}
-                        className="church-input text-center text-3xl tracking-[12px] font-bold h-16"
-                        placeholder="000000"
-                        maxLength={6}
-                        autoFocus
-                      />
-                    </div>
-                    <button onClick={handleSubmit(onVerifyOtp)} type="button" disabled={isSubmitting} className="btn-gold w-full justify-center py-4 text-lg font-bold">
-                      {isSubmitting ? ' Verifying...' : 'Verify & Login'}
-                    </button>
-                    <button type="button" onClick={async () => {
-                      const res = await api.post('/auth/resend-otp', { userId });
-                      toast.success('OTP resent!');
-                      if (res.data.devOtp) {
-                        setDevOtp(res.data.devOtp);
-                        setIsOtpLoading(true);
-                        setTimeout(() => setIsOtpLoading(false), 5000);
-                      }
-                    }} className="btn-ghost w-full justify-center text-xs mt-2">
-                      Didn't receive OTP? Resend
+                    <CommonOtpInput
+                      value={regOtpCode}
+                      onChange={(val) => {
+                        setRegOtpCode(val);
+                        if (regOtpError) setRegOtpError('');
+                      }}
+                      onComplete={(val) => onVerifyOtp(val)}
+                      disabled={isSubmitting}
+                      isError={Boolean(regOtpError)}
+                      errorMessage={regOtpError}
+                      onResend={async () => {
+                        const res = await api.post('/auth/resend-otp', { userId, purpose: 'registration' });
+                        toast.success(res.data.message || 'Fresh verification code sent!');
+                        if (res.data.devOtp) {
+                          setDevOtp(res.data.devOtp);
+                          setIsOtpLoading(true);
+                          setTimeout(() => setIsOtpLoading(false), 5000);
+                        }
+                      }}
+                    />
+
+                    <button
+                      onClick={() => onVerifyOtp(regOtpCode)}
+                      type="button"
+                      disabled={isSubmitting || regOtpCode.length !== 6}
+                      className="btn-gold w-full justify-center py-3.5 text-base font-bold disabled:opacity-50 shadow-md"
+                    >
+                      {isSubmitting ? ' Verifying...' : 'Verify & Continue to Login →'}
                     </button>
                   </div>
                 </motion.div>

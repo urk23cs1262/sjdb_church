@@ -5,6 +5,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+const fs = require('fs');
 const connectDB = require('./config/db');
 
 const app = express();
@@ -73,10 +74,56 @@ app.use(express.json({
   }
 }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// NoSQL Injection / Operator Injection Protection: strips keys starting with '$' or containing '.'
+const sanitizeNoSql = (obj) => {
+  if (obj && typeof obj === 'object') {
+    for (const key of Object.keys(obj)) {
+      if (key.startsWith('$') || key.includes('.')) {
+        delete obj[key];
+      } else {
+        sanitizeNoSql(obj[key]);
+      }
+    }
+  }
+};
+
+app.use((req, res, next) => {
+  if (req.body) sanitizeNoSql(req.body);
+  if (req.query) sanitizeNoSql(req.query);
+  if (req.params) sanitizeNoSql(req.params);
+  next();
+});
+
 app.use(morgan('dev'));
 
-// Static files
+// Static files & Devotional Songs streaming
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Direct static streaming for Devos directory if present on disk
+const devosCandidates = [
+  path.join(__dirname, '../Devos'),
+  path.join(__dirname, '../../Devos'),
+  path.join(__dirname, '../uploads/Devos'),
+  'C:\\Users\\Admin\\Desktop\\Devos'
+];
+const devosDir = devosCandidates.find(p => fs.existsSync(p));
+if (devosDir) {
+  app.use('/devotional-songs', express.static(devosDir));
+  app.use('/api/devotional-songs', express.static(devosDir));
+}
+
+// Direct streamed MP3 handler for devotional songs if filename requested
+app.get(['/api/devotional-songs/:filename', '/devotional-songs/:filename'], (req, res) => {
+  const filename = path.basename(req.params.filename);
+  if (devosDir) {
+    const target = path.join(devosDir, filename);
+    if (fs.existsSync(target)) {
+      return res.sendFile(target);
+    }
+  }
+  res.status(404).json({ success: false, message: 'Audio file not found' });
+});
 
 // Routes — Exempt Auth & Maintenance Control Routes
 app.use('/api/auth', require('./routes/auth'));

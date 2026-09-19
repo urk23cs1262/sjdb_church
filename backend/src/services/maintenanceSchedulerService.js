@@ -1,18 +1,5 @@
 const { getOrCreateSettings, setSystemState } = require('./systemStateService');
-const { dispatchPreMaintenanceNotice } = require('../controllers/maintenanceController');
-
-const getLeadTimeMinutes = (leadTimeStr) => {
-  switch (leadTimeStr) {
-    case '15m': return 15;
-    case '30m': return 30;
-    case '1h': return 60;
-    case '2h': return 120;
-    case '6h': return 360;
-    case '12h': return 720;
-    case '24h': return 1440;
-    default: return 60; // Default 1 hour
-  }
-};
+const { dispatchPreMaintenanceEvent, getLeadTimeMinutes } = require('./maintenanceNotificationService');
 
 const checkMaintenanceSchedule = async () => {
   try {
@@ -20,31 +7,47 @@ const checkMaintenanceSchedule = async () => {
     if (!settings) return;
 
     const now = new Date();
-    const schedulerEnabled = settings.scheduler && settings.scheduler.isEnabled;
-    const scheduledStart = schedulerEnabled && settings.scheduler.scheduledStart ? new Date(settings.scheduler.scheduledStart) : null;
-    const scheduledEnd = schedulerEnabled && settings.scheduler.scheduledEnd ? new Date(settings.scheduler.scheduledEnd) : null;
-    const expectedCompletion = settings.expectedCompletion ? new Date(settings.expectedCompletion) : null;
-
     const currentStatus = settings.status || (settings.isEnabled ? (settings.isEmergency ? 'emergency' : 'maintenance') : 'live');
+
+    // Effective start, end, and lead times across Notice Banner or Scheduler
+    const bannerConfig = settings.noticeBanner || {};
+    const schedulerConfig = settings.scheduler || {};
+
+    const scheduledStart = schedulerConfig.scheduledStart
+      ? new Date(schedulerConfig.scheduledStart)
+      : (bannerConfig.scheduledStartTime ? new Date(bannerConfig.scheduledStartTime) : null);
+
+    const scheduledEnd = schedulerConfig.scheduledEnd
+      ? new Date(schedulerConfig.scheduledEnd)
+      : (bannerConfig.scheduledEndTime ? new Date(bannerConfig.scheduledEndTime) : (settings.expectedCompletion ? new Date(settings.expectedCompletion) : null));
+
+    const leadTimeStr = bannerConfig.noticeLeadTime || schedulerConfig.noticeLeadTime || '15m';
+    const leadTimeMs = getLeadTimeMinutes(leadTimeStr) * 60 * 1000;
 
     // 1. Pre-Maintenance Notice Trigger (Lead Time before Maintenance Start)
     if (scheduledStart && currentStatus === 'live') {
-      const leadTimeStr = settings.scheduler?.noticeLeadTime || settings.noticeBanner?.noticeLeadTime || '1h';
-      const leadTimeMs = getLeadTimeMinutes(leadTimeStr) * 60 * 1000;
       const noticeTriggerTime = new Date(scheduledStart.getTime() - leadTimeMs);
 
+      // Trigger if current time is within lead window and notice has not yet been sent for this cycle
       if (now >= noticeTriggerTime && now < scheduledStart) {
-        if (!settings.noticeBanner?.isEnabled || !settings.noticeSentForEventId) {
-          console.log(`[Scheduler] Pre-maintenance notice auto-trigger activated (${leadTimeStr} before start) at:`, now.toISOString());
-          await dispatchPreMaintenanceNotice(settings, {
-            reason: `Scheduled Pre-Maintenance Notice Auto-Trigger (${leadTimeStr} lead time)`,
+        const alreadySent = Boolean(bannerConfig.isNoticeSent || settings.preMaintenanceEventId);
+        if (!alreadySent) {
+          console.log(`[Scheduler] Pre-maintenance notice trigger activated (${leadTimeStr} before start at ${scheduledStart.toISOString()})`);
+          await dispatchPreMaintenanceEvent({
+            settings,
             changedBy: 'Automated Scheduler'
           });
         }
       }
     }
 
-    // 2. Auto Start Maintenance using central setSystemState
+    // Scheduler-specific Auto-Start and Auto-End checks
+    const schedulerEnabled = Boolean(schedulerConfig.isEnabled);
+    if (!schedulerEnabled) {
+      return;
+    }
+
+    // 2. Auto Start Maintenance when scheduledStart is reached
     if (scheduledStart && now >= scheduledStart && (!scheduledEnd || now < scheduledEnd)) {
       if (currentStatus === 'live') {
         console.log('[Scheduler] Scheduled Maintenance auto-start triggered at:', now.toISOString());
@@ -57,16 +60,18 @@ const checkMaintenanceSchedule = async () => {
       }
     }
 
-    // 3. Auto End Maintenance using central setSystemState
-    const isScheduledEndReached = scheduledEnd && now >= scheduledEnd;
-    const isCountdownFinished = expectedCompletion && now >= expectedCompletion;
-
-    if (currentStatus !== 'live' && (isScheduledEndReached || isCountdownFinished)) {
-      console.log('[Scheduler] Scheduled Maintenance auto-end triggered at:', now.toISOString());
-      await setSystemState('live', {
-        reason: 'Scheduled Maintenance Auto-End',
-        changedBy: 'Automated Scheduler'
-      });
+    // 3. Auto End Maintenance when scheduledEnd is reached
+    if (scheduledEnd && now >= scheduledEnd) {
+      if (currentStatus !== 'live') {
+        console.log('[Scheduler] Scheduled Maintenance auto-end triggered at:', now.toISOString());
+        await setSystemState('live', {
+          reason: 'Scheduled Maintenance Auto-End',
+          changedBy: 'Automated Scheduler'
+        });
+      }
+      // Disable schedule once completed to prevent repeat executions
+      settings.scheduler.isEnabled = false;
+      await settings.save();
     }
   } catch (err) {
     console.error('[Scheduler] Error running maintenance scheduler check:', err.message);

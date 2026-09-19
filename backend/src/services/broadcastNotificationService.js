@@ -550,42 +550,42 @@ async function broadcastMaintenanceScheduled({ settings, action = 'scheduled' })
 
     if (action === 'completed') {
       waMessage =
-`✅ *Church Website Restored & Online*
+`✅ *Services Are Live Again*
 
-The scheduled maintenance on our church website has been completed successfully.
+Dear User,
 
-All online services (Holy Mass bookings, prayer petitions, certificates, and online offertory) are now fully operational.
+The St. John de Britto's Church website and services are now live again.
 
-🌐 *Visit Church Website:*
-${getClientUrl()}
+The maintenance has been completed, and you can now access the website/app and use the available services normally.
 
-Thank you for your patience and prayers! 🙏
-— *St. John de Britto Church, Kalayarkoil*`;
+🌐 Visit: ${getClientUrl()}
 
-      emailSubject = `✅ Church Website Maintenance Completed — All Services Online`;
-      notifTitle = `✅ Maintenance Completed`;
-      notifMessage = `The church website maintenance is complete. All services are online.`;
+Thank you for your patience and understanding.
+
+— *St. John de Britto's Church*`;
+
+      emailSubject = `✅ Church Website Is Live Again — St. John de Britto's Church`;
+      notifTitle = `✅ Church Website Is Live Again`;
+      notifMessage = `The St. John de Britto's Church website maintenance is complete. All services are now available. Visit: ${getClientUrl()}`;
     } else if (action === 'started' || action === 'emergency') {
       waMessage =
-`🛠️ *Church Website Maintenance in Progress*
+`🔧 *Maintenance Notice*
 
-🔧 *${title}*
-⚙️ *Category:* ${category}
-🕒 *Expected Completion:* ${endTimeFormatted}
+Dear User,
 
-_${messageText}_
+The St. John de Britto's Church website and services are currently under maintenance.
 
-During this window, online services may be temporarily unavailable.
+The website/app and some services may be temporarily unavailable during this period.
 
-🌐 *View Maintenance Status:*
-${maintenanceUrl}
+We apologize for the inconvenience and thank you for your patience.
 
-Thank you for your patience and understanding. 🙏
-— *St. John de Britto Church, Kalayarkoil*`;
+We will notify you once the services are live again.
 
-      emailSubject = `🛠️ Notice: Church Website Maintenance in Progress`;
-      notifTitle = `🛠️ Maintenance in Progress`;
-      notifMessage = `The church website is currently undergoing maintenance. Expected completion: ${endTimeFormatted}.`;
+— *St. John de Britto's Church*`;
+
+      emailSubject = `🔧 Church Website Maintenance Notice — St. John de Britto's Church`;
+      notifTitle = `🔧 Church Website Under Maintenance`;
+      notifMessage = `The St. John de Britto's Church website is currently under maintenance. We will notify you once services are available again.`;
     } else {
       // 'scheduled' or 'updated'
       waMessage =

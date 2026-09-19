@@ -354,7 +354,7 @@ export default function DailySaintTicker() {
                               "
                             >
                               <FiExternalLink className="text-base" />
-                              <span>{isTamil ? 'வத்திக்கான் செய்திகளில் வாசிக்க (Vatican News)' : 'Read on Vatican News'}</span>
+                              <span>{isTamil ? 'வத்திக்கான் செய்திகளில் வாசிக்க (Vatican State City)' : 'Read on Vatican State City'}</span>
                             </a>
                           )}
                         </div>

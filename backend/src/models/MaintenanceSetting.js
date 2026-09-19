@@ -64,7 +64,10 @@ const maintenanceSettingSchema = new mongoose.Schema({
     message: { type: String, default: 'Scheduled website maintenance today.' },
     scheduledStartTime: { type: Date },
     scheduledEndTime: { type: Date },
-    noticeLeadTime: { type: String, enum: ['15m', '30m', '1h', '2h', '6h', '12h', '24h'], default: '1h' }
+    noticeLeadTime: { type: String, enum: ['15m', '30m', '1h', '2h', '6h', '12h', '24h'], default: '15m' },
+    isNoticeSent: { type: Boolean, default: false },
+    sentAt: { type: Date },
+    eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'MaintenanceEvent' }
   },
 
   // Scheduler Configuration
@@ -72,10 +75,15 @@ const maintenanceSettingSchema = new mongoose.Schema({
     isEnabled: { type: Boolean, default: false },
     scheduledStart: { type: Date },
     scheduledEnd: { type: Date },
-    noticeLeadTime: { type: String, enum: ['15m', '30m', '1h', '2h', '6h', '12h', '24h'], default: '1h' },
+    noticeLeadTime: { type: String, enum: ['15m', '30m', '1h', '2h', '6h', '12h', '24h'], default: '15m' },
     autoNotify: { type: Boolean, default: true }
   },
 
+  // Cycle & Multi-Event Tracking
+  currentCycleId: { type: String, default: () => new mongoose.Types.ObjectId().toString() },
+  preMaintenanceEventId: { type: mongoose.Schema.Types.ObjectId, ref: 'MaintenanceEvent' },
+  maintenanceStartedEventId: { type: mongoose.Schema.Types.ObjectId, ref: 'MaintenanceEvent' },
+  maintenanceCompletedEventId: { type: mongoose.Schema.Types.ObjectId, ref: 'MaintenanceEvent' },
   noticeSentForEventId: { type: mongoose.Schema.Types.ObjectId, ref: 'MaintenanceEvent' },
 
   // Notification Template Defaults

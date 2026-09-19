@@ -13,6 +13,9 @@ const maintenanceMiddleware = async (req, res, next) => {
     }
 
     // Endpoints accessible during maintenance mode
+    // NOTE: /api/auth/login is intentionally NOT in this list — user login is
+    // blocked during maintenance. Only admin login is permitted via the JWT
+    // role-bypass check below.
     const allowedPathPrefixes = [
       '/api/maintenance/status',
       '/api/maintenance/track-attempt',
@@ -20,9 +23,8 @@ const maintenanceMiddleware = async (req, res, next) => {
     ];
 
     const isAllowedPath = allowedPathPrefixes.some(prefix => req.originalUrl.startsWith(prefix));
-    const isLoginPost = req.originalUrl.startsWith('/api/auth/login') && req.method === 'POST';
 
-    if (isAllowedPath || isLoginPost) {
+    if (isAllowedPath) {
       return next();
     }
 

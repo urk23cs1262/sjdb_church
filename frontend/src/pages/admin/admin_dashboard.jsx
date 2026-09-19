@@ -391,19 +391,20 @@ export default function AdminDashboard() {
                       </div>
                       <div>
                         <h4 className="text-base font-extrabold text-gray-900">Force Global OTP Re-verification</h4>
-                        <p className="text-xs text-gray-500">Global Session Invalidation & Re-authentication</p>
+                        <p className="text-xs text-gray-500">Enforce OTP on Next User Authentication</p>
                       </div>
                     </div>
 
                     <div className="space-y-3 text-xs text-gray-700 bg-amber-50/70 p-4 rounded-2xl border border-amber-200/60 mb-6">
                       <p className="font-bold text-amber-900">
-                        Are you sure you want to trigger a Global OTP Reset?
+                        Are you sure you want to enforce Global OTP Re-verification?
                       </p>
-                      <ul className="list-disc pl-4 space-y-1 text-gray-600">
-                        <li><strong>Instant Logout:</strong> All active sessions on all devices (phones, laptops, tablets) for every user and administrator will be terminated immediately.</li>
-                        <li><strong>Multi-Channel Broadcast:</strong> Official security advisory emails, in-app notifications, and web push alerts will be dispatched immediately to all registered parishioners.</li>
-                        <li><strong>Fresh Verification:</strong> Every account must enter their password and verify a new 6-digit OTP code on their next sign-in.</li>
-                        <li><strong>New 30-Day Window:</strong> Once verified, each account will enjoy another 30-day single-verification window across all their devices.</li>
+                      <ul className="list-disc pl-4 space-y-1.5 text-gray-600">
+                        <li><strong>Safe Transition:</strong> Active in-app sessions will NOT be abruptly terminated. Re-verification is enforced when users next attempt to sign in.</li>
+                        <li><strong>All Eligible Parishioners:</strong> All registered parishioner accounts will immediately be marked with <code>otpVerificationRequired = true</code>.</li>
+                        <li><strong>Next Sign-in Verification:</strong> Users must enter their credentials and verify a fresh 6-digit OTP code sent to their Email and WhatsApp.</li>
+                        <li><strong>Admin Exemption:</strong> Administrators and priests remain exempt from routine OTP and access directly with password.</li>
+                        <li><strong>Security Audit:</strong> This security event is permanently logged with timestamp and admin credentials.</li>
                       </ul>
                     </div>
 
@@ -423,11 +424,11 @@ export default function AdminDashboard() {
                         {resettingOtp ? (
                           <>
                             <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Broadcasting Alerts & Invalidating...
+                            Enforcing Re-verification...
                           </>
                         ) : (
                           <>
-                            <FiKey /> Invalidate Sessions & Require OTP
+                            <FiKey /> Enforce OTP on Next Login
                           </>
                         )}
                       </button>
@@ -525,7 +526,9 @@ export default function AdminDashboard() {
                             </div>
                             <div className="text-right flex-shrink-0">
                               <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                u.status === 'Initial Verification Pending' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800'
+                                u.status === 'Global Reset Pending' ? 'bg-orange-100 text-orange-800' :
+                                u.status === 'Initial Verification Pending' ? 'bg-amber-100 text-amber-800' :
+                                'bg-rose-100 text-rose-800'
                               }`}>
                                 {u.status}
                               </span>

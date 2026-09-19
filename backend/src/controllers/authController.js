@@ -8,6 +8,7 @@ const { notifyAdmin } = require('../services/adminNotificationService');
 const { sendLoginAlertEmail, sendPasswordUpdatedEmail } = require('../services/loginSecurityService');
 
 const { generateNextMemberId, generateNextFamilyId } = require('../services/memberIdService');
+const { logSecurityEvent } = require('../services/securityAuditService');
 
 // @POST /api/auth/register
 const register = async (req, res) => {
@@ -24,8 +25,8 @@ const register = async (req, res) => {
     }
 
     let { name, familyName, familyId, dob, gender, phone, email, address, parishMemberId, password, subStation, familyRole, familyMembers } = req.body;
-    if (!name || !phone || !password) {
-      return res.status(400).json({ success: false, message: 'Name, phone, and password are required' });
+    if (!name || !phone || !password || typeof name !== 'string' || typeof phone !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ success: false, message: 'Name, phone, and password are required and must be valid strings' });
     }
 
     const { isPhoneBlocked } = require('../services/userModerationService');
@@ -147,6 +148,27 @@ const register = async (req, res) => {
 const verifyOtp = async (req, res) => {
   try {
     const { userId, otp, purpose } = req.body;
+
+    // Block regular users if Maintenance Mode is active
+    const MaintenanceSetting = require('../models/MaintenanceSetting');
+    const maintSettings = await MaintenanceSetting.findOne({ key: 'site_maintenance' });
+    if (maintSettings && maintSettings.isEnabled) {
+      const candidateUser = await User.findById(userId).select('role isTechnicalTeam');
+      if (candidateUser) {
+        const uRole = (candidateUser.role || '').toLowerCase();
+        const isAdmin = ['admin', 'priest'].includes(uRole);
+        const isTech = Boolean(candidateUser.isTechnicalTeam) || ['staff', 'technical_team', 'tech_team'].includes(uRole);
+        if (!isAdmin && !isTech) {
+          return res.status(503).json({
+            success: false,
+            isMaintenanceRestricted: true,
+            title: 'Access Restricted',
+            message: 'The website is currently under maintenance. Regular user verification is temporarily unavailable.'
+          });
+        }
+      }
+    }
+
     const result = await verifyOTP(userId, otp, purpose, req);
     if (!result.valid) return res.status(400).json({ success: false, message: result.message });
 
@@ -157,18 +179,24 @@ const verifyOtp = async (req, res) => {
     const now = new Date();
     const isFirstLogin = !user.firstSuccessfulLoginAt;
     const isReVerification = user.isVerified === true && !!user.firstSuccessfulLoginAt;
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const nextVerificationAt = new Date(now.getTime() + THIRTY_DAYS_MS);
 
-    // Update OTP verification state — preserve all existing account data
-    // For re-verification (30-day cycle): keep isVerified true, restore isActive & unsuspended
+    // Update OTP verification state — individual 30-day cycle
     const updateFields = {
       otpVerified: true,
       otpVerifiedAt: now,
+      lastVerifiedAt: now,
+      nextVerificationAt: nextVerificationAt,
+      verificationStatus: 'Verified',
+      otpVerificationRequired: false,
       isVerified: true,   // Always ensure verified stays true after successful OTP
       isActive: true,     // Restore active status
       isSuspended: false, // Ensure suspension is lifted
       suspensionReason: undefined,
       otp: null,
       otpExpires: null,
+      otpExpiresAt: null,
       lastLogin: now,
       lastSuccessfulLogin: now,
       failedLoginAttempts: 0,
@@ -180,6 +208,15 @@ const verifyOtp = async (req, res) => {
       ...(isFirstLogin ? { firstSuccessfulLoginAt: now } : {})
     };
     await User.findByIdAndUpdate(user._id, updateFields);
+
+    logSecurityEvent({
+      userId: user._id,
+      eventType: isReVerification ? 'REVERIFICATION_SUCCESS' : 'LOGIN_SUCCESS',
+      req,
+      source: 'LOGIN',
+      success: true,
+      details: { purpose, isReVerification, nextVerificationAt }
+    });
 
     // Auto-resolve any pending SecurityIncident records for this user
     try {
@@ -265,8 +302,11 @@ const verifyOtp = async (req, res) => {
 // @POST /api/auth/login
 const login = async (req, res) => {
   try {
-    const { login: loginId, password } = req.body;
-    if (!loginId || !password) return res.status(400).json({ success: false, message: 'Login and password required' });
+    let { login: loginId, password } = req.body;
+    if (!loginId || !password || typeof loginId !== 'string' || typeof password !== 'string') {
+      return res.status(400).json({ success: false, message: 'Valid login identifier and password strings required' });
+    }
+    loginId = loginId.trim();
 
     let user = await User.findOne({
       $or: [
@@ -533,33 +573,7 @@ const login = async (req, res) => {
       }
     }
 
-    // 30-Day OTP Re-verification Cycle Check
-    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-    const isOtpValid30Days = (user.otpVerified === true || user.isVerified === true) && user.otpVerifiedAt && ((now.getTime() - new Date(user.otpVerifiedAt).getTime()) < THIRTY_DAYS_MS);
-
-    if (!isOtpValid30Days || !user.isVerified) {
-      const { otp } = await createAndSendOTP({
-        userId: user._id,
-        phone: user.phone,
-        email: user.email,
-        purpose: 'login',
-        req
-      });
-
-      const isExpiredCycle = user.otpVerifiedAt && ((now.getTime() - new Date(user.otpVerifiedAt).getTime()) >= THIRTY_DAYS_MS);
-
-      return res.status(200).json({
-        success: true,
-        requiresOTP: true,
-        userId: user._id,
-        devOtp: otp,
-        message: isExpiredCycle
-          ? 'Your 30-day security verification window has expired. A fresh 5-minute verification code has been sent.'
-          : 'Security verification code required. A 5-minute code has been dispatched to your registered phone/email.'
-      });
-    }
-
-    // Check Maintenance Mode Restriction
+    // Check Maintenance Mode Restriction FIRST for regular users
     const MaintenanceSetting = require('../models/MaintenanceSetting');
     const maintSettings = await MaintenanceSetting.findOne({ key: 'site_maintenance' });
     if (maintSettings && maintSettings.isEnabled) {
@@ -568,11 +582,52 @@ const login = async (req, res) => {
       const isTech = Boolean(user.isTechnicalTeam) || ['staff', 'technical_team', 'tech_team'].includes(userRole);
 
       if (!isAdmin && !isTech) {
-        return res.status(403).json({
+        return res.status(503).json({
           success: false,
           isMaintenanceRestricted: true,
           title: 'Access Restricted',
           message: 'The website is currently under maintenance.\nOnly Administrators and the Technical Team can access the system at this time.\nPlease try again later.'
+        });
+      }
+    }
+
+    // Check 30-Day OTP Re-verification Cycle & Global OTP Reset Requirement
+    // Admin and Priest accounts are strictly EXEMPT from routine 30-day OTP
+    const userRole = (user.role || '').toLowerCase();
+    const isExempt = ['admin', 'priest'].includes(userRole);
+
+    if (!isExempt) {
+      const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+      const lastVerified = user.lastVerifiedAt || user.otpVerifiedAt;
+      const nextDue = user.nextVerificationAt || (lastVerified ? new Date(new Date(lastVerified).getTime() + THIRTY_DAYS_MS) : null);
+      const isCycleExpired = !lastVerified || (nextDue && now.getTime() >= new Date(nextDue).getTime());
+      const isVerificationRequired = user.otpVerificationRequired === true || !user.isVerified || isCycleExpired;
+
+      if (isVerificationRequired) {
+        // Mark user state as pending verification if not already
+        if (!user.otpVerificationRequired || user.verificationStatus !== 'Pending Verification') {
+          await User.findByIdAndUpdate(user._id, {
+            otpVerificationRequired: true,
+            verificationStatus: 'Pending Verification'
+          });
+        }
+
+        const { otp } = await createAndSendOTP({
+          userId: user._id,
+          phone: user.phone,
+          email: user.email,
+          purpose: 'login',
+          req
+        });
+
+        return res.status(200).json({
+          success: true,
+          requiresOTP: true,
+          userId: user._id,
+          devOtp: otp,
+          message: isCycleExpired
+            ? 'Your 30-day security verification cycle has matured. A 6-digit verification code has been dispatched to your email and WhatsApp.'
+            : 'Account verification is required. A 6-digit verification code has been dispatched to your email and WhatsApp.'
         });
       }
     }
@@ -632,6 +687,23 @@ const resendOtp = async (req, res) => {
     const { userId, purpose = 'login' } = req.body;
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    // Block regular users if Maintenance Mode is active
+    const MaintenanceSetting = require('../models/MaintenanceSetting');
+    const maintSettings = await MaintenanceSetting.findOne({ key: 'site_maintenance' });
+    if (maintSettings && maintSettings.isEnabled) {
+      const uRole = (user.role || '').toLowerCase();
+      const isAdmin = ['admin', 'priest'].includes(uRole);
+      const isTech = Boolean(user.isTechnicalTeam) || ['staff', 'technical_team', 'tech_team'].includes(uRole);
+      if (!isAdmin && !isTech) {
+        return res.status(503).json({
+          success: false,
+          isMaintenanceRestricted: true,
+          message: 'The website is currently under maintenance. Please try again later.'
+        });
+      }
+    }
+
     const { otp } = await createAndSendOTP({
       userId: user._id,
       phone: user.phone,

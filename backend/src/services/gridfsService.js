@@ -53,6 +53,38 @@ const uploadToGridFS = (buffer, filename, mimetype) => {
 };
 
 /**
+ * Upload readable stream directly into GridFS (zero-RAM streaming)
+ */
+const uploadStreamToGridFS = (readableStream, filename, mimetype) => {
+  return new Promise((resolve, reject) => {
+    try {
+      const gridBucket = getBucket();
+      const uniqueFilename = `${Date.now()}-${Math.round(Math.random() * 1e9)}-${filename.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      
+      const uploadStream = gridBucket.openUploadStream(uniqueFilename, {
+        contentType: mimetype,
+        metadata: { originalName: filename, uploadDate: new Date() }
+      });
+
+      uploadStream.on('error', (err) => reject(err));
+      uploadStream.on('finish', () => {
+        resolve({
+          fileId: uploadStream.id.toString(),
+          filename: uniqueFilename,
+          contentType: mimetype,
+          size: uploadStream.length || 0,
+          url: `/api/files/${uploadStream.id}`
+        });
+      });
+
+      readableStream.pipe(uploadStream);
+    } catch (err) {
+      reject(err);
+    }
+  });
+};
+
+/**
  * Download / stream file by ID or filename from GridFS (supports byte ranges)
  */
 const getGridFSStream = (idOrFilename, options = {}) => {
@@ -119,6 +151,7 @@ const getGridFSBuffer = async (idOrFilename) => {
 
 module.exports = {
   uploadToGridFS,
+  uploadStreamToGridFS,
   getGridFSStream,
   getGridFSFileDoc,
   getGridFSBuffer,

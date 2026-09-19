@@ -127,7 +127,10 @@ function getVaticanSaintImage($, vaticanUrl) {
   }
 
   if (candidateUrl) {
-    let fullUrl = candidateUrl.startsWith('http') ? candidateUrl : `https://www.vaticannews.va${candidateUrl}`;
+    const isVaticanState = vaticanUrl && vaticanUrl.includes('vaticanstate.va');
+    let fullUrl = candidateUrl.startsWith('http')
+      ? candidateUrl
+      : (isVaticanState ? `https://www.vaticanstate.va${candidateUrl}` : `https://www.vaticannews.va${candidateUrl}`);
     // Upgrade low-res thumbnail renditions to high-resolution
     fullUrl = fullUrl.replace(/cq5dam\.thumbnail\.cropped\.\d+\.\d+\.jpeg/i, 'cq5dam.thumbnail.cropped.750.422.jpeg');
     return {

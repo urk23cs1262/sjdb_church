@@ -4,6 +4,8 @@ const cron = require('node-cron');
 const { getSaintForDate } = require('../data/catholic_saints_calendar');
 const { resolveSaintImage } = require('./saintImageResolver');
 
+const SAINT_OF_THE_DAY_URL = "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html";
+
 let dailySaint = null;
 
 function getISTDateParts(targetDate = new Date()) {
@@ -183,8 +185,8 @@ async function fetchDailySaint(targetDate = new Date()) {
     return dailySaint;
   }
 
-  // Construct default Vatican News Date URL: https://www.vaticannews.va/en/saints/MM/DD.html
-  let fetchUrl = `https://www.vaticannews.va/en/saints/${month}/${day}.html`;
+  // Default Vatican State Saint of the Day URL
+  let fetchUrl = SAINT_OF_THE_DAY_URL;
   try {
     const SiteSettings = require('../models/SiteSettings');
     const urlSetting = await SiteSettings.findOne({ key: 'daily_saint_fetch_url' }).lean();
@@ -194,8 +196,8 @@ async function fetchDailySaint(targetDate = new Date()) {
         .replace(/\{MM\}/g, month)
         .replace(/\{DD\}/g, day)
         .replace(/MM\/DD/g, `${month}/${day}`);
-      if (custom === 'https://www.vaticannews.va/en/saints.html' || custom === 'https://www.vaticannews.va/en/saints') {
-        custom = `https://www.vaticannews.va/en/saints/${month}/${day}.html`;
+      if (custom.includes('vaticannews.va/en/saints')) {
+        custom = SAINT_OF_THE_DAY_URL;
       }
       fetchUrl = custom;
     }
@@ -230,8 +232,8 @@ async function fetchDailySaint(targetDate = new Date()) {
     let scrapedName = '';
     $('h2').each((i, el) => {
       const text = $(el).text().trim();
-      if (text && !['menu', 'search', 'daily readings', 'all prayers', 'liturgical feasts', 'subscribe to our newsletters'].includes(text.toLowerCase())) {
-        scrapedName = text;
+      if (text && !['menu', 'search', 'daily readings', 'all prayers', 'liturgical feasts', 'subscribe to our newsletters', 'saint of the day'].includes(text.toLowerCase())) {
+        scrapedName = text.replace(/^\s*(\d{1,2}\s+[A-Za-z]+|[A-Za-z]+\s+\d{1,2})\s*[:–—-]\s*/i, '').trim() || text;
         return false; // Break loop
       }
     });
@@ -454,8 +456,8 @@ async function loadCachedSaint() {
       imageSourceUrl: fallbackSaint.link,
       imageFallback: true,
       feastDay: today.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
-      source: "Vatican News",
-      sourceUrl: `https://www.vaticannews.va/en/saints/${month}/${day}.html`,
+      source: "Vatican State",
+      sourceUrl: SAINT_OF_THE_DAY_URL,
       link: fallbackSaint.link,
       status: "Synced",
       lastSynced: new Date()
@@ -517,8 +519,8 @@ const getDailySaint = (targetDate = new Date()) => {
       imageSourceUrl: fallbackSaint.link,
       imageFallback: true,
       feastDay: today.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
-      source: "Vatican News",
-      sourceUrl: `https://www.vaticannews.va/en/saints/${month}/${day}.html`,
+      source: "Vatican State",
+      sourceUrl: SAINT_OF_THE_DAY_URL,
       link: fallbackSaint.link,
       status: "Synced",
       lastSynced: new Date()
