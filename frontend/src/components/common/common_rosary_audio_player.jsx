@@ -32,8 +32,10 @@ function isSameAudioSource(src1, src2) {
 const RosaryAudioPlayer = forwardRef(function RosaryAudioPlayer({ 
   src, 
   autoPlay = false, 
+  isOpen = true,
   title = "Rosary Audio",
-  onEnded
+  onEnded,
+  onPlay
 }, ref) {
   const audioRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -51,144 +53,66 @@ const RosaryAudioPlayer = forwardRef(function RosaryAudioPlayer({
   isSeekingRef.current = isSeeking;
   const onEndedRef = useRef(onEnded);
   onEndedRef.current = onEnded;
+  const onPlayRef = useRef(onPlay);
+  onPlayRef.current = onPlay;
   const isPlayingRef = useRef(isPlaying);
   isPlayingRef.current = isPlaying;
-  const autoPlayFiredRef = useRef(false);
 
-  // Expose imperative control (e.g. pause when switching to devotional songs)
+  // Expose imperative control (e.g. pause when switching to devotional songs, play on demand)
   useImperativeHandle(ref, () => ({
     pause: () => {
-      if (audioRef.current && !audioRef.current.paused) {
-        audioRef.current.pause();
+      const audio = audioRef.current;
+      if (audio && !audio.paused) {
+        audio.pause();
+        setIsPlaying(false);
+        setIsBuffering(false);
       }
     },
     play: () => {
-      if (audioRef.current && audioRef.current.paused) {
-        return audioRef.current.play();
+      const audio = audioRef.current;
+      if (!audio) return Promise.resolve();
+      audio.autoplay = true;
+      setIsBuffering(true);
+
+      if (src && (!audio.src || !isSameAudioSource(audio.src, src))) {
+        audio.src = src;
+        audio.load();
       }
+
+      const p = audio.play();
+      if (p !== undefined) {
+        return p
+          .then(() => {
+            setIsPlaying(true);
+            setIsBuffering(false);
+          })
+          .catch((err) => {
+            if (err.name === 'AbortError') return;
+            console.warn('Rosary play() interrupted, waiting for readyState:', err.message);
+            const onReady = () => {
+              audio.play().then(() => {
+                setIsPlaying(true);
+                setIsBuffering(false);
+              }).catch(() => {
+                setIsBuffering(false);
+              });
+            };
+            if (audio.readyState >= 2) {
+              onReady();
+            } else {
+              audio.addEventListener('canplay', onReady, { once: true });
+              audio.addEventListener('loadeddata', onReady, { once: true });
+            }
+          });
+      }
+      return Promise.resolve();
     },
     get audio() {
       return audioRef.current;
     }
   }));
 
-  // Initial source assignment on mount
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (audio && src && (!audio.src || !isSameAudioSource(audio.src, src))) {
-      audio.src = src;
-    }
-  }, []);
-
-  // Attach HTML5 Media Event Listeners ONCE on mount
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const handleLoadedMetadata = () => {
-      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity) {
-        setDuration(audio.duration);
-      }
-      setIsBuffering(false);
-    };
-
-    const handleDurationChange = () => {
-      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity) {
-        setDuration(audio.duration);
-      }
-    };
-
-    const handleTimeUpdate = () => {
-      if (!isSeekingRef.current) {
-        setCurrentTime(audio.currentTime);
-        setSeekValue(audio.currentTime);
-      }
-      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity) {
-        setDuration((prev) => (prev !== audio.duration ? audio.duration : prev));
-      }
-      setIsBuffering(false);
-    };
-
-    const handlePlay = () => {
-      setIsPlaying(true);
-      setIsBuffering(false);
-    };
-
-    const handlePlaying = () => {
-      setIsPlaying(true);
-      setIsBuffering(false);
-    };
-
-    const handlePause = () => {
-      setIsPlaying(false);
-      setIsBuffering(false);
-    };
-
-    const handleEnded = () => {
-      setIsPlaying(false);
-      setIsBuffering(false);
-      setCurrentTime(0);
-      setSeekValue(0);
-      if (onEndedRef.current) onEndedRef.current();
-    };
-
-    const handleWaiting = () => {
-      if (isPlayingRef.current) setIsBuffering(true);
-    };
-
-    const handleCanPlay = () => {
-      setSongIsBufferingSafe(false);
-      if (audio.duration && !isNaN(audio.duration)) {
-        setDuration(audio.duration);
-      }
-    };
-
-    function setSongIsBufferingSafe(val) {
-      setIsBuffering(val);
-    }
-
-    const handleError = (e) => {
-      // Ignore Abort errors caused by seeking or intentional source change
-      if (audio.error && audio.error.code === 1) {
-        return;
-      }
-      console.warn('Rosary audio event notice:', audio.error || e);
-      setIsBuffering(false);
-      setIsPlaying(false);
-    };
-
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('durationchange', handleDurationChange);
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('play', handlePlay);
-    audio.addEventListener('playing', handlePlaying);
-    audio.addEventListener('pause', handlePause);
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('waiting', handleWaiting);
-    audio.addEventListener('canplay', handleCanPlay);
-    audio.addEventListener('canplaythrough', handleCanPlay);
-    audio.addEventListener('error', handleError);
-
-    if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity) {
-      setDuration(audio.duration);
-    }
-
-    return () => {
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('durationchange', handleDurationChange);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('play', handlePlay);
-      audio.removeEventListener('playing', handlePlaying);
-      audio.removeEventListener('pause', handlePause);
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('waiting', handleWaiting);
-      audio.removeEventListener('canplay', handleCanPlay);
-      audio.removeEventListener('canplaythrough', handleCanPlay);
-      audio.removeEventListener('error', handleError);
-    };
-  }, []); // Run ONCE on mount — never torn down while audio is playing!
-
-  // Synchronize audio source without destructive reloads
+  // Synchronize audio.src whenever src changes & resume/start playback if active
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !src) return;
@@ -198,50 +122,67 @@ const RosaryAudioPlayer = forwardRef(function RosaryAudioPlayer({
       const currentPos = audio.currentTime;
       audio.src = src;
       audio.load();
-      if (wasPlaying) {
-        audio.currentTime = currentPos || 0;
+
+      if (wasPlaying || (autoPlay && isOpen)) {
+        audio.autoplay = true;
+        setIsBuffering(true);
         const playPromise = audio.play();
         if (playPromise !== undefined) {
           playPromise
             .then(() => {
+              if (wasPlaying && currentPos > 0) {
+                try { audio.currentTime = currentPos; } catch (_) {}
+              }
               setIsPlaying(true);
               setIsBuffering(false);
             })
             .catch((err) => {
-              console.warn('Playback resume notice:', err.message);
-              setIsPlaying(false);
-              setIsBuffering(false);
-            });
-        }
-      } else if (autoPlay && !autoPlayFiredRef.current) {
-        autoPlayFiredRef.current = true;
-        const playPromise = audio.play();
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              setIsPlaying(true);
-              setIsBuffering(false);
-            })
-            .catch((err) => {
-              console.warn('AutoPlay notice:', err.message);
-              setIsPlaying(false);
-              setIsBuffering(false);
+              if (err.name === 'AbortError') return;
+              console.warn('Source change play notice:', err.message);
+              const onCanPlay = () => {
+                audio.play().then(() => {
+                  if (wasPlaying && currentPos > 0) {
+                    try { audio.currentTime = currentPos; } catch (_) {}
+                  }
+                  setIsPlaying(true);
+                  setIsBuffering(false);
+                }).catch(() => {
+                  setIsBuffering(false);
+                });
+              };
+              if (audio.readyState >= 2) {
+                onCanPlay();
+              } else {
+                audio.addEventListener('canplay', onCanPlay, { once: true });
+                audio.addEventListener('loadeddata', onCanPlay, { once: true });
+              }
             });
         }
       }
     }
-  }, [src, autoPlay]);
+  }, [src, isOpen, autoPlay]);
 
-  // Handle reliable initial autoPlay without re-triggering on state changes
+  // Handle immediate autoPlay when modal opens or autoPlay becomes true
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !autoPlay || autoPlayFiredRef.current) return;
+    if (!audio || !autoPlay || !isOpen) return;
 
-    autoPlayFiredRef.current = true;
+    audio.autoplay = true;
     let isSubscribed = true;
 
-    const playAudio = () => {
+    if (src && (!audio.src || !isSameAudioSource(audio.src, src))) {
+      audio.src = src;
+      audio.load();
+    }
+
+    const startPlayback = () => {
       if (!isSubscribed) return;
+      if (!audio.paused) {
+        setIsPlaying(true);
+        setIsBuffering(false);
+        return;
+      }
+      setIsBuffering(true);
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise
@@ -252,26 +193,54 @@ const RosaryAudioPlayer = forwardRef(function RosaryAudioPlayer({
             }
           })
           .catch((err) => {
-            console.warn('AutoPlay delayed until interaction:', err.message);
+            if (err.name === 'AbortError') return;
+            console.warn('AutoPlay delayed until interaction or readyState:', err.message);
+            const onReady = () => {
+              if (!isSubscribed) return;
+              audio.play().then(() => {
+                if (isSubscribed) {
+                  setIsPlaying(true);
+                  setIsBuffering(false);
+                }
+              }).catch(() => {
+                if (isSubscribed) setIsBuffering(false);
+              });
+            };
+            if (audio.readyState >= 2) {
+              onReady();
+            } else {
+              audio.addEventListener('canplay', onReady, { once: true });
+              audio.addEventListener('loadeddata', onReady, { once: true });
+            }
           });
       }
     };
 
     if (audio.readyState >= 2) {
-      playAudio();
+      startPlayback();
     } else {
-      audio.addEventListener('canplay', playAudio, { once: true });
-      audio.addEventListener('loadeddata', playAudio, { once: true });
-      audio.addEventListener('loadedmetadata', playAudio, { once: true });
+      audio.addEventListener('canplay', startPlayback, { once: true });
+      audio.addEventListener('loadeddata', startPlayback, { once: true });
+      audio.addEventListener('loadedmetadata', startPlayback, { once: true });
     }
 
     return () => {
       isSubscribed = false;
-      audio.removeEventListener('canplay', playAudio);
-      audio.removeEventListener('loadeddata', playAudio);
-      audio.removeEventListener('loadedmetadata', playAudio);
+      audio.removeEventListener('canplay', startPlayback);
+      audio.removeEventListener('loadeddata', startPlayback);
+      audio.removeEventListener('loadedmetadata', startPlayback);
     };
-  }, [autoPlay]);
+  }, [isOpen, autoPlay, src]);
+
+  // Cleanly pause audio when modal closes
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!isOpen && audio && !audio.paused) {
+      audio.pause();
+      setIsPlaying(false);
+      setIsBuffering(false);
+    }
+  }, [isOpen]);
 
   const togglePlay = () => {
     const audio = audioRef.current;
@@ -354,7 +323,8 @@ const RosaryAudioPlayer = forwardRef(function RosaryAudioPlayer({
       {/* Hidden Native Audio Element (managed via ref to avoid JSX reconciliation resetting the browser load algorithm) */}
       <audio 
         ref={audioRef} 
-        preload="metadata"
+        preload="auto"
+        autoPlay={autoPlay && isOpen}
         onLoadedMetadata={(e) => {
           const d = e.currentTarget.duration;
           if (d && !isNaN(d) && d !== Infinity && d > 0) setDuration(d);
@@ -379,12 +349,14 @@ const RosaryAudioPlayer = forwardRef(function RosaryAudioPlayer({
           setIsBuffering(false);
           const d = e.currentTarget.duration;
           if (d && !isNaN(d) && d !== Infinity && d > 0) setDuration(d);
+          if (onPlayRef.current) onPlayRef.current();
         }}
         onPlaying={(e) => {
           setIsPlaying(true);
           setIsBuffering(false);
           const d = e.currentTarget.duration;
           if (d && !isNaN(d) && d !== Infinity && d > 0) setDuration(d);
+          if (onPlayRef.current) onPlayRef.current();
         }}
         onPause={() => {
           setIsPlaying(false);
@@ -398,6 +370,11 @@ const RosaryAudioPlayer = forwardRef(function RosaryAudioPlayer({
           if (onEndedRef.current) onEndedRef.current();
         }}
         onCanPlay={(e) => {
+          setIsBuffering(false);
+          const d = e.currentTarget.duration;
+          if (d && !isNaN(d) && d !== Infinity && d > 0) setDuration(d);
+        }}
+        onCanPlayThrough={(e) => {
           setIsBuffering(false);
           const d = e.currentTarget.duration;
           if (d && !isNaN(d) && d !== Infinity && d > 0) setDuration(d);
