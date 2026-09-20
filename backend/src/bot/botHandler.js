@@ -247,6 +247,52 @@ function isUnsupportedLanguage(text) {
   return foreignScriptsRegex.test(text);
 }
 
+function formatSingleVerseMessage(dailyContent, isTamil) {
+  const vEn = dailyContent?.bible?.english || '';
+  const vTa = dailyContent?.bible?.tamil || '';
+  const ref = dailyContent?.bible?.ref || 'Holy Bible';
+  const verseText = isTamil ? (vTa || vEn) : (vEn || vTa);
+
+  return isTamil
+    ? `📖 *இன்றைய இறைவார்த்தை*\n\n"${verseText}"\n— _${ref}_\n\n🌐 *இணையத்தில் வாசிக்க:* ${getSiteUrl(SITE_ROUTES.DAILY_VERSE)}`
+    : `📖 *Daily Bible Verse*\n\n"${verseText}"\n— _${ref}_\n\n🌐 *Read online:* ${getSiteUrl(SITE_ROUTES.DAILY_VERSE)}`;
+}
+
+function formatSingleReadingsMessage(dailyContent, isTamil) {
+  const taReadings = dailyContent?.massReadings?.tamil || {};
+  const enReadings = dailyContent?.massReadings?.english || {};
+
+  const firstR = isTamil ? (taReadings.firstReading || enReadings.firstReading) : (enReadings.firstReading || taReadings.firstReading);
+  const psalmR = isTamil ? (taReadings.psalm || enReadings.psalm) : (enReadings.psalm || taReadings.psalm);
+  const secondR = isTamil ? (taReadings.secondReading || enReadings.secondReading) : (enReadings.secondReading || taReadings.secondReading);
+  const gospelR = isTamil ? (taReadings.gospel || enReadings.gospel) : (enReadings.gospel || taReadings.gospel);
+
+  const dateStr = isTamil
+    ? new Date().toLocaleDateString('ta-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+    : new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  let body = `📜 *${isTamil ? 'இன்றைய திருப்பலி வாசகங்கள்' : 'Daily Mass Readings'}*\n📅 ${dateStr}\n\n`;
+  body += `*${isTamil ? 'முதல் வாசகம்' : 'First Reading'}:*\n${firstR || (isTamil ? 'வாசகம் கிடைக்கவில்லை.' : 'Not available')}\n\n`;
+  body += `*${isTamil ? 'திருப்பாடல்' : 'Responsorial Psalm'}:*\n${psalmR || (isTamil ? 'திருப்பாடல் கிடைக்கவில்லை.' : 'Not available')}\n\n`;
+  if (secondR) {
+    body += `*${isTamil ? 'இரண்டாம் வாசகம்' : 'Second Reading'}:*\n${secondR}\n\n`;
+  }
+  body += `✝️ *${isTamil ? 'நற்செய்தி வாசகம்' : 'Holy Gospel'}:*\n${gospelR || (isTamil ? 'நற்செய்தி கிடைக்கவில்லை.' : 'Not available')}\n\n`;
+  body += `🌐 *${isTamil ? 'முழு வாசகங்கள் இணையத்தில்' : 'Read Full Readings Online'}:* ${getSiteUrl(SITE_ROUTES.DAILY_READINGS)}`;
+
+  return body;
+}
+
+function formatSingleReflectionMessage(dailyContent, isTamil) {
+  const reflEn = dailyContent?.reflection?.english || '';
+  const reflTa = dailyContent?.reflection?.tamil || '';
+  const reflectionText = isTamil ? (reflTa || reflEn) : (reflEn || reflTa);
+
+  return isTamil
+    ? `🕊️ *இன்றைய தியானம் (Daily Reflection)*\n\n${reflectionText || 'இறைவனின் வார்த்தை நம் வாழ்வின் வெளிச்சம்.'}\n\n🌐 *இணையத்தில் வாசிக்க:* ${getSiteUrl(SITE_ROUTES.DAILY_REFLECTION)}`
+    : `🕊️ *Daily Reflection*\n\n${reflectionText || 'The word of God is a light unto our path.'}\n\n🌐 *Read online:* ${getSiteUrl(SITE_ROUTES.DAILY_REFLECTION)}`;
+}
+
 async function sendTodayDevotionsToUser(replyTarget, session, wa) {
   try {
     const dailyContent = await getCachedDailyContent();
@@ -274,10 +320,23 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
   const sessionKey = (fromNumber && fromNumber.includes('@lid')) ? fromNumber : (phone || fromNumber);
   const wa = getWA();
 
-  // 1. Fast In-Memory Message ID Idempotency Check (drops webhook retries/duplicates instantly)
-  if (messageId && isDuplicateMessageId(messageId)) {
-    console.log(`⚡ [BotHandler] Dropping duplicate WhatsApp message event ID: ${messageId}`);
-    return;
+  // 1. EARLY ATOMIC INCOMING MESSAGE DEDUPLICATION (Drops duplicate Baileys webhooks/reconnect retries)
+  if (messageId) {
+    if (isDuplicateMessageId(messageId)) {
+      console.log(`[INCOMING] Skipped duplicate WhatsApp message ID (cache): ${messageId}`);
+      return;
+    }
+
+    try {
+      await ProcessedMessage.create({ messageId, from: sessionKey, bodyPreview: rawText.slice(0, 100) });
+      markMessageIdProcessed(messageId);
+    } catch (pmErr) {
+      if (pmErr.code === 11000 || pmErr.message?.includes('duplicate key')) {
+        console.log(`[INCOMING] Skipped duplicate WhatsApp message ID (DB constraint): ${messageId}`);
+        markMessageIdProcessed(messageId);
+        return;
+      }
+    }
   }
 
   // 2. Concurrency lock to prevent simultaneous race conditions for the same user action
@@ -308,31 +367,42 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
       await session.save();
     }
 
-    // 4. Database-level Message ID Idempotency Check & Atomic Multi-Process Lock
+    // Record messageId in session for session-level audit trail
     if (messageId) {
-      if (session.processedMessageIds && session.processedMessageIds.includes(messageId)) {
-        console.log(`⚡ [BotHandler] Message ID ${messageId} already recorded in DB session. Dropping.`);
-        markMessageIdProcessed(messageId);
-        return;
-      }
-
-      try {
-        await ProcessedMessage.create({ messageId, from: sessionKey, bodyPreview: rawText.slice(0, 100) });
-      } catch (pmErr) {
-        if (pmErr.code === 11000 || pmErr.message?.includes('duplicate key')) {
-          console.log(`⚡ [BotHandler] Message ID ${messageId} already locked by another process. Dropping.`);
-          markMessageIdProcessed(messageId);
-          return;
+      if (!session.processedMessageIds) session.processedMessageIds = [];
+      if (!session.processedMessageIds.includes(messageId)) {
+        session.processedMessageIds.push(messageId);
+        if (session.processedMessageIds.length > 50) {
+          session.processedMessageIds.shift();
         }
       }
-
-      markMessageIdProcessed(messageId);
-      if (!session.processedMessageIds) session.processedMessageIds = [];
-      session.processedMessageIds.push(messageId);
-      if (session.processedMessageIds.length > 50) {
-        session.processedMessageIds.shift();
-      }
       session.lastProcessedMessageId = messageId;
+    }
+
+    // 4. AUTO-LINK REGISTERED PARISHIONER: Never force active website users into onboarding!
+    const phone10 = (session.providedPhone || phone || sessionKey || '').replace(/\D/g, '').slice(-10);
+    if (!session.isOnboarded && phone10) {
+      const registeredUser = await User.findOne({
+        phone: { $regex: phone10 + '$' },
+        isActive: { $ne: false }
+      }).lean();
+
+      if (registeredUser) {
+        console.log(`[BotHandler] Auto-linking registered parishioner ${registeredUser.name} (${phone10}) to WhatsApp session.`);
+        session.linkedUserId = registeredUser._id;
+        session.isVerified = true;
+        session.isOnboarded = true;
+        session.step = 'done';
+        session.providedPhone = registeredUser.phone || phone10;
+        session.language = registeredUser.mass_reflection_language || registeredUser.preferredLanguage || 'ta';
+        session.botLanguage = session.language === 'en' ? 'en' : 'ta';
+        session.preferences = registeredUser.botPreferences?.length
+          ? registeredUser.botPreferences
+          : ['verse', 'saint', 'mass', 'events', 'announcements', 'birthday'];
+        session.readingPreference = registeredUser.readingPreference || 'full';
+        session.sendLinks = registeredUser.sendLinks !== false;
+        await session.save();
+      }
     }
 
     session.lastMessage = new Date();
@@ -716,15 +786,53 @@ _SJDB Connect_`;
       normalizedText.includes('என்னென்ன சேவைகள்');
 
     if (isServicesTrigger) {
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'SERVICES';
+      session.lastSentAt = new Date();
+      await session.save();
       const servicesMsg = getServicesMenuMessage();
       await wa.sendWhatsAppMessage(replyTarget, servicesMsg);
       return;
     }
 
-    // ── 2. MAIN MENU / QUICK COMMANDS (0, Menu, Home, Start, Hi, Quick Commands) ──────────
-    const isMenuTrigger = /^(menu|0|home|start|hi|hello|hey|quick commands|வணக்கம்)$/i.test(normalizedText) ||
-      normalizedText.includes('main menu') ||
-      normalizedText.includes('முதன்மை மெனு') ||
+    // ── 2A. CASUAL GREETINGS (Hi, Hello, Hey, வணக்கம்) — Polite Contextual Reply (NO MENU DUMP) ─────
+    const isGreeting = /^(hi|hello|hey|வணக்கம்|good morning|good evening|good afternoon)$/i.test(normalizedText);
+    if (isGreeting) {
+      let linkedUser = null;
+      if (session.linkedUserId) {
+        linkedUser = await User.findById(session.linkedUserId);
+      } else if (session.providedPhone || phone) {
+        const searchPhone = (session.providedPhone || phone).slice(-10);
+        linkedUser = await User.findOne({ phone: { $regex: searchPhone + '$' } });
+      }
+
+      const userName = linkedUser ? linkedUser.name : (pushName || '');
+      session.invalidInputStreak = 0;
+
+      // Check if user recently received a greeting reply (within 60s) to avoid repeating identical text
+      if (session.lastBotReplyType === 'GREETING' && session.lastSentAt && (Date.now() - new Date(session.lastSentAt).getTime()) < 60000) {
+        const conciseAck = isTamilQuery
+          ? `வணக்கம்! இன்று நான் உங்களுக்கு எவ்வாறு உதவ முடியும்? (கட்டளைகளுக்கு *Menu* என தட்டச்சு செய்யவும்)`
+          : `Hello! How can I assist you right now? (Type *Menu* for quick commands or ask your question.)`;
+        await wa.sendWhatsAppMessage(replyTarget, conciseAck);
+        return;
+      }
+
+      session.lastBotReplyType = 'GREETING';
+      session.lastSentAt = new Date();
+      await session.save();
+
+      const greetingMsg = isTamilQuery
+        ? `👋 *வணக்கம் ${userName ? `${userName}! ` : ''}*\nபுனித அருளானந்தர் ஆலயம் உங்களை அன்புடன் வரவேற்கிறது. இன்று நான் உங்களுக்கு எவ்வாறு உதவ முடியும்? 🙏\n\n• முக்கிய கட்டளைகளைக் காண *Menu* என தட்டச்சு செய்யவும்\n• பங்கு சேவைகளைப் பார்க்க *Services* என தட்டச்சு செய்யவும்\n• அல்லது விவிலியம், திருப்பலி நேரங்கள் குறித்து நேரடியாகக் கேட்கவும்.`
+        : `👋 *Hello ${userName ? `${userName}! ` : ''}*\nWelcome to St. John de Britto Church, Kalayarkoil. How can I help you today? 🙏\n\n• Type *Menu* to view quick commands\n• Type *Services* for the 14-service help desk\n• Or ask any church question naturally.`;
+
+      await wa.sendWhatsAppMessage(replyTarget, greetingMsg);
+      return;
+    }
+
+    // ── 2B. MAIN MENU / QUICK COMMANDS (Menu, 0, Home, Start, Quick Commands) ──────────
+    const isMenuTrigger = /^(menu|0|home|start|quick commands|மெனு|முதன்மை மெனு)$/i.test(normalizedText) ||
+      normalizedText === 'main menu' ||
       normalizedText.includes('sjdb connect');
 
     if (isMenuTrigger) {
@@ -733,17 +841,34 @@ _SJDB Connect_`;
         linkedUser = await User.findById(session.linkedUserId);
       } else if (session.providedPhone || phone) {
         const searchPhone = (session.providedPhone || phone).slice(-10);
-        linkedUser = await User.findOne({ phone: { $regex: searchPhone } });
+        linkedUser = await User.findOne({ phone: { $regex: searchPhone + '$' } });
       }
 
       const userName = linkedUser ? linkedUser.name : (pushName || '');
-      const menuMsg = getMainMenuMessage(userName);
+      session.invalidInputStreak = 0;
+
+      // Deduplication: If menu was sent in the immediately preceding response within 2 mins, don't flood chat
+      if (session.lastBotReplyType === 'MENU' && session.lastMenuSentAt && (Date.now() - new Date(session.lastMenuSentAt).getTime()) < 120000) {
+        const menuReminder = isTamilQuery
+          ? `📌 முதன்மை மெனு மேலே காட்டப்பட்டுள்ளது. தயவுசெய்து ஒரு விருப்ப எண்ணை (1-8) தேர்ந்தெடுக்கவும் அல்லது உங்கள் கேள்வியைத் தட்டச்சு செய்யவும்.`
+          : `📌 The Main Menu is displayed right above. Please reply with an option number (1-8) or type your question.`;
+        await wa.sendWhatsAppMessage(replyTarget, menuReminder);
+        return;
+      }
+
+      session.lastBotReplyType = 'MENU';
+      session.lastMenuSentAt = new Date();
+      session.lastSentAt = new Date();
+      await session.save();
+
+      const menuMsg = getMainMenuMessage(userName, isTamilQuery);
       await wa.sendWhatsAppMessage(replyTarget, menuMsg);
       return;
     }
 
     // ── Preferences Command (Trigger preferences update anytime) ───────────────
     if (/^(preferences|prefs|விருப்பங்கள்)$/i.test(normalizedText)) {
+      session.invalidInputStreak = 0;
       session.step = 'preferences';
       await session.save();
       await wa.sendWhatsAppMessage(replyTarget, getPreferencesMenuMessage());
@@ -752,6 +877,7 @@ _SJDB Connect_`;
 
     // ── Language Command (Trigger Catholic content language update anytime) ─────
     if (/^(language|lang|மொழி)$/i.test(normalizedText)) {
+      session.invalidInputStreak = 0;
       session.step = 'language';
       await session.save();
       await wa.sendWhatsAppMessage(replyTarget, getDailyContentLanguagePrompt());
@@ -760,6 +886,7 @@ _SJDB Connect_`;
 
     // ── Language Switching Commands (Case-Insensitive) ─────────────────────────
     if (/^(tamil|தமிழ்|ta)$/i.test(normalizedText) || normalizedText === 'change to tamil' || normalizedText === 'switch to tamil') {
+      session.invalidInputStreak = 0;
       session.language = 'ta';
       await session.save();
       const taAck = `✅ *Daily Catholic Content Language set to Tamil (தமிழ்) successfully!*\nBible Verse, Mass Readings, Reflection & Saint of the Day will be delivered in Tamil.\n\n📌 Type *MENU* for Quick Commands or *SERVICES* for Help Desk.`;
@@ -768,6 +895,7 @@ _SJDB Connect_`;
     }
 
     if (/^(english|eng|en)$/i.test(normalizedText) || normalizedText === 'change to english' || normalizedText === 'switch to english') {
+      session.invalidInputStreak = 0;
       session.language = 'en';
       await session.save();
       const enAck = `✅ *Daily Catholic Content Language set to English successfully!*\nBible Verse, Mass Readings, Reflection & Saint of the Day will be delivered in English.\n\n📌 Type *MENU* for Quick Commands or *SERVICES* for Help Desk.`;
@@ -775,13 +903,86 @@ _SJDB Connect_`;
       return;
     }
 
-    // ── 3. NUMBERED MENU & DIRECT INTENT ROUTING ────────────────────────────────
+    // ── 3. SPECIFIC SINGLE CONTENT REQUESTS (No Unnecessary Chaining) ────────────
 
-    // Option 1: Daily Bible (Main Menu 1) OR Mass Timings (Services 1)
-    const isDailyBibleQuery = /^(daily bible|bible|today bible|readings|verse)$/i.test(normalizedText) ||
-      /(தினசரி விவிலியம்|விவிலியம்|இறைவார்த்தை|தினசரி வாசகம்)/.test(rawText);
+    // 3A. Daily Bible Verse Specifically (Option 4 in Services or "verse")
+    const isSpecificVerseQuery = /^(verse|bible verse|today verse|today's verse|daily verse|வேத வசனம்|இறைவார்த்தை|வசனம்)$/i.test(normalizedText) ||
+      normalizedText === '4' ||
+      normalizedText.includes("today's bible verse") ||
+      normalizedText.includes("send today's bible verse") ||
+      normalizedText.includes("bible verse again") ||
+      normalizedText.includes("இன்றைய இறைவார்த்தை");
 
-    if (normalizedText === '1' || isDailyBibleQuery) {
+    if (isSpecificVerseQuery) {
+      try {
+        const dailyContent = await getCachedDailyContent();
+        session.invalidInputStreak = 0;
+        session.lastBotReplyType = 'VERSE';
+        session.lastSentAt = new Date();
+        await session.save();
+
+        const verseMsg = formatSingleVerseMessage(dailyContent, isTamilQuery);
+        await wa.sendWhatsAppMessage(replyTarget, verseMsg);
+        return;
+      } catch (vErr) {
+        console.error('[BotHandler] Verse query error:', vErr.message);
+      }
+    }
+
+    // 3B. Daily Mass Readings Specifically (Option 5 in Services or "readings")
+    const isSpecificReadingsQuery = /^(readings|mass readings|today readings|today's readings|daily readings|gospel|வாசகம்|வாசகங்கள்|திருப்பலி வாசகங்கள்)$/i.test(normalizedText) ||
+      normalizedText === '5' ||
+      normalizedText.includes("mass readings") ||
+      normalizedText.includes("today's readings") ||
+      normalizedText.includes("readings again") ||
+      normalizedText.includes("இன்றைய வாசகங்கள்");
+
+    if (isSpecificReadingsQuery) {
+      try {
+        const dailyContent = await getCachedDailyContent();
+        session.invalidInputStreak = 0;
+        session.lastBotReplyType = 'READINGS';
+        session.lastSentAt = new Date();
+        await session.save();
+
+        const readingsMsg = formatSingleReadingsMessage(dailyContent, isTamilQuery);
+        await wa.sendWhatsAppMessage(replyTarget, readingsMsg);
+        return;
+      } catch (rErr) {
+        console.error('[BotHandler] Readings query error:', rErr.message);
+      }
+    }
+
+    // 3C. Daily Reflection Specifically
+    const isSpecificReflectionQuery = /^(reflection|daily reflection|today reflection|today's reflection|தியானம்|இன்றைய தியானம்)$/i.test(normalizedText) ||
+      normalizedText.includes("daily reflection") ||
+      normalizedText.includes("reflection again");
+
+    if (isSpecificReflectionQuery) {
+      try {
+        const dailyContent = await getCachedDailyContent();
+        session.invalidInputStreak = 0;
+        session.lastBotReplyType = 'REFLECTION';
+        session.lastSentAt = new Date();
+        await session.save();
+
+        const reflMsg = formatSingleReflectionMessage(dailyContent, isTamilQuery);
+        await wa.sendWhatsAppMessage(replyTarget, reflMsg);
+        return;
+      } catch (rfErr) {
+        console.error('[BotHandler] Reflection query error:', rfErr.message);
+      }
+    }
+
+    // 3D. Daily Devotions Package (Main Menu 1 or "devotions")
+    const isDailyDevotionsChoice = normalizedText === '1' ||
+      /^(daily devotions|daily catholic content|devotions|தினசரி திருப்பலி வாசகங்கள்)$/i.test(normalizedText);
+
+    if (isDailyDevotionsChoice) {
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'DEVOTIONS';
+      session.lastSentAt = new Date();
+      await session.save();
       await sendTodayDevotionsToUser(replyTarget, session, wa);
       return;
     }
@@ -792,6 +993,11 @@ _SJDB Connect_`;
       /(திருப்பலி நேரம்|பூசை நேரம்|திருப்பலி நேரங்கள்|ஞாயிறு திருப்பலி)/.test(rawText);
 
     if (isMassTimingsQuery) {
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'MASS_TIMINGS';
+      session.lastSentAt = new Date();
+      await session.save();
+
       const massMsg = `⛪ *St. John de Britto Church — Holy Mass Timings*
 _Kalayarkoil, Sivagangai Diocese_
 
@@ -819,6 +1025,11 @@ _Kalayarkoil, Sivagangai Diocese_
 
     // Option 3: Services Menu (Main Menu 3)
     if (normalizedText === '3') {
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'SERVICES';
+      session.lastSentAt = new Date();
+      await session.save();
+
       const servicesMsg = getServicesMenuMessage();
       await wa.sendWhatsAppMessage(replyTarget, servicesMsg);
       return;
@@ -1030,13 +1241,18 @@ Our parish in Kalayarkoil stands as a historic sanctuary of faith, vibrant Anbiy
     }
 
     // Option 7: Saint of the Day (Main Menu 7 & Services 6)
-    const isSaintChoice = normalizedText === '7' ||
+    const isSaintChoice = normalizedText === '7' || normalizedText === '6' ||
       /\b(saint|today saint|saint of the day|who is today saint|who is the saint today|today\'?s saint|saints)\b/i.test(normalizedText) ||
       /(இன்றைய புனிதர்|புனிதர் யார்|புனிதர்)/.test(rawText);
 
     if (isSaintChoice) {
       try {
         const dailyContent = await getCachedDailyContent();
+        session.invalidInputStreak = 0;
+        session.lastBotReplyType = 'SAINT';
+        session.lastSentAt = new Date();
+        await session.save();
+
         const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
         const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: session.language || 'en' });
 
@@ -1215,7 +1431,12 @@ ${EXTERNAL_LINKS.GOOGLE_MAPS}
       const userAuthContext = { user: linkedUser, session };
       const ragResult = await answerChurchQuestion(rawText, 'en', userAuthContext);
 
-      if (ragResult && ragResult.reply) {
+      if (ragResult && ragResult.isChurchRelated && ragResult.reply) {
+        session.invalidInputStreak = 0;
+        session.lastBotReplyType = 'RAG';
+        session.lastSentAt = new Date();
+        await session.save();
+
         let sentMedia = false;
         if (ragResult.isSaintOfDayFlow && ragResult.imageUrl && typeof wa.sendWhatsAppMedia === 'function') {
           try {
@@ -1234,9 +1455,28 @@ ${EXTERNAL_LINKS.GOOGLE_MAPS}
       console.error('[BotHandler] RAG processing error:', ragErr.message);
     }
 
-    // Fallback default helpful reply
-    const fallbackMsg = getMainMenuMessage(session.pushName || '', isTamilQuery);
-    await wa.sendWhatsAppMessage(replyTarget, fallbackMsg);
+    // ── Smart Invalid-Input & Streak Protection Policy (NO INFINITE MENUS) ──
+    session.invalidInputStreak = (session.invalidInputStreak || 0) + 1;
+    session.lastBotReplyType = 'INVALID_INPUT';
+    session.lastSentAt = new Date();
+    await session.save();
+
+    let invalidReply = '';
+    if (session.invalidInputStreak === 1) {
+      invalidReply = isTamilQuery
+        ? `❓ மன்னிக்கவும், உங்கள் விருப்பத்தை அடையாளம் காண முடியவில்லை.\n\nதயவுசெய்து சரியான எண்ணை (1-14) உள்ளிடவும் அல்லது உங்கள் கேள்வியைத் தட்டச்சு செய்யவும்.\n(முக்கிய கட்டளைகளுக்கு *Menu* அல்லது உதவி மையத்திற்கு *Services* என அனுப்பவும்)`
+        : `❓ I didn't recognize that option.\n\nPlease reply with a valid number (1-14) or type your church question.\n(Type *Menu* for quick commands or *Services* for help desk)`;
+    } else if (session.invalidInputStreak === 2) {
+      invalidReply = isTamilQuery
+        ? `💡 வழிகாட்டல்: 1 முதல் 14 வரையிலான எண்ணைத் தேர்ந்தெடுக்கவும், அல்லது முதன்மை மெனுவைக் காண *Menu* என தட்டச்சு செய்யவும்.`
+        : `💡 Guidance: Please reply with a number from 1 to 14, or type *Menu* to see available options.`;
+    } else {
+      invalidReply = isTamilQuery
+        ? `ℹ️ உதவி வேண்டுமா? அனைத்து கட்டளைகளையும் காண *Help* என அனுப்பவும், அல்லது எங்கள் பங்கு அலுவலகத்தை +91 96556 39144 இல் தொடர்பு கொள்ளவும்.`
+        : `ℹ️ Need assistance? Type *Help* for available commands, or contact our parish office at +91 96556 39144.`;
+    }
+
+    await wa.sendWhatsAppMessage(replyTarget, invalidReply);
   } finally {
     activeSessionLocks.delete(lockKey);
   }

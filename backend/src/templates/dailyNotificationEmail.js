@@ -275,7 +275,7 @@ function generateDailyNotificationHtml({
 
                       <!-- Attribution -->
                       <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #E2E8F0; font-size: 12px; color: #64748B; text-align: right;">
-                        Source: <a href="${escapeHtml(saint.sourceUrl)}" target="_blank" style="color: #C5A059; text-decoration: none; font-weight: 600;">Vatican News</a>
+                        Source: <a href="${escapeHtml(saint.sourceUrl || 'https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html')}" target="_blank" style="color: #C5A059; text-decoration: none; font-weight: 600;">${escapeHtml(saint.source || 'Vatican State')}</a>
                       </div>
                     </div>
                   </td>

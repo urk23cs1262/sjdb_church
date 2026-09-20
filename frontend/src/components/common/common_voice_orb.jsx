@@ -133,7 +133,7 @@ export default function VoiceOrb({
   // Escape key to dismiss
   useEffect(() => {
     const handleKey = (e) => {
-      if (e.key === 'Escape') dismiss?.();
+      if (e.key === 'Escape') dismiss?.(true);
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
@@ -186,7 +186,8 @@ export default function VoiceOrb({
         const nameClean = match && match[1]
           ? match[1].trim().split(/\s+/).map((w) => (w.length === 1 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())).join(' ')
           : '';
-        const topGreeting = nameClean
+        const isGenericRole = /^(parish\s*(admin|administrator)|admin|administrator|user|guest)$/i.test(nameClean);
+        const topGreeting = (nameClean && !isGenericRole)
           ? `Hello, ${nameClean}. I'm Connect.`
           : (isTamil ? (spokenText.includes("வணக்கம்,") ? spokenText.split('.')[0] + '.' : "வணக்கம்! நான் Connect.") : "Hello, I'm Connect.");
 
@@ -363,7 +364,7 @@ export default function VoiceOrb({
                 {/* Close button inside speech bubble */}
                 <button
                   className="cv-bubble-close"
-                  onClick={dismiss}
+                  onClick={() => dismiss?.(true)}
                   title="Close Connect (Esc)"
                   aria-label="Close Connect"
                 >
@@ -412,7 +413,7 @@ export default function VoiceOrb({
                 {/* Spherical iridescent 3D orb */}
                 <motion.div
                   className={`cv-orb ${isNavigating ? 'cv-orb-nav' : ''} ${isProcessing ? 'cv-orb-proc' : ''}`}
-                  onClick={dismiss}
+                  onClick={() => dismiss?.(true)}
                   title="Click or press Esc to close"
                   animate={
                     isSpeaking

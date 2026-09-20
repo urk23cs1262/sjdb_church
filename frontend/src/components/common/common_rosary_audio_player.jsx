@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { 
   FiPlay, FiPause, FiRotateCcw, FiRotateCw, 
   FiVolume2, FiVolumeX, FiLoader 
@@ -16,12 +16,25 @@ function formatTime(seconds) {
   return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 }
 
-export default function RosaryAudioPlayer({ 
+function isSameAudioSource(src1, src2) {
+  if (!src1 || !src2) return false;
+  if (src1 === src2) return true;
+  try {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
+    const u1 = new URL(src1, origin).href;
+    const u2 = new URL(src2, origin).href;
+    return u1 === u2;
+  } catch (_) {
+    return src1 === src2;
+  }
+}
+
+const RosaryAudioPlayer = forwardRef(function RosaryAudioPlayer({ 
   src, 
   autoPlay = false, 
   title = "Rosary Audio",
   onEnded
-}) {
+}, ref) {
   const audioRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -33,15 +46,44 @@ export default function RosaryAudioPlayer({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [isBuffering, setIsBuffering] = useState(false);
 
-  // Sync with audio source changes
+  // Mutable refs to keep event listeners stable across state changes
+  const isSeekingRef = useRef(false);
+  isSeekingRef.current = isSeeking;
+  const onEndedRef = useRef(onEnded);
+  onEndedRef.current = onEnded;
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
+  const autoPlayFiredRef = useRef(false);
+
+  // Expose imperative control (e.g. pause when switching to devotional songs)
+  useImperativeHandle(ref, () => ({
+    pause: () => {
+      if (audioRef.current && !audioRef.current.paused) {
+        audioRef.current.pause();
+      }
+    },
+    play: () => {
+      if (audioRef.current && audioRef.current.paused) {
+        return audioRef.current.play();
+      }
+    },
+    get audio() {
+      return audioRef.current;
+    }
+  }));
+
+  // Initial source assignment on mount
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (audio && src && (!audio.src || !isSameAudioSource(audio.src, src))) {
+      audio.src = src;
+    }
+  }, []);
+
+  // Attach HTML5 Media Event Listeners ONCE on mount
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
-
-    // Read duration if already cached or available
-    if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity) {
-      setDuration(audio.duration);
-    }
 
     const handleLoadedMetadata = () => {
       if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity) {
@@ -50,18 +92,29 @@ export default function RosaryAudioPlayer({
       setIsBuffering(false);
     };
 
+    const handleDurationChange = () => {
+      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity) {
+        setDuration(audio.duration);
+      }
+    };
+
     const handleTimeUpdate = () => {
-      if (!isSeeking) {
+      if (!isSeekingRef.current) {
         setCurrentTime(audio.currentTime);
         setSeekValue(audio.currentTime);
       }
-      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && duration !== audio.duration) {
-        setDuration(audio.duration);
+      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity) {
+        setDuration((prev) => (prev !== audio.duration ? audio.duration : prev));
       }
-      if (isBuffering) setIsBuffering(false);
+      setIsBuffering(false);
     };
 
     const handlePlay = () => {
+      setIsPlaying(true);
+      setIsBuffering(false);
+    };
+
+    const handlePlaying = () => {
       setIsPlaying(true);
       setIsBuffering(false);
     };
@@ -76,29 +129,39 @@ export default function RosaryAudioPlayer({
       setIsBuffering(false);
       setCurrentTime(0);
       setSeekValue(0);
-      if (onEnded) onEnded();
+      if (onEndedRef.current) onEndedRef.current();
     };
 
     const handleWaiting = () => {
-      if (isPlaying) setIsBuffering(true);
+      if (isPlayingRef.current) setIsBuffering(true);
     };
 
     const handleCanPlay = () => {
-      setIsBuffering(false);
+      setSongIsBufferingSafe(false);
       if (audio.duration && !isNaN(audio.duration)) {
         setDuration(audio.duration);
       }
     };
 
-    const handleError = () => {
+    function setSongIsBufferingSafe(val) {
+      setIsBuffering(val);
+    }
+
+    const handleError = (e) => {
+      // Ignore Abort errors caused by seeking or intentional source change
+      if (audio.error && audio.error.code === 1) {
+        return;
+      }
+      console.warn('Rosary audio event notice:', audio.error || e);
       setIsBuffering(false);
       setIsPlaying(false);
     };
 
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('durationchange', handleLoadedMetadata);
+    audio.addEventListener('durationchange', handleDurationChange);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('play', handlePlay);
+    audio.addEventListener('playing', handlePlaying);
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('waiting', handleWaiting);
@@ -106,11 +169,16 @@ export default function RosaryAudioPlayer({
     audio.addEventListener('canplaythrough', handleCanPlay);
     audio.addEventListener('error', handleError);
 
+    if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity) {
+      setDuration(audio.duration);
+    }
+
     return () => {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('durationchange', handleLoadedMetadata);
+      audio.removeEventListener('durationchange', handleDurationChange);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('playing', handlePlaying);
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('waiting', handleWaiting);
@@ -118,13 +186,58 @@ export default function RosaryAudioPlayer({
       audio.removeEventListener('canplaythrough', handleCanPlay);
       audio.removeEventListener('error', handleError);
     };
-  }, [src, autoPlay, isSeeking, duration, isPlaying]);
+  }, []); // Run ONCE on mount — never torn down while audio is playing!
 
-  // Handle reliable autoPlay when modal opens or autoPlay is active
+  // Synchronize audio source without destructive reloads
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || !autoPlay) return;
+    if (!audio || !src) return;
 
+    if (!isSameAudioSource(audio.src, src)) {
+      const wasPlaying = !audio.paused;
+      const currentPos = audio.currentTime;
+      audio.src = src;
+      audio.load();
+      if (wasPlaying) {
+        audio.currentTime = currentPos || 0;
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlaying(true);
+              setIsBuffering(false);
+            })
+            .catch((err) => {
+              console.warn('Playback resume notice:', err.message);
+              setIsPlaying(false);
+              setIsBuffering(false);
+            });
+        }
+      } else if (autoPlay && !autoPlayFiredRef.current) {
+        autoPlayFiredRef.current = true;
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlaying(true);
+              setIsBuffering(false);
+            })
+            .catch((err) => {
+              console.warn('AutoPlay notice:', err.message);
+              setIsPlaying(false);
+              setIsBuffering(false);
+            });
+        }
+      }
+    }
+  }, [src, autoPlay]);
+
+  // Handle reliable initial autoPlay without re-triggering on state changes
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !autoPlay || autoPlayFiredRef.current) return;
+
+    autoPlayFiredRef.current = true;
     let isSubscribed = true;
 
     const playAudio = () => {
@@ -158,7 +271,7 @@ export default function RosaryAudioPlayer({
       audio.removeEventListener('loadeddata', playAudio);
       audio.removeEventListener('loadedmetadata', playAudio);
     };
-  }, [src, autoPlay]);
+  }, [autoPlay]);
 
   const togglePlay = () => {
     const audio = audioRef.current;
@@ -238,8 +351,68 @@ export default function RosaryAudioPlayer({
 
   return (
     <div className="w-full bg-white/95 backdrop-blur-md rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-gray-200 shadow-2xs flex flex-col gap-2.5 select-none">
-      {/* Hidden Native Audio Element */}
-      <audio ref={audioRef} src={src} preload="metadata" />
+      {/* Hidden Native Audio Element (managed via ref to avoid JSX reconciliation resetting the browser load algorithm) */}
+      <audio 
+        ref={audioRef} 
+        preload="metadata"
+        onLoadedMetadata={(e) => {
+          const d = e.currentTarget.duration;
+          if (d && !isNaN(d) && d !== Infinity && d > 0) setDuration(d);
+          setIsBuffering(false);
+        }}
+        onDurationChange={(e) => {
+          const d = e.currentTarget.duration;
+          if (d && !isNaN(d) && d !== Infinity && d > 0) setDuration(d);
+        }}
+        onTimeUpdate={(e) => {
+          const audio = e.currentTarget;
+          if (!isSeekingRef.current) {
+            setCurrentTime(audio.currentTime);
+            setSeekValue(audio.currentTime);
+          }
+          const d = audio.duration;
+          if (d && !isNaN(d) && d !== Infinity && d > 0) setDuration(d);
+          setIsBuffering(false);
+        }}
+        onPlay={(e) => {
+          setIsPlaying(true);
+          setIsBuffering(false);
+          const d = e.currentTarget.duration;
+          if (d && !isNaN(d) && d !== Infinity && d > 0) setDuration(d);
+        }}
+        onPlaying={(e) => {
+          setIsPlaying(true);
+          setIsBuffering(false);
+          const d = e.currentTarget.duration;
+          if (d && !isNaN(d) && d !== Infinity && d > 0) setDuration(d);
+        }}
+        onPause={() => {
+          setIsPlaying(false);
+          setIsBuffering(false);
+        }}
+        onEnded={() => {
+          setIsPlaying(false);
+          setIsBuffering(false);
+          setCurrentTime(0);
+          setSeekValue(0);
+          if (onEndedRef.current) onEndedRef.current();
+        }}
+        onCanPlay={(e) => {
+          setIsBuffering(false);
+          const d = e.currentTarget.duration;
+          if (d && !isNaN(d) && d !== Infinity && d > 0) setDuration(d);
+        }}
+        onWaiting={() => {
+          if (isPlayingRef.current) setIsBuffering(true);
+        }}
+        onError={(e) => {
+          const audio = e.currentTarget;
+          if (audio.error && audio.error.code === 1) return;
+          console.warn('Rosary audio event notice:', audio.error);
+          setIsBuffering(false);
+          setIsPlaying(false);
+        }}
+      />
 
       {/* 1. Full-Width Interactive Seek Slider */}
       <div className="space-y-1 w-full">
@@ -350,4 +523,6 @@ export default function RosaryAudioPlayer({
       </div>
     </div>
   );
-}
+});
+
+export default RosaryAudioPlayer;

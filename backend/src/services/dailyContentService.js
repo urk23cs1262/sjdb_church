@@ -237,11 +237,11 @@ async function getTodayDailyContent(targetDate = new Date()) {
   };
 
   // 3. Saint of the Day
-  let saintData = getDailySaint();
+  let saintData = getDailySaint(targetDate);
   if (!saintData || saintData.date !== dateKey) {
     try {
       await fetchDailySaint(targetDate);
-      saintData = getDailySaint();
+      saintData = getDailySaint(targetDate);
     } catch (e) {
       console.warn('[DailyContentService] Error fetching saint:', e.message);
     }
@@ -251,14 +251,15 @@ async function getTodayDailyContent(targetDate = new Date()) {
   const saintImgBuffer = saintImageUrl ? await fetchImageBuffer(saintImageUrl) : null;
 
   const saint = {
+    date: saintData?.date || dateKey,
     nameTamil: saintData?.tamilName || saintData?.nameTa || saintData?.saintName || 'இன்றைய புனிதர்',
     nameEnglish: saintData?.englishName || saintData?.saintName || saintData?.name || 'Saint of the Day',
     descriptionTamil: saintData?.descriptionTa || saintData?.description || '',
     descriptionEnglish: saintData?.description || '',
     feastDay: saintData?.feastDay || formattedEn,
     image: saintImageUrl,
-    imageSource: saintData?.imageSource || 'Vatican News',
-    sourceUrl: saintData?.sourceUrl || saintData?.link || 'https://www.vaticannews.va/en/saints.html'
+    imageSource: saintData?.imageSource || 'Vatican State',
+    sourceUrl: saintData?.sourceUrl || saintData?.link || 'https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html'
   };
 
   const { getSiteUrl } = require('../config/siteRoutes');

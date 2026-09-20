@@ -220,11 +220,8 @@ export default function useVoiceAssistant() {
   const recognitionRestartTimerRef = useRef(null);
   const locationRef = useRef(location.pathname);
 
-  // Audio Analyser
-  const audioContextRef = useRef(null);
-  const analyserRef = useRef(null);
-  const micStreamRef = useRef(null);
-  const rafRef = useRef(null);
+  // Synthetic Waveform Animation Ref (Eliminates getUserMedia microphone hardware contention)
+  const waveRafRef = useRef(null);
 
   // Dynamic References
   const startListeningRef = useRef(null);
@@ -250,7 +247,11 @@ export default function useVoiceAssistant() {
   const getUserDisplayName = useCallback(() => {
     const u = userRef.current;
     if (!u) return '';
-    const raw = u.name || u.fullName || u.displayName || (u.email ? u.email.split('@')[0] : '');
+    const raw = u.name || u.fullName || u.displayName || '';
+    // Ignore generic placeholder roles (e.g. "Parish Admin", "Admin", "Administrator", "User", "Guest")
+    if (!raw || /^(parish\s*(admin|administrator)|admin|administrator|user|guest)$/i.test(raw.trim())) {
+      return '';
+    }
     return toPronounceableName(raw);
   }, []);
 
@@ -271,183 +272,7 @@ export default function useVoiceAssistant() {
     return true;
   }, []);
 
-  // ── Audio Analyser & Mic Stream ────────────────────────────────────────────
-
-  const stopAudioAnalyser = useCallback(() => {
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-    }
-    if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach((t) => t.stop());
-      micStreamRef.current = null;
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close().catch(() => {});
-      audioContextRef.current = null;
-    }
-    analyserRef.current = null;
-    setAudioLevel(0);
-  }, []);
-
-  const startAudioAnalyser = useCallback(async (sessionId) => {
-    try {
-      if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
-      if (micStreamRef.current || !navigator.mediaDevices?.getUserMedia) return;
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      if (sessionId !== sessionIdRef.current || isUnmountedRef.current) {
-        stream.getTracks().forEach((t) => t.stop());
-        return;
-      }
-      micStreamRef.current = stream;
-
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      audioContextRef.current = ctx;
-
-      const source = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.8;
-      source.connect(analyser);
-      analyserRef.current = analyser;
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-      const tick = () => {
-        if (sessionId !== sessionIdRef.current || isUnmountedRef.current || !analyserRef.current) return;
-        analyserRef.current.getByteFrequencyData(dataArray);
-        const mid = dataArray.slice(4, 60);
-        const avg = mid.reduce((s, v) => s + v, 0) / mid.length;
-        setAudioLevel(Math.min(100, Math.round((avg / 255) * 100)));
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      rafRef.current = requestAnimationFrame(tick);
-    } catch {
-      // Audio stream unavailable
-    }
-  }, []);
-
-  // ── Speech Synthesis (TTS) with Guaranteed Clean Completion & Anti-Truncation ──
-
-  const cancelSpeech = useCallback(() => {
-    clearInterval(ttsWatchdogTimerRef.current);
-    ttsWatchdogTimerRef.current = null;
-
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      try {
-        window.speechSynthesis.cancel();
-      } catch {}
-    }
-    activeUtterancesRef.current = [];
-    isSpeakingRef.current = false;
-    setIsSpeaking(false);
-  }, []);
-
-  /**
-   * Speak complete text sequentially across multiple sentences if needed
-   */
-  const speakText = useCallback((fullText, sessionId, onEnd = null, langOverride = null) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
-      onEnd?.();
-      return;
-    }
-
-    if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
-
-    cancelSpeech();
-
-    const sentences = splitIntoSentences(fullText);
-    if (!sentences.length) {
-      onEnd?.();
-      return;
-    }
-
-    // Determine language from fullText content or explicit override
-    const isTamilText = /[\u0B80-\u0BFF]/.test(fullText) || (langOverride && langOverride.startsWith('ta'));
-    const defaultLang = isTamilText ? 'ta-IN' : 'en-IN';
-    const ladyVoice = findCatchyLadyVoice(defaultLang);
-
-    isSpeakingRef.current = true;
-    setIsSpeaking(true);
-    setSpokenText(fullText);
-    transitionTo(VA_STATE.SPEAKING, sessionId);
-    log('TTS_START', { sentenceCount: sentences.length, fullText, defaultLang });
-
-    // Anti-truncation Chrome watchdog
-    clearInterval(ttsWatchdogTimerRef.current);
-    ttsWatchdogTimerRef.current = setInterval(() => {
-      if (typeof window !== 'undefined' && window.speechSynthesis) {
-        if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
-          window.speechSynthesis.pause();
-          window.speechSynthesis.resume();
-        }
-      }
-    }, 4500);
-
-    let currentIndex = 0;
-
-    const speakNextChunk = () => {
-      if (sessionId !== sessionIdRef.current || isUnmountedRef.current) {
-        cancelSpeech();
-        return;
-      }
-
-      if (currentIndex >= sentences.length) {
-        cancelSpeech();
-        log('TTS_FINISHED_ALL');
-        if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
-          onEnd?.();
-        }
-        return;
-      }
-
-      const chunkText = sentences[currentIndex];
-      currentIndex++;
-
-      const isChunkTamil = /[\u0B80-\u0BFF]/.test(chunkText) || isTamilText;
-      const chunkLang = isChunkTamil ? 'ta-IN' : 'en-IN';
-      const chunkLadyVoice = findCatchyLadyVoice(chunkLang);
-
-      const spokenChunk = sanitizeForSpeechSynthesis(chunkText);
-      const utt = new SpeechSynthesisUtterance(spokenChunk);
-      utt.lang = chunkLang;
-      utt.volume = 1.0; // Maximum loudness
-      utt.pitch = 1.15; // Bright, pleasant, feminine pitch
-      utt.rate = 1.02;  // Catchy, energetic, engaging delivery
-      if (chunkLadyVoice) utt.voice = chunkLadyVoice;
-      else if (ladyVoice) utt.voice = ladyVoice;
-
-      // Keep active reference
-      activeUtterancesRef.current.push(utt);
-
-      utt.onend = () => {
-        activeUtterancesRef.current = activeUtterancesRef.current.filter((u) => u !== utt);
-        speakNextChunk();
-      };
-
-      utt.onerror = (e) => {
-        activeUtterancesRef.current = activeUtterancesRef.current.filter((u) => u !== utt);
-        log('TTS_CHUNK_ERROR', e);
-        speakNextChunk();
-      };
-
-      try {
-        if (window.speechSynthesis.paused) {
-          window.speechSynthesis.resume();
-        }
-        window.speechSynthesis.speak(utt);
-      } catch {
-        speakNextChunk();
-      }
-    };
-
-    speakNextChunk();
-  }, [cancelSpeech, log, transitionTo]);
-
-  // ── Speech Recognition Lifecycle ──────────────────────────────────────────
+  // ── Speech Recognition Lifecycle (Defined first so TTS and helpers can abort safely) ──
 
   const safeAbortRecognition = useCallback(() => {
     if (recognitionRef.current) {
@@ -472,7 +297,170 @@ export default function useVoiceAssistant() {
     }
   }, [log, safeAbortRecognition]);
 
-  // ── Background Wake-Word Recognition (Passive "Hey Connect" Listener) ───────
+  // ── Audio Waveform Visualizer (Hardware-Safe, No getUserMedia mic contention) ──
+
+  const stopAudioAnalyser = useCallback(() => {
+    if (waveRafRef.current) {
+      cancelAnimationFrame(waveRafRef.current);
+      waveRafRef.current = null;
+    }
+    setAudioLevel(0);
+  }, []);
+
+  const startAudioAnalyser = useCallback((sessionId) => {
+    if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+    if (waveRafRef.current) return;
+
+    let step = 0;
+    const tick = () => {
+      if (
+        sessionId !== sessionIdRef.current ||
+        isUnmountedRef.current ||
+        stateRef.current !== VA_STATE.LISTENING
+      ) {
+        waveRafRef.current = null;
+        return;
+      }
+      step += 0.08;
+      // Gentle breathing wave between 28 and 65 for smooth visual feedback without capturing hardware mic
+      const level = Math.round(44 + Math.sin(step) * 16 + Math.sin(step * 2.2) * 5);
+      setAudioLevel(level);
+      waveRafRef.current = requestAnimationFrame(tick);
+    };
+    waveRafRef.current = requestAnimationFrame(tick);
+  }, []);
+
+  // ── Speech Synthesis (TTS) with Guaranteed Clean Completion & Safety Timeout ──
+
+  const cancelSpeech = useCallback(() => {
+    clearInterval(ttsWatchdogTimerRef.current);
+    ttsWatchdogTimerRef.current = null;
+
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
+    activeUtterancesRef.current = [];
+    isSpeakingRef.current = false;
+    setIsSpeaking(false);
+  }, []);
+
+  /**
+   * Speak complete text sequentially across sentences with guaranteed completion
+   * PRESERVES: Catchy lady voice (findCatchyLadyVoice, pitch: 1.15, rate: 1.02)
+   */
+  const speakText = useCallback(
+    (fullText, sessionId, onEnd = null, langOverride = null) => {
+      if (typeof window === 'undefined' || !window.speechSynthesis) {
+        onEnd?.();
+        return;
+      }
+
+      if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+
+      // CRITICAL: Stop speech recognition while speaking so microphone doesn't hear assistant's own voice
+      safeAbortRecognition();
+      cancelSpeech();
+
+      const sentences = splitIntoSentences(fullText);
+      if (!sentences.length) {
+        onEnd?.();
+        return;
+      }
+
+      const isTamilText = /[\u0B80-\u0BFF]/.test(fullText) || (langOverride && langOverride.startsWith('ta'));
+      const defaultLang = isTamilText ? 'ta-IN' : 'en-IN';
+      const ladyVoice = findCatchyLadyVoice(defaultLang);
+
+      isSpeakingRef.current = true;
+      setIsSpeaking(true);
+      setSpokenText(fullText);
+      transitionTo(VA_STATE.SPEAKING, sessionId);
+      log('TTS_START', { sentenceCount: sentences.length, fullText, defaultLang });
+
+      let currentIndex = 0;
+
+      const speakNextChunk = () => {
+        if (sessionId !== sessionIdRef.current || isUnmountedRef.current) {
+          cancelSpeech();
+          return;
+        }
+
+        if (currentIndex >= sentences.length) {
+          cancelSpeech();
+          log('TTS_FINISHED_ALL');
+          if (sessionId === sessionIdRef.current && !isUnmountedRef.current) {
+            onEnd?.();
+          }
+          return;
+        }
+
+        const chunkText = sentences[currentIndex];
+        currentIndex++;
+
+        const isChunkTamil = /[\u0B80-\u0BFF]/.test(chunkText) || isTamilText;
+        const chunkLang = isChunkTamil ? 'ta-IN' : 'en-IN';
+        const chunkLadyVoice = findCatchyLadyVoice(chunkLang);
+
+        const spokenChunk = sanitizeForSpeechSynthesis(chunkText);
+        const utt = new SpeechSynthesisUtterance(spokenChunk);
+        utt.lang = chunkLang;
+        utt.volume = 1.0; // Maximum loudness
+        utt.pitch = 1.15; // Bright, pleasant, feminine pitch (STRICTLY PRESERVED)
+        utt.rate = 1.02;  // Catchy, energetic, engaging delivery (STRICTLY PRESERVED)
+        if (chunkLadyVoice) utt.voice = chunkLadyVoice;
+        else if (ladyVoice) utt.voice = ladyVoice;
+
+        activeUtterancesRef.current.push(utt);
+
+        let chunkHandled = false;
+        let safetyTimer = null;
+
+        const finishChunk = () => {
+          if (chunkHandled) return;
+          chunkHandled = true;
+          if (safetyTimer) {
+            clearTimeout(safetyTimer);
+            safetyTimer = null;
+          }
+          activeUtterancesRef.current = activeUtterancesRef.current.filter((u) => u !== utt);
+          speakNextChunk();
+        };
+
+        // Guaranteed safety timeout to recover if mobile Chrome / WebView drops utt.onend
+        const safeDurationMs = Math.max(2200, Math.round((spokenChunk.length / 11) * 1000) + 1800);
+        safetyTimer = setTimeout(() => {
+          log('TTS_CHUNK_SAFETY_RECOVERY', { spokenChunk, safeDurationMs });
+          finishChunk();
+        }, safeDurationMs);
+
+        utt.onend = () => {
+          finishChunk();
+        };
+
+        utt.onerror = (e) => {
+          log('TTS_CHUNK_ERROR', e);
+          finishChunk();
+        };
+
+        try {
+          if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+          }
+          window.speechSynthesis.speak(utt);
+        } catch (err) {
+          log('TTS_SPEAK_EXCEPTION', err);
+          finishChunk();
+        }
+      };
+
+      speakNextChunk();
+    },
+    [cancelSpeech, log, safeAbortRecognition, transitionTo]
+  );
+
+  // ── Background Wake-Word Recognition (Desktop only, never run on mobile) ────
 
   const safeAbortWakeWord = useCallback(() => {
     if (wakeWordRestartTimerRef.current) {
@@ -498,6 +486,12 @@ export default function useVoiceAssistant() {
     if (isContinuousActiveRef.current) return;
     if (isWakeWordActiveRef.current || wakeWordRecognitionRef.current) return;
     if (!hasMicPermissionRef.current) return;
+
+    // Do NOT run passive background recognition on mobile devices to prevent OS audio locks
+    const isMobile =
+      typeof navigator !== 'undefined' &&
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobile) return;
 
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
@@ -561,7 +555,7 @@ export default function useVoiceAssistant() {
             if (stateRef.current === VA_STATE.IDLE && !isContinuousActiveRef.current) {
               startWakeWordListening();
             }
-          }, 450);
+          }, 600);
         }
       };
 
@@ -574,12 +568,8 @@ export default function useVoiceAssistant() {
     }
   }, [log, safeAbortWakeWord]);
 
-  // ── Dismiss Voice Assistant Completely (User Said Cancel / Stop / Closed) ──
+  // ── Dismiss Voice Assistant (Supports Immediate Close or Polite Farewell) ──
 
-  /**
-   * Finishes cleanup after farewell speech ends. Resets all state and restarts
-   * the background wake-word listener so the user can say "Hey Connect" again.
-   */
   const finaliseDismiss = useCallback(() => {
     if (isUnmountedRef.current) return;
     stateRef.current = VA_STATE.IDLE;
@@ -589,236 +579,274 @@ export default function useVoiceAssistant() {
     setDestination(null);
     setErrorMessage('');
 
-    // Restart background wake-word listener
+    // Restart background wake-word listener on desktop
     if (hasMicPermissionRef.current) {
       clearTimeout(wakeWordRestartTimerRef.current);
       wakeWordRestartTimerRef.current = setTimeout(() => {
         if (stateRef.current === VA_STATE.IDLE && !isContinuousActiveRef.current) {
           startWakeWordListening();
         }
-      }, 450);
+      }, 500);
     }
   }, [startWakeWordListening]);
 
-  const dismiss = useCallback(() => {
-    log('DISMISS');
-    isContinuousActiveRef.current = false;
-    pendingClarificationRef.current = null;
-    pendingActionConfirmationRef.current = null;
-    sessionIdRef.current++;
+  const dismiss = useCallback(
+    (immediate = false) => {
+      log('DISMISS', { immediate });
+      isContinuousActiveRef.current = false;
+      pendingClarificationRef.current = null;
+      pendingActionConfirmationRef.current = null;
+      sessionIdRef.current++;
 
-    clearTimeout(recognitionRestartTimerRef.current);
-    safeAbortRecognition();
-    stopAudioAnalyser();
-    isProcessingRef.current = false;
-
-    // ── Farewell Message ─────────────────────────────────────────────────────
-    // Speak the farewell using a raw utterance that bypasses the session-ID
-    // guard (since we just bumped the session above).
-    // The orb stays visible in SPEAKING state so the user can both SEE and
-    // HEAR the goodbye. finaliseDismiss() closes the orb after speech ends.
-    const FAREWELL = "I'm closing Connect. Thank you. God bless you.";
-    const farewell_utt = new SpeechSynthesisUtterance(FAREWELL);
-    farewell_utt.lang    = 'en-IN';
-    farewell_utt.volume  = 1.0;
-    farewell_utt.pitch   = 1.15;
-    farewell_utt.rate    = 1.02;
-    const ladyVoice = findCatchyLadyVoice('en-IN');
-    if (ladyVoice) farewell_utt.voice = ladyVoice;
-
-    // Cancel any in-progress speech before playing farewell
-    try { window.speechSynthesis.cancel(); } catch {}
-
-    // After speech finishes (or 3.5 s safety fallback), close the orb
-    let cleanupDone = false;
-    const doCleanup = () => {
-      if (cleanupDone) return;
-      cleanupDone = true;
-      clearTimeout(fallbackTimer);
-      finaliseDismiss();
-    };
-    const fallbackTimer = setTimeout(doCleanup, 3500);
-
-    farewell_utt.onend   = doCleanup;
-    farewell_utt.onerror = doCleanup;
-
-    try {
-      window.speechSynthesis.speak(farewell_utt);
-    } catch {
-      doCleanup();
-    }
-
-    // Keep orb VISIBLE in SPEAKING state so the farewell text is printed
-    // in the bubble while the voice plays. Do NOT go to IDLE yet.
-    if (!isUnmountedRef.current) {
-      stateRef.current = VA_STATE.SPEAKING;
-      setState(VA_STATE.SPEAKING);
-      setTranscript('');
-      setSpokenText(FAREWELL);   // ← prints the closing words in the bubble
-      setDestination(null);
-      setErrorMessage('');
-    }
-  }, [finaliseDismiss, log, safeAbortRecognition, startWakeWordListening, stopAudioAnalyser]);
-
-  // ── Start Listening (Continuous Conversation Loop) ─────────────────────────
-
-  const startListening = useCallback((sessionId) => {
-    if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
-    if (!isContinuousActiveRef.current) return;
-
-    if (isRecognitionActiveRef.current || isStartingRecognitionRef.current) {
-      log('RECOGNITION_ALREADY_ACTIVE');
-      return;
-    }
-
-    isStartingRecognitionRef.current = true;
-    isProcessingRef.current = false;
-
-    transitionTo(VA_STATE.LISTENING, sessionId);
-    setTranscript('');
-    startAudioAnalyser(sessionId);
-
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      const errText = isTamilLang()
-        ? 'உங்கள் உலாவியில் குரல் அறிதல் ஆதரிக்கப்படவில்லை.'
-        : 'Speech recognition is not supported in this browser.';
-      setErrorMessage(errText);
-      transitionTo(VA_STATE.ERROR, sessionId);
-      return;
-    }
-
-    const lang = currentSpeechLangRef.current || detectLang();
-    let r = null;
-    try {
+      clearTimeout(recognitionRestartTimerRef.current);
       safeAbortRecognition();
-      r = new SR();
+      stopAudioAnalyser();
+      cancelSpeech();
+      isProcessingRef.current = false;
+
+      // Immediate close (e.g. clicking ✕ or pressing Escape)
+      if (immediate || isUnmountedRef.current) {
+        finaliseDismiss();
+        return;
+      }
+
+      // Spoken stop command farewell
+      const isTamil = isTamilLang();
+      const FAREWELL = isTamil
+        ? 'கனெக்ட்டை மூடுகிறேன். நன்றி. கடவுள் உங்களை ஆசீர்வதிப்பாராக!'
+        : "I'm closing Connect. Thank you. God bless you.";
+      const farewell_utt = new SpeechSynthesisUtterance(FAREWELL);
+      farewell_utt.lang = isTamil ? 'ta-IN' : 'en-IN';
+      farewell_utt.volume = 1.0;
+      farewell_utt.pitch = 1.15;
+      farewell_utt.rate = 1.02;
+      const ladyVoice = findCatchyLadyVoice(farewell_utt.lang);
+      if (ladyVoice) farewell_utt.voice = ladyVoice;
+
+      let cleanupDone = false;
+      const doCleanup = () => {
+        if (cleanupDone) return;
+        cleanupDone = true;
+        clearTimeout(fallbackTimer);
+        finaliseDismiss();
+      };
+      const fallbackTimer = setTimeout(doCleanup, 2500);
+
+      farewell_utt.onend = doCleanup;
+      farewell_utt.onerror = doCleanup;
+
       try {
-        r.lang = lang;
+        window.speechSynthesis.speak(farewell_utt);
       } catch {
-        r.lang = 'en-IN';
+        doCleanup();
       }
-      r.continuous = false;
-      r.interimResults = true;
-      r.maxAlternatives = 1;
-    } catch (err) {
-      log('RECOGNITION_INIT_ERROR', err);
-      return;
-    }
 
-    recognitionRef.current = r;
-
-    r.onstart = () => {
-      if (sessionId !== sessionIdRef.current) {
-        try { r.abort(); } catch {}
-        return;
+      if (!isUnmountedRef.current) {
+        stateRef.current = VA_STATE.SPEAKING;
+        setState(VA_STATE.SPEAKING);
+        setTranscript('');
+        setSpokenText(FAREWELL);
+        setDestination(null);
+        setErrorMessage('');
       }
-      isRecognitionActiveRef.current = true;
-      isStartingRecognitionRef.current = false;
-      log('RECOGNITION_STARTED');
-    };
+    },
+    [cancelSpeech, finaliseDismiss, log, safeAbortRecognition, stopAudioAnalyser]
+  );
 
-    r.onresult = (e) => {
+  // ── Start Listening (Continuous Conversation Loop with Exclusive Mic Access) ─
+
+  const startListening = useCallback(
+    (sessionId) => {
       if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+      if (!isContinuousActiveRef.current) return;
 
-      // Interruption: cancel speech immediately if user speaks
-      if (isSpeakingRef.current) {
-        cancelSpeech();
-      }
-
-      const results = Array.from(e.results);
-      const raw = results.map((res) => res[0].transcript).join(' ');
-      setTranscript(raw);
-
-      const isFinal = results[results.length - 1].isFinal;
-
-      // Handle "stop speaking" command instantly
-      if (/\b(stop speaking|be quiet|silence)\b/i.test(raw)) {
-        cancelSpeech();
+      if (isRecognitionActiveRef.current || isStartingRecognitionRef.current) {
+        log('RECOGNITION_ALREADY_ACTIVE');
         return;
       }
 
-      // Handle "cancel" / "close" command instantly to close voice navigation
-      if (
-        /^(cancel|close|dismiss|exit|ரத்து)$/i.test(raw.trim()) ||
-        /\b(cancel voice|close voice|cancel navigation|stop voice)\b/i.test(raw)
-      ) {
-        log('INSTANT_CANCEL_TRIGGERED', raw);
-        dismiss();
-        return;
-      }
+      isStartingRecognitionRef.current = true;
+      isProcessingRef.current = false;
 
-      if (isFinal && raw.trim() && !isProcessingRef.current) {
-        isProcessingRef.current = true;
-        safeStopRecognition();
-        transitionTo(VA_STATE.PROCESSING, sessionId);
+      transitionTo(VA_STATE.LISTENING, sessionId);
+      setTranscript('');
+      startAudioAnalyser(sessionId);
 
-        setTimeout(() => {
-          if (sessionId === sessionIdRef.current) {
-            processTranscriptRef.current?.(raw, sessionId);
-          }
-        }, 100);
-      }
-    };
-
-    r.onerror = (e) => {
-      if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
-      log('RECOGNITION_ERROR', e.error);
-
-      if (e.error === 'no-speech') {
-        return; // Handled in onend
-      }
-
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        const permError = isTamilLang()
-          ? 'ஹே கனெக்ட் குரல் வழிசெலுத்தலுக்கு மைக்ரோஃபோன் அனுமதி தேவை. உங்கள் உலாவி அமைப்புகளில் அணுகலை அனுமதிக்கவும்.'
-          : 'Microphone permission is required for Hey Connect voice navigation. Please allow microphone access in your browser settings.';
-        setErrorMessage(permError);
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) {
+        const errText = isTamilLang()
+          ? 'மன்னிக்கவும், இந்த உலாவியில் குரல் அறிதல் ஆதரிக்கப்படவில்லை. தயவுசெய்து ஆதரிக்கப்படும் உலாவியைப் பயன்படுத்தவும் அல்லது உங்கள் கோரிக்கையை தட்டச்சு செய்யவும்.'
+          : 'Sorry, voice recognition is not supported in this browser. Please use a supported browser or type your request.';
+        setErrorMessage(errText);
         transitionTo(VA_STATE.ERROR, sessionId);
-        speakText(permError, sessionId, () => {
-          setTimeout(() => {
-            if (sessionId === sessionIdRef.current) dismiss();
-          }, 3500);
-        });
         return;
       }
-    };
 
-    r.onend = () => {
-      isRecognitionActiveRef.current = false;
-      isStartingRecognitionRef.current = false;
-      log('RECOGNITION_ENDED');
-
-      if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
-
-      // Gracefully resume listening if session is still active
-      if (
-        isContinuousActiveRef.current &&
-        !isProcessingRef.current &&
-        !isSpeakingRef.current &&
-        stateRef.current === VA_STATE.LISTENING
-      ) {
-        clearTimeout(recognitionRestartTimerRef.current);
-        recognitionRestartTimerRef.current = setTimeout(() => {
-          if (
-            sessionId === sessionIdRef.current &&
-            isContinuousActiveRef.current &&
-            !isProcessingRef.current &&
-            !isSpeakingRef.current
-          ) {
-            startListening(sessionId);
-          }
-        }, 180);
+      const lang = currentSpeechLangRef.current || detectLang();
+      let r = null;
+      try {
+        safeAbortRecognition();
+        safeAbortWakeWord();
+        r = new SR();
+        try {
+          r.lang = lang;
+        } catch {
+          r.lang = 'en-IN';
+        }
+        r.continuous = false;
+        r.interimResults = true;
+        r.maxAlternatives = 1;
+      } catch (err) {
+        log('RECOGNITION_INIT_ERROR', err);
+        isStartingRecognitionRef.current = false;
+        return;
       }
-    };
 
-    try {
-      r.start();
-    } catch (err) {
-      log('RECOGNITION_START_EXCEPTION', err);
-      isStartingRecognitionRef.current = false;
-    }
-  }, [cancelSpeech, dismiss, log, safeAbortRecognition, safeStopRecognition, speakText, startAudioAnalyser, transitionTo]);
+      recognitionRef.current = r;
+
+      r.onstart = () => {
+        if (sessionId !== sessionIdRef.current) {
+          try {
+            r.abort();
+          } catch {}
+          return;
+        }
+        isRecognitionActiveRef.current = true;
+        isStartingRecognitionRef.current = false;
+        log('RECOGNITION_STARTED');
+      };
+
+      r.onaudiostart = () => {
+        if (sessionId === sessionIdRef.current) {
+          setAudioLevel(50);
+        }
+      };
+
+      r.onspeechstart = () => {
+        if (sessionId === sessionIdRef.current) {
+          setAudioLevel(75);
+        }
+      };
+
+      r.onresult = (e) => {
+        if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+
+        // Interruption: cancel speech immediately if user speaks
+        if (isSpeakingRef.current) {
+          cancelSpeech();
+        }
+
+        const results = Array.from(e.results);
+        const raw = results.map((res) => res[0].transcript).join(' ');
+        setTranscript(raw);
+        setAudioLevel(Math.min(95, 50 + raw.length * 2));
+
+        const isFinal = results[results.length - 1].isFinal;
+
+        // Handle "stop speaking" command instantly
+        if (/\b(stop speaking|be quiet|silence)\b/i.test(raw)) {
+          cancelSpeech();
+          return;
+        }
+
+        // Handle "cancel" / "close" command instantly to close voice navigation
+        if (
+          /^(cancel|close|dismiss|exit|ரத்து)$/i.test(raw.trim()) ||
+          /\b(cancel voice|close voice|cancel navigation|stop voice)\b/i.test(raw)
+        ) {
+          log('INSTANT_CANCEL_TRIGGERED', raw);
+          dismiss(false);
+          return;
+        }
+
+        if (isFinal && raw.trim() && !isProcessingRef.current) {
+          isProcessingRef.current = true;
+          safeStopRecognition();
+          stopAudioAnalyser();
+          transitionTo(VA_STATE.PROCESSING, sessionId);
+
+          setTimeout(() => {
+            if (sessionId === sessionIdRef.current) {
+              processTranscriptRef.current?.(raw, sessionId);
+            }
+          }, 100);
+        }
+      };
+
+      r.onerror = (e) => {
+        if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+        log('RECOGNITION_ERROR', e.error);
+
+        if (e.error === 'no-speech') {
+          return; // Handled smoothly in onend
+        }
+
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          hasMicPermissionRef.current = false;
+          safeAbortWakeWord();
+          stopAudioAnalyser();
+          const permError = isTamilLang()
+            ? 'மைக்ரோஃபோன் அணுகல் தடுக்கப்பட்டுள்ளது. உங்கள் உலாவி அமைப்புகளில் மைக்ரோஃபோன் அனுமதியை வழங்கி மீண்டும் முயற்சிக்கவும்.'
+            : 'Microphone access is blocked. Please allow microphone permission in your browser settings and try again.';
+          setErrorMessage(permError);
+          transitionTo(VA_STATE.ERROR, sessionId);
+          speakText(permError, sessionId, () => {
+            setTimeout(() => {
+              if (sessionId === sessionIdRef.current) dismiss(true);
+            }, 3500);
+          });
+          return;
+        }
+      };
+
+      r.onend = () => {
+        isRecognitionActiveRef.current = false;
+        isStartingRecognitionRef.current = false;
+        log('RECOGNITION_ENDED');
+
+        if (sessionId !== sessionIdRef.current || isUnmountedRef.current) return;
+
+        // Gracefully resume listening if session is still active
+        if (
+          isContinuousActiveRef.current &&
+          !isProcessingRef.current &&
+          !isSpeakingRef.current &&
+          stateRef.current === VA_STATE.LISTENING
+        ) {
+          clearTimeout(recognitionRestartTimerRef.current);
+          recognitionRestartTimerRef.current = setTimeout(() => {
+            if (
+              sessionId === sessionIdRef.current &&
+              isContinuousActiveRef.current &&
+              !isProcessingRef.current &&
+              !isSpeakingRef.current
+            ) {
+              startListening(sessionId);
+            }
+          }, 180);
+        }
+      };
+
+      try {
+        r.start();
+      } catch (err) {
+        log('RECOGNITION_START_EXCEPTION', err);
+        isStartingRecognitionRef.current = false;
+      }
+    },
+    [
+      cancelSpeech,
+      dismiss,
+      log,
+      safeAbortRecognition,
+      safeAbortWakeWord,
+      safeStopRecognition,
+      speakText,
+      startAudioAnalyser,
+      stopAudioAnalyser,
+      transitionTo,
+    ]
+  );
 
   startListeningRef.current = startListening;
 
@@ -1407,6 +1435,15 @@ export default function useVoiceAssistant() {
       pendingClarificationRef.current = null;
       log('HEY_CONNECT_ACTIVATED', { initialCommand });
 
+      // Unlock mobile browser speech synthesis on direct user interaction
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        try {
+          if (window.speechSynthesis.paused) {
+            window.speechSynthesis.resume();
+          }
+        } catch {}
+      }
+
       cancelSpeech();
       safeAbortRecognition();
       stopAudioAnalyser();
@@ -1415,23 +1452,17 @@ export default function useVoiceAssistant() {
       setErrorMessage('');
       setDestination(null);
 
-      // Verify microphone access via getUserMedia first
-      try {
-        if (navigator.mediaDevices?.getUserMedia) {
-          const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          testStream.getTracks().forEach((t) => t.stop());
-        }
-      } catch (err) {
-        log('MIC_PERMISSION_DENIED', err);
-        const permError = isTamilLang()
-          ? 'ஹே கனெக்ட் குரல் வழிசெலுத்தலுக்கு மைக்ரோஃபோன் அனுமதி தேவை. உங்கள் உலாவி அமைப்புகளில் அணுகலை அனுமதிக்கவும்.'
-          : 'Microphone permission is required for Hey Connect voice navigation. Please allow microphone access in your browser settings.';
-        setErrorMessage(permError);
+      // Verify browser speech recognition support
+      if (!isSpeechAPISupported()) {
+        const unsupportedMsg = isTamilLang()
+          ? 'மன்னிக்கவும், இந்த உலாவியில் குரல் அறிதல் ஆதரிக்கப்படவில்லை. தயவுசெய்து ஆதரிக்கப்படும் உலாவியைப் பயன்படுத்தவும் அல்லது உங்கள் கோரிக்கையை தட்டச்சு செய்யவும்.'
+          : 'Sorry, voice recognition is not supported in this browser. Please use a supported browser or type your request.';
+        setErrorMessage(unsupportedMsg);
         transitionTo(VA_STATE.ERROR, currentSessionId);
-        speakText(permError, currentSessionId, () => {
+        speakText(unsupportedMsg, currentSessionId, () => {
           setTimeout(() => {
-            if (currentSessionId === sessionIdRef.current) dismiss();
-          }, 3500);
+            if (currentSessionId === sessionIdRef.current) dismiss(true);
+          }, 4500);
         });
         return;
       }
@@ -1502,8 +1533,12 @@ export default function useVoiceAssistant() {
       }
     };
 
-    // Check microphone permission and start passive wake-word listener
-    if (typeof navigator !== 'undefined' && navigator.permissions?.query) {
+    // Check microphone permission and start passive wake-word listener (desktop only)
+    const isMobileDevice =
+      typeof navigator !== 'undefined' &&
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    if (!isMobileDevice && typeof navigator !== 'undefined' && navigator.permissions?.query) {
       navigator.permissions
         .query({ name: 'microphone' })
         .then((status) => {
@@ -1520,11 +1555,7 @@ export default function useVoiceAssistant() {
             }
           };
         })
-        .catch(() => {
-          startWakeWordListening();
-        });
-    } else {
-      startWakeWordListening();
+        .catch(() => {});
     }
 
     return () => {
@@ -1533,7 +1564,6 @@ export default function useVoiceAssistant() {
       sessionIdRef.current++;
       clearTimeout(recognitionRestartTimerRef.current);
       safeAbortWakeWord();
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
       cancelSpeech();
       stopAudioAnalyser();
       safeAbortRecognition();

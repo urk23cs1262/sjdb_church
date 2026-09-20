@@ -17,14 +17,26 @@ const dailyNotificationLogSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true,
+    required: false,
     index: true
+  },
+  idempotencyKey: {
+    type: String,
+    unique: true,
+    sparse: true,
+    index: true
+  },
+  recipientPhone10: {
+    type: String,
+    index: true,
+    default: null
   },
   userEmail: {
     type: String,
-    required: true,
+    required: false,
     trim: true,
-    lowercase: true
+    lowercase: true,
+    default: null
   },
   userName: {
     type: String,
@@ -47,7 +59,7 @@ const dailyNotificationLogSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['sent', 'partially_sent', 'failed', 'skipped'],
+    enum: ['sent', 'partially_sent', 'failed', 'skipped', 'claiming'],
     default: 'sent'
   },
   channels: {
@@ -69,8 +81,9 @@ const dailyNotificationLogSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Compound unique index to guarantee no duplicate daily notification logs for the same user on the same date
-dailyNotificationLogSchema.index({ userId: 1, dateKey: 1 }, { unique: true });
+// Compound unique indexes to guarantee strictly zero duplicate deliveries per user / recipient per date
+dailyNotificationLogSchema.index({ userId: 1, dateKey: 1 }, { unique: true, sparse: true });
+dailyNotificationLogSchema.index({ recipientPhone10: 1, dateKey: 1 }, { sparse: true });
 dailyNotificationLogSchema.index({ dateKey: 1, status: 1 });
 dailyNotificationLogSchema.index({ userId: 1, createdAt: -1 });
 

@@ -345,7 +345,7 @@ export const INTENT_MAP = [
     patterns: [
       /\b(open.*saint.*of.*the.*day|show.*saint.*of.*the.*day|read.*saint.*of.*the.*day|saint.*of.*the.*day|saint.*today|today'?s?.*saint|saint.*day|day.*saint|patron.*saint|show.*me.*today'?s?.*saint)\b/i,
       /\b(saint\s*of\s*the\s*day\s*(open\s*pannu|kaatu|padi))\b/i,
-      /(இன்றைய.*புனிதரை.*பற்றி.*படி|இன்றைய.*புனிதர்.*பக்கத்தை.*திற|இன்றைய.*புனிதரை.*காட்டு|இன்றைய.*புனிதர்|புனிதர்)/i,
+      /(இன்றைய.*புனிதரை.*பற்றி.*(படி|சொல்லு|சொல்லுங்கள்|கூறு|கூறுங்கள்|விளக்கு)|இன்றைய.*புனிதர்.*பக்கத்தை.*திற|இன்றைய.*புனிதரை.*காட்டு|இன்றைய.*புனிதர்|புனிதர்)/i,
       /(saint\s*of\s*the\s*day\s*open\s*பண்ணு)/i,
     ],
   },

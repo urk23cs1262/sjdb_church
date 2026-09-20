@@ -133,6 +133,8 @@ function getVaticanSaintImage($, vaticanUrl) {
       : (isVaticanState ? `https://www.vaticanstate.va${candidateUrl}` : `https://www.vaticannews.va${candidateUrl}`);
     // Upgrade low-res thumbnail renditions to high-resolution
     fullUrl = fullUrl.replace(/cq5dam\.thumbnail\.cropped\.\d+\.\d+\.jpeg/i, 'cq5dam.thumbnail.cropped.750.422.jpeg');
+    // Strip Joomla/local image hash fragments if present
+    fullUrl = fullUrl.split('#')[0];
     return {
       url: fullUrl,
       source: 'vatican',

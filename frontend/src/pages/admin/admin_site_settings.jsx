@@ -54,12 +54,12 @@ const SETTING_CARDS = [
   {
     key: 'daily_saint_fetch_url',
     label: 'Daily Saint Fetch URL',
-    description: 'The URL to fetch the daily Saint of the Day details from (e.g. Vatican News).',
+    description: 'The URL to fetch the daily Saint of the Day details from (Vatican State).',
     icon: <FiSun className="text-2xl" />,
     color: 'bg-indigo-600',
     type: 'text',
-    placeholder: 'https://www.vaticannews.va/en/saints/{MM}/{DD}.html',
-    hint: 'Default: https://www.vaticannews.va/en/saints/{MM}/{DD}.html'
+    placeholder: 'https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html',
+    hint: 'Default: https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html'
   },
   {
     key: 'daily_mass_fetch_url',

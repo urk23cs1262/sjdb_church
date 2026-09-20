@@ -36,9 +36,9 @@ export default function DailySaintTicker() {
       descriptionTa: fallback.descriptionTa,
       image: fallback.image,
       feastDay: fallback.feastDay,
-      source: "Vatican News",
-      sourceUrl: `https://www.vaticannews.va/en/saints/${month}/${day}.html`,
-      link: fallback.link || `https://www.vaticannews.va/en/saints/${month}/${day}.html`
+      source: "Vatican State",
+      sourceUrl: "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html",
+      link: fallback.link || "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html"
     };
   });
 

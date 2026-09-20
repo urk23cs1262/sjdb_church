@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FiX, FiArrowRight, FiBookOpen, FiMusic, 
   FiRotateCcw, FiRotateCw, FiPlay, FiPause, 
-  FiList, FiVolume2, FiVolumeX, FiLoader 
+  FiList, FiVolume2, FiVolumeX, FiLoader,
+  FiSkipBack, FiSkipForward
 } from 'react-icons/fi';
 import { GiPrayerBeads, GiDove } from 'react-icons/gi';
 import { Link } from 'react-router-dom';
@@ -13,34 +14,99 @@ import RosaryAudioPlayer from './common_rosary_audio_player';
 import { MYSTERIES } from '../../data/rosary_prayers';
 import api, { getMediaUrl } from '../../services/api';
 
-// ── Devotional Song Persistence ───────────────────────────────────────────────
+// ── Audio Source & Devotional Song Persistence Helpers ─────────────────────────
 const DEVOTIONAL_STORAGE_KEY = 'sjdb_devotionalSong_lastPlayed';
 
-/** Save the currently playing song's stable ID to localStorage */
-function saveLastPlayedSong(song) {
-  if (!song || !song._id) return;
+function isSameAudioSource(src1, src2) {
+  if (!src1 || !src2) return false;
+  if (src1 === src2) return true;
   try {
-    localStorage.setItem(
-      DEVOTIONAL_STORAGE_KEY,
-      JSON.stringify({ songId: song._id, fileUrl: song.fileUrl || '', savedAt: Date.now() })
-    );
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
+    const u1 = new URL(src1, origin).href;
+    const u2 = new URL(src2, origin).href;
+    return u1 === u2;
+  } catch (_) {
+    return src1 === src2;
+  }
+}
+
+/** Save the currently playing or selected song to localStorage */
+function saveLastPlayedSong(song, index = 0) {
+  if (!song) return;
+  try {
+    const safeIndex = typeof index === 'number' ? index : 0;
+    const data = {
+      songId: song._id ? String(song._id) : null,
+      fileName: song.fileName || null,
+      fileUrl: song.fileUrl || '',
+      title: song.title || '',
+      index: safeIndex,
+      savedAt: Date.now()
+    };
+    const jsonStr = JSON.stringify(data);
+    localStorage.setItem(DEVOTIONAL_STORAGE_KEY, jsonStr);
+    localStorage.setItem('sjdb_last_played_devotional_song', jsonStr);
+    localStorage.setItem('sjdb_last_played_rosary_song_index', String(safeIndex));
   } catch (_) {}
 }
 
 /**
  * Load the persisted last-played song record from localStorage.
- * Returns null if nothing is saved or the value is malformed.
  */
 function loadLastPlayedSong() {
   try {
-    const raw = localStorage.getItem(DEVOTIONAL_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (parsed && parsed.songId) return parsed;
+    const raw = localStorage.getItem(DEVOTIONAL_STORAGE_KEY) || 
+                localStorage.getItem('sjdb_last_played_devotional_song') ||
+                localStorage.getItem('last_played_devotional_song');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && (parsed.songId || parsed.fileName || parsed.fileUrl || typeof parsed.index === 'number')) {
+        return parsed;
+      }
+    }
+    const rawIdx = localStorage.getItem('sjdb_last_played_rosary_song_index');
+    if (rawIdx !== null && !isNaN(parseInt(rawIdx, 10))) {
+      return { index: parseInt(rawIdx, 10) };
+    }
     return null;
   } catch (_) {
     return null;
   }
+}
+
+/**
+ * Robust matcher for finding the index of the saved song within the loaded song list.
+ */
+function findSavedSongIndex(songs, saved) {
+  if (!songs || songs.length === 0 || !saved) return 0;
+  // 1. Prioritize stable MongoDB ObjectId
+  if (saved.songId) {
+    const targetId = String(saved.songId).trim();
+    const idx = songs.findIndex((s) => s._id && String(s._id).trim() === targetId);
+    if (idx !== -1) return idx;
+  }
+  // 2. Fallback to fileName (case-insensitive, trimmed)
+  if (saved.fileName) {
+    const targetFile = String(saved.fileName).trim().toLowerCase();
+    const idx = songs.findIndex((s) => s.fileName && String(s.fileName).trim().toLowerCase() === targetFile);
+    if (idx !== -1) return idx;
+  }
+  // 3. Fallback to fileUrl
+  if (saved.fileUrl) {
+    const idx = songs.findIndex((s) => s.fileUrl === saved.fileUrl);
+    if (idx !== -1) return idx;
+  }
+  // 4. Fallback to title (case-insensitive, trimmed)
+  if (saved.title) {
+    const targetTitle = String(saved.title).trim().toLowerCase();
+    const idx = songs.findIndex((s) => s.title && String(s.title).trim().toLowerCase() === targetTitle);
+    if (idx !== -1) return idx;
+  }
+  // 5. Fallback to saved index within bounds
+  if (typeof saved.index === 'number' && saved.index >= 0 && saved.index < songs.length) {
+    return saved.index;
+  }
+  return 0;
 }
 
 function formatTime(seconds) {
@@ -57,19 +123,23 @@ function formatTime(seconds) {
 
 export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' }) {
   const { audioUrl: rosaryAudioUrl, isCustom } = useRosaryAudio();
+  const rosaryPlayerRef = useRef(null);
   
-  // Available Songs from Database
+  // Available Songs from Database & Persisted Song Record
   const [songsList, setSongsList] = useState([]);
-  const [currentSongIndex, setCurrentSongIndex] = useState(0);
+  const [currentSongIndex, setCurrentSongIndex] = useState(() => {
+    const saved = loadLastPlayedSong();
+    return (saved && typeof saved.index === 'number') ? saved.index : 0;
+  });
+  const [savedSongMeta, setSavedSongMeta] = useState(() => loadLastPlayedSong());
   const [loadingSongs, setLoadingSongs] = useState(false);
 
   // Guard: true once we have attempted to restore the persisted song.
-  // Prevents the default index-0 from overwriting the saved song during init.
   const restoredRef = useRef(false);
 
   // Modal View Mode: 'rosary' | 'finished' | 'songs'
-  const [viewMode, setViewMode] = useState('rosary');
-  const [autoPlayRosary, setAutoPlayRosary] = useState(true);
+  const [viewMode, setViewMode] = useState(initialMode === 'songs' ? 'songs' : 'rosary');
+  const [autoPlayRosary, setAutoPlayRosary] = useState(initialMode !== 'songs');
 
   // Devotional Playlist Audio State
   const devotionalAudioRef = useRef(null);
@@ -93,6 +163,12 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
   // Mutable refs to prevent effect re-triggers and stale closures
   const songsListRef = useRef([]);
   songsListRef.current = songsList;
+  const currentSongIndexRef = useRef(currentSongIndex);
+  currentSongIndexRef.current = currentSongIndex;
+  const songIsSeekingRef = useRef(songIsSeeking);
+  songIsSeekingRef.current = songIsSeeking;
+  const isPlayingSongRef = useRef(isPlayingSong);
+  isPlayingSongRef.current = isPlayingSong;
 
   const playDevotionalSongRef = useRef(null);
 
@@ -118,7 +194,7 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
         preloadAudioRef.current.src = getMediaUrl(nextSong.fileUrl);
         preloadAudioRef.current.load();
       } catch (err) {
-        console.warn('Preload audio error:', err);
+        console.warn('Preload audio notice:', err.message);
       }
     }
   }, []);
@@ -128,21 +204,33 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
     const songs = list && list.length > 0 ? list : songsListRef.current;
     if (!songs || songs.length === 0 || !songs[index]) return;
 
+    // Cleanly pause Rosary audio when devotional song plays
+    if (rosaryPlayerRef.current) {
+      rosaryPlayerRef.current.pause();
+    }
+    setAutoPlayRosary(false);
+
     setCurrentSongIndex(index);
+    setSavedSongMeta(songs[index]);
     setDevotionalPlaylistStarted(true);
 
     const song = songs[index];
-
-    // ── Persist last played song whenever the song actually changes ───────────
-    saveLastPlayedSong(song);
+    saveLastPlayedSong(song, index);
 
     const audio = devotionalAudioRef.current;
     if (audio) {
       const songUrl = getMediaUrl(song.fileUrl);
-      if (audio.src !== songUrl) {
+      const isNewSource = !audio.src || !isSameAudioSource(audio.src, songUrl);
+      if (isNewSource) {
         audio.src = songUrl;
-        audio.load();
+        setSongCurrentTime(0);
+        setSongSeekValue(0);
       }
+
+      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
+        setSongDuration(audio.duration);
+      }
+
       setSongIsBuffering(true);
       const playPromise = audio.play();
       if (playPromise !== undefined) {
@@ -150,20 +238,31 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
           .then(() => {
             setIsPlayingSong(true);
             setSongIsBuffering(false);
+            if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
+              setSongDuration(audio.duration);
+            }
             preloadNextSong(index, songs);
           })
           .catch((err) => {
-            console.warn('Playback initiation error, waiting for canplay:', err);
+            console.warn('Playback initiation notice, waiting for canplay:', err.message);
             const onCanPlay = () => {
               audio.play().then(() => {
                 setIsPlayingSong(true);
                 setSongIsBuffering(false);
+                if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
+                  setSongDuration(audio.duration);
+                }
                 preloadNextSong(index, songs);
               }).catch(() => {
                 setSongIsBuffering(false);
+                setIsPlayingSong(false);
               });
             };
-            audio.addEventListener('canplay', onCanPlay, { once: true });
+            if (audio.readyState >= 2) {
+              onCanPlay();
+            } else {
+              audio.addEventListener('canplay', onCanPlay, { once: true });
+            }
           });
       }
     }
@@ -171,6 +270,25 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
   }, [preloadNextSong]);
 
   playDevotionalSongRef.current = playDevotionalSong;
+
+  // Next and Previous Song Handlers
+  const handleNextSong = useCallback(() => {
+    const songs = songsListRef.current;
+    if (!songs || songs.length === 0) return;
+    const nextIdx = (currentSongIndexRef.current + 1) % songs.length;
+    if (playDevotionalSongRef.current) {
+      playDevotionalSongRef.current(nextIdx, songs);
+    }
+  }, []);
+
+  const handlePrevSong = useCallback(() => {
+    const songs = songsListRef.current;
+    if (!songs || songs.length === 0) return;
+    const prevIdx = (currentSongIndexRef.current - 1 + songs.length) % songs.length;
+    if (playDevotionalSongRef.current) {
+      playDevotionalSongRef.current(prevIdx, songs);
+    }
+  }, []);
 
   // Fetch active songs from API
   const fetchActiveSongs = useCallback(async (shouldAutoPlay = false) => {
@@ -183,33 +301,31 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
       setSongsList(fetchedSongs);
       songsListRef.current = fetchedSongs;
 
-      if (shouldAutoPlay && fetchedSongs.length > 0) {
-        // shouldAutoPlay (Rosary finished countdown) → play song 1, do not restore last-played
-        playDevotionalSong(0, fetchedSongs);
-        restoredRef.current = true;
-      } else if (fetchedSongs.length > 0) {
-        // ── Restore last-played song (no auto-play) ────────────────────────
+      if (fetchedSongs.length > 0) {
         const saved = loadLastPlayedSong();
-        if (saved && saved.songId) {
-          const savedIdx = fetchedSongs.findIndex((s) => s._id === saved.songId);
-          if (savedIdx !== -1) {
-            // Found the saved song → restore selection + load audio without playing
-            setCurrentSongIndex(savedIdx);
-            const audio = devotionalAudioRef.current;
-            if (audio) {
-              const songUrl = getMediaUrl(fetchedSongs[savedIdx].fileUrl);
+        const targetIndex = saved ? findSavedSongIndex(fetchedSongs, saved) : (currentSongIndexRef.current || 0);
+        const safeIndex = (targetIndex >= 0 && targetIndex < fetchedSongs.length) ? targetIndex : 0;
+
+        setCurrentSongIndex(safeIndex);
+        setSavedSongMeta(fetchedSongs[safeIndex]);
+
+        if (shouldAutoPlay) {
+          // Rosary finished countdown -> auto-play restored song
+          playDevotionalSong(safeIndex, fetchedSongs);
+          restoredRef.current = true;
+        } else {
+          // ── Restore last-played song (no auto-play) ──────────────────────
+          // Prepare audio element with saved track without auto-playing
+          const audio = devotionalAudioRef.current;
+          if (audio && fetchedSongs[safeIndex]?.fileUrl) {
+            const songUrl = getMediaUrl(fetchedSongs[safeIndex].fileUrl);
+            if (!isPlayingSongRef.current && (!audio.src || !isSameAudioSource(audio.src, songUrl))) {
               audio.src = songUrl;
               audio.load();
             }
-          } else {
-            // Saved song no longer exists → fall back to Song 1, clean up stale entry
-            localStorage.removeItem(DEVOTIONAL_STORAGE_KEY);
-            setCurrentSongIndex(0);
           }
-        } else {
-          setCurrentSongIndex(0);
+          restoredRef.current = true;
         }
-        restoredRef.current = true;
       }
 
       return fetchedSongs;
@@ -252,58 +368,93 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
       if (initialMode === 'songs') {
         setViewMode('songs');
         setAutoPlayRosary(false);
-        fetchActiveSongs(false); // false = restore last-played, not auto-play from song 1
+        const songs = songsListRef.current;
+        if (songs && songs.length > 0) {
+          const saved = loadLastPlayedSong();
+          const targetIndex = saved ? findSavedSongIndex(songs, saved) : (currentSongIndexRef.current || 0);
+          if (playDevotionalSongRef.current) {
+            playDevotionalSongRef.current(targetIndex, songs);
+          }
+        } else {
+          fetchActiveSongs(true); // true = auto-play restored song on load
+        }
       } else {
         setViewMode('rosary');
         setAutoPlayRosary(true);
         fetchActiveSongs(false);
       }
     } else {
-      // Modal Closed -> Pause and Reset All Audio
-      if (devotionalAudioRef.current) {
+      // Modal Closed -> Pause audio, but PRESERVE currentSongIndex and saved track
+      if (devotionalAudioRef.current && !devotionalAudioRef.current.paused) {
         devotionalAudioRef.current.pause();
-        devotionalAudioRef.current.currentTime = 0;
+      }
+      if (rosaryPlayerRef.current) {
+        rosaryPlayerRef.current.pause();
       }
       if (preloadAudioRef.current) {
         preloadAudioRef.current.src = '';
       }
       setIsPlayingSong(false);
       setDevotionalPlaylistStarted(false);
-      setCurrentSongIndex(0);
-      setSongCurrentTime(0);
-      setSongSeekValue(0);
+      // NOTE: Do NOT reset currentSongIndex! Preserve selected song across modal closes.
       setAutoPlayRosary(false);
-      // Reset restoration guard so next open re-loads the persisted song
-      restoredRef.current = false;
     }
-  }, [isOpen, initialMode]); // Stably dependent only on isOpen and initialMode
+  }, [isOpen, initialMode]);
 
-  // Devotional Audio Element Event Listeners
+  // Devotional Audio Element Event Listeners — attached whenever modal is open
   useEffect(() => {
+    if (!isOpen) return;
     const audio = devotionalAudioRef.current;
     if (!audio) return;
 
+    // Immediately sync current playback state from native audio
+    if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
+      setSongDuration(audio.duration);
+    }
+    if (audio.currentTime) {
+      setSongCurrentTime(audio.currentTime);
+      setSongSeekValue(audio.currentTime);
+    }
+    setIsPlayingSong(!audio.paused);
+
     const handleLoadedMetadata = () => {
-      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity) {
+      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
         setSongDuration(audio.duration);
       }
       setSongIsBuffering(false);
     };
 
+    const handleDurationChange = () => {
+      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
+        setSongDuration(audio.duration);
+      }
+    };
+
     const handleTimeUpdate = () => {
-      if (!songIsSeeking) {
+      if (!songIsSeekingRef.current) {
         setSongCurrentTime(audio.currentTime);
         setSongSeekValue(audio.currentTime);
       }
-      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && songDuration !== audio.duration) {
-        setSongDuration(audio.duration);
+      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
+        setSongDuration((prev) => (prev !== audio.duration ? audio.duration : prev));
       }
-      if (songIsBuffering) setSongIsBuffering(false);
+      setSongIsBuffering(false);
     };
 
     const handlePlay = () => {
       setIsPlayingSong(true);
       setSongIsBuffering(false);
+      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
+        setSongDuration(audio.duration);
+      }
+    };
+
+    const handlePlaying = () => {
+      setIsPlayingSong(true);
+      setSongIsBuffering(false);
+      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
+        setSongDuration(audio.duration);
+      }
     };
 
     const handlePause = () => {
@@ -319,39 +470,36 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
       setSongSeekValue(0);
 
       const songs = songsListRef.current;
-      const nextIndex = currentSongIndex + 1;
-      if (nextIndex < songs.length) {
-        // Immediately start next song in continuous playlist
-        if (playDevotionalSongRef.current) {
-          playDevotionalSongRef.current(nextIndex, songs);
-        }
-      } else {
-        // All songs completed -> reset to beginning
-        setDevotionalPlaylistStarted(false);
-        setCurrentSongIndex(0);
+      if (!songs || songs.length === 0) return;
+      const nextIndex = (currentSongIndexRef.current + 1) % songs.length;
+      if (playDevotionalSongRef.current) {
+        playDevotionalSongRef.current(nextIndex, songs);
       }
     };
 
     const handleWaiting = () => {
-      if (isPlayingSong) setSongIsBuffering(true);
+      if (isPlayingSongRef.current) setSongIsBuffering(true);
     };
 
     const handleCanPlay = () => {
       setSongIsBuffering(false);
-      if (audio.duration && !isNaN(audio.duration)) {
+      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
         setSongDuration(audio.duration);
       }
     };
 
-    const handleError = () => {
+    const handleError = (e) => {
+      if (audio.error && audio.error.code === 1) return;
+      console.warn('Devotional audio event notice:', audio.error || e);
       setSongIsBuffering(false);
       setIsPlayingSong(false);
     };
 
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('durationchange', handleLoadedMetadata);
+    audio.addEventListener('durationchange', handleDurationChange);
     audio.addEventListener('timeupdate', handleTimeUpdate);
     audio.addEventListener('play', handlePlay);
+    audio.addEventListener('playing', handlePlaying);
     audio.addEventListener('pause', handlePause);
     audio.addEventListener('ended', handleEnded);
     audio.addEventListener('waiting', handleWaiting);
@@ -361,9 +509,10 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
 
     return () => {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('durationchange', handleLoadedMetadata);
+      audio.removeEventListener('durationchange', handleDurationChange);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
       audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('playing', handlePlaying);
       audio.removeEventListener('pause', handlePause);
       audio.removeEventListener('ended', handleEnded);
       audio.removeEventListener('waiting', handleWaiting);
@@ -371,15 +520,18 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
       audio.removeEventListener('canplaythrough', handleCanPlay);
       audio.removeEventListener('error', handleError);
     };
-  }, [currentSongIndex, songIsSeeking, songDuration, isPlayingSong]);
+  }, [isOpen]);
 
   // Current Song Metadata
   const currentSongTitle = useMemo(() => {
     if (songsList.length > 0 && songsList[currentSongIndex]) {
       return songsList[currentSongIndex].title;
     }
+    if (savedSongMeta?.title) {
+      return savedSongMeta.title;
+    }
     return "Tamil Devotional Song";
-  }, [songsList, currentSongIndex]);
+  }, [songsList, currentSongIndex, savedSongMeta]);
 
   // Today's mystery based on Catholic calendar
   const todayMystery = useMemo(() => {
@@ -396,20 +548,53 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
 
   // Handle Modal Close
   const handleClose = () => {
-    if (devotionalAudioRef.current) {
+    if (devotionalAudioRef.current && !devotionalAudioRef.current.paused) {
       devotionalAudioRef.current.pause();
-      devotionalAudioRef.current.currentTime = 0;
+    }
+    if (rosaryPlayerRef.current) {
+      rosaryPlayerRef.current.pause();
     }
     if (preloadAudioRef.current) {
       preloadAudioRef.current.src = '';
     }
     setIsPlayingSong(false);
     setDevotionalPlaylistStarted(false);
-    setCurrentSongIndex(0);
-    setViewMode('rosary');
+    // NOTE: Keep currentSongIndex and saved track! Do NOT reset to 0!
     setAutoPlayRosary(false);
     setCountdown(totalDurationRef.current || totalTimerDuration || 10);
     onClose();
+  };
+
+  // Direct Mode Switch between Rosary and Devotional Songs
+  const handleSwitchMode = (newMode) => {
+    if (newMode === viewMode) return;
+    if (newMode === 'songs') {
+      // Switching from Rosary to Songs -> pause Rosary cleanly
+      if (rosaryPlayerRef.current) {
+        rosaryPlayerRef.current.pause();
+      }
+      setAutoPlayRosary(false);
+      setViewMode('songs');
+      // Auto-play the restored devotional song immediately
+      const songs = songsListRef.current;
+      const saved = loadLastPlayedSong();
+      const targetIdx = saved ? findSavedSongIndex(songs, saved) : (currentSongIndexRef.current || 0);
+      if (songs && songs.length > 0) {
+        if (playDevotionalSongRef.current) {
+          playDevotionalSongRef.current(targetIdx, songs);
+        }
+      } else {
+        fetchActiveSongs(true);
+      }
+    } else if (newMode === 'rosary') {
+      // Switching from Songs to Rosary -> pause Devotional audio cleanly
+      if (devotionalAudioRef.current && !devotionalAudioRef.current.paused) {
+        devotionalAudioRef.current.pause();
+      }
+      setIsPlayingSong(false);
+      setAutoPlayRosary(false);
+      setViewMode('rosary');
+    }
   };
 
   // When Rosary Audio ends -> trigger finished view & start countdown timer
@@ -419,20 +604,19 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
     setCountdown(startDuration);
     setViewMode('finished');
     
-    // Preload Song 1 in background so it starts instantaneously when timer hits 0
-    if (songsListRef.current.length > 0 && songsListRef.current[0]) {
-      if (preloadAudioRef.current && songsListRef.current[0].fileUrl) {
-        try {
-          preloadAudioRef.current.preload = 'auto';
-          preloadAudioRef.current.src = getMediaUrl(songsListRef.current[0].fileUrl);
-          preloadAudioRef.current.load();
-        } catch (_) {}
-      }
+    // Preload restored/saved song in background so it starts instantaneously when timer hits 0
+    const songs = songsListRef.current;
+    const curIdx = currentSongIndexRef.current || 0;
+    if (songs.length > 0 && songs[curIdx] && preloadAudioRef.current && songs[curIdx].fileUrl) {
+      try {
+        preloadAudioRef.current.preload = 'auto';
+        preloadAudioRef.current.src = getMediaUrl(songs[curIdx].fileUrl);
+        preloadAudioRef.current.load();
+      } catch (_) {}
     }
   };
 
   // Dedicated, stable countdown timer effect on finished screen
-  // Counts down 10 -> 9 -> 8 -> ... -> 0, then automatically transitions and plays devotional songs
   useEffect(() => {
     if (viewMode !== 'finished' || !isOpen) return;
 
@@ -446,11 +630,14 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
       if (remaining <= 0) {
         clearInterval(intervalId);
         setCountdown(0);
-        // Timer reached 0: Automatically switch to devotional songs mode and play immediately!
+        // Timer reached 0: Automatically switch to devotional songs mode and play restored song!
         setAutoPlayRosary(false);
         setViewMode('songs');
         if (playDevotionalSongRef.current) {
-          playDevotionalSongRef.current(0);
+          const songs = songsListRef.current;
+          const saved = loadLastPlayedSong();
+          const targetIdx = saved ? findSavedSongIndex(songs, saved) : (currentSongIndexRef.current || 0);
+          playDevotionalSongRef.current(targetIdx, songs);
         }
       } else {
         setCountdown(remaining);
@@ -464,24 +651,36 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
 
   // Replay Rosary: Stop devotional songs and switch back to Rosary
   const handleReplayRosary = () => {
-    if (devotionalAudioRef.current) {
+    if (devotionalAudioRef.current && !devotionalAudioRef.current.paused) {
       devotionalAudioRef.current.pause();
-      devotionalAudioRef.current.currentTime = 0;
     }
     setIsPlayingSong(false);
     setDevotionalPlaylistStarted(false);
-    setCurrentSongIndex(0);
+    // NOTE: Keep currentSongIndex! Do NOT reset to 0!
     setAutoPlayRosary(true);
     setCountdown(totalDurationRef.current || totalTimerDuration || 10);
     setViewMode('rosary');
+    if (rosaryPlayerRef.current) {
+      rosaryPlayerRef.current.play();
+    }
   };
 
-  // Switch to Devotional Songs mode & start playing Song 1 immediately (skips remaining timer)
+  // Switch to Devotional Songs mode & start playing the restored song immediately
   const handleSwitchToSongs = () => {
+    if (rosaryPlayerRef.current) {
+      rosaryPlayerRef.current.pause();
+    }
     setAutoPlayRosary(false);
     setViewMode('songs');
-    if (!isPlayingSong && playDevotionalSongRef.current) {
-      playDevotionalSongRef.current(0);
+    const songs = songsListRef.current;
+    const saved = loadLastPlayedSong();
+    const targetIdx = saved ? findSavedSongIndex(songs, saved) : (currentSongIndexRef.current || 0);
+    if (songs && songs.length > 0) {
+      if (playDevotionalSongRef.current) {
+        playDevotionalSongRef.current(targetIdx, songs);
+      }
+    } else {
+      fetchActiveSongs(true);
     }
   };
 
@@ -497,7 +696,16 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
     if (isPlayingSong) {
       audio.pause();
     } else {
+      if (rosaryPlayerRef.current) {
+        rosaryPlayerRef.current.pause();
+      }
+      setAutoPlayRosary(false);
       setSongIsBuffering(true);
+      const songs = songsListRef.current;
+      const curIdx = currentSongIndexRef.current;
+      if (songs && songs[curIdx]) {
+        saveLastPlayedSong(songs[curIdx], curIdx);
+      }
       if (!audio.src || audio.src === window.location.href) {
         playDevotionalSong(currentSongIndex);
       } else {
@@ -509,8 +717,9 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
             preloadNextSong(currentSongIndex);
           })
           .catch((err) => {
-            console.warn('Audio play prevented:', err);
-            setSongIsBuffering(false);
+            console.warn('Audio play prevented notice:', err.message);
+            // Fallback: try loading the current song explicitly
+            playDevotionalSong(currentSongIndex);
           });
       }
     }
@@ -599,6 +808,80 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
             ref={devotionalAudioRef} 
             id="navbarDevotionalAudio"
             preload="auto"
+            onLoadedMetadata={(e) => {
+              const d = e.currentTarget.duration;
+              if (d && !isNaN(d) && d !== Infinity && d > 0) {
+                setSongDuration(d);
+              }
+              setSongIsBuffering(false);
+            }}
+            onDurationChange={(e) => {
+              const d = e.currentTarget.duration;
+              if (d && !isNaN(d) && d !== Infinity && d > 0) {
+                setSongDuration(d);
+              }
+            }}
+            onTimeUpdate={(e) => {
+              const audio = e.currentTarget;
+              if (!songIsSeekingRef.current) {
+                setSongCurrentTime(audio.currentTime);
+                setSongSeekValue(audio.currentTime);
+              }
+              const d = audio.duration;
+              if (d && !isNaN(d) && d !== Infinity && d > 0) {
+                setSongDuration(d);
+              }
+              setSongIsBuffering(false);
+            }}
+            onPlay={(e) => {
+              setIsPlayingSong(true);
+              setSongIsBuffering(false);
+              const d = e.currentTarget.duration;
+              if (d && !isNaN(d) && d !== Infinity && d > 0) {
+                setSongDuration(d);
+              }
+            }}
+            onPlaying={(e) => {
+              setIsPlayingSong(true);
+              setSongIsBuffering(false);
+              const d = e.currentTarget.duration;
+              if (d && !isNaN(d) && d !== Infinity && d > 0) {
+                setSongDuration(d);
+              }
+            }}
+            onPause={() => {
+              setIsPlayingSong(false);
+              setSongIsBuffering(false);
+            }}
+            onEnded={() => {
+              setIsPlayingSong(false);
+              setSongIsBuffering(false);
+              setSongCurrentTime(0);
+              setSongSeekValue(0);
+              const songs = songsListRef.current;
+              if (!songs || songs.length === 0) return;
+              const nextIndex = (currentSongIndexRef.current + 1) % songs.length;
+              if (playDevotionalSongRef.current) {
+                playDevotionalSongRef.current(nextIndex, songs);
+              }
+            }}
+            onCanPlay={(e) => {
+              setSongIsBuffering(false);
+              const d = e.currentTarget.duration;
+              if (d && !isNaN(d) && d !== Infinity && d > 0) {
+                setSongDuration(d);
+              }
+            }}
+            onWaiting={() => {
+              if (isPlayingSongRef.current) setSongIsBuffering(true);
+            }}
+            onError={(e) => {
+              const audio = e.currentTarget;
+              if (audio.error && audio.error.code === 1) return;
+              console.warn('Devotional audio event notice:', audio.error);
+              setSongIsBuffering(false);
+              setIsPlayingSong(false);
+            }}
           />
 
           {/* 1. Header */}
@@ -633,66 +916,90 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
                 ? 'ஜெபமாலை முடிந்தது ' 
                 : 'புனித ஜெபமாலை ஆடியோ'}
             </p>
+
+            {/* Mode Switcher Tabs */}
+            {/* <div className="flex items-center justify-center gap-1.5 p-1 bg-black/25 backdrop-blur-xs rounded-xl mx-auto mt-2.5 max-w-[320px] text-xs"> */}
+              {/* <button
+                type="button"
+                onClick={() => handleSwitchMode('rosary')}
+                className={`flex-1 py-1.5 px-2.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer text-[11px] sm:text-xs ${
+                  viewMode === 'rosary' || viewMode === 'finished'
+                    ? 'bg-church-gold text-white shadow-xs'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <GiPrayerBeads className="text-sm" />
+                <span>Rosary / ஜெபமாலை</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSwitchMode('songs')}
+                className={`flex-1 py-1.5 px-2.5 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer text-[11px] sm:text-xs ${
+                  viewMode === 'songs'
+                    ? 'bg-church-gold text-white shadow-xs'
+                    : 'text-white/80 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <FiMusic className="text-sm" />
+                <span>Songs / பாடல்கள்</span>
+              </button> */}
+            {/* </div> */}
           </div>
-
-
 
           {/* 2. Dynamic Content Area */}
           <div className="p-3.5 sm:p-5 overflow-y-auto space-y-3 flex-1">
             
-            {/* VIEW MODE 1: Normal Rosary Player */}
-            {viewMode === 'rosary' && (
-              <>
-                <div className="bg-amber-50/80 p-3 sm:p-3.5 rounded-2xl border border-amber-200/90 shadow-2xs">
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
-                      <span className="text-[10px] sm:text-[11px] font-black text-church-royal-blue uppercase tracking-wider">
-                        {isCustom ? 'Live Parish Audio' : 'Official Tamil Rosary'}
-                      </span>
-                    </div>
-                    <span className="text-[10px] bg-white border border-amber-200/80 px-2 py-0.5 rounded-full text-amber-900 font-bold flex-shrink-0 shadow-2xs">
-                      {dayName}
+            {/* VIEW MODE 1: Normal Rosary Player (kept mounted across viewMode switches to prevent audio destruction) */}
+            <div className={viewMode === 'rosary' ? 'space-y-3' : 'hidden'}>
+              <div className="bg-amber-50/80 p-3 sm:p-3.5 rounded-2xl border border-amber-200/90 shadow-2xs">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+                    <span className="text-[10px] sm:text-[11px] font-black text-church-royal-blue uppercase tracking-wider">
+                      {isCustom ? 'Live Tamil Rosary Audio' : 'Official Tamil Rosary'}
                     </span>
                   </div>
-
-                  {/* Rosary Audio Player with onEnded listener */}
-                  <RosaryAudioPlayer 
-                    key={`rosary-${rosaryAudioUrl}-${autoPlayRosary}`}
-                    src={rosaryAudioUrl} 
-                    autoPlay={autoPlayRosary} 
-                    title={todayMystery.name}
-                    onEnded={handleRosaryEnded}
-                  />
-
-                  {/* Mystery Today Info */}
-                  <div className="mt-2 pt-2 border-t border-amber-200/70 flex flex-wrap items-center justify-between text-xs gap-1">
-                    <span className="text-gray-600 font-medium text-[11px]">Today's Mystery:</span>
-                    <span className="font-bold text-church-royal-blue font-tamil text-right leading-tight text-xs">
-                      {todayMystery.tag}
-                    </span>
-                  </div>
+                  <span className="text-[10px] bg-white border border-amber-200/80 px-2 py-0.5 rounded-full text-amber-900 font-bold flex-shrink-0 shadow-2xs">
+                    {dayName}
+                  </span>
                 </div>
 
-                {/* Mystery Decades Preview */}
-                <div className="bg-gray-50 p-3 rounded-2xl border border-gray-200/80 text-xs">
-                  <div className="flex items-center justify-between gap-1 mb-1.5 pb-1 border-b border-gray-200/60">
-                    <p className="font-bold text-church-royal-blue uppercase tracking-wider flex items-center gap-1 text-[11px]">
-                      <FiBookOpen className="text-church-gold flex-shrink-0" /> {todayMystery.name.split('(')[0].trim()}
-                    </p>
-                    <span className="text-[10px] text-gray-500 font-bold font-tamil">{todayMystery.days.split('(')[0].trim()}</span>
-                  </div>
-                  <ul className="space-y-1 text-gray-700 font-tamil max-h-24 sm:max-h-32 overflow-y-auto pr-1">
-                    {todayMystery.items.map((item, idx) => (
-                      <li key={idx} className="flex items-start gap-1 text-[11px] leading-snug">
-                        <span className="text-church-gold font-bold flex-shrink-0">•</span>
-                        <span>{item.ta}</span>
-                      </li>
-                    ))}
-                  </ul>
+                {/* Rosary Audio Player with forwardRef and stable onEnded listener */}
+                <RosaryAudioPlayer 
+                  ref={rosaryPlayerRef}
+                  src={rosaryAudioUrl} 
+                  autoPlay={autoPlayRosary} 
+                  title={todayMystery.name}
+                  onEnded={handleRosaryEnded}
+                />
+
+                {/* Mystery Today Info */}
+                <div className="mt-2 pt-2 border-t border-amber-200/70 flex flex-wrap items-center justify-between text-xs gap-1">
+                  <span className="text-gray-600 font-medium text-[11px]">Today's Mystery:</span>
+                  <span className="font-bold text-church-royal-blue font-tamil text-right leading-tight text-xs">
+                    {todayMystery.tag}
+                  </span>
                 </div>
-              </>
-            )}
+              </div>
+
+              {/* Mystery Decades Preview */}
+              <div className="bg-gray-50 p-3 rounded-2xl border border-gray-200/80 text-xs">
+                <div className="flex items-center justify-between gap-1 mb-1.5 pb-1 border-b border-gray-200/60">
+                  <p className="font-bold text-church-royal-blue uppercase tracking-wider flex items-center gap-1 text-[11px]">
+                    <FiBookOpen className="text-church-gold flex-shrink-0" /> {todayMystery.name.split('(')[0].trim()}
+                  </p>
+                  <span className="text-[10px] text-gray-500 font-bold font-tamil">{todayMystery.days.split('(')[0].trim()}</span>
+                </div>
+                <ul className="space-y-1 text-gray-700 font-tamil max-h-24 sm:max-h-32 overflow-y-auto pr-1">
+                  {todayMystery.items.map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-1 text-[11px] leading-snug">
+                      <span className="text-church-gold font-bold flex-shrink-0">•</span>
+                      <span>{item.ta}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
 
             {/* VIEW MODE 2: Rosary Finished Completion Screen with Animated Countdown */}
             {viewMode === 'finished' && (
@@ -769,205 +1076,225 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
               </motion.div>
             )}
 
-            {/* VIEW MODE 3: Devotional Songs Continuous Playlist Player & List */}
-            {viewMode === 'songs' && (
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="space-y-3"
-              >
-                {/* Active Song Player Card */}
-                <div className="bg-indigo-50/80 p-3 sm:p-3.5 rounded-2xl border border-indigo-200/90 shadow-2xs">
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className={`w-2 h-2 rounded-full ${isPlayingSong ? 'bg-indigo-600 animate-pulse' : 'bg-gray-400'} flex-shrink-0`} />
-                      <span className="text-[10px] sm:text-[11px] font-black text-indigo-950 uppercase tracking-wider truncate">
-                        NOW PLAYING: {currentSongTitle}
-                      </span>
+            {/* VIEW MODE 3: Devotional Songs Continuous Playlist Player & List (kept mounted to preserve playback) */}
+            <div className={viewMode === 'songs' ? 'space-y-3' : 'hidden'}>
+              {/* Active Song Player Card */}
+              <div className="bg-indigo-50/80 p-3 sm:p-3.5 rounded-2xl border border-indigo-200/90 shadow-2xs">
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className={`w-2 h-2 rounded-full ${isPlayingSong ? 'bg-indigo-600 animate-pulse' : 'bg-gray-400'} flex-shrink-0`} />
+                    <span className="text-[10px] sm:text-[11px] font-black text-indigo-950 uppercase tracking-wider truncate">
+                      NOW PLAYING: {currentSongTitle}
+                    </span>
+                  </div>
+                  {songsList.length > 0 ? (
+                    <span className="text-[10px] bg-white border border-indigo-200 px-2 py-0.5 rounded-full text-indigo-900 font-bold flex-shrink-0 shadow-2xs">
+                      {currentSongIndex + 1} / {songsList.length}
+                    </span>
+                  ) : savedSongMeta ? (
+                    <span className="text-[10px] bg-white border border-indigo-200 px-2 py-0.5 rounded-full text-indigo-900 font-bold flex-shrink-0 shadow-2xs">
+                      Track {currentSongIndex + 1}
+                    </span>
+                  ) : null}
+                </div>
+
+                {/* Devotional Continuous Audio Player UI */}
+                <div className="w-full bg-white/95 backdrop-blur-md rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-indigo-100 shadow-2xs flex flex-col gap-2.5 select-none">
+                  
+                  {/* 1. Full-Width Interactive Seek Slider */}
+                  <div className="space-y-1 w-full">
+                    <div className="relative flex items-center group w-full">
+                      <input
+                        type="range"
+                        min="0"
+                        max={songDuration || 100}
+                        step="0.1"
+                        value={songSeekValue}
+                        onChange={handleSeekChange}
+                        onMouseDown={handleSeekStart}
+                        onMouseUp={handleSeekEnd}
+                        onTouchStart={handleSeekStart}
+                        onTouchEnd={handleSeekEnd}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-church-gold focus:outline-none"
+                        style={{
+                          background: `linear-gradient(to right, #d4a017 0%, #d4a017 ${songProgressPercent}%, #e2e8f0 ${songProgressPercent}%, #e2e8f0 100%)`
+                        }}
+                        title="Drag or tap to seek audio position"
+                      />
                     </div>
-                    {songsList.length > 0 && (
-                      <span className="text-[10px] bg-white border border-indigo-200 px-2 py-0.5 rounded-full text-indigo-900 font-bold flex-shrink-0 shadow-2xs">
-                        {currentSongIndex + 1} / {songsList.length}
-                      </span>
-                    )}
+
+                    {/* Timestamps */}
+                    <div className="flex items-center justify-between text-[11px] font-bold text-gray-500 tracking-wide font-mono px-0.5">
+                      <span className="text-indigo-900">{formatTime(songSeekValue)}</span>
+                      <span>{formatTime(songDuration)}</span>
+                    </div>
                   </div>
 
-                  {/* Devotional Continuous Audio Player UI */}
-                  <div className="w-full bg-white/95 backdrop-blur-md rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-indigo-100 shadow-2xs flex flex-col gap-2.5 select-none">
+                  {/* 2. Audio Control Buttons Single Row */}
+                  <div className="flex items-center justify-between gap-1 sm:gap-2 pt-1.5 border-t border-gray-100">
                     
-                    {/* 1. Full-Width Interactive Seek Slider */}
-                    <div className="space-y-1 w-full">
-                      <div className="relative flex items-center group w-full">
+                    {/* Left Controls: Previous Track, Rewind -10s, Play/Pause, Forward +10s, Next Track */}
+                    <div className="flex items-center gap-1 sm:gap-1.5">
+                      {/* Previous Song Track */}
+                      <button
+                        type="button"
+                        onClick={handlePrevSong}
+                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold transition-all cursor-pointer active:scale-90"
+                        title="Previous Song / முந்தைய பாடல்"
+                      >
+                        <FiSkipBack className="text-xs sm:text-sm" />
+                      </button>
+
+                      {/* Rewind -10s */}
+                      <button
+                        type="button"
+                        onClick={() => skipSongTime(-10)}
+                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold transition-all cursor-pointer active:scale-90"
+                        title="Rewind 10 seconds"
+                      >
+                        <FiRotateCcw className="text-xs sm:text-sm" />
+                      </button>
+
+                      {/* Primary Play / Pause Button */}
+                      <button
+                        type="button"
+                        onClick={toggleDevotionalPlay}
+                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-r from-church-royal-blue to-indigo-900 hover:from-blue-900 hover:to-indigo-950 text-white flex items-center justify-center shadow-md transition-all cursor-pointer active:scale-95"
+                        title={isPlayingSong ? 'Pause' : 'Play'}
+                      >
+                        {songIsBuffering ? (
+                          <FiLoader className="animate-spin text-sm" />
+                        ) : isPlayingSong ? (
+                          <FiPause className="text-sm sm:text-base" />
+                        ) : (
+                          <FiPlay className="text-sm sm:text-base translate-x-0.5" />
+                        )}
+                      </button>
+
+                      {/* Forward +10s */}
+                      <button
+                        type="button"
+                        onClick={() => skipSongTime(10)}
+                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold transition-all cursor-pointer active:scale-90"
+                        title="Fast forward 10 seconds"
+                      >
+                        <FiRotateCw className="text-xs sm:text-sm" />
+                      </button>
+
+                      {/* Next Song Track */}
+                      <button
+                        type="button"
+                        onClick={handleNextSong}
+                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold transition-all cursor-pointer active:scale-90"
+                        title="Next Song / அடுத்த பாடல்"
+                      >
+                        <FiSkipForward className="text-xs sm:text-sm" />
+                      </button>
+                    </div>
+
+                    {/* Right Controls: Playback Speed & Volume */}
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      {/* Speed Toggle */}
+                      <button
+                        type="button"
+                        onClick={togglePlaybackRate}
+                        className="px-2 py-0.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-800 text-[10px] sm:text-[11px] font-black tracking-tight transition-all cursor-pointer"
+                        title="Playback Speed"
+                      >
+                        {songPlaybackRate}x
+                      </button>
+
+                      {/* Volume Control */}
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={toggleMute}
+                          className="text-gray-600 hover:text-gray-900 p-0.5 transition-colors cursor-pointer"
+                          title={songIsMuted ? 'Unmute' : 'Mute'}
+                        >
+                          {songIsMuted || songVolume === 0 ? <FiVolumeX className="text-xs sm:text-sm" /> : <FiVolume2 className="text-xs sm:text-sm" />}
+                        </button>
                         <input
                           type="range"
                           min="0"
-                          max={songDuration || 100}
-                          step="0.1"
-                          value={songSeekValue}
-                          onChange={handleSeekChange}
-                          onMouseDown={handleSeekStart}
-                          onMouseUp={handleSeekEnd}
-                          onTouchStart={handleSeekStart}
-                          onTouchEnd={handleSeekEnd}
-                          className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-church-gold focus:outline-none"
-                          style={{
-                            background: `linear-gradient(to right, #d4a017 0%, #d4a017 ${songProgressPercent}%, #e2e8f0 ${songProgressPercent}%, #e2e8f0 100%)`
-                          }}
-                          title="Drag or tap to seek audio position"
+                          max="1"
+                          step="0.05"
+                          value={songIsMuted ? 0 : songVolume}
+                          onChange={handleVolumeChange}
+                          className="w-10 sm:w-14 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                          title="Adjust Volume"
                         />
                       </div>
-
-                      {/* Timestamps */}
-                      <div className="flex items-center justify-between text-[11px] font-bold text-gray-500 tracking-wide font-mono px-0.5">
-                        <span className="text-indigo-900">{formatTime(songSeekValue)}</span>
-                        <span>{formatTime(songDuration)}</span>
-                      </div>
                     </div>
 
-                    {/* 2. Audio Control Buttons Single Row */}
-                    <div className="flex items-center justify-between gap-1 sm:gap-2 pt-1.5 border-t border-gray-100">
-                      
-                      {/* Left Controls: Rewind, Play/Pause, Forward */}
-                      <div className="flex items-center gap-1 sm:gap-1.5">
-                        {/* Rewind -10s */}
-                        <button
-                          type="button"
-                          onClick={() => skipSongTime(-10)}
-                          className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold transition-all cursor-pointer active:scale-90"
-                          title="Rewind 10 seconds"
-                        >
-                          <FiRotateCcw className="text-xs sm:text-sm" />
-                        </button>
-
-                        {/* Primary Play / Pause Button */}
-                        <button
-                          type="button"
-                          onClick={toggleDevotionalPlay}
-                          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-r from-church-royal-blue to-indigo-900 hover:from-blue-900 hover:to-indigo-950 text-white flex items-center justify-center shadow-md transition-all cursor-pointer active:scale-95"
-                          title={isPlayingSong ? 'Pause' : 'Play'}
-                        >
-                          {songIsBuffering ? (
-                            <FiLoader className="animate-spin text-sm" />
-                          ) : isPlayingSong ? (
-                            <FiPause className="text-sm sm:text-base" />
-                          ) : (
-                            <FiPlay className="text-sm sm:text-base translate-x-0.5" />
-                          )}
-                        </button>
-
-                        {/* Forward +10s */}
-                        <button
-                          type="button"
-                          onClick={() => skipSongTime(10)}
-                          className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold transition-all cursor-pointer active:scale-90"
-                          title="Fast forward 10 seconds"
-                        >
-                          <FiRotateCw className="text-xs sm:text-sm" />
-                        </button>
-                      </div>
-
-                      {/* Right Controls: Playback Speed & Volume */}
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        {/* Speed Toggle */}
-                        <button
-                          type="button"
-                          onClick={togglePlaybackRate}
-                          className="px-2 py-0.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-800 text-[10px] sm:text-[11px] font-black tracking-tight transition-all cursor-pointer"
-                          title="Playback Speed"
-                        >
-                          {songPlaybackRate}x
-                        </button>
-
-                        {/* Volume Control */}
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={toggleMute}
-                            className="text-gray-600 hover:text-gray-900 p-0.5 transition-colors cursor-pointer"
-                            title={songIsMuted ? 'Unmute' : 'Mute'}
-                          >
-                            {songIsMuted || songVolume === 0 ? <FiVolumeX className="text-xs sm:text-sm" /> : <FiVolume2 className="text-xs sm:text-sm" />}
-                          </button>
-                          <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.05"
-                            value={songIsMuted ? 0 : songVolume}
-                            onChange={handleVolumeChange}
-                            className="w-10 sm:w-14 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                            title="Adjust Volume"
-                          />
-                        </div>
-                      </div>
-
-                    </div>
                   </div>
                 </div>
+              </div>
 
-                {/* Individual Song Selection List */}
-                <div className="bg-gray-50 p-3 rounded-2xl border border-gray-200 text-xs space-y-2">
-                  <div className="flex items-center justify-between pb-1 border-b border-gray-200">
-                    <p className="font-bold text-church-royal-blue uppercase tracking-wider flex items-center gap-1.5 text-[11px]">
-                      <FiList className="text-church-gold" /> SELECT A SONG / பாடலைத் தேர்வு செய்க
-                    </p>
-                    <span className="text-[10px] text-gray-500 font-bold">{songsList.length} Songs</span>
+              {/* Individual Song Selection List */}
+              <div className="bg-gray-50 p-3 rounded-2xl border border-gray-200 text-xs space-y-2">
+                <div className="flex items-center justify-between pb-1 border-b border-gray-200">
+                  <p className="font-bold text-church-royal-blue uppercase tracking-wider flex items-center gap-1.5 text-[11px]">
+                    <FiList className="text-church-gold" /> SELECT A SONG / பாடலைத் தேர்வு செய்க
+                  </p>
+                  <span className="text-[10px] text-gray-500 font-bold">
+                    {songsList.length > 0 ? `${songsList.length} Songs` : 'Loading Songs...'}
+                  </span>
+                </div>
+
+                {loadingSongs && songsList.length === 0 ? (
+                  <div className="py-4 flex items-center justify-center gap-2 text-xs text-gray-500">
+                    <FiLoader className="animate-spin text-indigo-600" />
+                    <span>Loading devotional songs...</span>
                   </div>
-
-                  {loadingSongs ? (
-                    <div className="py-4 flex items-center justify-center gap-2 text-xs text-gray-500">
-                      <FiLoader className="animate-spin text-indigo-600" />
-                      <span>Loading devotional songs...</span>
-                    </div>
-                  ) : songsList.length === 0 ? (
-                    <p className="text-xs text-gray-500 py-3 text-center font-tamil">
-                      பக்திப் பாடல்கள் பதிவேற்றப்படவில்லை (No songs active)
-                    </p>
-                  ) : (
-                    <div className="space-y-1.5 max-h-36 sm:max-h-44 overflow-y-auto pr-1">
-                      {songsList.map((song, idx) => {
-                        const isSelected = idx === currentSongIndex;
-                        const isCurrentlyPlaying = isSelected && isPlayingSong;
-                        return (
-                          <button
-                            key={song._id || idx}
-                            type="button"
-                            onClick={() => handleSelectSong(idx)}
-                            className={`w-full p-2 rounded-xl text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
-                              isSelected 
-                                ? 'bg-indigo-600 text-white font-bold shadow-xs' 
-                                : 'bg-white hover:bg-indigo-50/70 text-gray-800 border border-gray-100'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold ${
-                                isSelected ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
-                              }`}>
-                                {idx + 1}
-                              </span>
-                              <span className="text-xs truncate">{song.title}</span>
-                            </div>
-                            <span className="text-xs flex-shrink-0">
-                              {isCurrentlyPlaying ? <FiPause /> : <FiPlay />}
+                ) : songsList.length === 0 ? (
+                  <p className="text-xs text-gray-500 py-3 text-center font-tamil">
+                    பக்திப் பாடல்கள் பதிவேற்றப்படவில்லை (No songs active)
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 max-h-36 sm:max-h-44 overflow-y-auto pr-1">
+                    {songsList.map((song, idx) => {
+                      const isSelected = idx === currentSongIndex;
+                      const isCurrentlyPlaying = isSelected && isPlayingSong;
+                      return (
+                        <button
+                          key={song._id || idx}
+                          type="button"
+                          onClick={() => handleSelectSong(idx)}
+                          className={`w-full p-2 rounded-xl text-left flex items-center justify-between gap-2 transition-all cursor-pointer ${
+                            isSelected 
+                              ? 'bg-indigo-600 text-white font-bold shadow-xs' 
+                              : 'bg-white hover:bg-indigo-50/70 text-gray-800 border border-gray-100'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold ${
+                              isSelected ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {idx + 1}
                             </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                            <span className="text-xs truncate">{song.title}</span>
+                          </div>
+                          <span className="text-xs flex-shrink-0">
+                            {isCurrentlyPlaying ? <FiPause /> : <FiPlay />}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
-                {/* Back to Rosary Switch Button */}
-                <button
-                  type="button"
-                  onClick={handleReplayRosary}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-xs transition-all cursor-pointer border border-gray-200"
-                >
-                  <FiRotateCcw className="text-xs" />
-                  <span> Replay Rosary / மீண்டும் ஜெபமாலை</span>
-                </button>
-              </motion.div>
-            )}
+              {/* Back to Rosary Switch Button */}
+              <button
+                type="button"
+                onClick={handleReplayRosary}
+                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-xs transition-all cursor-pointer border border-gray-200"
+              >
+                <FiRotateCcw className="text-xs" />
+                <span> Replay Rosary / மீண்டும் ஜெபமாலை</span>
+              </button>
+            </div>
 
           </div>
 

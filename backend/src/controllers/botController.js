@@ -217,8 +217,8 @@ const getStats = async (req, res) => {
     const users = await User.find({ phone: { $exists: true, $ne: '' }, isActive: { $ne: false } }).select('phone botPreferences whatsappOptIn').lean();
 
     const phones = new Set([
-      ...sessions.map(s => s.phoneNumber ? s.phoneNumber.replace(/\D/g, '') : '').filter(Boolean),
-      ...users.map(u => u.phone ? u.phone.replace(/\D/g, '') : '').filter(Boolean)
+      ...sessions.map(s => s.phoneNumber ? s.phoneNumber.replace(/\D/g, '').slice(-10) : '').filter(Boolean),
+      ...users.map(u => u.phone ? u.phone.replace(/\D/g, '').slice(-10) : '').filter(Boolean)
     ]);
 
     // Calculate today's dateKey in IST

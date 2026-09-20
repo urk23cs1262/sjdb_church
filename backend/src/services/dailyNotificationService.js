@@ -105,7 +105,28 @@ async function sendDailyChurchNotifications({
 } = {}) {
   try {
     const today = new Date();
-    const dailyContent = await getTodayDailyContent(today);
+    let dailyContent = await getTodayDailyContent(today);
+
+    // ── VERIFY DAILY SAINT SYNCHRONIZATION FOR TODAY (Asia/Kolkata) ─────────
+    const { getISTDateParts, fetchDailySaint } = require('./saintService');
+    const { dateKey: currentIstDate } = getISTDateParts(today);
+
+    // Verify today's Saint of the Day is synchronized
+    if (!dailyContent || !dailyContent.saint || dailyContent.saint.date !== currentIstDate) {
+      console.log(`[Daily Notification Service] Saint of the Day not yet synchronized for today (${currentIstDate}). Synchronizing from Vatican State...`);
+      try {
+        await fetchDailySaint(today);
+        dailyContent = await getTodayDailyContent(today);
+      } catch (syncErr) {
+        console.warn(`[Daily Notification Service] Vatican State sync attempt notice:`, syncErr.message);
+      }
+    }
+
+    // Safety guard: Verify daily content is complete and for today before sending
+    if (!dailyContent || !dailyContent.dateKey || dailyContent.dateKey !== currentIstDate || !dailyContent.saint || !dailyContent.saint.nameEnglish) {
+      console.error(`[Daily Notification Service] Content verification failed for ${currentIstDate}. Daily content is incomplete or outdated. Broadcast aborted to protect parishioners.`);
+      return { success: false, skipped: true, reason: 'Daily content incomplete or outdated for today' };
+    }
 
     const manualTest = isTest || isManualTest;
     const toEmail = testEmail || targetEmail;
@@ -288,7 +309,78 @@ async function sendDailyChurchNotifications({
       return true;
     });
 
-    console.log(`[Daily Notification Service] Found ${users.length} active parishioners and ${botSessions.length} bot sessions.`);
+    // ── UNIFIED DEDUPLICATED RECIPIENT PIPELINE (Zero Duplicate Deliveries) ──
+    const recipientMap = new Map();
+
+    // 1. Ingest registered website users
+    for (const user of users) {
+      const phone10 = (user.phone || '').replace(/\D/g, '').slice(-10);
+      const userSettings = user.settings?.notifications || {};
+      const userLang = resolveUserLanguage(user);
+      const userName = user.name || 'Parishioner';
+      const userEmail = (user.email || '').trim().toLowerCase();
+
+      const isEmailEnabled = userSettings.email !== false && Boolean(userEmail && userEmail.includes('@'));
+      const isInAppEnabled = userSettings.inApp !== false;
+      const isPushEnabled = userSettings.push !== false;
+      const isWhatsAppEnabled = userSettings.whatsapp !== false && Boolean(user.phone) && user.whatsappOptIn !== false;
+
+      const recipientKey = phone10 || `user_${user._id}`;
+      recipientMap.set(recipientKey, {
+        recipientKey,
+        phone10: phone10 || null,
+        userId: user._id,
+        userName,
+        userEmail: userEmail || null,
+        userPhone: user.phone || null,
+        userLang,
+        readingPreference: user.readingPreference || 'full',
+        sendLinks: user.sendLinks !== false,
+        isEmailEnabled,
+        isInAppEnabled,
+        isPushEnabled,
+        isWhatsAppEnabled,
+        isBotOnly: false
+      });
+    }
+
+    // 2. Ingest standalone WhatsApp Bot sessions (merging if phone already exists)
+    for (const session of botSessions) {
+      const phone10 = (session.phoneNumber || '').replace(/\D/g, '').slice(-10);
+      if (!phone10) continue;
+
+      if (recipientMap.has(phone10)) {
+        // User already in recipient map! Link session and ensure WhatsApp is active
+        const existing = recipientMap.get(phone10);
+        if (!existing.userId && session.linkedUserId) {
+          existing.userId = session.linkedUserId;
+        }
+        existing.isWhatsAppEnabled = true;
+        if (!existing.userPhone) existing.userPhone = session.phoneNumber;
+        continue;
+      }
+
+      // Standalone bot-only subscriber
+      const sessionLang = resolveUserLanguage(session);
+      recipientMap.set(phone10, {
+        recipientKey: phone10,
+        phone10,
+        userId: session.linkedUserId || null,
+        userName: session.pushName || 'WhatsApp Parishioner',
+        userEmail: null,
+        userPhone: session.phoneNumber,
+        userLang: sessionLang,
+        readingPreference: session.readingPreference || 'full',
+        sendLinks: session.sendLinks !== false,
+        isEmailEnabled: false,
+        isInAppEnabled: false,
+        isPushEnabled: false,
+        isWhatsAppEnabled: true,
+        isBotOnly: true
+      });
+    }
+
+    console.log(`[Daily Notification Service] Unified recipient count: ${recipientMap.size} unique recipients (from ${users.length} users and ${botSessions.length} bot sessions).`);
 
     let sentCount = 0;
     let skippedCount = 0;
@@ -303,59 +395,101 @@ async function sendDailyChurchNotifications({
 
     const waService = getWhatsApp();
 
-    // ── 2A. PROCESS WEBSITE USERS ───────────────────────────────────────────
-    for (const user of users) {
-      const userSettings = user.settings?.notifications || {};
-      const userLang = resolveUserLanguage(user);
-      const userName = user.name || 'Parishioner';
-      const userEmail = (user.email || '').trim().toLowerCase();
-      const userPhone = (user.phone || '').trim();
+    // ── DISPATCH TO EACH UNIQUE RECIPIENT WITH ATOMIC IDEMPOTENCY LOCK ─────
+    for (const recipient of recipientMap.values()) {
+      const idempotencyKey = recipient.phone10
+        ? `daily-catholic:${dailyContent.dateKey}:${recipient.phone10}`
+        : `daily-catholic:${dailyContent.dateKey}:user:${recipient.userId}`;
 
-      // DUPLICATE PROTECTION: Check if user already has a log for this dateKey (unless force=true)
+      // DUPLICATE PROTECTION: Check database before sending
       if (!force) {
         const existingLog = await DailyNotificationLog.findOne({
-          userId: user._id,
-          dateKey: dailyContent.dateKey
+          $or: [
+            { idempotencyKey },
+            ...(recipient.userId ? [{ userId: recipient.userId, dateKey: dailyContent.dateKey }] : []),
+            ...(recipient.phone10 ? [{ recipientPhone10: recipient.phone10, dateKey: dailyContent.dateKey }] : [])
+          ]
         }).lean();
 
         if (existingLog && (existingLog.status === 'sent' || existingLog.status === 'partially_sent')) {
+          console.log(`[DEDUPLICATION] Skipped: daily content already sent for this user and date (${idempotencyKey}).`);
           skippedCount++;
           continue;
         }
+
+        // Atomic claim to prevent concurrent worker execution
+        try {
+          const claim = await DailyNotificationLog.findOneAndUpdate(
+            { idempotencyKey },
+            {
+              $setOnInsert: {
+                idempotencyKey,
+                recipientPhone10: recipient.phone10,
+                userId: recipient.userId || null,
+                userEmail: recipient.userEmail || null,
+                userName: recipient.userName,
+                userPhone: recipient.userPhone,
+                dateKey: dailyContent.dateKey,
+                language: recipient.userLang,
+                status: 'claiming',
+                channels: {
+                  email: { status: recipient.isEmailEnabled ? 'pending' : 'disabled' },
+                  inApp: { status: recipient.isInAppEnabled ? 'pending' : 'disabled' },
+                  push: { status: recipient.isPushEnabled ? 'pending' : 'disabled' },
+                  whatsapp: { status: recipient.isWhatsAppEnabled ? 'pending' : 'disabled' }
+                },
+                summary: {
+                  bibleRef: dailyContent.bible?.ref,
+                  saintName: dailyContent.saint?.nameEnglish,
+                  massTitle: dailyContent.massReadings?.[recipient.userLang === 'en' ? 'english' : 'tamil']?.title || 'Daily Mass Readings'
+                },
+                sentAt: new Date()
+              }
+            },
+            { upsert: true, new: false }
+          );
+
+          if (claim && claim.status === 'claiming' && (Date.now() - new Date(claim.updatedAt || claim.sentAt).getTime()) < 10 * 60 * 1000) {
+            console.log(`[DEDUPLICATION] Claim active for ${idempotencyKey} by another worker. Skipping.`);
+            skippedCount++;
+            continue;
+          }
+        } catch (claimErr) {
+          if (claimErr.code === 11000 || claimErr.message?.includes('duplicate key')) {
+            console.log(`[DEDUPLICATION] Skipped duplicate concurrent claim for ${idempotencyKey}.`);
+            skippedCount++;
+            continue;
+          }
+        }
       }
 
-      const isEmailEnabled = userSettings.email !== false && Boolean(userEmail && userEmail.includes('@'));
-      const isInAppEnabled = userSettings.inApp !== false;
-      const isPushEnabled = userSettings.push !== false;
-      const isWhatsAppEnabled = userSettings.whatsapp !== false && Boolean(userPhone) && user.whatsappOptIn !== false;
-
       const logChannels = {
-        email: { status: isEmailEnabled ? 'pending' : 'disabled' },
-        inApp: { status: isInAppEnabled ? 'pending' : 'disabled' },
-        push: { status: isPushEnabled ? 'pending' : 'disabled' },
-        whatsapp: { status: isWhatsAppEnabled ? 'pending' : 'disabled' }
+        email: { status: recipient.isEmailEnabled ? 'pending' : 'disabled' },
+        inApp: { status: recipient.isInAppEnabled ? 'pending' : 'disabled' },
+        push: { status: recipient.isPushEnabled ? 'pending' : 'disabled' },
+        whatsapp: { status: recipient.isWhatsAppEnabled ? 'pending' : 'disabled' }
       };
 
       let userHadAtLeastOneSuccess = false;
       let userHadAnyAttempt = false;
 
-      // ── CHANNEL 1: EMAIL ──────────────────────────────────────────────────
-      if (isEmailEnabled) {
+      // ── CHANNEL 1: EMAIL (If enabled) ─────────────────────────────────────
+      if (recipient.isEmailEnabled && recipient.userEmail) {
         userHadAnyAttempt = true;
         try {
           const html = generateDailyNotificationHtml({
-            userName,
+            userName: recipient.userName,
             dailyContent,
-            userLanguage: userLang,
+            userLanguage: recipient.userLang,
             hasSaintImageAttachment: hasSaintImage
           });
 
-          const subject = userLang === 'en'
+          const subject = recipient.userLang === 'en'
             ? `Good Morning - Your Daily Catholic Reading - ${dailyContent.formattedDate}`
             : `காலை வணக்கம் - இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள் - ${dailyContent.formattedDateTa || dailyContent.formattedDate}`;
 
           const mailRes = await sendMail({
-            to: userEmail,
+            to: recipient.userEmail,
             subject,
             html,
             attachments: emailAttachments
@@ -377,17 +511,17 @@ async function sendDailyChurchNotifications({
         channelStats.email.disabled++;
       }
 
-      // ── CHANNEL 2 & 3: IN-APP & MOBILE/WEB PUSH ──────────────────────────
-      if (isInAppEnabled || isPushEnabled) {
+      // ── CHANNEL 2 & 3: IN-APP & MOBILE/WEB PUSH (Registered users only) ───
+      if (recipient.userId && (recipient.isInAppEnabled || recipient.isPushEnabled)) {
         userHadAnyAttempt = true;
         try {
           const { createNotification } = require('./notificationService');
-          const inAppMsg = formatInAppMessage(dailyContent, userLang);
+          const inAppMsg = formatInAppMessage(dailyContent, recipient.userLang);
 
           const notif = await createNotification({
-            userId: user._id,
+            userId: recipient.userId,
             isBroadcast: false,
-            title: userLang === 'en'
+            title: recipient.userLang === 'en'
               ? `Daily Catholic Word & Readings — ${dailyContent.formattedDate}`
               : `இன்றைய கத்தோலிக்க வாசகங்கள் — ${dailyContent.formattedDateTa || dailyContent.formattedDate}`,
             message: inAppMsg,
@@ -397,28 +531,28 @@ async function sendDailyChurchNotifications({
             recipient: 'user',
             actionUrl: `/notifications`,
             channels: [
-              ...(isInAppEnabled ? ['inApp'] : []),
-              ...(isPushEnabled ? ['push'] : [])
+              ...(recipient.isInAppEnabled ? ['inApp'] : []),
+              ...(recipient.isPushEnabled ? ['push'] : [])
             ]
           });
 
           if (notif) {
-            if (isInAppEnabled) {
+            if (recipient.isInAppEnabled) {
               logChannels.inApp = { status: 'sent', notificationId: notif._id, error: null, sentAt: new Date() };
               channelStats.inApp.sent++;
             }
-            if (isPushEnabled) {
+            if (recipient.isPushEnabled) {
               logChannels.push = { status: 'sent', error: null, sentAt: new Date() };
               channelStats.push.sent++;
             }
             userHadAtLeastOneSuccess = true;
           }
         } catch (err) {
-          if (isInAppEnabled) {
+          if (recipient.isInAppEnabled) {
             logChannels.inApp = { status: 'failed', notificationId: null, error: err.message, sentAt: new Date() };
             channelStats.inApp.failed++;
           }
-          if (isPushEnabled) {
+          if (recipient.isPushEnabled) {
             logChannels.push = { status: 'failed', error: err.message, sentAt: new Date() };
             channelStats.push.failed++;
           }
@@ -428,70 +562,67 @@ async function sendDailyChurchNotifications({
         channelStats.push.disabled++;
       }
 
-      // ── CHANNEL 4: WHATSAPP BOT ──────────────────────────────────────────
-      if (isWhatsAppEnabled) {
+      // ── CHANNEL 4: WHATSAPP BOT (Single Guaranteed Execution per Subscriber) ──
+      if (recipient.isWhatsAppEnabled && recipient.userPhone) {
         userHadAnyAttempt = true;
         try {
           if (waService && typeof waService.sendWhatsAppMessage === 'function') {
-            const userReadingPref = user.readingPreference || 'full';
-            const userSendLinks = user.sendLinks !== false;
-
             // 1. Message 1: Clean devotional/reading message (0 URLs)
             const waMsg = generateDailyCatholicMessage({
               dailyContent,
-              language: userLang,
-              readingPreference: userReadingPref
+              language: recipient.userLang,
+              readingPreference: recipient.readingPreference
             });
-            const waOk = await waService.sendWhatsAppMessage(userPhone, waMsg);
+            const waOk = await waService.sendWhatsAppMessage(recipient.userPhone, waMsg);
 
             if (waOk) {
-              logChannels.whatsapp = { status: 'sent', phone: userPhone, error: null, sentAt: new Date() };
+              logChannels.whatsapp = { status: 'sent', phone: recipient.userPhone, error: null, sentAt: new Date() };
               channelStats.whatsapp.sent++;
               userHadAtLeastOneSuccess = true;
+              console.log(`[DELIVERY] Sent daily content successfully to ${recipient.userPhone}`);
 
               // 2. Message 2: Saint of the Day Separate WhatsApp Photo Message (Image only)
               try {
                 const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
-
                 if (saintImageUrl && typeof waService.sendWhatsAppMedia === 'function') {
                   await new Promise(r => setTimeout(r, 450));
-                  await waService.sendWhatsAppMedia(userPhone, { url: saintImageUrl, mimetype: 'image/jpeg' });
+                  await waService.sendWhatsAppMedia(recipient.userPhone, { url: saintImageUrl, mimetype: 'image/jpeg' });
                 }
               } catch (saintMediaErr) {
-                console.warn(`[Daily Notification] Failed to send Saint photo message to ${userPhone}:`, saintMediaErr.message);
+                console.warn(`[Daily Notification] Failed to send Saint photo message to ${recipient.userPhone}:`, saintMediaErr.message);
               }
 
               // 3. Message 3: Saint of the Day Information
               try {
                 await new Promise(r => setTimeout(r, 450));
-                const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: userLang });
-                await waService.sendWhatsAppMessage(userPhone, saintInfoMsg);
+                const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: recipient.userLang });
+                await waService.sendWhatsAppMessage(recipient.userPhone, saintInfoMsg);
               } catch (saintInfoErr) {
-                console.warn(`[Daily Notification] Failed to send Saint info to ${userPhone}:`, saintInfoErr.message);
+                console.warn(`[Daily Notification] Failed to send Saint info to ${recipient.userPhone}:`, saintInfoErr.message);
               }
 
               // 4. Message 4: Separate Clickable Links Message (if user preference enabled)
-              if (userSendLinks) {
+              if (recipient.sendLinks) {
                 try {
                   await new Promise(r => setTimeout(r, 450));
-                  const linksMsg = generateDailyLinksMessage({ dailyContent, language: userLang });
+                  const linksMsg = generateDailyLinksMessage({ dailyContent, language: recipient.userLang });
                   if (linksMsg) {
-                    await waService.sendWhatsAppMessage(userPhone, linksMsg);
+                    await waService.sendWhatsAppMessage(recipient.userPhone, linksMsg);
                   }
                 } catch (linkErr) {
-                  console.warn(`[Daily Notification] Failed to send links message to ${userPhone}:`, linkErr.message);
+                  console.warn(`[Daily Notification] Failed to send links message to ${recipient.userPhone}:`, linkErr.message);
                 }
               }
             } else {
-              logChannels.whatsapp = { status: 'failed', phone: userPhone, error: 'Socket unreachable', sentAt: new Date() };
+              logChannels.whatsapp = { status: 'failed', phone: recipient.userPhone, error: 'Socket unreachable', sentAt: new Date() };
               channelStats.whatsapp.failed++;
             }
           } else {
-            logChannels.whatsapp = { status: 'failed', phone: userPhone, error: 'WhatsApp service offline', sentAt: new Date() };
+            logChannels.whatsapp = { status: 'failed', phone: recipient.userPhone, error: 'WhatsApp service offline', sentAt: new Date() };
             channelStats.whatsapp.failed++;
           }
         } catch (err) {
-          logChannels.whatsapp = { status: 'failed', phone: userPhone, error: err.message, sentAt: new Date() };
+          logChannels.whatsapp = { status: 'failed', phone: recipient.userPhone, error: err.message, sentAt: new Date() };
           channelStats.whatsapp.failed++;
         }
       } else {
@@ -507,24 +638,28 @@ async function sendDailyChurchNotifications({
       else if (overallStatus === 'failed') failedCount++;
       else skippedCount++;
 
-      // Save / Upsert to DailyNotificationLog
+      // Save / Upsert final result to DailyNotificationLog
       await DailyNotificationLog.findOneAndUpdate(
-        { userId: user._id, dateKey: dailyContent.dateKey },
+        { idempotencyKey },
         {
-          userId: user._id,
-          userEmail: userEmail || 'no-email@sjdb.church',
-          userName,
-          userPhone: userPhone || null,
-          dateKey: dailyContent.dateKey,
-          language: userLang,
-          status: overallStatus,
-          channels: logChannels,
-          summary: {
-            bibleRef: dailyContent.bible.ref,
-            saintName: dailyContent.saint.nameEnglish,
-            massTitle: dailyContent.massReadings[userLang === 'en' ? 'english' : 'tamil']?.title || 'Daily Mass Readings'
-          },
-          sentAt: new Date()
+          $set: {
+            idempotencyKey,
+            recipientPhone10: recipient.phone10,
+            userId: recipient.userId || null,
+            userEmail: recipient.userEmail || null,
+            userName: recipient.userName,
+            userPhone: recipient.userPhone || null,
+            dateKey: dailyContent.dateKey,
+            language: recipient.userLang,
+            status: overallStatus,
+            channels: logChannels,
+            summary: {
+              bibleRef: dailyContent.bible?.ref,
+              saintName: dailyContent.saint?.nameEnglish,
+              massTitle: dailyContent.massReadings?.[recipient.userLang === 'en' ? 'english' : 'tamil']?.title || 'Daily Mass Readings'
+            },
+            sentAt: new Date()
+          }
         },
         { upsert: true, new: true }
       );
@@ -540,72 +675,6 @@ async function sendDailyChurchNotifications({
       console.log(`[Daily Notification Service] Global Push Broadcast delivered to ${pushBroadcastRes.sentCount || 0} browser/mobile subscribers.`);
     } catch (pushErr) {
       console.warn('[Daily Notification Service] Global push broadcast error:', pushErr.message);
-    }
-
-    // ── 2C. PROCESS STANDALONE WHATSAPP BOT SESSIONS ─────────────────────────
-    if (waService && typeof waService.sendWhatsAppMessage === 'function') {
-      const processedPhones = new Set(users.map(u => (u.phone || '').replace(/\D/g, '')).filter(Boolean));
-
-      for (const session of botSessions) {
-        const phone = session.phoneNumber;
-        const cleanPhone = (phone || '').replace(/\D/g, '');
-        if (!phone || (cleanPhone && processedPhones.has(cleanPhone))) continue;
-
-        processedPhones.add(cleanPhone || phone);
-        const sessionLang = resolveUserLanguage(session);
-        const sessionReadingPref = session.readingPreference || 'full';
-        const sessionSendLinks = session.sendLinks !== false;
-
-        try {
-          await new Promise(r => setTimeout(r, 500));
-          const waMsg = generateDailyCatholicMessage({
-            dailyContent,
-            language: sessionLang,
-            readingPreference: sessionReadingPref
-          });
-
-          const ok = await waService.sendWhatsAppMessage(phone, waMsg);
-          if (ok) {
-            channelStats.whatsapp.sent++;
-
-            // 2. Message 2: Saint of the Day Separate WhatsApp Photo Message (Image only)
-            try {
-              const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
-
-              if (saintImageUrl && typeof waService.sendWhatsAppMedia === 'function') {
-                await new Promise(r => setTimeout(r, 450));
-                await waService.sendWhatsAppMedia(phone, { url: saintImageUrl, mimetype: 'image/jpeg' });
-              }
-            } catch (saintMediaErr) {
-              console.warn(`[Daily Notification] Session Saint photo send error for ${phone}:`, saintMediaErr.message);
-            }
-
-            // 3. Message 3: Saint of the Day Information
-            try {
-              await new Promise(r => setTimeout(r, 450));
-              const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: sessionLang });
-              await waService.sendWhatsAppMessage(phone, saintInfoMsg);
-            } catch (saintInfoErr) {
-              console.warn(`[Daily Notification] Session Saint info send error for ${phone}:`, saintInfoErr.message);
-            }
-
-            // 4. Message 4: Separate Clickable Links Message (if sessionSendLinks enabled)
-            if (sessionSendLinks) {
-              try {
-                await new Promise(r => setTimeout(r, 450));
-                const linksMsg = generateDailyLinksMessage({ dailyContent, language: sessionLang });
-                if (linksMsg) {
-                  await waService.sendWhatsAppMessage(phone, linksMsg);
-                }
-              } catch (linkErr) {
-                console.warn(`[Daily Notification] Session links send error for ${phone}:`, linkErr.message);
-              }
-            }
-          }
-        } catch (sessErr) {
-          console.warn(`[Daily Notification] Session send error for ${phone}:`, sessErr.message);
-        }
-      }
     }
 
     if (!manualTest) {
@@ -637,7 +706,7 @@ async function sendDailyChurchNotifications({
     return {
       success: true,
       dateKey: dailyContent.dateKey,
-      totalUsers: users.length,
+      totalRecipients: recipientMap.size,
       sentCount,
       skippedCount,
       failedCount,
@@ -662,13 +731,16 @@ async function getDailyNotificationStatus() {
     const dailyContent = await getTodayDailyContent(today);
     const dateKey = dailyContent.dateKey;
 
-    const totalUsers = await User.countDocuments({ isActive: { $ne: false } });
+    const registeredUsers = await User.countDocuments({ isActive: { $ne: false } });
+    const botSessionCount = await BotSession.countDocuments({ step: { $ne: 'stopped' } });
+    const totalUsers = registeredUsers;
+    const totalRecipients = Math.max(registeredUsers, botSessionCount);
 
     const sentLogs = await DailyNotificationLog.countDocuments({ dateKey, status: { $in: ['sent', 'partially_sent'] } });
     const failedLogs = await DailyNotificationLog.countDocuments({ dateKey, status: 'failed' });
     const recentLogs = await DailyNotificationLog.find({ dateKey }).sort({ sentAt: -1 }).limit(30).lean();
 
-    const isComplete = sentLogs > 0 && (sentLogs + failedLogs) >= totalUsers;
+    const isComplete = sentLogs > 0 && (sentLogs + failedLogs) >= totalRecipients;
 
     const emailSent = await DailyNotificationLog.countDocuments({ dateKey, 'channels.email.status': 'sent' });
     const inAppSent = await DailyNotificationLog.countDocuments({ dateKey, 'channels.inApp.status': 'sent' });
@@ -681,9 +753,10 @@ async function getDailyNotificationStatus() {
       formattedDate: dailyContent.formattedDate,
       status: isComplete ? 'Completed' : (sentLogs > 0 ? 'Partially Sent' : 'Pending'),
       totalUsers,
+      totalRecipients,
       sentCount: sentLogs,
       failedCount: failedLogs,
-      skippedCount: Math.max(0, totalUsers - (sentLogs + failedLogs)),
+      skippedCount: Math.max(0, totalRecipients - (sentLogs + failedLogs)),
       channels: {
         email: emailSent,
         inApp: inAppSent,

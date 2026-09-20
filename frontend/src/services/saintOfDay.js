@@ -49,9 +49,9 @@ export async function fetchSaintOfTheDay(dateStr) {
         imageSourceUrl: res.data.imageSourceUrl || res.data.sourceUrl || res.data.link,
         imageFallback: typeof res.data.imageFallback === 'boolean' ? res.data.imageFallback : false,
         feastDay: res.data.feastDay || fallbackSaint.feastDay || `${targetDate.toLocaleDateString('en-US', { month: 'long' })} ${dayNum}`,
-        source: res.data.source || "Vatican News / Catholic Liturgical Calendar",
-        sourceUrl: res.data.sourceUrl || `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`,
-        link: res.data.link || res.data.sourceUrl || `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`
+        source: res.data.source || "Vatican State / Catholic Liturgical Calendar",
+        sourceUrl: res.data.sourceUrl || "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html",
+        link: res.data.link || res.data.sourceUrl || "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html"
       };
 
       saintClientCache.set(dateKey, saintPayload);
@@ -77,12 +77,12 @@ export async function fetchSaintOfTheDay(dateStr) {
     descriptionTa: fallbackSaint.descriptionTa,
     image: fallbackSaint.image,
     imageSource: "liturgical_calendar",
-    imageSourceUrl: fallbackSaint.link || `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`,
+    imageSourceUrl: fallbackSaint.link || "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html",
     imageFallback: true,
     feastDay: fallbackSaint.feastDay || `${targetDate.toLocaleDateString('en-US', { month: 'long' })} ${dayNum}`,
-    source: "Vatican News / Catholic Liturgical Calendar",
-    sourceUrl: `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`,
-    link: fallbackSaint.link || `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`
+    source: "Vatican State / Catholic Liturgical Calendar",
+    sourceUrl: "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html",
+    link: fallbackSaint.link || "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html"
   };
 
   saintClientCache.set(dateKey, fallbackPayload);

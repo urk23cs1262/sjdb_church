@@ -228,40 +228,72 @@ async function fetchDailySaint(targetDate = new Date()) {
     
     const $ = cheerio.load(response.data);
     
-    // Extract first saint title: usually in h2, .teaser__title, or article headers
+    // Attempt date-matching against Vatican State articles (e.g. "September 20: Andrew Kim...")
+    const monthName = dt.toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', month: 'long' });
+    const dayNum = parseInt(day, 10);
+    const dateRegex = new RegExp(`(^|\\b)(${monthName}|${monthName.slice(0, 3)})\\s+0*${dayNum}\\b|\\b0*${dayNum}\\s+(${monthName}|${monthName.slice(0, 3)})\\b`, 'i');
+
+    let matchedArticle = null;
     let scrapedName = '';
-    $('h2').each((i, el) => {
-      const text = $(el).text().trim();
-      if (text && !['menu', 'search', 'daily readings', 'all prayers', 'liturgical feasts', 'subscribe to our newsletters', 'saint of the day'].includes(text.toLowerCase())) {
-        scrapedName = text.replace(/^\s*(\d{1,2}\s+[A-Za-z]+|[A-Za-z]+\s+\d{1,2})\s*[:–—-]\s*/i, '').trim() || text;
-        return false; // Break loop
-      }
-    });
+    let detailUrl = '';
+    let articleImg = '';
+    let articleBio = '';
 
-    if (!scrapedName) {
-      $('.section__head, .teaser__title, .page-title, .title').each((i, el) => {
-        const text = $(el).text().trim();
-        if (text && !['saint of the day', 'menu', 'search'].includes(text.toLowerCase())) {
-          scrapedName = text;
-          return false;
+    // Search articles on Vatican State page
+    $('article').each((i, el) => {
+      const h2Text = $(el).find('h2').text().trim();
+      const h2Link = $(el).find('h2 a');
+      const isHeaderMatch = dateRegex.test(h2Text);
+
+      // If matches today's date, or if it's the very first article as fallback candidate
+      if (isHeaderMatch || (i === 0 && !matchedArticle)) {
+        if (isHeaderMatch) {
+          matchedArticle = $(el);
         }
-      });
-    }
+        
+        const rawName = h2Text.replace(/^.*?(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}\s*[:–—-]\s*/i, '').trim();
+        const candidateName = rawName || h2Text;
+        const candidateLink = h2Link.attr('href') || $(el).find('a').attr('href') || '';
+        
+        let candidateImg = $(el).find('img').attr('src') || '';
+        if (candidateImg) {
+          candidateImg = candidateImg.split('#')[0];
+          if (!candidateImg.startsWith('http')) {
+            candidateImg = `https://www.vaticanstate.va${candidateImg}`;
+          }
+        }
 
-    // Extract first saint description
-    let bio = '';
-    $('p').each((i, el) => {
-      const text = $(el).text().trim();
-      if (text && text.length > 40 && 
-          !text.startsWith('The Saint of the day presents') && 
-          !text.includes('Subscribe') && 
-          !text.includes('Useful Information') && 
-          !text.includes('Pope\'s Activities')) {
-        bio += text + ' ';
+        const paragraphs = [];
+        $(el).find('.itemBody p, p').each((pi, pel) => {
+          const pt = $(pel).text().trim();
+          if (pt && pt.length > 25 && 
+              !pt.includes('Select your language') && 
+              !pt.startsWith('The Saint of the day presents') && 
+              !pt.includes('Subscribe') && 
+              !pt.includes('Useful Information')) {
+            paragraphs.push(pt);
+          }
+        });
+        const candidateBio = paragraphs.join(' ').replace(/\s+/g, ' ').trim();
+
+        if (isHeaderMatch) {
+          scrapedName = candidateName;
+          detailUrl = candidateLink.startsWith('http') ? candidateLink : (candidateLink ? `https://www.vaticanstate.va${candidateLink}` : fetchUrl);
+          articleImg = candidateImg;
+          articleBio = candidateBio;
+          return false; // Break loop on exact match
+        } else if (!scrapedName && candidateName) {
+          // Store first article as potential fallback candidate if no exact date match found
+          scrapedName = candidateName;
+          detailUrl = candidateLink.startsWith('http') ? candidateLink : (candidateLink ? `https://www.vaticanstate.va${candidateLink}` : fetchUrl);
+          articleImg = candidateImg;
+          articleBio = candidateBio;
+        }
       }
     });
 
-    const cleanBio = bio.replace(/\s+/g, ' ').trim();
+    // Clean sentences for biography
+    const cleanBio = (articleBio || '').replace(/\s+/g, ' ').trim();
     const sentences = splitIntoSentences(cleanBio);
     const shortBio = sentences.slice(0, 4).join(' ').trim();
 
@@ -271,12 +303,12 @@ async function fetchDailySaint(targetDate = new Date()) {
     let descriptionTa = '';
 
     // ZERO MISMATCH COHERENCE LOGIC:
-    // 1. If Vatican News returned both name and a legitimate biography
+    // 1. If Vatican State returned both name and a legitimate biography
     if (scrapedName && shortBio && shortBio.length >= 40) {
       saintName = scrapedName;
       description = shortBio;
     } 
-    // 2. If Vatican News returned a name but no biography
+    // 2. If Vatican State returned a name but no substantial biography
     else if (scrapedName) {
       const cleanScraped = scrapedName.toLowerCase().replace(/[^a-z]/g, '');
       const cleanFallback = fallbackSaint.name.toLowerCase().replace(/[^a-z]/g, '');
@@ -310,8 +342,18 @@ async function fetchDailySaint(targetDate = new Date()) {
       descriptionTa = fallbackSaint.descriptionTa;
     }
 
-    // Resolve Saint Image specifically for the chosen saintName
-    const imageResult = await resolveSaintImage(saintName, fetchUrl, $, dt);
+    // Resolve Saint Image: prioritize article image if available and verified, or resolve via resolver
+    let imageResult = null;
+    if (articleImg) {
+      imageResult = {
+        url: articleImg,
+        source: 'vatican',
+        sourceUrl: detailUrl || fetchUrl,
+        fallback: false
+      };
+    } else {
+      imageResult = await resolveSaintImage(saintName, fetchUrl, $, dt);
+    }
 
     // Translate name & description to Tamil if not already available
     if (!tamilName) {
@@ -338,9 +380,9 @@ async function fetchDailySaint(targetDate = new Date()) {
       imageSourceUrl: imageResult.sourceUrl,
       imageFallback: imageResult.fallback,
       feastDay: formattedFeastDay,
-      source: "Vatican News / Catholic Liturgical Calendar",
-      sourceUrl: fetchUrl,
-      link: fetchUrl,
+      source: "Vatican State / Catholic Liturgical Calendar",
+      sourceUrl: detailUrl || fetchUrl,
+      link: detailUrl || fetchUrl,
       status: "Synced",
       lastSynced: new Date()
     };
@@ -354,7 +396,7 @@ async function fetchDailySaint(targetDate = new Date()) {
     }
     return dailySaint;
   } catch (error) {
-    console.error(' Error fetching from online Vatican News, using Saint Resolver fallback:', error.message);
+    console.error(' Error fetching from Vatican State, using Saint Resolver fallback:', error.message);
     
     const imageResult = await resolveSaintImage(fallbackSaint.name, fetchUrl, null, dt);
 
@@ -372,7 +414,7 @@ async function fetchDailySaint(targetDate = new Date()) {
       imageSourceUrl: imageResult.sourceUrl,
       imageFallback: imageResult.fallback,
       feastDay: formattedFeastDay,
-      source: "Vatican News / Catholic Liturgical Calendar",
+      source: "Vatican State / Catholic Liturgical Calendar",
       sourceUrl: fetchUrl,
       link: fallbackSaint.link || fetchUrl,
       status: "Synced",
@@ -441,7 +483,7 @@ async function loadCachedSaint() {
       }
     }
     
-    const fallbackSaint = getSaintForDate(today);
+    const fallbackSaint = getSaintForDate(dateKey);
     dailySaint = {
       date: todayStr,
       saintName: fallbackSaint.name,
@@ -455,7 +497,7 @@ async function loadCachedSaint() {
       imageSource: "liturgical_calendar",
       imageSourceUrl: fallbackSaint.link,
       imageFallback: true,
-      feastDay: today.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
+      feastDay: dt.toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', month: 'long', day: 'numeric' }),
       source: "Vatican State",
       sourceUrl: SAINT_OF_THE_DAY_URL,
       link: fallbackSaint.link,
@@ -477,7 +519,12 @@ cron.schedule('0 0 * * *', async () => {
   const { dateKey } = getISTDateParts();
   console.log(`🔄 [CRON 12:00 AM IST] Updating Saint of the Day for new calendar date (${dateKey})...`);
   dailySaint = null; // Invalidate previous day in memory immediately
-  await fetchDailySaint();
+  try {
+    await fetchDailySaint();
+    console.log(`✅ [CRON 12:00 AM IST] Saint of the Day successfully synchronized for ${dateKey}`);
+  } catch (err) {
+    console.error(`❌ [CRON 12:00 AM IST] Failed to synchronize Saint of the Day for ${dateKey}:`, err.message);
+  }
 }, {
   timezone: 'Asia/Kolkata'
 });
@@ -504,7 +551,7 @@ const getDailySaint = (targetDate = new Date()) => {
   const todayStr = dateKey;
 
   if (!dailySaint || dailySaint.date !== todayStr) {
-    const fallbackSaint = getSaintForDate(today);
+    const fallbackSaint = getSaintForDate(dateKey);
     dailySaint = {
       date: todayStr,
       saintName: fallbackSaint.name,
@@ -518,7 +565,7 @@ const getDailySaint = (targetDate = new Date()) => {
       imageSource: "liturgical_calendar",
       imageSourceUrl: fallbackSaint.link,
       imageFallback: true,
-      feastDay: today.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
+      feastDay: dt.toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', month: 'long', day: 'numeric' }),
       source: "Vatican State",
       sourceUrl: SAINT_OF_THE_DAY_URL,
       link: fallbackSaint.link,

@@ -51,7 +51,11 @@ const botSessionSchema = new mongoose.Schema({
   processedMessageIds: [{ type: String }],
   lastProcessedMessageId: { type: String, default: '' },
   lastSentResponseHash: { type: String, default: '' },
-  lastSentAt: { type: Date }
+  lastSentAt: { type: Date },
+  lastBotReplyType: { type: String, default: '' },
+  invalidInputStreak: { type: Number, default: 0 },
+  lastMenuSentAt: { type: Date, default: null },
+  lastReplyText: { type: String, default: '' }
 }, { timestamps: true });
 
 module.exports = mongoose.model('BotSession', botSessionSchema);

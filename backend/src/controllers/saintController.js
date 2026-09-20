@@ -42,9 +42,9 @@ const getSaint = async (req, res) => {
             imageSourceUrl: fallbackSaint.link,
             imageFallback: true,
             feastDay: fallbackSaint.feastDay || targetDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
-            source: "Vatican News / Catholic Liturgical Calendar",
-            sourceUrl: `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`,
-            link: fallbackSaint.link || `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`,
+            source: "Vatican State / Catholic Liturgical Calendar",
+            sourceUrl: "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html",
+            link: fallbackSaint.link || "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html",
             status: "Synced"
           };
         }
@@ -88,7 +88,7 @@ const getSaint = async (req, res) => {
       imageSourceUrl: saint.imageSourceUrl || saint.sourceUrl || saint.link,
       imageFallback: typeof saint.imageFallback === 'boolean' ? saint.imageFallback : false,
       feastDay: saint.feastDay || `${month} ${day}`,
-      source: saint.source || "Vatican News",
+      source: saint.source || "Vatican State",
       sourceUrl: saint.sourceUrl || saint.link,
       link: saint.link || saint.sourceUrl,
       saint
@@ -132,7 +132,7 @@ const refreshSaint = async (req, res) => {
       imageSourceUrl: saint.imageSourceUrl || saint.sourceUrl || saint.link,
       imageFallback: typeof saint.imageFallback === 'boolean' ? saint.imageFallback : false,
       feastDay: saint.feastDay || `${month} ${day}`,
-      source: saint.source || "Vatican News",
+      source: saint.source || "Vatican State",
       sourceUrl: saint.sourceUrl || saint.link,
       link: saint.link || saint.sourceUrl,
       saint
@@ -148,7 +148,7 @@ const getSaintStatus = async (req, res) => {
     const today = new Date();
     const month = String(today.getMonth() + 1).padStart(2, "0");
     const day = String(today.getDate()).padStart(2, "0");
-    const vaticanUrl = `https://www.vaticannews.va/en/saints/${month}/${day}.html`;
+    const vaticanUrl = "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html";
 
     res.json({
       success: true,
