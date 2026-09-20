@@ -39,7 +39,11 @@ export default function Announcements() {
 
     const handleFocus = () => fetchAnnouncements(false);
     window.addEventListener('focus', handleFocus);
-    const interval = setInterval(() => fetchAnnouncements(false), 5000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchAnnouncements(false);
+      }
+    }, 60000);
 
     return () => {
       isMounted = false;

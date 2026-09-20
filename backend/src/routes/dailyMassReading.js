@@ -13,6 +13,7 @@ router.get('/today', async (req, res) => {
   try {
     const today = getDateKey(new Date());
     const lang = req.query.lang || 'ta';
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=7200');
     
     if (lang === 'en') {
       const translated = await getOrGenerateEnglishTranslation(today);
@@ -34,6 +35,7 @@ router.get('/', async (req, res) => {
   try {
     const targetDate = req.query.date || getDateKey(new Date());
     const lang = req.query.lang || 'ta';
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=7200');
 
     if (lang === 'en') {
       const translated = await getOrGenerateEnglishTranslation(targetDate);

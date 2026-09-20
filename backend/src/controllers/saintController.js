@@ -67,6 +67,7 @@ const getSaint = async (req, res) => {
     const dayOfWeek = saint.dayOfWeek || d.toLocaleDateString('en-US', { weekday: 'long' });
     const dayOfWeekTa = saint.dayOfWeekTa || d.toLocaleDateString('ta-IN', { weekday: 'long' });
 
+    res.set('Cache-Control', 'public, max-age=3600, stale-while-revalidate=7200');
     res.json({
       success: true,
       date: saint.date,

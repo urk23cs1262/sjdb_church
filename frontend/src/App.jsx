@@ -35,7 +35,7 @@ const MemberReport = lazy(() => import('./pages/public/public_member_report'));
 const Anbiyams = lazy(() => import('./pages/public/public_anbiyams'));
 const PublicDocuments = lazy(() => import('./pages/public/public_documents'));
 
-import AdminLayout from './components/admin/admin_layout';
+const AdminLayout = lazy(() => import('./components/admin/admin_layout'));
 
 // Auth & Security pages
 const Login = lazy(() => import('./pages/auth/auth_login'));

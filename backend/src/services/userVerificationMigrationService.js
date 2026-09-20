@@ -7,77 +7,77 @@ const User = require('../models/User');
  */
 async function migrateUserVerificationCycles() {
   try {
-    const users = await User.find({});
+    const users = await User.find({}).lean();
     const now = new Date();
     const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-    let updatedCount = 0;
+    const bulkOps = [];
 
     for (const user of users) {
-      let needsSave = false;
+      const updateFields = {};
 
       // 1. Initialize registeredAt
       if (!user.registeredAt) {
-        user.registeredAt = user.createdAt || now;
-        needsSave = true;
+        updateFields.registeredAt = user.createdAt || now;
       }
 
       // 2. Initialize lastVerifiedAt
+      const lastVerifiedAt = user.lastVerifiedAt || user.otpVerifiedAt || user.last_verified_at || updateFields.registeredAt || user.registeredAt || user.createdAt || now;
       if (!user.lastVerifiedAt) {
-        user.lastVerifiedAt = user.otpVerifiedAt || user.last_verified_at || user.registeredAt;
-        needsSave = true;
+        updateFields.lastVerifiedAt = lastVerifiedAt;
       }
 
       // 3. Initialize nextVerificationAt based on individual lastVerifiedAt
+      const nextVerificationAt = user.nextVerificationAt || new Date(new Date(lastVerifiedAt).getTime() + THIRTY_DAYS_MS);
       if (!user.nextVerificationAt) {
-        user.nextVerificationAt = new Date(new Date(user.lastVerifiedAt).getTime() + THIRTY_DAYS_MS);
-        needsSave = true;
+        updateFields.nextVerificationAt = nextVerificationAt;
       }
 
       // 4. Compute status & verification requirement
       const isAdmin = ['admin', 'priest', 'technical_team'].includes(user.role) || Boolean(user.isTechnicalTeam);
-      const isPastDue = now.getTime() >= new Date(user.nextVerificationAt).getTime();
+      const isPastDue = now.getTime() >= new Date(nextVerificationAt).getTime();
       const isUnverified = user.isVerified === false && user.otpVerified === false;
 
       if (isAdmin) {
         if (user.otpVerificationRequired !== false) {
-          user.otpVerificationRequired = false;
-          needsSave = true;
+          updateFields.otpVerificationRequired = false;
         }
         if (user.verificationStatus !== 'Verified') {
-          user.verificationStatus = 'Verified';
-          needsSave = true;
+          updateFields.verificationStatus = 'Verified';
         }
       } else {
         const required = Boolean(user.otpVerificationRequired || isPastDue || isUnverified);
         if (user.otpVerificationRequired !== required) {
-          user.otpVerificationRequired = required;
-          needsSave = true;
+          updateFields.otpVerificationRequired = required;
         }
 
         let newStatus = 'Verified';
         if (required) {
           newStatus = isPastDue ? 'Overdue' : 'Pending Verification';
         } else {
-          const daysRemaining = (new Date(user.nextVerificationAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+          const daysRemaining = (new Date(nextVerificationAt).getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
           if (daysRemaining <= 3) {
             newStatus = 'Due Soon';
           }
         }
 
         if (user.verificationStatus !== newStatus) {
-          user.verificationStatus = newStatus;
-          needsSave = true;
+          updateFields.verificationStatus = newStatus;
         }
       }
 
-      if (needsSave) {
-        await user.save();
-        updatedCount++;
+      if (Object.keys(updateFields).length > 0) {
+        bulkOps.push({
+          updateOne: {
+            filter: { _id: user._id },
+            update: { $set: updateFields }
+          }
+        });
       }
     }
 
-    if (updatedCount > 0) {
-      console.log(`[UserVerificationMigration] Successfully initialized individual 30-day verification cycles for ${updatedCount} existing user(s).`);
+    if (bulkOps.length > 0) {
+      await User.bulkWrite(bulkOps);
+      console.log(`[UserVerificationMigration] Successfully initialized individual 30-day verification cycles for ${bulkOps.length} existing user(s).`);
     }
   } catch (err) {
     console.error('[UserVerificationMigration] Migration error:', err.message);

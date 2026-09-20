@@ -26,4 +26,7 @@ const eventSchema = new mongoose.Schema({
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
 
+eventSchema.index({ isPublished: 1, date: 1 });
+eventSchema.index({ category: 1, isPublished: 1 });
+
 module.exports = mongoose.model('Event', eventSchema);

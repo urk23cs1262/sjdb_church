@@ -1193,19 +1193,19 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
                     </div>
 
                     {/* Right Controls: Playback Speed & Volume */}
-                    <div className="flex items-center gap-1.5 sm:gap-2">
+                    {/* <div className="flex items-center gap-1.5 sm:gap-2"> */}
                       {/* Speed Toggle */}
-                      <button
+                      {/* <button
                         type="button"
                         onClick={togglePlaybackRate}
                         className="px-2 py-0.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-800 text-[10px] sm:text-[11px] font-black tracking-tight transition-all cursor-pointer"
                         title="Playback Speed"
                       >
                         {songPlaybackRate}x
-                      </button>
+                      </button> */}
 
                       {/* Volume Control */}
-                      <div className="flex items-center gap-1">
+                      {/* <div className="flex items-center gap-1">
                         <button
                           type="button"
                           onClick={toggleMute}
@@ -1225,7 +1225,7 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
                           title="Adjust Volume"
                         />
                       </div>
-                    </div>
+                    </div> */}
 
                   </div>
                 </div>

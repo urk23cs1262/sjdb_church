@@ -129,6 +129,7 @@ const getActiveSongs = async (req, res) => {
       songs = await Promise.all(songs.map(enrichSongDetails));
     }
 
+    res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=300');
     res.json({ success: true, songs });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

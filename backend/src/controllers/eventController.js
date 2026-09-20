@@ -16,14 +16,17 @@ const getAll = async (req, res) => {
     if (upcoming === 'true') query.date = { $gte: new Date() };
     if (featured === 'true') query.isFeatured = true;
     const total = await Event.countDocuments(query);
-    const events = await Event.find(query).sort({ date: 1 }).skip((page - 1) * limit).limit(Number(limit));
+    const events = await Event.find(query).sort({ date: 1 }).skip((page - 1) * limit).limit(Number(limit)).lean();
+    if (all !== 'true') {
+      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
+    }
     res.json({ success: true, total, events });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
 const getOne = async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id).populate('createdBy', 'name');
+    const event = await Event.findById(req.params.id).populate('createdBy', 'name').lean();
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
     res.json({ success: true, event });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }

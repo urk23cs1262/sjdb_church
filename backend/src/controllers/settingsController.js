@@ -9,6 +9,7 @@ const CACHE_TTL = 60 * 1000; // 1 min cache
 // GET all settings (public - needed by frontend widgets)
 const getSettings = async (req, res) => {
   try {
+    res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
     const now = Date.now();
     if (cachedMap && (now - cacheTime < CACHE_TTL)) {
       return res.json({ success: true, settings: cachedMap });
@@ -33,6 +34,7 @@ const getSettings = async (req, res) => {
 // GET single setting by key (public)
 const getSetting = async (req, res) => {
   try {
+    res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
     const setting = await SiteSettings.findOne({ key: req.params.key }).lean();
     let value = setting?.value || null;
     if (!value) {

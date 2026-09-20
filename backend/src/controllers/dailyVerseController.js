@@ -36,6 +36,15 @@ function getDayOfYear(date = new Date()) {
   return Math.floor((current - start) / 86400000);
 }
 
+let defaultVersesEnsured = false;
+let cachedVerseData = null;
+let cachedVerseExpiry = 0;
+
+function invalidateVerseCache() {
+  cachedVerseData = null;
+  cachedVerseExpiry = 0;
+}
+
 // Helper to drop stale legacy date_1 index from MongoDB
 async function dropLegacyIndexes() {
   try {
@@ -48,11 +57,17 @@ async function dropLegacyIndexes() {
 
 // Seed default dataset if collection is empty
 async function ensureDefaultVerses() {
-  await dropLegacyIndexes();
-  const count = await DailyVerse.countDocuments();
-  if (count === 0) {
-    console.log(' Seeding default Daily Bible Verses dataset...');
-    await DailyVerse.insertMany(DEFAULT_VERSES);
+  if (defaultVersesEnsured) return;
+  try {
+    const count = await DailyVerse.countDocuments();
+    if (count === 0) {
+      await dropLegacyIndexes();
+      console.log(' Seeding default Daily Bible Verses dataset...');
+      await DailyVerse.insertMany(DEFAULT_VERSES);
+    }
+    defaultVersesEnsured = true;
+  } catch (e) {
+    console.error('Error ensuring default verses:', e.message);
   }
 }
 
@@ -63,7 +78,12 @@ function getTodayDateStr(date = new Date()) {
 }
 
 // Helper to fetch today's verse data with automatic daily rotation at 12:00 AM IST
-const getTodayVerseData = async () => {
+const getTodayVerseData = async (forceRefresh = false) => {
+  const now = Date.now();
+  if (!forceRefresh && cachedVerseData && now < cachedVerseExpiry) {
+    return cachedVerseData;
+  }
+
   await ensureDefaultVerses();
   const total = await DailyVerse.countDocuments();
   const dayOfYear = getDayOfYear();
@@ -123,7 +143,7 @@ const getTodayVerseData = async () => {
   const textEn = verse?.verseTextEn || 'For God so loved the world...';
   const textTa = verse?.verseTextTa || '';
 
-  return {
+  const result = {
     id: verse?.id || 1,
     ref: refStr,
     reference: refStr,
@@ -137,12 +157,17 @@ const getTodayVerseData = async () => {
     totalVerses: total,
     dateStr: todayDateStr
   };
+
+  cachedVerseData = result;
+  cachedVerseExpiry = Date.now() + 60 * 1000; // 1 min memory cache
+  return result;
 };
 
 // GET /api/daily-verse or GET /api/site-settings/daily-verses/today (Public)
 const getTodayVerse = async (req, res) => {
   try {
     const data = await getTodayVerseData();
+    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
     res.json({
       success: true,
       ...data
@@ -248,6 +273,7 @@ const uploadVerses = async (req, res) => {
     await dropLegacyIndexes();
     await DailyVerse.deleteMany({});
     const inserted = await DailyVerse.insertMany(cleanVerses);
+    invalidateVerseCache();
 
     res.json({
       success: true,
@@ -277,6 +303,8 @@ const createVerse = async (req, res) => {
       verseTextTa: verseTextTa ? verseTextTa.trim() : ''
     });
 
+    invalidateVerseCache();
+
     res.json({ success: true, verse: newVerse, message: 'Verse added successfully' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -304,6 +332,7 @@ const updateVerse = async (req, res) => {
     if (verseTextTa !== undefined) verse.verseTextTa = verseTextTa.trim();
 
     await verse.save();
+    invalidateVerseCache();
     res.json({ success: true, verse, message: 'Verse updated successfully' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -322,6 +351,7 @@ const deleteVerse = async (req, res) => {
     if (!deleted) {
       return res.status(404).json({ success: false, message: 'Verse not found' });
     }
+    invalidateVerseCache();
     res.json({ success: true, message: 'Verse deleted successfully' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -372,6 +402,7 @@ const resetVerses = async (req, res) => {
     await dropLegacyIndexes();
     await DailyVerse.deleteMany({});
     const inserted = await DailyVerse.insertMany(DEFAULT_VERSES);
+    invalidateVerseCache();
     res.json({
       success: true,
       count: inserted.length,
@@ -433,7 +464,8 @@ const changeTodayVerse = async (req, res) => {
       { upsert: true, new: true }
     );
 
-    const updatedData = await getTodayVerseData();
+    invalidateVerseCache();
+    const updatedData = await getTodayVerseData(true);
 
     res.json({
       success: true,

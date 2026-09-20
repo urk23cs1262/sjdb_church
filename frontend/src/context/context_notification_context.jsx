@@ -134,8 +134,23 @@ export const NotificationProvider = ({ children }) => {
     }
 
     refetch();
-    pollInterval.current = setInterval(refetch, 20000);
-    return () => clearInterval(pollInterval.current);
+    pollInterval.current = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        refetch();
+      }
+    }, 60000);
+
+    const handleFocus = () => {
+      if (document.visibilityState === 'visible') {
+        refetch();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      if (pollInterval.current) clearInterval(pollInterval.current);
+      window.removeEventListener('focus', handleFocus);
+    };
   }, [isAuthenticated, refetch]);
 
   const markRead = async (id) => {

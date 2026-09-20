@@ -22,7 +22,11 @@ export default function PreMaintenanceBanner() {
     };
 
     fetchStatus();
-    const interval = setInterval(fetchStatus, 30 * 1000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchStatus();
+      }
+    }, 60 * 1000);
     return () => {
       isMounted = false;
       clearInterval(interval);

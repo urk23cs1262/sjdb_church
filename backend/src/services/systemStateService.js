@@ -91,7 +91,7 @@ function updateCacheFromSettings(settings) {
  * Read-only fast query of the current system state
  */
 async function getSystemState(forceRefresh = false) {
-  if (forceRefresh || !stateCache.lastUpdated || (Date.now() - stateCache.lastUpdated > 10000)) {
+  if (forceRefresh || !stateCache.lastUpdated || (Date.now() - stateCache.lastUpdated > 30000)) {
     await getOrCreateSettings();
   }
   return stateCache;

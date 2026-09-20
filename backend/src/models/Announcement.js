@@ -13,4 +13,6 @@ const announcementSchema = new mongoose.Schema({
   attachment: { type: String },
 }, { timestamps: true });
 
+announcementSchema.index({ isPublished: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Announcement', announcementSchema);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +17,7 @@ import { GiChurch, GiCrucifix } from 'react-icons/gi';
 import churchLogo from '../../assets/church_extirior.png';
 import DailySaintTicker from './common_daily_saint_ticker';
 import PreMaintenanceBanner from './common_pre_maintenance_banner';
-import RosaryModal from './common_rosary_modal';
+const RosaryModal = lazy(() => import('./common_rosary_modal'));
 
 const navLinks = [
   { key: 'rosary', path: '/rosary' },
@@ -632,12 +632,16 @@ export default function Navbar() {
       </AnimatePresence>
 
       {/* Rosary Audio Modal */}
-      <RosaryModal
-        isOpen={showRosaryModal}
-        onClose={() => setShowRosaryModal(false)}
-        initialMode={rosaryModalMode}
-        t={t}
-      />
+      {showRosaryModal && (
+        <Suspense fallback={null}>
+          <RosaryModal
+            isOpen={showRosaryModal}
+            onClose={() => setShowRosaryModal(false)}
+            initialMode={rosaryModalMode}
+            t={t}
+          />
+        </Suspense>
+      )}
     </>
   );
 }

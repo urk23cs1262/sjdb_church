@@ -21,5 +21,33 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    build: {
+      target: 'esnext',
+      chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('jspdf') || id.includes('html-to-image')) {
+                return 'vendor-pdf';
+              }
+              if (id.includes('recharts')) {
+                return 'vendor-charts';
+              }
+              if (id.includes('framer-motion') || id.includes('swiper') || id.includes('yet-another-react-lightbox') || id.includes('canvas-confetti')) {
+                return 'vendor-ui';
+              }
+              if (id.includes('i18next')) {
+                return 'vendor-i18n';
+              }
+              if (id.includes('react-router-dom') || id.includes('react-dom') || id.includes('react')) {
+                return 'vendor-react';
+              }
+              return 'vendor-misc';
+            }
+          }
+        }
+      }
+    }
   };
 })

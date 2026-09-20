@@ -11,7 +11,7 @@ const MaintenancePage = lazy(() => import('../../pages/public/public_maintenance
 const CACHE_KEY = 'maint_status_cache';
 
 // How often to re-poll the maintenance status (ms)
-const POLL_INTERVAL = 15_000;
+const POLL_INTERVAL = 60_000;
 
 // Routes always reachable even during maintenance so Admin/Tech Team can log in
 const LOGIN_ROUTE = '/login';
@@ -57,7 +57,11 @@ export default function MaintenanceGuard({ children }) {
     isMounted.current = true;
 
     checkMaintenance();
-    const interval = setInterval(checkMaintenance, POLL_INTERVAL);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        checkMaintenance();
+      }
+    }, POLL_INTERVAL);
 
     // Re-check immediately when the user returns to the tab/app (critical for
     // PWA/installed app scenario: admin enables maintenance while user is away,

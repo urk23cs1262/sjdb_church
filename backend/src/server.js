@@ -6,10 +6,26 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
+const compression = require('compression');
 const connectDB = require('./config/db');
 
 const app = express();
 app.set('trust proxy', 1); // Trust the reverse proxy on Render/Heroku
+
+// HTTP response compression (gzip/deflate)
+app.use(compression());
+
+// Performance Monitor: Log slow API requests exceeding 500ms
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (duration > 500) {
+      console.warn(`[SLOW API] ${req.method} ${req.originalUrl || req.url} took ${duration}ms (status: ${res.statusCode})`);
+    }
+  });
+  next();
+});
 
 // Validate critical environment variables
 if (!process.env.JWT_SECRET) {

@@ -8,6 +8,8 @@ function sendWA(phone, text) {
   return require('../bot/whatsapp').sendWhatsAppMessage(phone, text).catch(() => { });
 }
 
+let lastBroadcastSync = 0;
+
 const getAll = async (req, res) => {
   try {
     const { type, page = 1, limit = 20, admin, all } = req.query;
@@ -22,30 +24,38 @@ const getAll = async (req, res) => {
     if (type) query.type = type;
 
     const total = await Announcement.countDocuments(query);
-    let announcements = await Announcement.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(Number(limit));
+    let announcements = await Announcement.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(Number(limit)).lean();
 
-    // Auto-sync broadcast notifications of category 'announcements' into Announcement collection
-    try {
-      const broadcastNotifs = await Notification.find({
-        isBroadcast: true,
-        $or: [{ category: 'announcements' }, { type: 'announcement' }]
-      }).sort({ createdAt: -1 });
+    // Auto-sync broadcast notifications throttled to at most once per 60 seconds
+    const nowMs = Date.now();
+    if (nowMs - lastBroadcastSync > 60000) {
+      lastBroadcastSync = nowMs;
+      try {
+        const broadcastNotifs = await Notification.find({
+          isBroadcast: true,
+          $or: [{ category: 'announcements' }, { type: 'announcement' }]
+        }).sort({ createdAt: -1 }).limit(10).lean();
 
-      for (const notif of broadcastNotifs) {
-        const exists = announcements.some(a => a.title === notif.title || (notif.relatedId && String(a._id) === String(notif.relatedId)));
-        if (!exists) {
-          const created = await Announcement.create({
-            title: notif.title,
-            content: notif.message,
-            priority: notif.priority === 'high' ? 'urgent' : 'medium',
-            type: 'general',
-            isPublished: true,
-            createdAt: notif.createdAt
-          }).catch(() => null);
-          if (created) announcements.unshift(created);
+        for (const notif of broadcastNotifs) {
+          const exists = announcements.some(a => a.title === notif.title || (notif.relatedId && String(a._id) === String(notif.relatedId)));
+          if (!exists) {
+            const created = await Announcement.create({
+              title: notif.title,
+              content: notif.message,
+              priority: notif.priority === 'high' ? 'urgent' : 'medium',
+              type: 'general',
+              isPublished: true,
+              createdAt: notif.createdAt
+            }).catch(() => null);
+            if (created) announcements.unshift(created.toObject ? created.toObject() : created);
+          }
         }
-      }
-    } catch { /* silent */ }
+      } catch { /* silent */ }
+    }
+
+    if (!isAdmin) {
+      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
+    }
 
     res.json({ success: true, total, announcements });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
