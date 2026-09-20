@@ -1046,101 +1046,63 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
                   </div>
 
                   {/* 2. Audio Control Buttons Single Row */}
-                  <div className="flex items-center justify-between gap-1 sm:gap-2 pt-1.5 border-t border-gray-100">
+                  <div className="flex items-center justify-center gap-3 sm:gap-4 pt-1.5 border-t border-gray-100">
 
-                    {/* Left Controls: Previous Track, Rewind -10s, Play/Pause, Forward +10s, Next Track */}
-                    <div className="flex items-center gap-1 sm:gap-1.5">
-                      {/* Previous Song Track */}
-                      <button
-                        type="button"
-                        onClick={handlePrevSong}
-                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold transition-all cursor-pointer active:scale-90"
-                        title="Previous Song / முந்தைய பாடல்"
-                      >
-                        <FiSkipBack className="text-xs sm:text-sm" />
-                      </button>
+                    {/* Previous Song Track */}
+                    <button
+                      type="button"
+                      onClick={handlePrevSong}
+                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                      title="Previous Song / முந்தைய பாடல்"
+                    >
+                      <FiSkipBack className="text-sm sm:text-base" />
+                    </button>
 
-                      {/* Rewind -10s */}
-                      <button
-                        type="button"
-                        onClick={() => skipSongTime(-10)}
-                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold transition-all cursor-pointer active:scale-90"
-                        title="Rewind 10 seconds"
-                      >
-                        <FiRotateCcw className="text-xs sm:text-sm" />
-                      </button>
+                    {/* Rewind -10s */}
+                    <button
+                      type="button"
+                      onClick={() => skipSongTime(-10)}
+                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                      title="Rewind 10 seconds"
+                    >
+                      <FiRotateCcw className="text-sm sm:text-base" />
+                    </button>
 
-                      {/* Primary Play / Pause Button */}
-                      <button
-                        type="button"
-                        onClick={toggleDevotionalPlay}
-                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-r from-church-royal-blue to-indigo-900 hover:from-blue-900 hover:to-indigo-950 text-white flex items-center justify-center shadow-md transition-all cursor-pointer active:scale-95"
-                        title={isPlayingSong ? 'Pause' : 'Play'}
-                      >
-                        {songIsBuffering ? (
-                          <FiLoader className="animate-spin text-sm" />
-                        ) : isPlayingSong ? (
-                          <FiPause className="text-sm sm:text-base" />
-                        ) : (
-                          <FiPlay className="text-sm sm:text-base translate-x-0.5" />
-                        )}
-                      </button>
+                    {/* Primary Play / Pause Button */}
+                    <button
+                      type="button"
+                      onClick={toggleDevotionalPlay}
+                      className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-r from-church-royal-blue to-indigo-900 hover:from-blue-900 hover:to-indigo-950 text-white flex items-center justify-center shadow-md transition-all cursor-pointer active:scale-95"
+                      title={isPlayingSong ? 'Pause' : 'Play'}
+                    >
+                      {songIsBuffering ? (
+                        <FiLoader className="animate-spin text-lg" />
+                      ) : isPlayingSong ? (
+                        <FiPause className="text-lg sm:text-xl" />
+                      ) : (
+                        <FiPlay className="text-lg sm:text-xl translate-x-0.5" />
+                      )}
+                    </button>
 
-                      {/* Forward +10s */}
-                      <button
-                        type="button"
-                        onClick={() => skipSongTime(10)}
-                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold transition-all cursor-pointer active:scale-90"
-                        title="Fast forward 10 seconds"
-                      >
-                        <FiRotateCw className="text-xs sm:text-sm" />
-                      </button>
+                    {/* Forward +10s */}
+                    <button
+                      type="button"
+                      onClick={() => skipSongTime(10)}
+                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                      title="Fast forward 10 seconds"
+                    >
+                      <FiRotateCw className="text-sm sm:text-base" />
+                    </button>
 
-                      {/* Next Song Track */}
-                      <button
-                        type="button"
-                        onClick={handleNextSong}
-                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold transition-all cursor-pointer active:scale-90"
-                        title="Next Song / அடுத்த பாடல்"
-                      >
-                        <FiSkipForward className="text-xs sm:text-sm" />
-                      </button>
-                    </div>
-
-                    {/* Right Controls: Playback Speed & Volume */}
-                    {/* <div className="flex items-center gap-1.5 sm:gap-2"> */}
-                    {/* Speed Toggle */}
-                    {/* <button
-                        type="button"
-                        onClick={togglePlaybackRate}
-                        className="px-2 py-0.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-800 text-[10px] sm:text-[11px] font-black tracking-tight transition-all cursor-pointer"
-                        title="Playback Speed"
-                      >
-                        {songPlaybackRate}x
-                      </button> */}
-
-                    {/* Volume Control */}
-                    {/* <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={toggleMute}
-                          className="text-gray-600 hover:text-gray-900 p-0.5 transition-colors cursor-pointer"
-                          title={songIsMuted ? 'Unmute' : 'Mute'}
-                        >
-                          {songIsMuted || songVolume === 0 ? <FiVolumeX className="text-xs sm:text-sm" /> : <FiVolume2 className="text-xs sm:text-sm" />}
-                        </button>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={songIsMuted ? 0 : songVolume}
-                          onChange={handleVolumeChange}
-                          className="w-10 sm:w-14 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                          title="Adjust Volume"
-                        />
-                      </div>
-                    </div> */}
+                    {/* Next Song Track */}
+                    <button
+                      type="button"
+                      onClick={handleNextSong}
+                      className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center transition-all cursor-pointer active:scale-90"
+                      title="Next Song / அடுத்த பாடல்"
+                    >
+                      <FiSkipForward className="text-sm sm:text-base" />
+                    </button>
 
                   </div>
                 </div>

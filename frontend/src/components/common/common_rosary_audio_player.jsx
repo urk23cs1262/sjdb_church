@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { 
   FiPlay, FiPause, FiRotateCcw, FiRotateCw, 
-  FiVolume2, FiVolumeX, FiLoader 
+  FiLoader 
 } from 'react-icons/fi';
 
 function formatTime(seconds) {
@@ -43,9 +43,6 @@ const RosaryAudioPlayer = forwardRef(function RosaryAudioPlayer({
   const [duration, setDuration] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekValue, setSeekValue] = useState(0);
-  const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState(1);
   const [isBuffering, setIsBuffering] = useState(false);
 
   // Mutable refs to keep event listeners stable across state changes
@@ -290,32 +287,6 @@ const RosaryAudioPlayer = forwardRef(function RosaryAudioPlayer({
     setIsSeeking(false);
   };
 
-  const toggleMute = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const newMuted = !isMuted;
-    setIsMuted(newMuted);
-    audio.muted = newMuted;
-  };
-
-  const handleVolumeChange = (e) => {
-    const val = parseFloat(e.target.value);
-    const audio = audioRef.current;
-    if (!audio) return;
-    setVolume(val);
-    audio.volume = val;
-    setIsMuted(val === 0);
-  };
-
-  const togglePlaybackRate = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const rates = [1, 1.25, 1.5, 0.75];
-    const nextRate = rates[(rates.indexOf(playbackRate) + 1) % rates.length];
-    audio.playbackRate = nextRate;
-    setPlaybackRate(nextRate);
-  };
-
   const progressPercent = duration > 0 ? (seekValue / duration) * 100 : 0;
 
   return (
@@ -420,82 +391,44 @@ const RosaryAudioPlayer = forwardRef(function RosaryAudioPlayer({
         </div>
       </div>
 
-      {/* 2. Audio Control Buttons Single Row */}
-      <div className="flex items-center justify-between gap-1 sm:gap-2 pt-1.5 border-t border-gray-100">
-        
-        {/* Left Controls: Rewind, Play/Pause, Forward */}
-        <div className="flex items-center gap-1 sm:gap-1.5">
-          {/* Rewind -10s */}
-          <button
-            type="button"
-            onClick={() => skipTime(-10)}
-            className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold transition-all cursor-pointer active:scale-90"
-            title="Rewind 10 seconds"
-          >
-            <FiRotateCcw className="text-xs sm:text-sm" />
-          </button>
+      {/* 2. Audio Control Buttons — Centered */}
+      <div className="flex items-center justify-center gap-4 sm:gap-6 pt-1.5 border-t border-gray-100">
 
-          {/* Primary Play / Pause Button */}
-          <button
-            type="button"
-            onClick={togglePlay}
-            className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-r from-church-royal-blue to-blue-900 hover:from-blue-900 hover:to-indigo-950 text-white flex items-center justify-center shadow-md transition-all cursor-pointer active:scale-95"
-            title={isPlaying ? 'Pause' : 'Play'}
-          >
-            {isBuffering && isPlaying ? (
-              <FiLoader className="animate-spin text-sm" />
-            ) : isPlaying ? (
-              <FiPause className="text-sm sm:text-base" />
-            ) : (
-              <FiPlay className="text-sm sm:text-base translate-x-0.5" />
-            )}
-          </button>
+        {/* Rewind -10s */}
+        <button
+          type="button"
+          onClick={() => skipTime(-10)}
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center transition-all cursor-pointer active:scale-90"
+          title="Rewind 10 seconds"
+        >
+          <FiRotateCcw className="text-sm sm:text-base" />
+        </button>
 
-          {/* Forward +10s */}
-          <button
-            type="button"
-            onClick={() => skipTime(10)}
-            className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center text-xs font-bold transition-all cursor-pointer active:scale-90"
-            title="Fast forward 10 seconds"
-          >
-            <FiRotateCw className="text-xs sm:text-sm" />
-          </button>
-        </div>
+        {/* Primary Play / Pause Button */}
+        <button
+          type="button"
+          onClick={togglePlay}
+          className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-r from-church-royal-blue to-blue-900 hover:from-blue-900 hover:to-indigo-950 text-white flex items-center justify-center shadow-md transition-all cursor-pointer active:scale-95"
+          title={isPlaying ? 'Pause' : 'Play'}
+        >
+          {isBuffering && isPlaying ? (
+            <FiLoader className="animate-spin text-lg" />
+          ) : isPlaying ? (
+            <FiPause className="text-lg sm:text-xl" />
+          ) : (
+            <FiPlay className="text-lg sm:text-xl translate-x-0.5" />
+          )}
+        </button>
 
-        {/* Right Controls: Playback Speed & Volume */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {/* Speed Toggle */}
-          <button
-            type="button"
-            onClick={togglePlaybackRate}
-            className="px-2 py-0.5 rounded-md bg-gray-100 hover:bg-gray-200 text-gray-800 text-[10px] sm:text-[11px] font-black tracking-tight transition-all cursor-pointer"
-            title="Playback Speed"
-          >
-            {playbackRate}x
-          </button>
-
-          {/* Volume Control */}
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={toggleMute}
-              className="text-gray-600 hover:text-gray-900 p-0.5 transition-colors cursor-pointer"
-              title={isMuted ? 'Unmute' : 'Mute'}
-            >
-              {isMuted || volume === 0 ? <FiVolumeX className="text-xs sm:text-sm" /> : <FiVolume2 className="text-xs sm:text-sm" />}
-            </button>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={isMuted ? 0 : volume}
-              onChange={handleVolumeChange}
-              className="w-10 sm:w-14 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-church-royal-blue"
-              title="Adjust Volume"
-            />
-          </div>
-        </div>
+        {/* Forward +10s */}
+        <button
+          type="button"
+          onClick={() => skipTime(10)}
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center transition-all cursor-pointer active:scale-90"
+          title="Fast forward 10 seconds"
+        >
+          <FiRotateCw className="text-sm sm:text-base" />
+        </button>
 
       </div>
     </div>
