@@ -314,16 +314,9 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
           playDevotionalSong(safeIndex, fetchedSongs);
           restoredRef.current = true;
         } else {
-          // ── Restore last-played song (no auto-play) ──────────────────────
-          // Prepare audio element with saved track without auto-playing
-          const audio = devotionalAudioRef.current;
-          if (audio && fetchedSongs[safeIndex]?.fileUrl) {
-            const songUrl = getMediaUrl(fetchedSongs[safeIndex].fileUrl);
-            if (!isPlayingSongRef.current && (!audio.src || !isSameAudioSource(audio.src, songUrl))) {
-              audio.src = songUrl;
-              audio.load();
-            }
-          }
+          // ── Restore last-played song metadata ──────────────────────
+          // Keep UI metadata in sync with saved track without triggering
+          // background decoding while user is on Rosary screen.
           restoredRef.current = true;
         }
       }
@@ -407,13 +400,12 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
     }
   }, [isOpen, initialMode]);
 
-  // Devotional Audio Element Event Listeners — attached whenever modal is open
+  // Synchronize devotional audio playback state when modal opens
   useEffect(() => {
     if (!isOpen) return;
     const audio = devotionalAudioRef.current;
     if (!audio) return;
 
-    // Immediately sync current playback state from native audio
     if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
       setSongDuration(audio.duration);
     }
@@ -422,110 +414,6 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
       setSongSeekValue(audio.currentTime);
     }
     setIsPlayingSong(!audio.paused);
-
-    const handleLoadedMetadata = () => {
-      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
-        setSongDuration(audio.duration);
-      }
-      setSongIsBuffering(false);
-    };
-
-    const handleDurationChange = () => {
-      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
-        setSongDuration(audio.duration);
-      }
-    };
-
-    const handleTimeUpdate = () => {
-      if (!songIsSeekingRef.current) {
-        setSongCurrentTime(audio.currentTime);
-        setSongSeekValue(audio.currentTime);
-      }
-      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
-        setSongDuration((prev) => (prev !== audio.duration ? audio.duration : prev));
-      }
-      setSongIsBuffering(false);
-    };
-
-    const handlePlay = () => {
-      setIsPlayingSong(true);
-      setSongIsBuffering(false);
-      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
-        setSongDuration(audio.duration);
-      }
-    };
-
-    const handlePlaying = () => {
-      setIsPlayingSong(true);
-      setSongIsBuffering(false);
-      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
-        setSongDuration(audio.duration);
-      }
-    };
-
-    const handlePause = () => {
-      setIsPlayingSong(false);
-      setSongIsBuffering(false);
-    };
-
-    // Automatic continuous transition: When current song ends, immediately play next song
-    const handleEnded = () => {
-      setIsPlayingSong(false);
-      setSongIsBuffering(false);
-      setSongCurrentTime(0);
-      setSongSeekValue(0);
-
-      const songs = songsListRef.current;
-      if (!songs || songs.length === 0) return;
-      const nextIndex = (currentSongIndexRef.current + 1) % songs.length;
-      if (playDevotionalSongRef.current) {
-        playDevotionalSongRef.current(nextIndex, songs);
-      }
-    };
-
-    const handleWaiting = () => {
-      if (isPlayingSongRef.current) setSongIsBuffering(true);
-    };
-
-    const handleCanPlay = () => {
-      setSongIsBuffering(false);
-      if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
-        setSongDuration(audio.duration);
-      }
-    };
-
-    const handleError = (e) => {
-      if (audio.error && audio.error.code === 1) return;
-      console.warn('Devotional audio event notice:', audio.error || e);
-      setSongIsBuffering(false);
-      setIsPlayingSong(false);
-    };
-
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('durationchange', handleDurationChange);
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-    audio.addEventListener('play', handlePlay);
-    audio.addEventListener('playing', handlePlaying);
-    audio.addEventListener('pause', handlePause);
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('waiting', handleWaiting);
-    audio.addEventListener('canplay', handleCanPlay);
-    audio.addEventListener('canplaythrough', handleCanPlay);
-    audio.addEventListener('error', handleError);
-
-    return () => {
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('durationchange', handleDurationChange);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-      audio.removeEventListener('play', handlePlay);
-      audio.removeEventListener('playing', handlePlaying);
-      audio.removeEventListener('pause', handlePause);
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('waiting', handleWaiting);
-      audio.removeEventListener('canplay', handleCanPlay);
-      audio.removeEventListener('canplaythrough', handleCanPlay);
-      audio.removeEventListener('error', handleError);
-    };
   }, [isOpen]);
 
   // Current Song Metadata
@@ -888,10 +776,19 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
             }}
             onError={(e) => {
               const audio = e.currentTarget;
-              if (audio.error && audio.error.code === 1) return;
+              if (audio.error && audio.error.code === 1) return; // Abort error
               console.warn('Devotional audio event notice:', audio.error);
               setSongIsBuffering(false);
               setIsPlayingSong(false);
+              if (audio.error && audio.error.code === 3 && devotionalPlaylistStarted) {
+                const songs = songsListRef.current;
+                if (songs && songs.length > 0) {
+                  const nextIndex = (currentSongIndexRef.current + 1) % songs.length;
+                  if (playDevotionalSongRef.current) {
+                    playDevotionalSongRef.current(nextIndex, songs);
+                  }
+                }
+              }
             }}
           />
 

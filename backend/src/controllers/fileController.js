@@ -41,7 +41,11 @@ const getFile = async (req, res) => {
         // Parse Range header e.g. "bytes=32324-" or "bytes=0-1000"
         const parts = range.replace(/bytes=/, '').split('-');
         const start = parseInt(parts[0], 10);
-        const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        if (isNaN(start) || start >= fileSize || start < 0) {
+          return res.status(416).set('Content-Range', `bytes */${fileSize}`).end();
+        }
+        const parsedEnd = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+        const end = Math.min(isNaN(parsedEnd) ? fileSize - 1 : parsedEnd, fileSize - 1);
         const chunksize = (end - start) + 1;
 
         res.status(206);
@@ -52,7 +56,7 @@ const getFile = async (req, res) => {
           'Content-Type': doc.contentType || 'audio/mpeg',
         });
 
-        const stream = getGridFSStream(doc._id, { start, end: end + 1 });
+        const stream = getGridFSStream(doc._id, { start, end: Math.min(end + 1, fileSize) });
         stream.on('error', () => {
           if (!res.headersSent) res.status(404).json({ success: false, message: 'Stream error' });
         });
