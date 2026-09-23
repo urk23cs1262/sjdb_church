@@ -42,6 +42,11 @@ export const getMediaUrl = (path) => {
   if (!path) return null;
   if (path.startsWith('data:') || path.startsWith('http://') || path.startsWith('https://')) return path;
   
+  // Directly stream static devotional songs from host public assets
+  if (path.startsWith('/devotional-songs/') || path.startsWith('devotional-songs/')) {
+    return path.startsWith('/') ? path : `/${path}`;
+  }
+
   const baseUrl = UPLOADS_URL.replace(/\/uploads\/?$/, '');
 
   // If path is a 24-character MongoDB GridFS ObjectId

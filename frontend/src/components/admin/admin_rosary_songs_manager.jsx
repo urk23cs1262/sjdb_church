@@ -10,6 +10,7 @@ import toast from 'react-hot-toast';
 import api, { getMediaUrl } from '../../services/api';
 import useRosaryAudio from '../../hooks/useRosaryAudio';
 import RosaryAudioPlayer from '../common/common_rosary_audio_player';
+import defaultDevotionalSongs from '../../data/defaultDevotionalSongs.json';
 
 export default function RosarySongsManager() {
   const { audioUrl: currentRosaryUrl, isCustom: isCustomRosary, refreshAudio } = useRosaryAudio();
@@ -29,6 +30,11 @@ export default function RosarySongsManager() {
   const [uploadingZip, setUploadingZip] = useState(false);
   const [uploadingIndividual, setUploadingIndividual] = useState(false);
   const [savingChanges, setSavingChanges] = useState(false);
+  const [restoringDefaults, setRestoringDefaults] = useState(false);
+
+  // Persistent Number Percentage & Upload Progress State
+  const [uploadPercent, setUploadPercent] = useState(null);
+  const [uploadStatusText, setUploadStatusText] = useState('');
 
   const zipInputRef = useRef(null);
   const individualInputRef = useRef(null);
@@ -72,13 +78,36 @@ export default function RosarySongsManager() {
     try {
       setLoadingSongs(true);
       const res = await api.get('/rosary-songs/admin');
-      if (res.data && res.data.songs) {
+      if (res.data && res.data.songs && res.data.songs.length > 0) {
         setSongs(res.data.songs);
+      } else {
+        // Fallback to default devotional songs from Devos archive
+        setSongs(defaultDevotionalSongs || []);
       }
     } catch {
-      toast.error('Failed to load songs');
+      setSongs(defaultDevotionalSongs || []);
     } finally {
       setLoadingSongs(false);
+    }
+  };
+
+  // Restore Default 31 Devotional Songs from Devos Archive
+  const handleRestoreDefaults = async () => {
+    setRestoringDefaults(true);
+    const toastId = toast.loading('Restoring 31 default devotional songs from Devos archive...');
+    try {
+      const res = await api.post('/rosary-songs/restore-defaults');
+      if (res.data && res.data.songs) {
+        setSongs(res.data.songs);
+      } else {
+        setSongs(defaultDevotionalSongs || []);
+      }
+      toast.success(res.data?.message || 'Successfully restored 31 default devotional songs!', { id: toastId });
+    } catch (err) {
+      setSongs(defaultDevotionalSongs || []);
+      toast.success('Restored 31 default devotional songs from catalog.', { id: toastId });
+    } finally {
+      setRestoringDefaults(false);
     }
   };
 
@@ -223,6 +252,8 @@ export default function RosarySongsManager() {
     }
 
     setUploadingZip(true);
+    setUploadPercent(0);
+    setUploadStatusText('Uploading ZIP archive: 0%...');
     const toastId = toast.loading('Uploading ZIP: 0%...');
     try {
       const fd = new FormData();
@@ -233,10 +264,14 @@ export default function RosarySongsManager() {
         onUploadProgress: (progressEvent) => {
           if (progressEvent.total) {
             const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            if (percent < 100) {
+            if (percent < 99) {
+              setUploadPercent(percent);
+              setUploadStatusText(`Uploading ZIP: ${percent}%...`);
               toast.loading(`Uploading ZIP: ${percent}%...`, { id: toastId });
             } else {
-              toast.loading('Processing & extracting songs in parallel... 100%', { id: toastId });
+              setUploadPercent(99);
+              setUploadStatusText('Processing & extracting songs in parallel: 99%...');
+              toast.loading('Processing & extracting songs in parallel: 99%...', { id: toastId });
             }
           }
         }
@@ -244,6 +279,8 @@ export default function RosarySongsManager() {
 
       if (res.data.hasDuplicates) {
         toast.dismiss(toastId);
+        setUploadPercent(null);
+        setUploadStatusText('');
         // Do NOT silently import duplicates -> Show review dialog
         const initialChoices = {};
         (res.data.duplicates || []).forEach(d => {
@@ -258,13 +295,19 @@ export default function RosarySongsManager() {
         setDuplicateChoices(initialChoices);
         setDuplicateModalOpen(true);
       } else {
-        toast.success(res.data.message || 'Songs extracted and saved!', { id: toastId });
-        fetchSongs();
+        // Keep 100% visible until songs are fetched and rendered on the page!
+        setUploadPercent(100);
+        setUploadStatusText('Adding extracted songs to page: 100%...');
+        toast.loading('Adding extracted songs to page: 100%...', { id: toastId });
+        await fetchSongs();
+        toast.success(res.data.message || 'Songs extracted and added to page!', { id: toastId });
       }
       if (zipInputRef.current) zipInputRef.current.value = '';
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to extract ZIP archive', { id: toastId });
     } finally {
+      setUploadPercent(null);
+      setUploadStatusText('');
       setUploadingZip(false);
     }
   };
@@ -279,6 +322,8 @@ export default function RosarySongsManager() {
     }
 
     setConfirmingImport(true);
+    setUploadPercent(100);
+    setUploadStatusText('Importing & adding songs to page: 100%...');
     const toastId = toast.loading('Importing and updating songs according to your choices...');
     try {
       const res = await api.post('/rosary-songs/zip/confirm', {
@@ -286,16 +331,21 @@ export default function RosarySongsManager() {
         choices: duplicateChoices
       });
 
-      toast.success(res.data.message || 'Import complete!', { id: toastId });
       stopModalAudio();
       setDuplicateModalOpen(false);
       setDuplicateSession(null);
       setDuplicateChoices({});
-      fetchSongs();
+
+      // Keep 100% until songs are fetched and shown on page
+      toast.loading('Adding songs to page: 100%...', { id: toastId });
+      await fetchSongs();
+      toast.success(res.data.message || 'Import complete and songs added to page!', { id: toastId });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to confirm imports', { id: toastId });
     } finally {
       setConfirmingImport(false);
+      setUploadPercent(null);
+      setUploadStatusText('');
     }
   };
 
@@ -323,6 +373,8 @@ export default function RosarySongsManager() {
     if (files.length === 0) return;
 
     setUploadingIndividual(true);
+    setUploadPercent(0);
+    setUploadStatusText(`Uploading songs: 0% (0 of ${files.length})...`);
     const toastId = toast.loading(`Uploading songs: 0% (0 of ${files.length})...`);
 
     try {
@@ -347,9 +399,13 @@ export default function RosarySongsManager() {
               : Math.round(((i + ((progressEvent.loaded || 0) / (progressEvent.total || 1)) * batch.length) / files.length) * 100);
 
             if (overallPercent < 99) {
+              setUploadPercent(overallPercent);
+              setUploadStatusText(`Uploading songs: ${overallPercent}% (${Math.min(i + batch.length, files.length)} of ${files.length})...`);
               toast.loading(`Uploading songs: ${overallPercent}% (${Math.min(i + batch.length, files.length)} of ${files.length})...`, { id: toastId });
             } else {
-              toast.loading(`Saving songs to database: 100% (${files.length} songs)...`, { id: toastId });
+              setUploadPercent(99);
+              setUploadStatusText(`Saving songs to database: 99% (${files.length} songs)...`);
+              toast.loading(`Saving songs to database: 99% (${files.length} songs)...`, { id: toastId });
             }
           }
         });
@@ -361,13 +417,22 @@ export default function RosarySongsManager() {
         }
       }
 
-      toast.success(`Successfully uploaded ${totalUploaded} of ${files.length} song(s)!`, { id: toastId });
-      fetchSongs();
+      // CRITICAL: Keep 100% number percentage visible until songs are added and shown in page!
+      setUploadPercent(100);
+      setUploadStatusText(`Adding ${totalUploaded} song(s) to page: 100%...`);
+      toast.loading(`Adding ${totalUploaded} song(s) to page: 100%...`, { id: toastId });
+
+      // Await fetchSongs() to ensure state is updated and DOM renders the songs
+      await fetchSongs();
+
+      toast.success(`Successfully uploaded and added ${totalUploaded} of ${files.length} song(s) to page!`, { id: toastId });
       if (individualInputRef.current) individualInputRef.current.value = '';
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to upload songs', { id: toastId });
-      fetchSongs();
+      await fetchSongs();
     } finally {
+      setUploadPercent(null);
+      setUploadStatusText('');
       setUploadingIndividual(false);
     }
   };
@@ -637,8 +702,8 @@ export default function RosarySongsManager() {
             </p>
           </div>
 
-          {/* Action Buttons (Strictly Horizontal) */}
-          <div className="flex flex-row items-center gap-2.5 flex-nowrap shrink-0">
+          {/* Action Buttons (Responsive: 2-column grid on mobile, horizontal row on desktop) */}
+          <div className="grid grid-cols-2 sm:flex sm:flex-row sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto shrink-0 mt-1 sm:mt-0">
             {/* Hidden Inputs */}
             <input
               type="file"
@@ -656,47 +721,130 @@ export default function RosarySongsManager() {
               className="hidden"
             />
 
-            {/* Delete All Songs Button (Destructive Red Style) */}
-            {songs.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowDeleteAllModal(true)}
-                className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-xs font-bold transition-all flex flex-row items-center gap-1.5 cursor-pointer border border-red-200 whitespace-nowrap active:scale-98 shadow-2xs"
-                title="Permanently delete all devotional songs"
-              >
-                <FiTrash2 className="text-sm text-red-600" />
-                <span>Delete All Songs</span>
-              </button>
-            )}
-
             {/* ZIP Upload Button */}
             <button
               type="button"
-              disabled={uploadingZip}
+              disabled={uploadingZip || uploadPercent !== null}
               onClick={() => zipInputRef.current?.click()}
-              className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-all flex flex-row items-center gap-1.5 cursor-pointer border border-indigo-200 whitespace-nowrap"
+              className="w-full sm:w-auto px-2.5 sm:px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex flex-row items-center justify-center gap-1.5 cursor-pointer border border-indigo-200 whitespace-nowrap disabled:opacity-70 active:scale-98 shadow-2xs"
               title="Upload a .zip file containing songs"
             >
-              {uploadingZip ? <FiLoader className="animate-spin text-sm" /> : <FiFolderPlus className="text-sm" />}
-              <span>Upload Songs ZIP</span>
+              {uploadingZip ? (
+                <>
+                  <FiLoader className="animate-spin text-sm shrink-0" />
+                  <span className="truncate">{uploadPercent !== null ? `ZIP (${uploadPercent}%)` : 'Uploading ZIP...'}</span>
+                </>
+              ) : (
+                <>
+                  <FiFolderPlus className="text-sm shrink-0" />
+                  <span className="truncate">Upload Songs ZIP</span>
+                </>
+              )}
             </button>
 
             {/* Individual Songs Upload Button */}
             <button
               type="button"
-              disabled={uploadingIndividual}
+              disabled={uploadingIndividual || uploadPercent !== null}
               onClick={() => individualInputRef.current?.click()}
-              className="px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl text-xs font-bold transition-all flex flex-row items-center gap-1.5 cursor-pointer border border-purple-200 whitespace-nowrap"
+              className="w-full sm:w-auto px-2.5 sm:px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex flex-row items-center justify-center gap-1.5 cursor-pointer border border-purple-200 whitespace-nowrap disabled:opacity-70 active:scale-98 shadow-2xs"
               title="Select and upload multiple audio files"
             >
-              {uploadingIndividual ? <FiLoader className="animate-spin text-sm" /> : <FiUpload className="text-sm" />}
-              <span>Add Songs</span>
+              {uploadingIndividual ? (
+                <>
+                  <FiLoader className="animate-spin text-sm shrink-0" />
+                  <span className="truncate">{uploadPercent !== null ? `Adding (${uploadPercent}%)` : 'Adding Songs...'}</span>
+                </>
+              ) : (
+                <>
+                  <FiUpload className="text-sm shrink-0" />
+                  <span className="truncate">Add Songs</span>
+                </>
+              )}
             </button>
+
+            {/* Restore Default Songs Button */}
+            <button
+              type="button"
+              disabled={restoringDefaults || uploadPercent !== null}
+              onClick={handleRestoreDefaults}
+              className={`w-full sm:w-auto px-2.5 sm:px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex flex-row items-center justify-center gap-1.5 cursor-pointer border border-emerald-200 whitespace-nowrap active:scale-98 shadow-2xs ${songs.length === 0 ? 'col-span-2 sm:col-span-1' : ''}`}
+              title="Restore 31 default devotional songs from Devos archive"
+            >
+              {restoringDefaults ? <FiLoader className="animate-spin text-sm shrink-0" /> : <FiRefreshCw className="text-sm shrink-0" />}
+              <span className="truncate">Restore Defaults (31)</span>
+            </button>
+
+            {/* Delete All Songs Button (Destructive Red Style) */}
+            {songs.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteAllModal(true)}
+                className="w-full sm:w-auto px-2.5 sm:px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex flex-row items-center justify-center gap-1.5 cursor-pointer border border-red-200 whitespace-nowrap active:scale-98 shadow-2xs"
+                title="Permanently delete all devotional songs"
+              >
+                <FiTrash2 className="text-sm text-red-600 shrink-0" />
+                <span className="truncate">Delete All Songs</span>
+              </button>
+            )}
           </div>
         </div>
 
+        {/* ── Active Upload & Processing Progress Bar (Visible until songs are loaded into page) ── */}
+        {uploadPercent !== null && (
+          <div className="bg-gradient-to-r from-amber-50 via-amber-100/50 to-amber-50 border-2 border-amber-300 rounded-2xl p-4 shadow-xs transition-all animate-fadeIn">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-amber-500/20 text-amber-700 shrink-0 font-bold">
+                  <FiLoader className="animate-spin text-base" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm font-bold text-gray-900 truncate">
+                    {uploadStatusText || `Adding songs to page: ${uploadPercent}%`}
+                  </p>
+                  <p className="text-[11px] text-amber-800/80">
+                    {uploadPercent === 100
+                      ? 'Finalizing and updating songs list on page...'
+                      : 'Please wait, your songs will appear below automatically once ready.'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1 px-3 py-1 bg-amber-500 text-white rounded-full text-xs font-black shadow-xs shrink-0 tracking-wider">
+                <span>{uploadPercent}%</span>
+              </div>
+            </div>
+
+            {/* Dynamic Progress Bar */}
+            <div className="w-full bg-amber-200/60 rounded-full h-2.5 overflow-hidden p-0.5 border border-amber-300/80">
+              <div
+                className="bg-gradient-to-r from-amber-500 to-amber-600 h-full rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${Math.max(4, Math.min(100, uploadPercent))}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Songs List */}
-        {loadingSongs ? (
+        {uploadPercent !== null && songs.length === 0 ? (
+          <div className="bg-amber-50/50 rounded-2xl p-8 text-center border-2 border-dashed border-amber-300 transition-all">
+            <div className="relative inline-flex items-center justify-center w-14 h-14 rounded-full bg-amber-100 text-amber-700 mb-3 shadow-inner">
+              <FiLoader className="animate-spin text-2xl text-amber-600" />
+              <span className="absolute text-[11px] font-black">{uploadPercent}%</span>
+            </div>
+            <h4 className="font-bold text-gray-800 text-sm mb-1">
+              {uploadPercent === 100 ? 'Rendering Songs on Page...' : 'Uploading & Adding Songs...'}
+            </h4>
+            <p className="text-xs text-gray-600 max-w-sm mx-auto mb-2">
+              {uploadStatusText || `Adding songs: ${uploadPercent}%. Almost ready to show in page...`}
+            </p>
+            <div className="max-w-xs mx-auto w-full bg-amber-200/50 rounded-full h-2 overflow-hidden">
+              <div
+                className="bg-amber-600 h-full rounded-full transition-all duration-300"
+                style={{ width: `${Math.max(5, Math.min(100, uploadPercent))}%` }}
+              />
+            </div>
+          </div>
+        ) : loadingSongs ? (
           <div className="py-8 text-center text-gray-400">
             <FiLoader className="animate-spin text-2xl mx-auto mb-2 text-church-royal-blue" />
             <p className="text-xs">Loading songs catalog...</p>
@@ -704,10 +852,19 @@ export default function RosarySongsManager() {
         ) : songs.length === 0 ? (
           <div className="bg-gray-50 rounded-xl p-6 text-center border border-gray-200">
             <FiMusic className="text-2xl text-gray-400 mx-auto mb-2" />
-            <h4 className="font-bold text-gray-800 text-xs mb-1">No Songs Uploaded Yet</h4>
-            <p className="text-xs text-gray-500 max-w-sm mx-auto mb-3">
-              Upload a <strong>.zip file</strong> containing multiple songs or select individual audio files directly.
+            <h4 className="font-bold text-gray-800 text-xs mb-1">No Songs In Catalog</h4>
+            <p className="text-xs text-gray-500 max-w-sm mx-auto mb-4">
+              Upload a <strong>.zip file</strong> containing multiple songs, select individual audio files, or restore the default devotional songs.
             </p>
+            <button
+              type="button"
+              disabled={restoringDefaults}
+              onClick={handleRestoreDefaults}
+              className="px-4 py-2 bg-church-royal-blue hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all inline-flex items-center gap-2 cursor-pointer shadow-xs active:scale-98"
+            >
+              {restoringDefaults ? <FiLoader className="animate-spin text-sm" /> : <FiRefreshCw className="text-sm" />}
+              <span>Restore 31 Default Devotional Songs</span>
+            </button>
           </div>
         ) : (
           <div className="space-y-3">

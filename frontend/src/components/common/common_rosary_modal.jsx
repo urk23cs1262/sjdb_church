@@ -13,6 +13,7 @@ import useRosaryAudio from '../../hooks/useRosaryAudio';
 import RosaryAudioPlayer from './common_rosary_audio_player';
 import { MYSTERIES } from '../../data/rosary_prayers';
 import api, { getMediaUrl } from '../../services/api';
+import defaultDevotionalSongs from '../../data/defaultDevotionalSongs.json';
 
 // ── Audio Source & Devotional Song Persistence Helpers ─────────────────────────
 const DEVOTIONAL_STORAGE_KEY = 'sjdb_devotionalSong_lastPlayed';
@@ -390,9 +391,10 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
     try {
       setLoadingSongs(true);
       const res = await api.get('/rosary-songs');
+      const fallbackList = (defaultDevotionalSongs || []).filter(s => s.isActive);
       const fetchedSongs = (res.data && res.data.songs && res.data.songs.length > 0)
         ? res.data.songs
-        : [];
+        : fallbackList;
       setSongsList(fetchedSongs);
       songsListRef.current = fetchedSongs;
 
@@ -418,9 +420,10 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
 
       return fetchedSongs;
     } catch {
-      setSongsList([]);
-      songsListRef.current = [];
-      return [];
+      const fallbackList = (defaultDevotionalSongs || []).filter(s => s.isActive);
+      setSongsList(fallbackList);
+      songsListRef.current = fallbackList;
+      return fallbackList;
     } finally {
       setLoadingSongs(false);
     }

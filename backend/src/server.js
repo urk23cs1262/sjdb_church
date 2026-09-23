@@ -125,9 +125,11 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Direct static streaming for Devos directory if present on disk
 const devosCandidates = [
+  path.join(__dirname, '../uploads/Devos'),
+  path.join(__dirname, '../../frontend/public/devotional-songs'),
+  path.join(__dirname, '../../frontend/src/assets/Devos'),
   path.join(__dirname, '../Devos'),
   path.join(__dirname, '../../Devos'),
-  path.join(__dirname, '../uploads/Devos'),
   'C:\\Users\\Admin\\Desktop\\Devos'
 ];
 const devosDir = devosCandidates.find(p => fs.existsSync(p));

@@ -13,7 +13,8 @@ const {
   bulkUpdateStatus, 
   reorderSongs,
   deleteSong,
-  deleteAllSongs 
+  deleteAllSongs,
+  restoreDefaultSongs
 } = require('../controllers/rosarySongController');
 const { protect, adminOnly } = require('../middleware/auth');
 const diskUpload = require('../middleware/diskUpload');
@@ -23,6 +24,9 @@ router.get('/', getActiveSongs);
 
 // Admin: Get all songs (active & inactive)
 router.get('/admin', protect, adminOnly, getAllSongsAdmin);
+
+// Admin: Restore all default devotional songs from Devos archive
+router.post('/restore-defaults', protect, adminOnly, restoreDefaultSongs);
 
 // Admin: Upload individual song audio files (Zero-RAM disk streaming)
 router.post('/individual', protect, adminOnly, diskUpload.array('files', 200), uploadIndividualSongs);

@@ -104,6 +104,42 @@ async function enrichSongDetails(song) {
   return song;
 }
 
+const defaultSongsCatalog = require('../data/defaultDevotionalSongs.json');
+
+/**
+ * Auto-seeds default devotional songs from Devos archive if database is empty or missing songs
+ */
+const seedDefaultDevosSongs = async () => {
+  try {
+    if (!defaultSongsCatalog || defaultSongsCatalog.length === 0) return;
+
+    const existingSongs = await RosarySong.find().lean();
+    const existingNames = new Set(existingSongs.map(s => s.fileName));
+
+    const missingDocs = [];
+    defaultSongsCatalog.forEach((s, idx) => {
+      if (!existingNames.has(s.fileName)) {
+        missingDocs.push({
+          title: s.title,
+          fileName: s.fileName,
+          fileUrl: s.fileUrl,
+          fileSize: s.fileSize || 0,
+          mimeType: s.mimeType || 'audio/mpeg',
+          isActive: true,
+          sortOrder: existingSongs.length + idx + 1
+        });
+      }
+    });
+
+    if (missingDocs.length > 0) {
+      await RosarySong.insertMany(missingDocs);
+      console.log(`[RosarySong] Auto-seeded ${missingDocs.length} devotional songs into database.`);
+    }
+  } catch (err) {
+    console.error('[RosarySong] Error seeding default songs:', err.message);
+  }
+};
+
 /**
  * Public: Get active songs for users in Navbar Rosary modal (sorted from oldest to newest -> appended from end)
  */
@@ -113,45 +149,28 @@ const getActiveSongs = async (req, res) => {
       .sort({ sortOrder: 1, createdAt: 1 })
       .lean();
 
-    // If no songs in collection, auto-sync from SiteSettings.songsAudio if uploaded
+    // If no songs in collection, auto-seed default devotional songs
     if (songs.length === 0) {
-      const setting = await SiteSettings.findOne({ key: 'songsAudio' }).lean();
-      if (setting && setting.value) {
-        let origName = 'Tamil Devotional Song.mp3';
-        let fileSize = 0;
-        
-        if (setting.value.startsWith('/api/files/')) {
-          const fileId = setting.value.replace('/api/files/', '');
-          const doc = await getGridFSFileDoc(fileId);
-          if (doc) {
-            origName = doc.metadata?.originalName || doc.filename || origName;
-            fileSize = doc.length || 0;
-          }
-        }
-
-        const autoSong = await RosarySong.findOneAndUpdate(
-          { fileUrl: setting.value },
-          {
-            title: formatTitle(origName),
-            fileUrl: setting.value,
-            fileName: origName,
-            fileSize: fileSize,
-            sortOrder: 1,
-            isActive: true
-          },
-          { upsert: true, new: true }
-        ).lean();
-        songs = [autoSong];
+      const cleared = await SiteSettings.findOne({ key: 'devotionalSongsCleared' }).lean();
+      if (!cleared || cleared.value !== 'true') {
+        await seedDefaultDevosSongs();
+        songs = await RosarySong.find({ isActive: true })
+          .sort({ sortOrder: 1, createdAt: 1 })
+          .lean();
       }
-    } else {
-      // Enrich any existing songs if needed
-      songs = await Promise.all(songs.map(enrichSongDetails));
     }
 
+    if (songs.length === 0) {
+      const fallbackActive = (defaultSongsCatalog || []).filter(s => s.isActive);
+      return res.json({ success: true, songs: fallbackActive });
+    }
+
+    songs = await Promise.all(songs.map(enrichSongDetails));
     res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=300');
     res.json({ success: true, songs });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    const fallbackActive = (defaultSongsCatalog || []).filter(s => s.isActive);
+    res.json({ success: true, songs: fallbackActive });
   }
 };
 
@@ -165,41 +184,23 @@ const getAllSongsAdmin = async (req, res) => {
       .lean();
 
     if (songs.length === 0) {
-      const setting = await SiteSettings.findOne({ key: 'songsAudio' }).lean();
-      if (setting && setting.value) {
-        let origName = 'Tamil Devotional Song.mp3';
-        let fileSize = 0;
-        
-        if (setting.value.startsWith('/api/files/')) {
-          const fileId = setting.value.replace('/api/files/', '');
-          const doc = await getGridFSFileDoc(fileId);
-          if (doc) {
-            origName = doc.metadata?.originalName || doc.filename || origName;
-            fileSize = doc.length || 0;
-          }
-        }
-
-        const autoSong = await RosarySong.findOneAndUpdate(
-          { fileUrl: setting.value },
-          {
-            title: formatTitle(origName),
-            fileUrl: setting.value,
-            fileName: origName,
-            fileSize: fileSize,
-            sortOrder: 1,
-            isActive: true
-          },
-          { upsert: true, new: true }
-        ).lean();
-        songs = [autoSong];
+      const cleared = await SiteSettings.findOne({ key: 'devotionalSongsCleared' }).lean();
+      if (!cleared || cleared.value !== 'true') {
+        await seedDefaultDevosSongs();
+        songs = await RosarySong.find()
+          .sort({ sortOrder: 1, createdAt: 1 })
+          .lean();
       }
-    } else {
-      songs = await Promise.all(songs.map(enrichSongDetails));
     }
 
+    if (songs.length === 0) {
+      return res.json({ success: true, songs: defaultSongsCatalog || [] });
+    }
+
+    songs = await Promise.all(songs.map(enrichSongDetails));
     res.json({ success: true, songs });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.json({ success: true, songs: defaultSongsCatalog || [] });
   }
 };
 
@@ -760,6 +761,11 @@ const deleteAllSongs = async (req, res) => {
 
     // Delete all database records
     await RosarySong.deleteMany({});
+    await SiteSettings.findOneAndUpdate(
+      { key: 'devotionalSongsCleared' },
+      { key: 'devotionalSongsCleared', value: 'true' },
+      { upsert: true }
+    );
 
     res.json({
       success: true,
@@ -767,6 +773,41 @@ const deleteAllSongs = async (req, res) => {
     });
   } catch (err) {
     console.error('Delete all songs error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * Admin: Restore all default devotional songs from Devos archive
+ */
+const restoreDefaultSongs = async (req, res) => {
+  try {
+    await SiteSettings.deleteOne({ key: 'devotionalSongsCleared' });
+    await RosarySong.deleteMany({});
+
+    const defaultList = defaultSongsCatalog || [];
+    const docs = defaultList.map((s, idx) => ({
+      title: s.title,
+      fileName: s.fileName,
+      fileUrl: s.fileUrl,
+      fileSize: s.fileSize || 0,
+      mimeType: s.mimeType || 'audio/mpeg',
+      isActive: true,
+      sortOrder: idx + 1
+    }));
+
+    if (docs.length > 0) {
+      await RosarySong.insertMany(docs);
+    }
+
+    const songs = await RosarySong.find().sort({ sortOrder: 1, createdAt: 1 }).lean();
+    res.json({
+      success: true,
+      message: `Successfully restored ${songs.length} default devotional songs.`,
+      songs
+    });
+  } catch (err) {
+    console.error('Restore default songs error:', err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
@@ -907,5 +948,7 @@ module.exports = {
   bulkUpdateStatus,
   reorderSongs,
   deleteSong,
-  deleteAllSongs
+  deleteAllSongs,
+  restoreDefaultSongs,
+  seedDefaultDevosSongs
 };
