@@ -114,29 +114,98 @@ function getMainMenuMessage(userName, isTamil = false) {
 }
 
 /**
- * Dedicated 1-14 Services & Help Desk Message (English Only UI)
+ * Dedicated 1-13 Services & Help Desk Message (English & Tamil)
  */
-function getServicesMenuMessage() {
+function getServicesMenuMessage(isTamil = false) {
+  if (isTamil) {
+    return `⛪ *SJDB Connect – பங்கு சேவைகள் (Parish Services)*
+_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
+
+1️⃣ ⛪ *திருப்பலி நேரங்கள்* (Mass Timings)
+2️⃣ 🕊️ *ஒப்புரவு அருட்சாதனம்* (Confession Timings)
+3️⃣ 📖 *தினசரி விவிலிய வசனம்* (Daily Bible Verse)
+4️⃣ 📜 *திருப்பலி வாசகங்கள்* (Daily Mass Readings)
+5️⃣ 🌟 *இன்றைய புனிதர்* (Saint of the Day)
+6️⃣ 🙏 *கத்தோலிக்க செபங்கள்* (Catholic Prayers)
+7️⃣ 📅 *பங்கு நிகழ்வுகள்* (Church Events)
+8️⃣ 📢 *பங்கு அறிவிப்புகள்* (Parish Announcements)
+9️⃣ 📍 *ஆலய அமைவிடம் & வரைபடம்* (Church Location & Map)
+1️⃣0️⃣ 👥 *பங்கு அமைப்புகள் & அன்பியங்கள்* (Parish Ministries & Anbiyams)
+1️⃣1️⃣ 👑 *பங்குத்தந்தையர்கள்* (Parish Priest & Clergy)
+1️⃣2️⃣ 🏛️ *ஆலய வரலாறு* (Church History)
+1️⃣3️⃣ 📞 *தொடர்பு விபரம்* (Contact Church)
+
+👉 *1 முதல் 13 வரை உள்ள எண்ணை அழுத்தவும் அல்லது உங்கள் கேள்வியை நேரடியாகக் கேட்கவும்!*
+_(எ.கா: "திருப்பலி நேரம்", "ஒப்புரவு நேரம்", "இன்றைய வாசகங்கள்")_`;
+  }
+
   return `⛪ *SJDB Connect – Services & Help Desk*
 _St. John de Britto Church, Kalayarkoil_
 
 1️⃣ ⛪ *Mass Timings*
 2️⃣ 🕊️ *Confession Timings*
-3️⃣ ✝️ *Other Sacrament Timings*
-4️⃣ 📖 *Daily Bible Verse*
-5️⃣ 📜 *Daily Mass Readings*
-6️⃣ 🌟 *Saint of the Day*
-7️⃣ 🙏 *Catholic Prayers*
-8️⃣ 📅 *Church Events*
-9️⃣ 📢 *Parish Announcements*
-🔟 📍 *Church Location & Map*
-1️⃣1️⃣ 👥 *Parish Ministries & Anbiyams*
-1️⃣2️⃣ 👑 *Parish Priest & Clergy*
-1️⃣3️⃣ 🏛️ *Church History*
-1️⃣4️⃣ 📞 *Contact Church*
+3️⃣ 📖 *Daily Bible Verse*
+4️⃣ 📜 *Daily Mass Readings*
+5️⃣ 🌟 *Saint of the Day*
+6️⃣ 🙏 *Catholic Prayers*
+7️⃣ 📅 *Church Events*
+8️⃣ 📢 *Parish Announcements*
+9️⃣ 📍 *Church Location & Map*
+1️⃣0️⃣ 👥 *Parish Ministries & Anbiyams*
+1️⃣1️⃣ 👑 *Parish Priest & Clergy*
+1️⃣2️⃣ 🏛️ *Church History*
+1️⃣3️⃣ 📞 *Contact Church*
 
-👉 *Reply with a number (1-14) or type your question naturally.*
+👉 *Reply with a number (1-13) or type your question naturally.*
 _(e.g., "What time is Mass?", "Where is the church?", "Confession timings")_`;
+}
+
+/**
+ * Safely and deterministically extracts menu numbers 1 to 13 from raw user inputs.
+ * Supports:
+ * - Plain digits: "1" to "13", "01" to "09"
+ * - Punctuated/prefixed: "1.", "#1", "opt 1", "option 1", "(1)"
+ * - WhatsApp Emoji numbers: "1️⃣" to "1️⃣3️⃣", "🔟", "1️⃣0️⃣"
+ * - English word numbers: "one" to "thirteen"
+ * - Tamil word numbers: "ஒன்று" to "பதின்மூன்று"
+ * Strictly avoids matching 10-digit phone numbers, 6-digit OTPs, or numbers > 13.
+ */
+function extractMenuNumber(rawText) {
+  if (!rawText) return null;
+  const str = rawText.trim().toLowerCase();
+
+  // 1. Direct emoji mapping (sort descending by length so 1️⃣0️⃣-1️⃣3️⃣ match before 1️⃣)
+  const emojiMap = {
+    '1️⃣0️⃣': 10, '1️⃣1️⃣': 11, '1️⃣2️⃣': 12, '1️⃣3️⃣': 13,
+    '🔟': 10,
+    '1️⃣': 1, '2️⃣': 2, '3️⃣': 3, '4️⃣': 4, '5️⃣': 5,
+    '6️⃣': 6, '7️⃣': 7, '8️⃣': 8, '9️⃣': 9
+  };
+  const sortedEmojiKeys = Object.keys(emojiMap).sort((a, b) => b.length - a.length);
+  for (const emoji of sortedEmojiKeys) {
+    if (str === emoji || str.startsWith(emoji)) return emojiMap[emoji];
+  }
+
+  // 2. Exact word numbers in English and Tamil
+  const wordMap = {
+    'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+    'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+    'eleven': 11, 'twelve': 12, 'thirteen': 13,
+    'ஒன்று': 1, 'ஒன்னு': 1, 'இரண்டு': 2, 'ரெண்டு': 2, 'மூன்று': 3,
+    'நான்கு': 4, 'நாலு': 4, 'ஐந்து': 5, 'அஞ்சு': 5, 'ஆறு': 6,
+    'ஏழு': 7, 'எட்டு': 8, 'ஒன்பது': 9, 'பத்து': 10,
+    'பதினொன்று': 11, 'பன்னிரண்டு': 12, 'பதின்மூன்று': 13
+  };
+  if (wordMap[str]) return wordMap[str];
+
+  // 3. Regex for single/double digits: e.g. "1", "01", "1.", "#1", "opt 1", "option 1", "(1)"
+  const digitMatch = str.match(/^(?:option\s*|opt\s*|choice\s*|#)?\(?(\d{1,2})\)?\.?$/i);
+  if (digitMatch) {
+    const n = parseInt(digitMatch[1], 10);
+    if (n >= 1 && n <= 13) return n;
+  }
+
+  return null;
 }
 
 /**
@@ -291,6 +360,60 @@ function formatSingleReflectionMessage(dailyContent, isTamil) {
   return isTamil
     ? `🕊️ *இன்றைய தியானம் (Daily Reflection)*\n\n${reflectionText || 'இறைவனின் வார்த்தை நம் வாழ்வின் வெளிச்சம்.'}\n\n🌐 *இணையத்தில் வாசிக்க:* ${getSiteUrl(SITE_ROUTES.DAILY_REFLECTION)}`
     : `🕊️ *Daily Reflection*\n\n${reflectionText || 'The word of God is a light unto our path.'}\n\n🌐 *Read online:* ${getSiteUrl(SITE_ROUTES.DAILY_REFLECTION)}`;
+}
+
+function formatCatholicPrayersMessage(isTamil = false) {
+  if (isTamil) {
+    return `🙏 *அடிப்படை கத்தோலிக்க செபங்கள் (Catholic Prayers)*
+_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
+
+✝️ *சிலுவை அடையாளம்:*
+தந்தை, மகன், தூய ஆவியாரின் பெயராலே. ஆமென்.
+
+🕊️ *கர்த்தர் கற்பித்த செபம் (பரலோக மந்திரம்):*
+பரலோகத்தில் இருக்கிற எங்கள் பிதாவே, உம்முடைய நாமம் அர்ச்சிக்கப்படுவதாக. உம்முடைய இராச்சியம் வருக. உம்முடைய சித்தம் பரலோகத்தில் செய்யப்படுவது போல, பூலோகத்திலும் செய்யப்படுவதாக.
+எங்கள் அன்றாட உணவை எங்களுக்கு இன்று அளித்தருளும். எங்களுக்குத் தீமை செய்வோரை நாங்கள் மன்னிப்பது போல, எங்கள் பாவங்களை மன்னித்தருளும். எங்களைச் சோதனைக்கு உட்படவிடாதேயும், தீமையிலிருந்து எங்களை விடுவித்தருளும். ஆமென்.
+
+🌹 *மங்கள வார்த்தை செபம்:*
+அருள் நிறைந்த மரியே வாழ்க! கர்த்தர் உம்முடனே. பெண்களுள் ஆசீர்வதிக்கப்பட்டவர் நீரே, உம்முடைய திருவயிற்றின் கனியாகிய இயேசுவும் ஆசீர்வதிக்கப்பட்டவரே.
+புனித மரியே, இறைவனின் தாயே, பாவிகளாய் இருக்கிற எங்களுக்காக இப்பொழுதும் எங்கள் இறப்பின் வேளையிலும் வேண்டிக்கொள்ளும். ஆமென்.
+
+✨ *திரித்துவப் புகழ்:*
+தந்தைக்கும் மகனுக்கும் தூய ஆவியாருக்கும் ஆட்சிமை உண்டாவதாக. தொடக்கத்தில் இருந்தது போல இப்பொழுதும் எப்பொழுதும் என்றென்றும் இருப்பதாக. ஆமென்.
+
+📿 *புனித ஜெபமாலை தேவ இரகசியங்கள்:*
+• *மகிழ்ச்சி நிறை இரகசியங்கள்* (திங்கள் & சனி)
+• *துயரம் நிறை இரகசியங்கள்* (செவ்வாய் & வெள்ளி)
+• *ஒளி நிறை இரகசியங்கள்* (வியாழன்)
+• *மகிமை நிறை இரகசியங்கள்* (புதன் & ஞாயிறு)
+
+🌐 *ஜெபமாலை செபிக்க & பாடல்கள் கேட்க:* ${getSiteUrl(SITE_ROUTES.ROSARY)}`;
+  }
+
+  return `🙏 *Catholic Prayers & Holy Rosary*
+_St. John de Britto Church, Kalayarkoil_
+
+✝️ *The Sign of the Cross:*
+In the name of the Father, and of the Son, and of the Holy Spirit. Amen.
+
+🕊️ *The Lord's Prayer (Our Father):*
+Our Father, who art in heaven, hallowed be Thy name; Thy kingdom come; Thy will be done on earth as it is in heaven.
+Give us this day our daily bread; and forgive us our trespasses as we forgive those who trespass against us; and lead us not into temptation, but deliver us from evil. Amen.
+
+🌹 *Hail Mary:*
+Hail Mary, full of grace, the Lord is with thee; blessed art thou among women, and blessed is the fruit of thy womb, Jesus.
+Holy Mary, Mother of God, pray for us sinners, now and at the hour of our death. Amen.
+
+✨ *Glory Be:*
+Glory be to the Father, and to the Son, and to the Holy Spirit. As it was in the beginning, is now, and ever shall be, world without end. Amen.
+
+📿 *Mysteries of the Holy Rosary:*
+• *Joyful Mysteries* (Monday & Saturday)
+• *Sorrowful Mysteries* (Tuesday & Friday)
+• *Luminous Mysteries* (Thursday)
+• *Glorious Mysteries* (Wednesday & Sunday)
+
+🌐 *Pray the Rosary & Devotional Songs:* ${getSiteUrl(SITE_ROUTES.ROSARY)}`;
 }
 
 async function sendTodayDevotionsToUser(replyTarget, session, wa) {
@@ -563,7 +686,8 @@ _SJDB Connect_`;
     }
 
     const normalizedText = rawText.toLowerCase().replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
-    const isTamilQuery = /[\u0B80-\u0BFF]/.test(rawText) || session.language === 'ta';
+    const isTamilQuery = /[\u0B80-\u0BFF]/.test(rawText) || session.language === 'ta' || session.botLanguage === 'ta';
+    const menuNum = extractMenuNumber(rawText);
 
     // ── Re-Verification Command ────────────────────────────────────────────────
     const isVerifyCommand = /^(verify|reverify|reset|restart|சரிபார்|மீண்டும் சரிபார்)$/i.test(normalizedText);
@@ -579,8 +703,8 @@ _SJDB Connect_`;
       return;
     }
 
-    // ── Single Authoritative Onboarding Flow (Unonboarded Users) ────────────────
-    if (!session.isOnboarded) {
+    // ── Single Authoritative Onboarding & Preference Flow ────────────────
+    if (!session.isOnboarded || session.step === 'preferences' || session.step === 'language') {
       // 1️⃣ Step 1: Bot Language
       if (!session.step || session.step === 'welcome' || session.step === 'bot_language') {
         if (session.step === 'bot_language') {
@@ -674,9 +798,14 @@ _SJDB Connect_`;
           session.otpAttempts = 0;
           session.step = 'preferences';
 
-          const parishUser = await User.findOne({ phone: { $regex: session.providedPhone } });
+          const cleanPhone = (session.providedPhone || '').replace(/\D/g, '').slice(-10);
+          const parishUser = (cleanPhone && cleanPhone.length >= 10)
+            ? await User.findOne({ phone: { $regex: cleanPhone + '$' }, isActive: { $ne: false } }).lean()
+            : null;
           if (parishUser) {
             session.linkedUserId = parishUser._id;
+          } else {
+            session.linkedUserId = null;
           }
           await session.save();
 
@@ -746,18 +875,46 @@ _SJDB Connect_`;
           session.isOnboarded = true;
           await session.save();
 
+          // Search the provided number whether present in the website database or not
+          let parishUser = null;
+          if (session.linkedUserId) {
+            try {
+              parishUser = await User.findById(session.linkedUserId).lean();
+            } catch (e) { }
+          }
+          if (!parishUser && (session.providedPhone || session.phoneNumber)) {
+            const rawPhone = session.providedPhone || session.phoneNumber;
+            const clean10 = rawPhone.replace(/\D/g, '').slice(-10);
+            if (clean10 && clean10.length >= 10) {
+              try {
+                parishUser = await User.findOne({
+                  phone: { $regex: clean10 + '$' },
+                  isActive: { $ne: false }
+                }).lean();
+                if (parishUser) {
+                  session.linkedUserId = parishUser._id;
+                  await session.save();
+                }
+              } catch (e) { }
+            }
+          }
+
           if (session.linkedUserId) {
             try {
               await User.findByIdAndUpdate(session.linkedUserId, {
                 language: chosenLang,
                 mass_reflection_language: chosenLang,
-                preferredLanguage: chosenLang
+                preferredLanguage: chosenLang,
+                botPreferences: session.preferences,
+                whatsappOptIn: true
               });
             } catch (lErr) { }
           }
 
+          const hasWebsiteAccount = Boolean(parishUser);
+
           // 7️⃣ Step 7: You're All Set!
-          const allSetMsg = getStep7AllSetMessage(session.preferences, session.language, session.botLanguage);
+          const allSetMsg = getStep7AllSetMessage(session.preferences, session.language, session.botLanguage, hasWebsiteAccount);
           await wa.sendWhatsAppMessage(replyTarget, allSetMsg);
 
           // 📖 "How to use SJDB Connect" (sent in a separate message immediately after You're All Set)
@@ -850,8 +1007,8 @@ _SJDB Connect_`;
       // Deduplication: If menu was sent in the immediately preceding response within 2 mins, don't flood chat
       if (session.lastBotReplyType === 'MENU' && session.lastMenuSentAt && (Date.now() - new Date(session.lastMenuSentAt).getTime()) < 120000) {
         const menuReminder = isTamilQuery
-          ? `📌 முதன்மை மெனு மேலே காட்டப்பட்டுள்ளது. தயவுசெய்து ஒரு விருப்ப எண்ணை (1-8) தேர்ந்தெடுக்கவும் அல்லது உங்கள் கேள்வியைத் தட்டச்சு செய்யவும்.`
-          : `📌 The Main Menu is displayed right above. Please reply with an option number (1-8) or type your question.`;
+          ? `📌 முதன்மை மெனு மேலே காட்டப்பட்டுள்ளது. தயவுசெய்து ஒரு விருப்ப எண்ணை (1-13) தேர்ந்தெடுக்கவும் அல்லது உங்கள் கேள்வியைத் தட்டச்சு செய்யவும்.`
+          : `📌 The Main Menu is displayed right above. Please reply with an option number (1-13) or type your question.`;
         await wa.sendWhatsAppMessage(replyTarget, menuReminder);
         return;
       }
@@ -903,57 +1060,7 @@ _SJDB Connect_`;
       return;
     }
 
-    // ── 3. SPECIFIC SINGLE CONTENT REQUESTS (No Unnecessary Chaining) ────────────
-
-    // 3A. Daily Bible Verse Specifically (Option 4 in Services or "verse")
-    const isSpecificVerseQuery = /^(verse|bible verse|today verse|today's verse|daily verse|வேத வசனம்|இறைவார்த்தை|வசனம்)$/i.test(normalizedText) ||
-      normalizedText === '4' ||
-      normalizedText.includes("today's bible verse") ||
-      normalizedText.includes("send today's bible verse") ||
-      normalizedText.includes("bible verse again") ||
-      normalizedText.includes("இன்றைய இறைவார்த்தை");
-
-    if (isSpecificVerseQuery) {
-      try {
-        const dailyContent = await getCachedDailyContent();
-        session.invalidInputStreak = 0;
-        session.lastBotReplyType = 'VERSE';
-        session.lastSentAt = new Date();
-        await session.save();
-
-        const verseMsg = formatSingleVerseMessage(dailyContent, isTamilQuery);
-        await wa.sendWhatsAppMessage(replyTarget, verseMsg);
-        return;
-      } catch (vErr) {
-        console.error('[BotHandler] Verse query error:', vErr.message);
-      }
-    }
-
-    // 3B. Daily Mass Readings Specifically (Option 5 in Services or "readings")
-    const isSpecificReadingsQuery = /^(readings|mass readings|today readings|today's readings|daily readings|gospel|வாசகம்|வாசகங்கள்|திருப்பலி வாசகங்கள்)$/i.test(normalizedText) ||
-      normalizedText === '5' ||
-      normalizedText.includes("mass readings") ||
-      normalizedText.includes("today's readings") ||
-      normalizedText.includes("readings again") ||
-      normalizedText.includes("இன்றைய வாசகங்கள்");
-
-    if (isSpecificReadingsQuery) {
-      try {
-        const dailyContent = await getCachedDailyContent();
-        session.invalidInputStreak = 0;
-        session.lastBotReplyType = 'READINGS';
-        session.lastSentAt = new Date();
-        await session.save();
-
-        const readingsMsg = formatSingleReadingsMessage(dailyContent, isTamilQuery);
-        await wa.sendWhatsAppMessage(replyTarget, readingsMsg);
-        return;
-      } catch (rErr) {
-        console.error('[BotHandler] Readings query error:', rErr.message);
-      }
-    }
-
-    // 3C. Daily Reflection Specifically
+    // ── Non-Numeric Special Handlers (Daily Reflection & Full Devotions) ───────
     const isSpecificReflectionQuery = /^(reflection|daily reflection|today reflection|today's reflection|தியானம்|இன்றைய தியானம்)$/i.test(normalizedText) ||
       normalizedText.includes("daily reflection") ||
       normalizedText.includes("reflection again");
@@ -974,10 +1081,7 @@ _SJDB Connect_`;
       }
     }
 
-    // 3D. Daily Devotions Package (Main Menu 1 or "devotions")
-    const isDailyDevotionsChoice = normalizedText === '1' ||
-      /^(daily devotions|daily catholic content|devotions|தினசரி திருப்பலி வாசகங்கள்)$/i.test(normalizedText);
-
+    const isDailyDevotionsChoice = /^(daily devotions|daily catholic content|devotions|தினசரி திருப்பலி வாசகங்கள்|தினசரி பக்தி)$/i.test(normalizedText);
     if (isDailyDevotionsChoice) {
       session.invalidInputStreak = 0;
       session.lastBotReplyType = 'DEVOTIONS';
@@ -987,9 +1091,11 @@ _SJDB Connect_`;
       return;
     }
 
-    // Option 2: Mass Timings (Main Menu 2 & Services 1)
-    const isMassTimingsQuery = normalizedText === '2' ||
-      /\b(mass timings|mass time|mass schedule|when is mass|what time is mass|morning mass|evening mass|sunday mass|today mass)\b/i.test(normalizedText) ||
+    // ── 13-SERVICE UNIFIED PARISH MENU & NUMERIC ROUTING (Options 1 to 13) ────
+
+    // 1️⃣ ⛪ Option 1: Mass Timings
+    const isMassTimingsQuery = menuNum === 1 ||
+      /\b(mass timings?|mass times?|mass schedule|when is mass|what time is mass|morning mass|evening mass|sunday mass|today mass)\b/i.test(normalizedText) ||
       /(திருப்பலி நேரம்|பூசை நேரம்|திருப்பலி நேரங்கள்|ஞாயிறு திருப்பலி)/.test(rawText);
 
     if (isMassTimingsQuery) {
@@ -998,45 +1104,211 @@ _SJDB Connect_`;
       session.lastSentAt = new Date();
       await session.save();
 
-      const massMsg = `⛪ *St. John de Britto Church — Holy Mass Timings*
+      const massMsg = isTamilQuery
+        ? `⛪ *புனித அருளானந்தர் ஆலயம் — திருப்பலி நேரங்கள்*
+_காளையார்கோவில், சிவகங்கை மறைமாவட்டம்_
+
+📅 *வார நாட்கள் (புதன் – சனி):*
+• மாலை 5:30 மணி — மாலைத் திருப்பலி
+
+🌟 *ஞாயிறு திருப்பலிகள்:*
+• காலை 6:30 மணி — அதிகாலைத் திருப்பலி
+• காலை 8:30 மணி — பங்குப் பெருவிழாத் திருப்பலி
+
+🕯️ *புதன்கிழமை நவநாள்:*
+• மாலை 5:30 மணி — புனித அருளானந்தர் நவநாள் & திருப்பலி
+
+🕯️ *சனிக்கிழமை நவநாள்:*
+• மாலை 5:30 மணி — நித்திய சகாய மாதா நவநாள் & திருப்பலி
+
+🕊️ *ஒப்புரவு அருட்சாதனம் (பாவசங்கீர்த்தனம்):*
+• புதன் – சனி: மாலை 5:00 – 5:30 மணி (திருப்பலிக்கு முன்) & திருப்பலிக்கு பின்
+
+🌐 *முழு விபரம் & திருப்பலி கருத்துக்கள்:* ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}`
+        : `⛪ *St. John de Britto Church — Holy Mass Timings*
 _Kalayarkoil, Sivagangai Diocese_
 
-📅 *Weekdays (Mon – Sat):*
-• 6:00 AM — Daily Morning Holy Mass
+📅 *Weekdays (Wednesday – Saturday):*
+• 5:30 PM — Evening Holy Mass
 
 🌟 *Sunday Holy Masses:*
-• 6:00 AM — Early Morning Mass
-• 8:00 AM — Parish High Mass
+• 6:30 AM — Early Morning Mass
+• 8:30 AM — Parish High Mass
 
-🕯️ *Tuesday Novena:*
-• 6:00 PM — Novena to St. Antony & Mass
+🕯️ *Wednesday Novena:*
+• 5:30 PM — Novena to St. John de Britto & Holy Mass
 
-🕊️ *First Friday:*
-• 6:00 PM — Eucharistic Adoration & Special Mass
+🕯️ *Saturday Novena:*
+• 5:30 PM — Novena to Our Lady of Perpetual Succour (Sahaya Madha) & Holy Mass
 
 🕊️ *Confessions (Reconciliation):*
-• Saturdays: 5:30 PM – 6:30 PM & before daily morning Mass
+• Wed – Sat: 5:00 PM – 5:30 PM (before Evening Mass) & after Mass
 
-🌐 *Full Schedule:* ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}`;
+🌐 *Full Schedule & Intentions:* ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}`;
 
       await wa.sendWhatsAppMessage(replyTarget, massMsg);
       return;
     }
 
-    // Option 3: Services Menu (Main Menu 3)
-    if (normalizedText === '3') {
+    // 2️⃣ 🕊️ Option 2: Confession Timings
+    const isConfessionQuery = menuNum === 2 ||
+      /\b(confessions?|confession timings?|confession times?|reconciliation|sacrament of reconciliation|penance)\b/i.test(normalizedText) ||
+      normalizedText.includes('confession') ||
+      normalizedText.includes('reconciliation') ||
+      /(ஒப்புரவு|பாவசங்கீர்த்தனம்|ஒப்புரவு நேரம்|பாவமன்னிப்பு)/.test(rawText);
+
+    if (isConfessionQuery) {
       session.invalidInputStreak = 0;
-      session.lastBotReplyType = 'SERVICES';
+      session.lastBotReplyType = 'CONFESSION';
       session.lastSentAt = new Date();
       await session.save();
 
-      const servicesMsg = getServicesMenuMessage();
-      await wa.sendWhatsAppMessage(replyTarget, servicesMsg);
+      const confMsg = isTamilQuery
+        ? `🕊️ *ஒப்புரவு அருட்சாதனம் (பாவசங்கீர்த்தன நேரங்கள்)*
+_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
+
+"உங்கள் பாவங்கள் கருஞ்சிவப்பாய் இருந்தாலும், உறைந்த பனிபோல் வெண்மையாகும்." — எசாயா 1:18
+
+⏰ *வழக்கமான ஒப்புரவு நேரங்கள்:*
+• *புதன் முதல் சனி வரை:* மாலை 5:00 – 5:30 மணி (மாலை திருப்பலிக்கு முன்)
+• *ஞாயிற்றுக்கிழமைகளில்:* காலை 6:00 – 6:30 & காலை 8:00 – 8:30 மணி (திருப்பலிக்கு முன்)
+• *திருப்பலி முடிந்த பின்:* பங்குத்தந்தையிடம் தனிப்பட்ட முறையில் கேட்டுப் பெறலாம்.
+
+✝️ *சிறப்பு ஒப்புரவு வழிபாடுகள்:*
+• மாதத்தின் முதல் வெள்ளிக்கிழமை ஆராதனையின் போது (மாலை 5:00 மணி முதல்)
+• தவக்காலம் மற்றும் திருவருகைக் கால சிறப்பு ஒப்புரவு வழிபாடுகள்
+• அவசர மற்றும் தனிப்பட்ட தேவைகளுக்கு பங்குத்தந்தையை எந்நேரமும் அணுகலாம்.
+
+📞 *அருட்தந்தையரைத் தொடர்பு கொள்ள:* +91 96556 39144
+
+🌐 *திருவருட்சாதன விபரம்:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`
+        : `🕊️ *Sacrament of Reconciliation (Confession Timings)*
+_St. John de Britto Church, Kalayarkoil_
+
+"Come now, let us settle the matter, says the LORD. Though your sins are like scarlet, they shall be as white as snow." — Isaiah 1:18
+
+⏰ *Regular Confession Schedule:*
+• *Wednesdays – Saturdays:* 5:00 PM – 5:30 PM (before Evening Mass)
+• *Sundays:* 6:00 AM – 6:30 AM & 8:00 AM – 8:30 AM (before Sunday Masses)
+• *After Every Mass:* Priests are available upon request near the confessional / sacristy.
+
+✝️ *Special Confession Services:*
+• First Friday Eucharistic Adoration (from 5:00 PM)
+• Season of Lent & Advent Penitential Services
+• Anytime by appointment with the Parish Priest.
+
+📞 *Need to meet a priest?*
+Call Parish Office: +91 96556 39144
+
+🌐 *Sacraments Info:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`;
+
+      await wa.sendWhatsAppMessage(replyTarget, confMsg);
       return;
     }
 
-    // ── 4. Church Events Query (Option 4, "What are the events?", "Upcoming events", "Any events this week?", "Show church events") ──
-    const isEventsChoice = normalizedText === '4' ||
+    // 3️⃣ 📖 Option 3: Daily Bible Verse
+    const isSpecificVerseQuery = menuNum === 3 ||
+      /\b(verse|bible verse|today verse|today\'?s verse|daily verse|scripture)\b/i.test(normalizedText) ||
+      normalizedText.includes("bible verse") ||
+      normalizedText.includes("today's verse") ||
+      /(வேத வசனம்|இறைவார்த்தை|வசனம்|இன்றைய இறைவார்த்தை)/.test(rawText);
+
+    if (isSpecificVerseQuery) {
+      try {
+        const dailyContent = await getCachedDailyContent();
+        session.invalidInputStreak = 0;
+        session.lastBotReplyType = 'VERSE';
+        session.lastSentAt = new Date();
+        await session.save();
+
+        const verseMsg = formatSingleVerseMessage(dailyContent, isTamilQuery);
+        await wa.sendWhatsAppMessage(replyTarget, verseMsg);
+        return;
+      } catch (vErr) {
+        console.error('[BotHandler] Verse query error:', vErr.message);
+      }
+    }
+
+    // 4️⃣ 📜 Option 4: Daily Mass Readings
+    const isSpecificReadingsQuery = menuNum === 4 ||
+      /\b(readings?|mass readings?|today readings?|today\'?s readings?|daily readings?|daily mass readings?|gospel)\b/i.test(normalizedText) ||
+      normalizedText.includes("mass readings") ||
+      normalizedText.includes("today's readings") ||
+      normalizedText.includes("readings again") ||
+      /(வாசகம்|வாசகங்கள்|திருப்பலி வாசகங்கள்|இன்றைய வாசகங்கள்)/.test(rawText);
+
+    if (isSpecificReadingsQuery) {
+      try {
+        const dailyContent = await getCachedDailyContent();
+        session.invalidInputStreak = 0;
+        session.lastBotReplyType = 'READINGS';
+        session.lastSentAt = new Date();
+        await session.save();
+
+        const readingsMsg = formatSingleReadingsMessage(dailyContent, isTamilQuery);
+        await wa.sendWhatsAppMessage(replyTarget, readingsMsg);
+        return;
+      } catch (rErr) {
+        console.error('[BotHandler] Readings query error:', rErr.message);
+      }
+    }
+
+    // 5️⃣ 🌟 Option 5: Saint of the Day
+    const isSaintChoice = menuNum === 5 ||
+      /\b(saint|today saint|saint of the day|who is today saint|who is the saint today|today\'?s saint|saints)\b/i.test(normalizedText) ||
+      normalizedText.includes("saint of the day") ||
+      /(இன்றைய புனிதர்|புனிதர் யார்|புனிதர்)/.test(rawText);
+
+    if (isSaintChoice) {
+      try {
+        const dailyContent = await getCachedDailyContent();
+        session.invalidInputStreak = 0;
+        session.lastBotReplyType = 'SAINT';
+        session.lastSentAt = new Date();
+        await session.save();
+
+        const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
+        const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: isTamilQuery ? 'ta' : (session.language || 'en') });
+
+        let sentMedia = false;
+        if (saintImageUrl && typeof wa.sendWhatsAppMedia === 'function') {
+          try {
+            sentMedia = await wa.sendWhatsAppMedia(replyTarget, { url: saintImageUrl, caption: saintInfoMsg, mimetype: 'image/jpeg' });
+          } catch (mErr) {
+            console.warn('[BotHandler] Saint media send fallback:', mErr.message);
+            sentMedia = false;
+          }
+        }
+
+        if (!sentMedia) {
+          await wa.sendWhatsAppMessage(replyTarget, saintInfoMsg);
+        }
+        return;
+      } catch (sErr) {
+        console.error('[BotHandler] Saint fetch error:', sErr.message);
+      }
+    }
+
+    // 6️⃣ 🙏 Option 6: Catholic Prayers
+    const isPrayersChoice = menuNum === 6 ||
+      /\b(catholic prayers?|prayers?|common prayers?|our father|hail mary|holy rosary|rosary|litany)\b/i.test(normalizedText) ||
+      normalizedText.includes("catholic prayer") ||
+      normalizedText.includes("rosary prayer") ||
+      /(செபம்|செபங்கள்|ஜெபம்|ஜெபங்கள்|கத்தோலிக்க செபங்கள்|பரலோக மந்திரம்|மங்கள வார்த்தை)/.test(rawText);
+
+    if (isPrayersChoice) {
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'PRAYERS';
+      session.lastSentAt = new Date();
+      await session.save();
+
+      const prayersMsg = formatCatholicPrayersMessage(isTamilQuery);
+      await wa.sendWhatsAppMessage(replyTarget, prayersMsg);
+      return;
+    }
+
+    // 7️⃣ 📅 Option 7: Church Events
+    const isEventsChoice = menuNum === 7 ||
       /\b(events?|upcoming events?|church events?|parish events?|show events?|list events?|what are the events|any events|what events|events this week)\b/i.test(normalizedText) ||
       normalizedText.includes('what are the events') ||
       normalizedText.includes('upcoming events') ||
@@ -1050,7 +1322,6 @@ _Kalayarkoil, Sivagangai Diocese_
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        // Fetch live directly from MongoDB to guarantee 100% real-time accuracy
         const events = await Event.find({
           isPublished: { $ne: false },
           date: { $gte: today }
@@ -1064,13 +1335,21 @@ _Kalayarkoil, Sivagangai Diocese_
         let eventsMsg = '';
         if (events && events.length > 0) {
           const items = events.map((ev, idx) => {
-            const dt = new Date(ev.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
-            return `${idx + 1}. *${ev.title}*\n   📅 ${dt}\n   🕐 ${ev.time || 'Schedule TBA'}\n   📍 ${ev.venue || 'Church Grounds'}\n   🔗 View Event: ${eventsUrl}`;
+            const dt = isTamilQuery
+              ? new Date(ev.date).toLocaleDateString('ta-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+              : new Date(ev.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
+            return isTamilQuery
+              ? `${idx + 1}. *${ev.title}*\n   📅 ${dt}\n   🕐 ${ev.time || 'நேரம் பின்னர் அறிவிக்கப்படும்'}\n   📍 ${ev.venue || 'ஆலய வளாகம்'}\n   🔗 விபரம்: ${eventsUrl}`
+              : `${idx + 1}. *${ev.title}*\n   📅 ${dt}\n   🕐 ${ev.time || 'Schedule TBA'}\n   📍 ${ev.venue || 'Church Grounds'}\n   🔗 View Event: ${eventsUrl}`;
           }).join('\n\n');
 
-          eventsMsg = `📅 *Upcoming Church Events*\n\n${items}\n\n🌐 *Complete Calendar:* ${eventsUrl}`;
+          eventsMsg = isTamilQuery
+            ? `📅 *வரவிருக்கும் பங்கு நிகழ்வுகள் (Church Events)*\n\n${items}\n\n🌐 *நிகழ்வுகள் நாள்காட்டி:* ${eventsUrl}`
+            : `📅 *Upcoming Church Events*\n\n${items}\n\n🌐 *Complete Calendar:* ${eventsUrl}`;
         } else {
-          eventsMsg = `📅 *Upcoming Church Events*\n\nNo upcoming church events are scheduled at the moment. Please check back soon or visit our website calendar.\n\n🌐 *View Events Calendar:* ${eventsUrl}`;
+          eventsMsg = isTamilQuery
+            ? `📅 *பங்கு நிகழ்வுகள்*\n\nதற்போது புதிய நிகழ்வுகள் எதுவும் திட்டமிடப்படவில்லை. எமது இணையதள நாள்காட்டியில் புதிய தகவல்களைப் பார்க்கலாம்.\n\n🌐 *நிகழ்வுகள் நாள்காட்டி:* ${eventsUrl}`
+            : `📅 *Upcoming Church Events*\n\nNo upcoming church events are scheduled at the moment. Please check back soon or visit our website calendar.\n\n🌐 *View Events Calendar:* ${eventsUrl}`;
         }
 
         await wa.sendWhatsAppMessage(replyTarget, eventsMsg);
@@ -1080,8 +1359,8 @@ _Kalayarkoil, Sivagangai Diocese_
       }
     }
 
-    // ── 5. Parish Announcements Query (Option 5, "Any announcements?", "Latest announcement", "What is new?", "Show announcements") ──
-    const isAnnouncementsChoice = normalizedText === '5' || normalizedText === '9' ||
+    // 8️⃣ 📢 Option 8: Parish Announcements
+    const isAnnouncementsChoice = menuNum === 8 ||
       /\b(announcements?|notices?|parish announcements?|what is new|what\'?s new|latest announcements?|show announcements?|any announcements?)\b/i.test(normalizedText) ||
       normalizedText.includes('any announcements') ||
       normalizedText.includes('latest announcement') ||
@@ -1109,14 +1388,18 @@ _Kalayarkoil, Sivagangai Diocese_
         let annMsg = '';
         if (announcements && announcements.length > 0) {
           const items = announcements.map((a, idx) => {
-            const dt = a.createdAt ? new Date(a.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '';
+            const dt = a.createdAt ? new Date(a.createdAt).toLocaleDateString(isTamilQuery ? 'ta-IN' : 'en-IN', { day: 'numeric', month: 'short' }) : '';
             const snippet = (a.content || a.description || '').replace(/\s+/g, ' ').slice(0, 110);
-            return `${idx + 1}. *${a.title}*${dt ? ` (${dt})` : ''}\n   📝 ${snippet}${snippet.length >= 110 ? '...' : ''}\n   🔗 Read Announcement: ${annUrl}`;
+            return `${idx + 1}. *${a.title}*${dt ? ` (${dt})` : ''}\n   📝 ${snippet}${snippet.length >= 110 ? '...' : ''}\n   🔗 ${isTamilQuery ? 'முழு அறிவிப்பு' : 'Read Announcement'}: ${annUrl}`;
           }).join('\n\n');
 
-          annMsg = `📢 *Latest Parish Announcements*\n\n${items}\n\n🌐 *All Announcements:* ${annUrl}`;
+          annMsg = isTamilQuery
+            ? `📢 *சமீபத்திய பங்கு அறிவிப்புகள் (Parish Announcements)*\n\n${items}\n\n🌐 *அனைத்து அறிவிப்புகள்:* ${annUrl}`
+            : `📢 *Latest Parish Announcements*\n\n${items}\n\n🌐 *All Announcements:* ${annUrl}`;
         } else {
-          annMsg = `📢 *Parish Announcements*\n\nThere are no new announcements at this moment. You can check our website for updates.\n\n🌐 *View Announcements:* ${annUrl}`;
+          annMsg = isTamilQuery
+            ? `📢 *பங்கு அறிவிப்புகள்*\n\nதற்போது புதிய அறிவிப்புகள் ஏதுமில்லை. எமது இணையதளத்தில் புதிய விபரங்களைப் பார்க்கலாம்.\n\n🌐 *அறிவிப்புகள் பக்கம்:* ${annUrl}`
+            : `📢 *Parish Announcements*\n\nThere are no new announcements at this moment. You can check our website for updates.\n\n🌐 *View Announcements:* ${annUrl}`;
         }
 
         await wa.sendWhatsAppMessage(replyTarget, annMsg);
@@ -1218,122 +1501,87 @@ ${siteUrl}
       }
     }
 
-    // Option 6: Church Information & History (Main Menu 6 & Services 13)
-    const isChurchInfoChoice = normalizedText === '6' || normalizedText === '13' ||
-      /\b(church information|church info|about church|history|patron saint)\b/i.test(normalizedText) ||
-      /(ஆலய விபரம்|பங்கு வரலாறு|புனிதர் வரலாறு|வரலாறு)/.test(rawText);
-
-    if (isChurchInfoChoice) {
-      const histMsg = `🏛️ *St. John de Britto Church — Church Information*
-_Kalayarkoil, Sivagangai Diocese_
-
-👑 *Patron Saint:* St. John de Britto (Arulanandar)
-🎉 *Patronal Feast Day:* February 4
-
-St. John de Britto was a Portuguese Jesuit missionary who adopted local Indian ascetic customs and attire to proclaim the Gospel across Marava country before his martyrdom at Oriyur on February 4, 1693.
-
-Our parish in Kalayarkoil stands as a historic sanctuary of faith, vibrant Anbiyams, and active pastoral ministries.
-
-🌐 *Read Complete History & Info:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`;
-
-      await wa.sendWhatsAppMessage(replyTarget, histMsg);
-      return;
-    }
-
-    // Option 7: Saint of the Day (Main Menu 7 & Services 6)
-    const isSaintChoice = normalizedText === '7' || normalizedText === '6' ||
-      /\b(saint|today saint|saint of the day|who is today saint|who is the saint today|today\'?s saint|saints)\b/i.test(normalizedText) ||
-      /(இன்றைய புனிதர்|புனிதர் யார்|புனிதர்)/.test(rawText);
-
-    if (isSaintChoice) {
-      try {
-        const dailyContent = await getCachedDailyContent();
-        session.invalidInputStreak = 0;
-        session.lastBotReplyType = 'SAINT';
-        session.lastSentAt = new Date();
-        await session.save();
-
-        const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
-        const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: session.language || 'en' });
-
-        let sentMedia = false;
-        if (saintImageUrl && typeof wa.sendWhatsAppMedia === 'function') {
-          try {
-            sentMedia = await wa.sendWhatsAppMedia(replyTarget, { url: saintImageUrl, caption: saintInfoMsg, mimetype: 'image/jpeg' });
-          } catch (mErr) {
-            console.warn('[BotHandler] Saint media send fallback:', mErr.message);
-            sentMedia = false;
-          }
-        }
-
-        if (!sentMedia) {
-          await wa.sendWhatsAppMessage(replyTarget, saintInfoMsg);
-        }
-        return;
-      } catch (sErr) {
-        console.error('[BotHandler] Saint fetch error:', sErr.message);
-      }
-    }
-
-    // Option 8: Help (Main Menu 8)
-    const isHelpChoice = normalizedText === '8' ||
-      /\b(help|commands|how to use|guide|options)\b/i.test(normalizedText) ||
-      /(உதவி|வழிகாட்டி)/.test(rawText);
-
-    if (isHelpChoice) {
-      const helpMsg = `❓ *SJDB Connect — Help & Guidance*
-_St. John de Britto Church, Kalayarkoil_
-
-📌 *Key Commands You Can Type Anytime:*
-• *MENU* — Main Navigation Menu
-• *SERVICES* — 14-Option Parish Services Directory
-• *PREFERENCES* — Update your subscribed services
-• *LANGUAGE* — Choose Tamil or English for Daily Catholic Devotions
-• *TAMIL* — Set Catholic readings to Tamil
-• *ENGLISH* — Set Catholic readings to English
-• *STOP* — Unsubscribe from daily broadcasts
-
-💡 You can reply with numbers 1 to 8 or type your questions naturally in English or Tamil!`;
-
-      await wa.sendWhatsAppMessage(replyTarget, helpMsg);
-      return;
-    }
-
-    // Option 10: Church Location & Google Maps
-    const isLocationChoice = normalizedText === '10' ||
-      /\b(where is the church|where is church|church location|location|how to reach|maps?)\b/i.test(normalizedText) ||
-      /(அமைவிடம்|கோவில் எங்கு|ஆலயம் எங்கு|முகவரி)/.test(rawText);
+    // 9️⃣ 📍 Option 9: Church Location & Map
+    const isLocationChoice = menuNum === 9 ||
+      /\b(where is the church|where is church|church location|location|church map|maps?|how to reach|directions?)\b/i.test(normalizedText) ||
+      normalizedText.includes('church location') ||
+      normalizedText.includes('where is the church') ||
+      /(அமைவிடம்|கோவில் எங்கு|ஆலயம் எங்கு|வரைபடம்|முகவரி)/.test(rawText);
 
     if (isLocationChoice) {
-      const locMsg = `🏛️ *St. John de Britto Church — Location*
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'LOCATION';
+      session.lastSentAt = new Date();
+      await session.save();
+
+      const locMsg = isTamilQuery
+        ? `🏛️ *புனித அருளானந்தர் ஆலயம் — அமைவிடம் & வரைபடம்*
+ஆலய சாலை, காளையார்கோவில் — 630551, சிவகங்கை மாவட்டம், தமிழ்நாடு, இந்தியா.
+
+🕒 *பார்வையாளர் நேரம்:*
+• திங்கள் – சனி: காலை 9:00 – 12:30 & மாலை 4:00 – 8:00
+• ஞாயிறு: காலை 10:00 – 12:00 & மாலை 5:00 – 8:00
+
+📍 *கூகுள் மேப் (Google Maps) இணைப்பு:*
+${EXTERNAL_LINKS.GOOGLE_MAPS}
+
+🚌 *போக்குவரத்து வசதி:* காளையார்கோவில் பேருந்து நிலையத்திலிருந்து 500 மீட்டர் தொலைவில் ஆலயம் அமைந்துள்ளது.
+
+🌐 *தொடர்பு பக்கம்:* ${getSiteUrl(SITE_ROUTES.CONTACT)}`
+        : `🏛️ *St. John de Britto Church — Church Location & Map*
 Church Road, Kalayarkoil — 630551, Sivagangai District, Tamil Nadu, India.
 
-🕒 *Visiting Hours:* Open daily from 5:30 AM to 8:00 PM
+🕒 *Visiting Hours:*
+• Monday – Saturday: 9:00 AM – 12:30 PM & 4:00 PM – 8:00 PM
+• Sunday: 10:00 AM – 12:00 PM & 5:00 PM – 8:00 PM
 
 📍 *Google Maps Location Link:*
 ${EXTERNAL_LINKS.GOOGLE_MAPS}
 
-🌐 ${getSiteUrl(SITE_ROUTES.CONTACT)}`;
+🚌 *How to Reach:* Located just 500 meters from Kalayarkoil Bus Stand.
+
+🌐 *Contact & Directions:* ${getSiteUrl(SITE_ROUTES.CONTACT)}`;
 
       await wa.sendWhatsAppMessage(replyTarget, locMsg);
       return;
     }
 
-    // Option 11: Parish Ministries & Anbiyams
-    const isMinistriesChoice = normalizedText === '11' ||
-      /\b(ministr(y|ies)|anbiyams?|council|choir|youth group|catechism)\b/i.test(normalizedText) ||
-      /(அன்பியம்|அன்பியங்கள்|பங்கு அமைப்புகள்|பாடகர் குழு|இளைஞர் இயக்கம்)/.test(rawText);
+    // 1️⃣0️⃣ 👥 Option 10: Parish Ministries & Anbiyams
+    const isMinistriesChoice = menuNum === 10 ||
+      /\b(ministr(y|ies)|anbiyams?|parish ministries|ward|council|choir|youth group|catechism|altar servers?)\b/i.test(normalizedText) ||
+      normalizedText.includes('ministries') ||
+      normalizedText.includes('anbiyam') ||
+      /(அன்பியம்|அன்பியங்கள்|பங்கு அமைப்புகள்|பாடகர் குழு|இளைஞர் இயக்கம்|பீடப் பணியாளர்கள்)/.test(rawText);
 
     if (isMinistriesChoice) {
-      const minMsg = `👥 *Parish Ministries & Anbiyams*
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'MINISTRIES';
+      session.lastSentAt = new Date();
+      await session.save();
 
-• 👥 *12 Active Anbiyams:* Ward family prayer cells
-• 🏛️ *Parish Pastoral Council:* Pastoral leadership & guidance
-• 🎶 *Parish Choir:* Tamil & English liturgical worship
-• 🕯️ *Altar Servers Guild:* Serving at the Holy Altar
-• 🌟 *Youth Movement (ICYM):* Active youth community & faith formation
-• 📖 *Sunday Catechism:* Faith classes for children
-• ❤️ *Society of St. Vincent de Paul:* Charity to the needy
+      const minMsg = isTamilQuery
+        ? `👥 *பங்கு அமைப்புகள் & அன்பியங்கள் (Ministries & Anbiyams)*
+_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
+
+• 👥 *12 அன்பியங்கள்:* பங்கு குடும்பங்களை இணைக்கும் வார்டு செபக் கூட்டமைப்புகள்
+• 🏛️ *பங்கு அருள்பணிப் பேரவை:* பங்கு வளர்ச்சி மற்றும் மேய்ப்புப் பணி ஆலோசனைக் குழு
+• 🎶 *பங்கு பாடகர் குழு:* திருப்பலி வழிபாட்டுப் பாடல்கள்
+• 🕯️ *பீடப் பணியாளர்கள் சங்கம் (Altar Servers):* பலிபீடப் பணி
+• 🌟 *இளைஞர் இயக்கம் (ICYM):* பங்கு இளைஞர் நற்பணி மன்றம்
+• 📖 *ஞாயிறு மறைக் கல்வி:* சிறார்களுக்கான விசுவாசக் கல்வி வகுப்புகள்
+• ❤️ *புனித வின்சென்ட் தே பவுல் சபை (SVP):* ஏழை எளியோருக்கான உதவி
+
+🌐 *மேலும் அறிய:* ${getSiteUrl(SITE_ROUTES.ANBIYAMS)}`
+        : `👥 *Parish Ministries & Anbiyams*
+_St. John de Britto Church, Kalayarkoil_
+
+• 👥 *12 Active Anbiyams:* Ward-level Christian family prayer cells
+• 🏛️ *Parish Pastoral Council:* Parish governance & pastoral leadership
+• 🎶 *Parish Choir:* Liturgical worship & sacred choral music
+• 🕯️ *Altar Servers Guild:* Reverent altar service during Masses
+• 🌟 *Youth Movement (ICYM):* Vibrant parish youth community
+• 📖 *Sunday Catechism:* Faith formation & Sunday school for children
+• ❤️ *Society of St. Vincent de Paul:* Loving charity & outreach to the needy
 
 🌐 *Read More:* ${getSiteUrl(SITE_ROUTES.ANBIYAMS)}`;
 
@@ -1341,27 +1589,47 @@ ${EXTERNAL_LINKS.GOOGLE_MAPS}
       return;
     }
 
-    // Option 12: Parish Priests & Clergy
-    const isPriestsChoice = normalizedText === '12' ||
-      /\b(priests?|parish priest|clergy|father)\b/i.test(normalizedText) ||
-      /(பங்குத்தந்தை|அருட்தந்தை|குருக்கள்)/.test(rawText);
+    // 1️⃣1️⃣ 👑 Option 11: Parish Priest & Clergy
+    const isPriestsChoice = menuNum === 11 ||
+      /\b(priests?|parish priest|clergy|pastor|fathers?)\b/i.test(normalizedText) ||
+      normalizedText.includes('parish priest') ||
+      normalizedText.includes('clergy') ||
+      /(பங்குத்தந்தை|அருட்தந்தை|குருக்கள்|குரு)/.test(rawText);
 
     if (isPriestsChoice) {
       try {
+        session.invalidInputStreak = 0;
+        session.lastBotReplyType = 'PRIESTS';
+        session.lastSentAt = new Date();
+        await session.save();
+
         const priests = await getCachedPriests();
         let pList = '';
         if (priests && priests.length > 0) {
-          pList = priests.map(p => `• *${p.designation || 'Priest'}:* Rev. Fr. ${p.name} ${p.phone ? `(Ph: ${p.phone})` : ''}`).join('\n');
+          pList = priests.map(p => `• *${p.designation || (isTamilQuery ? 'அருட்பணியாளர்' : 'Priest')}:* Rev. Fr. ${p.name} ${p.phone ? `(Ph: ${p.phone})` : ''}`).join('\n');
         } else {
-          pList = `• *Parish Priest:* Rev. Fr. Parish Priest (Ph: +91 96556 39144)`;
+          pList = isTamilQuery
+            ? `• *பங்குத்தந்தை:* Rev. Fr. Parish Priest (Ph: +91 96556 39144)`
+            : `• *Parish Priest:* Rev. Fr. Parish Priest (Ph: +91 96556 39144)`;
         }
 
-        const pMsg = `👑 *Parish Priests & Clergy*
+        const pMsg = isTamilQuery
+          ? `👑 *பங்குத்தந்தையர்கள் & அருட்பணியாளர்கள் (Parish Clergy)*
+_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
+
+${pList}
+
+🕒 *சந்திப்பு நேரம்:* காலை 9:00 – 1:00 & மாலை 4:00 – 7:00
+
+🌐 *குருக்கள் விபரம்:* ${getSiteUrl(SITE_ROUTES.PRIESTS)}`
+          : `👑 *Parish Priests & Clergy*
 _St. John de Britto Church, Kalayarkoil_
 
 ${pList}
 
-🌐 ${getSiteUrl(SITE_ROUTES.PRIESTS)}`;
+🕒 *Office Meeting Hours:* 9:00 AM – 1:00 PM & 4:00 PM – 7:00 PM
+
+🌐 *View Priests Online:* ${getSiteUrl(SITE_ROUTES.PRIESTS)}`;
 
         await wa.sendWhatsAppMessage(replyTarget, pMsg);
         return;
@@ -1370,21 +1638,40 @@ ${pList}
       }
     }
 
-    // Option 13: Church History & Patron Saint
-    const isHistoryChoice = normalizedText === '13' ||
-      /\b(church history|saint history|about church|history|patron saint)\b/i.test(normalizedText) ||
-      /(ஆலய வரலாறு|பங்கு வரலாறு|புனிதர் வரலாறு)/.test(rawText);
+    // 1️⃣2️⃣ 🏛️ Option 12: Church History & Patron Saint
+    const isHistoryChoice = menuNum === 12 ||
+      /\b(church history|saint history|about church|history|patron saint|britto history)\b/i.test(normalizedText) ||
+      normalizedText.includes('church history') ||
+      normalizedText.includes('history') ||
+      /(ஆலய வரலாறு|பங்கு வரலாறு|புனிதர் வரலாறு|வரலாறு)/.test(rawText);
 
     if (isHistoryChoice) {
-      const histMsg = `🏛️ *St. John de Britto Church — History*
-_Diocese of Sivagangai_
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'HISTORY';
+      session.lastSentAt = new Date();
+      await session.save();
+
+      const histMsg = isTamilQuery
+        ? `🏛️ *புனித அருளானந்தர் ஆலயம் — ஆலய வரலாறு*
+_காளையார்கோவில், சிவகங்கை மறைமாவட்டம்_
+
+👑 *பங்குப் பாதுகாவலர்:* புனித யோவான் தே பிரிட்டோ (அருளானந்தர்)
+🎉 *பாதுகாவலர் பெருவிழா:* பிப்ரவரி 4
+
+போர்ச்சுகல் நாட்டில் பிரபுக்கள் குடும்பத்தில் பிறந்த புனித ஜான் டி பிரிட்டோ (அருளானந்தர்), இயேசு சபைத் துறவியாக இந்தியா வந்து, இந்திய சந்நியாசி வேடமேற்று மறவர் சீமையில் நற்செய்தி அறிவித்தார். பிப்ரவரி 4, 1693 அன்று ஓரியூரில் விசுவாசத்திற்காக இரத்தசாட்சியாக உயிர்த்தியாகம் செய்தார்.
+
+காளையார்கோவிலில் அமைந்துள்ள எமது ஆலயம், விசுவாசப் பாரம்பரியமிக்க வரலாற்றுச் சிறப்புமிக்க புனிதத் தலமாகத் திகழ்கிறது.
+
+🌐 *முழுமையான வரலாறு வாசிக்க:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`
+        : `🏛️ *St. John de Britto Church — Church History*
+_Kalayarkoil, Sivagangai Diocese_
 
 👑 *Patron Saint:* St. John de Britto (Arulanandar)
 🎉 *Patronal Feast Day:* February 4
 
-St. John de Britto was a Portuguese Jesuit missionary who adopted local Indian ascetic customs and attire to proclaim the Gospel across Marava country before his martyrdom at Oriyur on February 4, 1693.
+St. John de Britto was a Portuguese Jesuit missionary who adopted the ascetic lifestyle, dress, and customs of an Indian sannyasi to proclaim the Gospel across Marava country. He embraced martyrdom for the Catholic faith at Oriyur on February 4, 1693.
 
-Our parish in Kalayarkoil stands as a historic sanctuary of faith, vibrant Anbiyams, and active pastoral ministries.
+Our parish in Kalayarkoil stands as a historic sanctuary of deep faith, active Anbiyams, and spiritual devotion.
 
 🌐 *Read Complete History:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`;
 
@@ -1392,13 +1679,38 @@ Our parish in Kalayarkoil stands as a historic sanctuary of faith, vibrant Anbiy
       return;
     }
 
-    // Option 14: Contact Church & Office Hours
-    const isContactChoice = normalizedText === '14' ||
-      /\b(contact|office hours|phone number|email|phone)\b/i.test(normalizedText) ||
-      /(தொடர்பு|அலுவலக நேரம்|தொலைபேசி)/.test(rawText);
+    // 1️⃣3️⃣ 📞 Option 13: Contact Church & Office Hours
+    const isContactChoice = menuNum === 13 ||
+      /\b(contact|contact church|office hours|phone number|email|phone|office)\b/i.test(normalizedText) ||
+      normalizedText.includes('contact church') ||
+      normalizedText.includes('contact') ||
+      /(தொடர்பு|அலுவலக நேரம்|தொலைபேசி|அலுவலகம்)/.test(rawText);
 
     if (isContactChoice) {
-      const contactMsg = `📞 *Parish Contact & Office Hours*
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'CONTACT';
+      session.lastSentAt = new Date();
+      await session.save();
+
+      const contactMsg = isTamilQuery
+        ? `📞 *ஆலய தொடர்பு விபரம் & அலுவலக நேரம்*
+_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
+
+🏛️ *முகவரி:*
+புனித அருளானந்தர் ஆலயம்,
+ஆலய சாலை, காளையார்கோவில் — 630551,
+சிவகங்கை மாவட்டம், தமிழ்நாடு, இந்தியா.
+
+📱 *தொலைபேசி:* +91 96556 39144
+📧 *மின்னஞ்சல்:* stjdbchurch@gmail.com
+🕒 *அலுவலக நேரம்:* Monday – Saturday: 9:00 AM – 12:30 PM & 4.00 PM - 8.00 PM\n Sunday: 10.00 AM - 12.00 PM & 5.00 PM - 8.00 PM
+
+📍 *கூகுள் மேப் (Google Maps) இணைப்பு:*
+${EXTERNAL_LINKS.GOOGLE_MAPS}
+
+🌐 *இணையதள தொடர்பு பக்கம்:* ${getSiteUrl(SITE_ROUTES.CONTACT)}`
+        : `📞 *Parish Contact & Office Hours*
+_St. John de Britto Church, Kalayarkoil_
 
 🏛️ *Address:*
 St. John de Britto Church,
@@ -1407,14 +1719,52 @@ Sivagangai District, Tamil Nadu, India.
 
 📱 *Phone:* +91 96556 39144
 📧 *Email:* stjdbchurch@gmail.com
-🕒 *Office Hours:* 9:00 AM – 1:00 PM & 4:00 PM – 7:00 PM
+🕒 *Office Hours:* Monday – Saturday: 9:00 AM – 12:30 PM & 4.00 PM - 8.00 PM\n Sunday: 10.00 AM - 12.00 PM & 5.00 PM - 8.00 PM
 
 📍 *Google Maps Location Link:*
 ${EXTERNAL_LINKS.GOOGLE_MAPS}
 
-🌐 ${getSiteUrl(SITE_ROUTES.CONTACT)}`;
+🌐 *Contact Page:* ${getSiteUrl(SITE_ROUTES.CONTACT)}`;
 
       await wa.sendWhatsAppMessage(replyTarget, contactMsg);
+      return;
+    }
+
+    // ── Help Command ──────────────────────────────────────────────────────────
+    const isHelpChoice =
+      /\b(help|commands|how to use|guide|options)\b/i.test(normalizedText) ||
+      /(உதவி|வழிகாட்டி)/.test(rawText);
+
+    if (isHelpChoice) {
+      const helpMsg = isTamilQuery
+        ? `❓ *SJDB Connect — உதவி & வழிகாட்டி*
+_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
+
+📌 *பயன்படுத்தக்கூடிய முக்கிய கட்டளைகள்:*
+• *MENU* — முதன்மை மெனு
+• *SERVICES* — 13 பங்கு சேவைகளின் விபரம்
+• *PREFERENCES* — உங்கள் அறிவிப்பு விருப்பங்களை மாற்ற
+• *LANGUAGE* — தமிழ் அல்லது ஆங்கில மொழியைத் தேர்ந்தெடுக்க
+• *TAMIL* — தமிழ் மொழிக்கு மாற்ற
+• *ENGLISH* — ஆங்கில மொழிக்கு மாற்ற
+• *STOP* — தினசரி செய்திகளிலிருந்து விலக
+
+💡 நீங்கள் 1 முதல் 13 வரை உள்ள எண்களை அனுப்பலாம் அல்லது உங்கள் கேள்வியை நேரடியாக தமிழ் அல்லது ஆங்கிலத்தில் தட்டச்சு செய்யலாம்!`
+        : `❓ *SJDB Connect — Help & Guidance*
+_St. John de Britto Church, Kalayarkoil_
+
+📌 *Key Commands You Can Type Anytime:*
+• *MENU* — Main Navigation Menu
+• *SERVICES* — 13-Option Parish Services Directory
+• *PREFERENCES* — Update your subscribed services
+• *LANGUAGE* — Choose Tamil or English for Daily Catholic Devotions
+• *TAMIL* — Set Catholic readings to Tamil
+• *ENGLISH* — Set Catholic readings to English
+• *STOP* — Unsubscribe from daily broadcasts
+
+💡 You can reply with numbers 1 to 13 or type your questions naturally in English or Tamil!`;
+
+      await wa.sendWhatsAppMessage(replyTarget, helpMsg);
       return;
     }
 
@@ -1484,6 +1834,9 @@ ${EXTERNAL_LINKS.GOOGLE_MAPS}
 
 module.exports = {
   handleIncomingMessage,
+  extractMenuNumber,
+  getServicesMenuMessage,
+  formatCatholicPrayersMessage,
   resetBotCachesAndSessions: async () => {
     processedMessageIdsCache.clear();
     incomingMsgDeduplication.clear();

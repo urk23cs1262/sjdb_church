@@ -10,7 +10,7 @@ import * as htmlToImage from 'html-to-image';
 import downloadjs from 'downloadjs';
 import PageHero from '../../components/common/common_page_hero';
 import api from '../../services/api';
-import { fetchSaintOfTheDay, searchSaintImage } from '../../services/saintOfDay';
+import { fetchSaintOfTheDay, searchSaintImage, cleanSaintName, formatFiveLines } from '../../services/saintOfDay';
 
 
 // ── Date helpers — always use LOCAL time, never UTC ────────────────────────
@@ -1014,13 +1014,14 @@ export default function BibleVerse() {
                       {isTamil ? 'இன்றைய புனிதர்' : 'Saint of the Day'}
                     </span>
                     <h4 className="font-bold text-base sm:text-lg text-white drop-shadow">
-                      {isTamil && saintData?.tamilName ? saintData.tamilName : (saintData?.englishName || saintData?.saintName || 'Saint of the Day')}
+                      {isTamil && saintData?.tamilName ? saintData.tamilName : cleanSaintName(saintData?.englishName || saintData?.saintName)}
                     </h4>
                   </div>
                 </div>
 
                 {/* Details & Biography */}
-                <div className="flex-1 space-y-4 text-left">                  <div>
+                <div className="flex-1 space-y-4 text-left">
+                  <div>
                     <span className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400">
                       {isTamil ? 'திருவிழா நாள்' : 'FEAST DAY'}
                     </span>
@@ -1031,8 +1032,16 @@ export default function BibleVerse() {
                   </div>
 
                   <div className="text-gray-700 leading-relaxed text-sm sm:text-base font-normal">
-                    <p>
-                      {isTamil && saintData?.descriptionTa ? saintData.descriptionTa : (saintData?.description || 'Daily Saint details.')}
+                    <p
+                      className="line-clamp-5"
+                      style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 5,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden'
+                      }}
+                    >
+                      {formatFiveLines(isTamil && saintData?.descriptionTa ? saintData.descriptionTa : (saintData?.description || 'Daily Saint details.'))}
                     </p>
                   </div>
 
@@ -1045,7 +1054,14 @@ export default function BibleVerse() {
                         className="btn-royal text-xs sm:text-sm py-2 px-4 rounded-xl flex items-center gap-1.5 shadow-sm hover:shadow-md"
                       >
                         <FiExternalLink />
-                        <span>{isTamil ? 'வத்திக்கான் அதிகாரப்பூர்வ பக்கம்' : 'Read on Vatican State City'}</span>
+                        <span>
+                          {(() => {
+                            const siteName = saintData?.source && !saintData.source.toLowerCase().includes('vatican')
+                              ? saintData.source.split('/')[0].trim()
+                              : 'Catholic Readings';
+                            return isTamil ? `${siteName}-ல் வாசிக்க` : `Read on ${siteName}`;
+                          })()}
+                        </span>
                       </a>
                     )}
                   </div>

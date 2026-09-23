@@ -223,13 +223,23 @@ export default function RosarySongsManager() {
     }
 
     setUploadingZip(true);
-    const toastId = toast.loading('Extracting and inspecting audio files from ZIP archive...');
+    const toastId = toast.loading('Uploading ZIP: 0%...');
     try {
       const fd = new FormData();
       fd.append('file', file);
 
       const res = await api.post('/rosary-songs/zip', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            if (percent < 100) {
+              toast.loading(`Uploading ZIP: ${percent}%...`, { id: toastId });
+            } else {
+              toast.loading('Processing & extracting songs in parallel... 100%', { id: toastId });
+            }
+          }
+        }
       });
 
       if (res.data.hasDuplicates) {
@@ -306,26 +316,57 @@ export default function RosarySongsManager() {
     }
   };
 
-  // Upload Individual Songs
+  // Upload Individual Songs in reliable batches
+  // Upload Individual Songs with real-time percentage toast and high-speed batching
   const handleIndividualUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
     setUploadingIndividual(true);
-    const toastId = toast.loading(`Uploading ${files.length} audio file(s)...`);
+    const toastId = toast.loading(`Uploading songs: 0% (0 of ${files.length})...`);
+
     try {
-      const fd = new FormData();
-      files.forEach(f => fd.append('files', f));
+      const BATCH_SIZE = 50; // Maximum efficiency for bulk uploads
+      const totalBytes = files.reduce((acc, f) => acc + (f.size || 0), 0);
+      let loadedBytesPrior = 0;
+      let totalUploaded = 0;
 
-      const res = await api.post('/rosary-songs/individual', fd, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      for (let i = 0; i < files.length; i += BATCH_SIZE) {
+        const batch = files.slice(i, i + BATCH_SIZE);
+        const batchBytes = batch.reduce((acc, f) => acc + (f.size || 0), 0);
 
-      toast.success(res.data.message || 'Songs uploaded successfully!', { id: toastId });
+        const fd = new FormData();
+        batch.forEach(f => fd.append('files', f));
+
+        const res = await api.post('/rosary-songs/individual', fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+          onUploadProgress: (progressEvent) => {
+            const currentTotalLoaded = loadedBytesPrior + (progressEvent.loaded || 0);
+            const overallPercent = totalBytes > 0
+              ? Math.min(99, Math.round((currentTotalLoaded * 100) / totalBytes))
+              : Math.round(((i + ((progressEvent.loaded || 0) / (progressEvent.total || 1)) * batch.length) / files.length) * 100);
+
+            if (overallPercent < 99) {
+              toast.loading(`Uploading songs: ${overallPercent}% (${Math.min(i + batch.length, files.length)} of ${files.length})...`, { id: toastId });
+            } else {
+              toast.loading(`Saving songs to database: 100% (${files.length} songs)...`, { id: toastId });
+            }
+          }
+        });
+
+        loadedBytesPrior += batchBytes;
+
+        if (res.data?.songs) {
+          totalUploaded += res.data.songs.length;
+        }
+      }
+
+      toast.success(`Successfully uploaded ${totalUploaded} of ${files.length} song(s)!`, { id: toastId });
       fetchSongs();
       if (individualInputRef.current) individualInputRef.current.value = '';
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to upload songs', { id: toastId });
+      fetchSongs();
     } finally {
       setUploadingIndividual(false);
     }
@@ -883,6 +924,46 @@ export default function RosarySongsManager() {
               </button>
             </div>
 
+            {/* Quick Batch Actions Toolbar */}
+            <div className="px-4 sm:px-5 py-2.5 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="font-bold text-gray-700">Quick 1-Click Decisions:</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = {};
+                    duplicateSession.duplicates.forEach(d => { next[d.id] = 'uploaded'; });
+                    setDuplicateChoices(next);
+                  }}
+                  className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg font-bold transition-all cursor-pointer shadow-2xs active:scale-98"
+                >
+                  Keep All Uploaded (Replace)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = {};
+                    duplicateSession.duplicates.forEach(d => { next[d.id] = 'existing'; });
+                    setDuplicateChoices(next);
+                  }}
+                  className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg font-bold transition-all cursor-pointer shadow-2xs active:scale-98"
+                >
+                  Keep All Existing (Skip)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = {};
+                    duplicateSession.duplicates.forEach(d => { next[d.id] = 'new'; });
+                    setDuplicateChoices(next);
+                  }}
+                  className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg font-bold transition-all cursor-pointer shadow-2xs active:scale-98"
+                >
+                  Import All as New (Keep Both)
+                </button>
+              </div>
+            </div>
+
             {/* Scrollable Duplicate Songs List */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
               {duplicateSession.duplicates.map((dup, index) => {
@@ -973,17 +1054,30 @@ export default function RosarySongsManager() {
                             {uploadedPlaying ? <FiPause className="text-xs" /> : <FiPlay className="text-xs" />}
                             <span>{uploadedPlaying ? 'Pause' : 'Play Uploaded'}</span>
                           </button>
-                          <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                            <input
-                              type="radio"
-                              name={`choice_${dup.id}`}
-                              value="uploaded"
-                              checked={choice === 'uploaded'}
-                              onChange={() => setDuplicateChoices(prev => ({ ...prev, [dup.id]: 'uploaded' }))}
-                              className="accent-indigo-600 w-3.5 h-3.5 cursor-pointer"
-                            />
-                            <span className="text-xs font-bold text-gray-800">Keep Uploaded</span>
-                          </label>
+                          <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+                            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                              <input
+                                type="radio"
+                                name={`choice_${dup.id}`}
+                                value="uploaded"
+                                checked={choice === 'uploaded'}
+                                onChange={() => setDuplicateChoices(prev => ({ ...prev, [dup.id]: 'uploaded' }))}
+                                className="accent-indigo-600 w-3.5 h-3.5 cursor-pointer"
+                              />
+                              <span className="text-xs font-bold text-gray-800">Keep Uploaded</span>
+                            </label>
+                            <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                              <input
+                                type="radio"
+                                name={`choice_${dup.id}`}
+                                value="new"
+                                checked={choice === 'new'}
+                                onChange={() => setDuplicateChoices(prev => ({ ...prev, [dup.id]: 'new' }))}
+                                className="accent-emerald-600 w-3.5 h-3.5 cursor-pointer"
+                              />
+                              <span className="text-xs font-bold text-emerald-700">Keep Both</span>
+                            </label>
+                          </div>
                         </div>
                       </div>
                     </div>

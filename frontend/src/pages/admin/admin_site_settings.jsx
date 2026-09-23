@@ -54,12 +54,12 @@ const SETTING_CARDS = [
   {
     key: 'daily_saint_fetch_url',
     label: 'Daily Saint Fetch URL',
-    description: 'The URL to fetch the daily Saint of the Day details from (Vatican State).',
+    description: 'The URL to fetch the daily Saint of the Day details from (Catholic Readings).',
     icon: <FiSun className="text-2xl" />,
     color: 'bg-indigo-600',
     type: 'text',
-    placeholder: 'https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html',
-    hint: 'Default: https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html'
+    placeholder: 'https://catholicreadings.org/catholic-saint-of-the-day/',
+    hint: 'Default: https://catholicreadings.org/catholic-saint-of-the-day/'
   },
   {
     key: 'daily_mass_fetch_url',

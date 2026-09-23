@@ -44,8 +44,22 @@ const getFile = async (req, res) => {
         if (isNaN(start) || start >= fileSize || start < 0) {
           return res.status(416).set('Content-Range', `bytes */${fileSize}`).end();
         }
-        const parsedEnd = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-        const end = Math.min(isNaN(parsedEnd) ? fileSize - 1 : parsedEnd, fileSize - 1);
+
+        // Bounded chunk window for open-ended requests (e.g. bytes=0-)
+        // Prevents proxy/load balancer socket idle timeouts during audio playback
+        const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB chunk window
+        let end;
+        if (parts[1] && parts[1].trim() !== '') {
+          const parsedEnd = parseInt(parts[1], 10);
+          end = Math.min(isNaN(parsedEnd) ? fileSize - 1 : parsedEnd, fileSize - 1);
+        } else {
+          end = Math.min(start + CHUNK_SIZE - 1, fileSize - 1);
+        }
+
+        if (end < start) {
+          end = start;
+        }
+
         const chunksize = (end - start) + 1;
 
         res.status(206);
@@ -54,11 +68,23 @@ const getFile = async (req, res) => {
           'Accept-Ranges': 'bytes',
           'Content-Length': chunksize,
           'Content-Type': doc.contentType || 'audio/mpeg',
+          'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800'
         });
 
-        const stream = getGridFSStream(doc._id, { start, end: Math.min(end + 1, fileSize) });
-        stream.on('error', () => {
-          if (!res.headersSent) res.status(404).json({ success: false, message: 'Stream error' });
+        // GridFS openDownloadStream 'end' is non-inclusive, so pass end + 1
+        const stream = getGridFSStream(doc._id, { start, end: end + 1 });
+
+        // Destroy stream if client cancels, seeks, or socket closes
+        req.on('close', () => {
+          try {
+            stream.destroy();
+          } catch (_) {}
+        });
+
+        stream.on('error', (err) => {
+          if (!res.headersSent) {
+            res.status(404).json({ success: false, message: 'Stream error' });
+          }
         });
         return stream.pipe(res);
       } else {

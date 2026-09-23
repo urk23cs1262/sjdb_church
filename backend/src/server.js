@@ -12,8 +12,15 @@ const connectDB = require('./config/db');
 const app = express();
 app.set('trust proxy', 1); // Trust the reverse proxy on Render/Heroku
 
-// HTTP response compression (gzip/deflate)
-app.use(compression());
+// HTTP response compression (gzip/deflate), excluding media streaming routes
+app.use(compression({
+  filter: (req, res) => {
+    if (req.path.startsWith('/api/files/') || req.path.startsWith('/api/rosary-songs/temp-preview')) {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+}));
 
 // Performance Monitor: Log slow API requests exceeding 500ms
 app.use((req, res, next) => {
@@ -184,7 +191,7 @@ app.use('/api/bot', require('./routes/bot'));
 app.use('/api/moderation', require('./routes/moderationRoutes'));
 
 // Background Services
-require('./services/saintService'); // 12:00 AM IST Daily Saint of the Day automated Vatican News sync
+require('./services/saintService'); // 12:00 AM IST Daily Saint of the Day automated Catholic Readings sync
 require('./services/birthdayService');
 require('./services/dailyBroadcastService'); // 12:00 AM Birthday & Unified Broadcast triggers
 require('./services/reminderSchedulerService'); // Automated Event & Announcement reminders via Email, WhatsApp bot & In-App
@@ -254,7 +261,7 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`\n St. John de Britto's Church API & 24/7 WhatsApp Daemon`);
   console.log(` Server running on port ${PORT}`);
   console.log(` Allowed origins: ${allowedOrigins.join(', ')}`);
@@ -270,6 +277,10 @@ app.listen(PORT, () => {
     console.error(' WhatsApp (Baileys) connection failed:', err.message);
   });
 });
+
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
+server.requestTimeout = 300000; // 5 minutes for large media uploads and streaming
 
 
 module.exports = app;

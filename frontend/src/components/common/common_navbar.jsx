@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
@@ -60,6 +60,64 @@ export default function Navbar() {
   const [showRosaryModal, setShowRosaryModal] = useState(false);
   const [rosaryModalMode, setRosaryModalMode] = useState('rosary');
   const [moreInfoOpen, setMoreInfoOpen] = useState(false);
+
+  const userMenuRef = useRef(null);
+  const moreInfoRef = useRef(null);
+  const mobileMenuRef = useRef(null);
+  const mobileToggleRef = useRef(null);
+
+  // Close menu bar and dropdowns when user presses Escape key
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' || e.key === 'Esc' || e.keyCode === 27) {
+        setUserMenuOpen(false);
+        setMoreInfoOpen(false);
+        setMobileOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Close menu bar and dropdowns when clicking anywhere outside on the website
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      // User Profile Dropdown
+      if (userMenuOpen && userMenuRef.current && !userMenuRef.current.contains(e.target)) {
+        setUserMenuOpen(false);
+      }
+      // More Info Dropdown
+      if (moreInfoOpen && moreInfoRef.current && !moreInfoRef.current.contains(e.target)) {
+        setMoreInfoOpen(false);
+      }
+      // Mobile Slide-down Menu (ignore clicks on the hamburger button so it can toggle properly)
+      if (
+        mobileOpen &&
+        mobileMenuRef.current &&
+        !mobileMenuRef.current.contains(e.target) &&
+        mobileToggleRef.current &&
+        !mobileToggleRef.current.contains(e.target)
+      ) {
+        setMobileOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [userMenuOpen, moreInfoOpen, mobileOpen]);
+
+  // Close all menus on page navigation
+  useEffect(() => {
+    setUserMenuOpen(false);
+    setMoreInfoOpen(false);
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   const isTamil = checkIsTamil();
 
@@ -220,8 +278,9 @@ export default function Navbar() {
               ))}
 
               {/* More Info Dropdown */}
-              <div className="relative" onMouseEnter={() => setMoreInfoOpen(true)} onMouseLeave={() => setMoreInfoOpen(false)}>
+              <div ref={moreInfoRef} className="relative" onMouseEnter={() => setMoreInfoOpen(true)} onMouseLeave={() => setMoreInfoOpen(false)}>
                 <button
+                  onClick={() => setMoreInfoOpen(prev => !prev)}
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${moreInfoOpen ? 'text-church-gold bg-white/10' : 'text-gray-200 hover:text-church-gold hover:bg-white/10'
                     }`}
                 >
@@ -300,7 +359,7 @@ export default function Navbar() {
 
               {/* Hey Connect mic button — desktop (pill) & mobile (circle) — kept RIGHT side of rosary icon */}
               <button
-                onClick={() => window.dispatchEvent(new CustomEvent('hey-connect-activate'))}
+                onClick={() => window.dispatchEvent(new CustomEvent('hey-connect-activate', { detail: { userName: user?.name || user?.fullName || '' } }))}
                 className="connect-mic-btn"
                 title="Hey Connect — Voice Assistant"
                 aria-label="Activate Hey Connect voice assistant"
@@ -327,7 +386,7 @@ export default function Navbar() {
 
               {/* Auth buttons */}
               {isAuthenticated ? (
-                <div className="relative">
+                <div ref={userMenuRef} className="relative">
                   <button
                     onClick={() => setUserMenuOpen(!userMenuOpen)}
                     className="relative flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-xl transition-all duration-200"
@@ -407,6 +466,7 @@ export default function Navbar() {
 
               {/* Mobile menu button */}
               <button
+                ref={mobileToggleRef}
                 onClick={() => setMobileOpen(!mobileOpen)}
                 className="lg:hidden text-gray-200 hover:text-gold-300 p-2 rounded-lg hover:bg-white/10 transition-all"
               >
@@ -420,6 +480,7 @@ export default function Navbar() {
         <AnimatePresence>
           {mobileOpen && (
             <motion.div
+              ref={mobileMenuRef}
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -512,7 +573,7 @@ export default function Navbar() {
                 {/* Hey Connect mic button — mobile menu */}
                 <button
                   onClick={() => {
-                    window.dispatchEvent(new CustomEvent('hey-connect-activate'));
+                    window.dispatchEvent(new CustomEvent('hey-connect-activate', { detail: { userName: user?.name || user?.fullName || '' } }));
                     setMobileOpen(false);
                   }}
                   className="connect-mic-btn w-full justify-center"

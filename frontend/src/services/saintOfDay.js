@@ -7,6 +7,24 @@ import { getSaintForDate } from '../data/catholic_saints_calendar';
  */
 const saintClientCache = new Map();
 
+export function cleanSaintName(name) {
+  if (!name) return 'Saint of the Day';
+  return name
+    .replace(/\s*[-–—|]\s*Saint of the Day.*$/i, '')
+    .replace(/\s*[-–—|]\s*Catholic Readings.*$/i, '')
+    .replace(/\s+\d{4}\s*$/g, '')
+    .trim();
+}
+
+export function formatFiveLines(text) {
+  if (!text) return '';
+  return text
+    .split(/\n+/)
+    .map(t => t.trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
 export async function fetchSaintOfTheDay(dateStr) {
   let targetDate = new Date();
   if (dateStr) {
@@ -22,15 +40,20 @@ export async function fetchSaintOfTheDay(dateStr) {
   const dateKey = `${yearNum}-${monthNum}-${dayNum}`;
   const fallbackSaint = getSaintForDate(targetDate);
 
-  // Check client memory cache first
+  // Check client memory cache first (only if it has full multi-line bio)
   if (saintClientCache.has(dateKey)) {
-    return saintClientCache.get(dateKey);
+    const cached = saintClientCache.get(dateKey);
+    if (cached && cached.description && cached.description.length >= 200) {
+      return cached;
+    }
   }
 
   try {
     const query = dateStr ? `?date=${encodeURIComponent(dateStr)}` : '';
     const res = await api.get(`/saint-of-the-day${query}`);
     if (res.data && res.data.success && (res.data.saintName || res.data.name)) {
+      const rawSaintName = res.data.saintName || res.data.name || fallbackSaint.name;
+      const rawEngName = res.data.englishName || res.data.saintName || res.data.name || fallbackSaint.name;
       const saintPayload = {
         date: res.data.date || dateKey,
         day: res.data.day || dayNum,
@@ -39,19 +62,19 @@ export async function fetchSaintOfTheDay(dateStr) {
         year: res.data.year || yearNum,
         dayOfWeek: res.data.dayOfWeek || targetDate.toLocaleDateString('en-US', { weekday: 'long' }),
         dayOfWeekTa: res.data.dayOfWeekTa || targetDate.toLocaleDateString('ta-IN', { weekday: 'long' }),
-        saintName: res.data.saintName || res.data.name || fallbackSaint.name,
-        englishName: res.data.englishName || res.data.saintName || res.data.name || fallbackSaint.name,
+        saintName: cleanSaintName(rawSaintName),
+        englishName: cleanSaintName(rawEngName),
         tamilName: res.data.tamilName || res.data.nameTa || fallbackSaint.nameTa,
         description: res.data.description || fallbackSaint.description,
         descriptionTa: res.data.descriptionTa || fallbackSaint.descriptionTa,
         image: res.data.image || fallbackSaint.image,
-        imageSource: res.data.imageSource || (res.data.imageFallback ? 'fallback' : 'vatican'),
+        imageSource: res.data.imageSource || (res.data.imageFallback ? 'fallback' : 'catholicreadings'),
         imageSourceUrl: res.data.imageSourceUrl || res.data.sourceUrl || res.data.link,
         imageFallback: typeof res.data.imageFallback === 'boolean' ? res.data.imageFallback : false,
         feastDay: res.data.feastDay || fallbackSaint.feastDay || `${targetDate.toLocaleDateString('en-US', { month: 'long' })} ${dayNum}`,
-        source: res.data.source || "Vatican State / Catholic Liturgical Calendar",
-        sourceUrl: res.data.sourceUrl || "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html",
-        link: res.data.link || res.data.sourceUrl || "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html"
+        source: res.data.source || "Catholic Readings / Catholic Liturgical Calendar",
+        sourceUrl: res.data.sourceUrl || "https://catholicreadings.org/catholic-saint-of-the-day/",
+        link: res.data.link || res.data.sourceUrl || "https://catholicreadings.org/catholic-saint-of-the-day/"
       };
 
       saintClientCache.set(dateKey, saintPayload);
@@ -77,12 +100,12 @@ export async function fetchSaintOfTheDay(dateStr) {
     descriptionTa: fallbackSaint.descriptionTa,
     image: fallbackSaint.image,
     imageSource: "liturgical_calendar",
-    imageSourceUrl: fallbackSaint.link || "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html",
+    imageSourceUrl: fallbackSaint.link || "https://catholicreadings.org/catholic-saint-of-the-day/",
     imageFallback: true,
     feastDay: fallbackSaint.feastDay || `${targetDate.toLocaleDateString('en-US', { month: 'long' })} ${dayNum}`,
-    source: "Vatican State / Catholic Liturgical Calendar",
-    sourceUrl: "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html",
-    link: fallbackSaint.link || "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html"
+    source: "Catholic Readings / Catholic Liturgical Calendar",
+    sourceUrl: "https://catholicreadings.org/catholic-saint-of-the-day/",
+    link: fallbackSaint.link || "https://catholicreadings.org/catholic-saint-of-the-day/"
   };
 
   saintClientCache.set(dateKey, fallbackPayload);

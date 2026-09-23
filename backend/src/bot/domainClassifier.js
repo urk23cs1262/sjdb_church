@@ -44,6 +44,11 @@ const CHURCH_PATTERNS = [
   /\b(kalayarkoil|sivagangai|anbiyam|anbiyams|substation|substations|sjdb|connect|readings|reading|reflection|reflections|catholic|catholics|vatican|christian|christians|faith)\b/i,
   /\b(timing|timings|schedule|schedules|event|events|announcement|announcements|donation|donations|register|registration|registering|offering|tithe|choir|catechist|ministry|ministries|association|associations|contact|location|address|office hours|forms|portal|website|language|notification|notifications|preference|preferences|subscribe|unsubscribe|profile|account|service|services|menu|help)\b/i,
   /\b(hi|hello|hey|greetings|good morning|good evening|praise the lord|peace|welcome|start|reset|vanakkam)\b/i,
+  // Numbers 1 to 13 & emoji numbers for menu selections
+  /^(?:option\s*|opt\s*|choice\s*|#)?\(?(?:[1-9]|1[0-3])\)?\.?$/i,
+  /^(1️⃣|2️⃣|3️⃣|4️⃣|5️⃣|6️⃣|7️⃣|8️⃣|9️⃣|🔟|1️⃣0️⃣|1️⃣1️⃣|1️⃣2️⃣|1️⃣3️⃣)$/,
+  /^(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen)$/i,
+  /^(ஒன்று|இரண்டு|மூன்று|நான்கு|ஐந்து|ஆறு|ஏழு|எட்டு|ஒன்பது|பத்து|பதினொன்று|பன்னிரண்டு|பதின்மூன்று)$/,
 
   // Tamil Keywords
   /(கோவில்|ஆலயம்|பங்கு|திருப்பலி|பூசை|நற்கருணை|ஒப்புரவு|பாவசங்கீர்த்தனம்|ஜெபமாலை|நவநாள்|ஆராதனை)/,

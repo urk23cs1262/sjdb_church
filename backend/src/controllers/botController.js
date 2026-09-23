@@ -598,7 +598,6 @@ _St. John de Britto's Church, Kalayarkoil_
 
 1️⃣ ⛪ *Mass Timings*
 2️⃣ 🕊️ *Confession Timings*
-3️⃣ ✝️ *Other Sacrament Timings*
 4️⃣ 📖 *Daily Bible Verse*
 5️⃣ 📜 *Daily Mass Readings*
 6️⃣ 🌟 *Saint of the Day*

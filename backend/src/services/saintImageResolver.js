@@ -23,6 +23,9 @@ const DIGNIFIED_FALLBACK_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons
 function cleanSaintName(name) {
   if (!name) return '';
   let cleaned = name
+    .replace(/\s*[-–—|]\s*Saint of the Day.*$/i, '')
+    .replace(/\s*[-–—|]\s*Catholic Readings.*$/i, '')
+    .replace(/\s+\d{4}\s*$/g, '')
     .replace(/^Sts?\.\s+/i, '')
     .replace(/^Saint\s+/i, '')
     .replace(/^Saints\s+/i, '')
@@ -178,11 +181,16 @@ async function searchSaintFallback(saintName) {
   }
 
   // 2. Wikipedia Search API
+  const primaryPart = (cleanName.includes('–') || cleanName.includes('-'))
+    ? cleanName.split(/[-–—]/)[0].trim()
+    : cleanName;
+
   const queries = [
     cleanName,
+    primaryPart,
     cleanName.replace(/\bda\b/gi, 'of'),
+    `Saint ${primaryPart}`,
     `Saint ${cleanName}`,
-    `Saint ${cleanName.replace(/\bda\b/gi, 'of')}`,
     saintName
   ];
 

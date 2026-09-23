@@ -819,46 +819,44 @@ function buildPriestsSection(dynamicContext, isTamil) {
   };
 }
 
-// Dedicated 1-14 Services Menu Section
+// Dedicated 1-13 Services Menu Section
 function buildServicesMenuSection(isTamil) {
   const body = isTamil
     ? `1️⃣ ⛪ *திருப்பலி நேரங்கள்* (Mass Timings)
 2️⃣ 🕊️ *ஒப்புரவு அருட்சாதனம்* (Confession Timings)
-3️⃣ ✝️ *பிற திருவருட்சாதனங்கள்* (Other Sacraments)
-4️⃣ 📖 *தினசரி விவிலிய வசனம்* (Daily Bible Verse)
-5️⃣ 📜 *திருப்பலி வாசகங்கள்* (Daily Mass Readings)
-6️⃣ 🌟 *இன்றைய புனிதர்* (Saint of the Day)
-7️⃣ 🙏 *கத்தோலிக்க செபங்கள்* (Catholic Prayers)
-8️⃣ 📅 *பங்கு நிகழ்வுகள்* (Church Events)
-9️⃣ 📢 *பங்கு அறிவிப்புகள்* (Parish Announcements)
-🔟 📍 *ஆலய அமைவிடம் & வரைபடம்* (Location & Maps)
-1️⃣1️⃣ 👥 *பங்கு அமைப்புகள் & அன்பியங்கள்* (Ministries & Anbiyams)
-1️⃣2️⃣ 👑 *பங்குத்தந்தையர்கள்* (Parish Priests & Clergy)
-1️⃣3️⃣ 🏛️ *ஆலய வரலாறு* (Church History)
-1️⃣4️⃣ 📞 *தொடர்பு விபரம்* (Contact Information)
+3️⃣ 📖 *தினசரி விவிலிய வசனம்* (Daily Bible Verse)
+4️⃣ 📜 *திருப்பலி வாசகங்கள்* (Daily Mass Readings)
+5️⃣ 🌟 *இன்றைய புனிதர்* (Saint of the Day)
+6️⃣ 🙏 *கத்தோலிக்க செபங்கள்* (Catholic Prayers)
+7️⃣ 📅 *பங்கு நிகழ்வுகள்* (Church Events)
+8️⃣ 📢 *பங்கு அறிவிப்புகள்* (Parish Announcements)
+9️⃣ 📍 *ஆலய அமைவிடம் & வரைபடம்* (Church Location & Map)
+1️⃣0️⃣ 👥 *பங்கு அமைப்புகள் & அன்பியங்கள்* (Parish Ministries & Anbiyams)
+1️⃣1️⃣ 👑 *பங்குத்தந்தையர்கள்* (Parish Priest & Clergy)
+1️⃣2️⃣ 🏛️ *ஆலய வரலாறு* (Church History)
+1️⃣3️⃣ 📞 *தொடர்பு விபரம்* (Contact Church)
 
-👉 *1 முதல் 14 வரை உள்ள எண்ணை அழுத்தவும் அல்லது உங்கள் கேள்வியை நேரடியாகக் கேட்கவும்!*
-_(எ.கா: "திருப்பலி நேரம்", "கோவில் எங்கு உள்ளது", "இன்றைய வாசகங்கள்")_\n`
+👉 *1 முதல் 13 வரை உள்ள எண்ணை அழுத்தவும் அல்லது உங்கள் கேள்வியை நேரடியாகக் கேட்கவும்!*
+_(எ.கா: "திருப்பலி நேரம்", "ஒப்புரவு நேரம்", "இன்றைய வாசகங்கள்")_\n`
     : `1️⃣ ⛪ *Mass Timings*
 2️⃣ 🕊️ *Confession Timings*
-3️⃣ ✝️ *Other Sacrament Timings*
-4️⃣ 📖 *Daily Bible Verse*
-5️⃣ 📜 *Daily Mass Readings*
-6️⃣ 🌟 *Saint of the Day*
-7️⃣ 🙏 *Catholic Prayers*
-8️⃣ 📅 *Church Events*
-9️⃣ 📢 *Announcements*
-🔟 📍 *Church Location & Map*
-1️⃣1️⃣ 👥 *Parish Ministries*
-1️⃣2️⃣ 👑 *Parish Priest & Clergy*
-1️⃣3️⃣ 🏛️ *Church History*
-1️⃣4️⃣ 📞 *Contact Church*
+3️⃣ 📖 *Daily Bible Verse*
+4️⃣ 📜 *Daily Mass Readings*
+5️⃣ 🌟 *Saint of the Day*
+6️⃣ 🙏 *Catholic Prayers*
+7️⃣ 📅 *Church Events*
+8️⃣ 📢 *Parish Announcements*
+9️⃣ 📍 *Church Location & Map*
+1️⃣0️⃣ 👥 *Parish Ministries & Anbiyams*
+1️⃣1️⃣ 👑 *Parish Priest & Clergy*
+1️⃣2️⃣ 🏛️ *Church History*
+1️⃣3️⃣ 📞 *Contact Church*
 
-👉 *Reply with a number (1-14) or type your question naturally.*
+👉 *Reply with a number (1-13) or type your question naturally.*
 _(e.g., "What time is Mass?", "Where is the church?", "Confession timings")_\n`;
 
   return {
-    header: isTamil ? `⛪ *SJDB Connect – பங்கு சேவைகள் (Parish Services)*` : `⛪ *SJDB Connect – Services*`,
+    header: isTamil ? `⛪ *SJDB Connect – பங்கு சேவைகள் (Parish Services)*` : `⛪ *SJDB Connect – Services & Help Desk*`,
     body,
     linkTitle: isTamil ? 'பங்கு சேவைகள்' : 'Parish Services',
     url: getSiteUrl(SITE_ROUTES.ABOUT)
@@ -1202,5 +1200,6 @@ module.exports = {
   answerChurchQuestion,
   detectQueryLanguage,
   extractQueryIntents,
-  normalizeUserText
+  normalizeUserText,
+  buildServicesMenuSection
 };

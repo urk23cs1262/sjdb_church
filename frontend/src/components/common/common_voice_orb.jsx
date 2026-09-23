@@ -16,6 +16,8 @@ import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiNavigation } from 'react-icons/fi';
 import { VA_STATE } from '../../hooks/useVoiceAssistant';
+import { useAuth } from '../../context/context_auth_context';
+import { toPronounceableName } from '../../services/voice_intent_map';
 import voiceOrbImg from '../../assets/voice_orb.png';
 
 // ─── Play soft pleasant chime ──────────────────────────────────────────────────
@@ -112,6 +114,7 @@ export default function VoiceOrb({
   errorMessage,
   dismiss,
 }) {
+  const { user } = useAuth();
   const isVisible = state !== VA_STATE.IDLE;
   const isError = state === VA_STATE.ERROR || Boolean(errorMessage);
   const isSpeakingState = state === VA_STATE.SPEAKING || isSpeaking;
@@ -182,14 +185,41 @@ export default function VoiceOrb({
         spokenText?.includes("Connect") &&
         (spokenText?.includes("help") || spokenText?.includes("உதவ"))
       ) {
-        const match = spokenText.match(/Hello,\s*([^.]+)\.\s*I'm Connect\./i);
-        const nameClean = match && match[1]
+        const match = spokenText.match(/Hello,\s*([^.]+)\.\s*I['’]m Connect\./i);
+        let nameClean = match && match[1]
           ? match[1].trim().split(/\s+/).map((w) => (w.length === 1 ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())).join(' ')
           : '';
+
+        if (!nameClean && spokenText.includes("வணக்கம்,")) {
+          const taMatch = spokenText.match(/வணக்கம்,\s*([^.]+)\.\s*நான் Connect/i);
+          if (taMatch && taMatch[1]) {
+            nameClean = taMatch[1].trim();
+          }
+        }
+
+        // Resilient Fallback: If spokenText was plain or generated before auth state arrived
+        if (!nameClean || /^(parish\s*(admin|administrator)|admin|administrator|user|guest)$/i.test(nameClean)) {
+          let u = user;
+          if (!u) {
+            try {
+              const saved = localStorage.getItem('user');
+              if (saved) u = JSON.parse(saved);
+            } catch {}
+          }
+          if (u) {
+            const raw = u.name || u.fullName || u.displayName || u.username || '';
+            if (raw && !/^(parish\s*(admin|administrator)|admin|administrator|user|guest)$/i.test(raw.trim())) {
+              nameClean = toPronounceableName(raw);
+            } else if ((u.email || '').toLowerCase() === 'arndas777@gmail.com') {
+              nameClean = 'Nivesh Arn';
+            }
+          }
+        }
+
         const isGenericRole = /^(parish\s*(admin|administrator)|admin|administrator|user|guest)$/i.test(nameClean);
         const topGreeting = (nameClean && !isGenericRole)
-          ? `Hello, ${nameClean}. I'm Connect.`
-          : (isTamil ? (spokenText.includes("வணக்கம்,") ? spokenText.split('.')[0] + '.' : "வணக்கம்! நான் Connect.") : "Hello, I'm Connect.");
+          ? (isTamil ? `வணக்கம், ${nameClean}! நான் Connect.` : `Hello, ${nameClean}. I'm Connect.`)
+          : (isTamil ? "வணக்கம்! நான் Connect." : "Hello, I'm Connect.");
 
         return (
           <>

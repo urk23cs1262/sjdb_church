@@ -221,8 +221,13 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
     if (audio) {
       const songUrl = getMediaUrl(song.fileUrl);
       const isNewSource = !audio.src || !isSameAudioSource(audio.src, songUrl);
+
       if (isNewSource) {
+        try {
+          audio.pause();
+        } catch (_) {}
         audio.src = songUrl;
+        audio.load();
         setSongCurrentTime(0);
         setSongSeekValue(0);
       }
@@ -232,44 +237,134 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
       }
 
       setSongIsBuffering(true);
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            setIsPlayingSong(true);
-            setSongIsBuffering(false);
-            if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
-              setSongDuration(audio.duration);
-            }
-            preloadNextSong(index, songs);
-          })
-          .catch((err) => {
-            console.warn('Playback initiation notice, waiting for canplay:', err.message);
-            const onCanPlay = () => {
-              audio.play().then(() => {
-                setIsPlayingSong(true);
-                setSongIsBuffering(false);
-                if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
-                  setSongDuration(audio.duration);
-                }
-                preloadNextSong(index, songs);
-              }).catch(() => {
-                setSongIsBuffering(false);
-                setIsPlayingSong(false);
-              });
-            };
-            if (audio.readyState >= 2) {
-              onCanPlay();
-            } else {
-              audio.addEventListener('canplay', onCanPlay, { once: true });
-            }
-          });
+
+      const startPlayback = () => {
+        const playPromise = audio.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlayingSong(true);
+              setSongIsBuffering(false);
+              if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
+                setSongDuration(audio.duration);
+              }
+              preloadNextSong(index, songs);
+            })
+            .catch((err) => {
+              console.warn('Playback initiation notice, waiting for canplay:', err.message);
+              const onCanPlay = () => {
+                audio.play()
+                  .then(() => {
+                    setIsPlayingSong(true);
+                    setSongIsBuffering(false);
+                    if (audio.duration && !isNaN(audio.duration) && audio.duration !== Infinity && audio.duration > 0) {
+                      setSongDuration(audio.duration);
+                    }
+                    preloadNextSong(index, songs);
+                  })
+                  .catch(() => {
+                    setSongIsBuffering(false);
+                    setIsPlayingSong(false);
+                  });
+              };
+              if (audio.readyState >= 2) {
+                onCanPlay();
+              } else {
+                audio.addEventListener('canplay', onCanPlay, { once: true });
+                audio.addEventListener('loadeddata', onCanPlay, { once: true });
+              }
+            });
+        }
+      };
+
+      if (isNewSource) {
+        setTimeout(startPlayback, 25);
+      } else {
+        startPlayback();
       }
     }
     preloadNextSong(index, songs);
   }, [preloadNextSong]);
 
   playDevotionalSongRef.current = playDevotionalSong;
+
+  // Active Devotional Audio Stall Recovery & End Detection Watchdog
+  useEffect(() => {
+    if (viewMode !== 'songs' || !isOpen) return;
+
+    let lastTime = 0;
+    let stallCount = 0;
+
+    const watchdogInterval = setInterval(() => {
+      const audio = devotionalAudioRef.current;
+      if (!audio || audio.paused || songIsSeekingRef.current) {
+        stallCount = 0;
+        return;
+      }
+
+      const curTime = audio.currentTime;
+      const duration = audio.duration;
+
+      // 1. Detect VBR MP3 end-of-track freeze (where audio stops ~0.4s before duration without firing onEnded)
+      if (duration && duration > 0 && curTime >= duration - 0.6) {
+        if (Math.abs(curTime - lastTime) < 0.05) {
+          stallCount++;
+          if (stallCount >= 2) {
+            stallCount = 0;
+            const songs = songsListRef.current;
+            if (songs && songs.length > 0) {
+              const nextIndex = (currentSongIndexRef.current + 1) % songs.length;
+              if (playDevotionalSongRef.current) {
+                playDevotionalSongRef.current(nextIndex, songs);
+              }
+            }
+            return;
+          }
+        }
+      }
+
+      // 2. Detect mid-song stall / buffer starvation
+      if (Math.abs(curTime - lastTime) < 0.02 && isPlayingSongRef.current) {
+        stallCount++;
+        if (stallCount >= 3) {
+          // Stalled for 3 seconds while playing
+          setSongIsBuffering(true);
+          if (audio.buffered.length > 0) {
+            audio.currentTime = Math.min(curTime + 0.05, duration || curTime);
+            audio.play().catch(() => {});
+          } else {
+            audio.play().catch(() => {});
+          }
+        }
+        if (stallCount >= 6) {
+          // Still stalled after 6 seconds: reload stream at current timestamp
+          const resumeTime = curTime;
+          const currentSrc = audio.src;
+          if (currentSrc) {
+            audio.pause();
+            audio.load();
+            const onRecovered = () => {
+              try {
+                audio.currentTime = Math.max(0, resumeTime);
+                audio.play().then(() => {
+                  setSongIsBuffering(false);
+                }).catch(() => {});
+              } catch (_) {}
+            };
+            audio.addEventListener('canplay', onRecovered, { once: true });
+          }
+          stallCount = 0;
+        }
+      } else {
+        stallCount = 0;
+        setSongIsBuffering(false);
+      }
+
+      lastTime = curTime;
+    }, 1000);
+
+    return () => clearInterval(watchdogInterval);
+  }, [viewMode, isOpen]);
 
   // Next and Previous Song Handlers
   const handleNextSong = useCallback(() => {
@@ -760,9 +855,11 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
               const songs = songsListRef.current;
               if (!songs || songs.length === 0) return;
               const nextIndex = (currentSongIndexRef.current + 1) % songs.length;
-              if (playDevotionalSongRef.current) {
-                playDevotionalSongRef.current(nextIndex, songs);
-              }
+              setTimeout(() => {
+                if (playDevotionalSongRef.current) {
+                  playDevotionalSongRef.current(nextIndex, songs);
+                }
+              }, 50);
             }}
             onCanPlay={(e) => {
               setSongIsBuffering(false);
@@ -772,6 +869,9 @@ export default function RosaryModal({ isOpen, onClose, initialMode = 'rosary' })
               }
             }}
             onWaiting={() => {
+              if (isPlayingSongRef.current) setSongIsBuffering(true);
+            }}
+            onStalled={() => {
               if (isPlayingSongRef.current) setSongIsBuffering(true);
             }}
             onError={(e) => {

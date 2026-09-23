@@ -36,16 +36,16 @@ export default function DailySaintTicker() {
       descriptionTa: fallback.descriptionTa,
       image: fallback.image,
       feastDay: fallback.feastDay,
-      source: "Vatican State",
-      sourceUrl: "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html",
-      link: fallback.link || "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html"
+      source: "Catholic Readings",
+      sourceUrl: "https://catholicreadings.org/catholic-saint-of-the-day/",
+      link: fallback.link || "https://catholicreadings.org/catholic-saint-of-the-day/"
     };
   });
 
   const [showModal, setShowModal] = useState(false);
   const [imgError, setImgError] = useState(false);
 
-  // Fetch Saint of the Day from backend Vatican News API & setup midnight auto-rotation
+  // Fetch Saint of the Day from backend API & setup midnight auto-rotation
   useEffect(() => {
     let isMounted = true;
 
@@ -53,10 +53,19 @@ export default function DailySaintTicker() {
       try {
         const data = await fetchSaintOfTheDay();
         if (isMounted && data && (data.saintName || data.englishName)) {
-          // If original image is missing or broken placeholder, fetch from Google/online search
-          if (!data.image || data.image.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato')) {
+          // If original image is missing or from catholicreadings banner graphic, fetch clean portrait from Google
+          const isBannerGraphic = data.image && (
+            data.image.includes('catholicreadings.org/wp-content') ||
+            data.image.includes('Whatsapp-50x50') ||
+            data.imageSource === 'catholicreadings'
+          );
+          if (!data.image || data.image.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato') || isBannerGraphic) {
             try {
-              const found = await searchSaintImage(data.englishName || data.saintName);
+              const targetName = (data.englishName || data.saintName || '')
+                .replace(/\s*[-–—|]\s*Saint of the Day.*$/i, '')
+                .replace(/\s+\d{4}\s*$/g, '')
+                .trim();
+              const found = await searchSaintImage(targetName);
               if (found && found.image) {
                 data.image = found.image;
                 data.imageSource = found.imageSource || 'google_web_search';
@@ -93,10 +102,22 @@ export default function DailySaintTicker() {
   // Language Detection
   const isTamil = checkIsTamil() || i18n.language === 'ta';
 
+  // Helper to strip website title noise from display name
+  const cleanDisplayName = (name) => {
+    if (!name) return 'Saint of the Day';
+    return name
+      .replace(/\s*[-–—|]\s*Saint of the Day.*$/i, '')
+      .replace(/\s*[-–—|]\s*Catholic Readings.*$/i, '')
+      .replace(/\s+\d{4}\s*$/g, '')
+      .trim();
+  };
+
   // Extract display values from the SAME single saintOfDay object
-  const displayName = isTamil && saintOfDay.tamilName 
+  const rawDisplayName = isTamil && saintOfDay.tamilName 
     ? saintOfDay.tamilName 
     : (saintOfDay.englishName || saintOfDay.saintName || "Saint of the Day");
+
+  const displayName = cleanDisplayName(rawDisplayName);
 
   const displayDescription = isTamil && saintOfDay.descriptionTa 
     ? saintOfDay.descriptionTa 
@@ -165,6 +186,28 @@ export default function DailySaintTicker() {
     };
   }, [showModal]);
 
+  // Helper to format clean, cohesive 5-line biography
+  const formatFiveLines = (text) => {
+    if (!text) return '';
+    return text
+      .split(/\n+/)
+      .map(t => t.trim())
+      .filter(Boolean)
+      .join(' ');
+  };
+
+  // Open modal and ensure full saint details are refreshed if needed
+  const handleOpenModal = () => {
+    setShowModal(true);
+    if (!saintOfDay.description || saintOfDay.description.length < 180) {
+      fetchSaintOfTheDay().then(data => {
+        if (data && (data.saintName || data.englishName)) {
+          setSaintOfDay(data);
+        }
+      }).catch(() => {});
+    }
+  };
+
   if (!saintOfDay) return null;
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -176,7 +219,7 @@ export default function DailySaintTicker() {
         <div className="max-w-7xl mx-auto px-4 flex items-center">
           {/* Ticker Button with Badge */}
           <button
-            onClick={() => setShowModal(true)}
+            onClick={handleOpenModal}
             className="flex-shrink-0 bg-church-gold text-white text-[10px] font-bold px-2 py-1 rounded mr-2 z-10 flex items-center gap-1.5 hover:bg-church-gold/90 transition-colors cursor-pointer uppercase tracking-wider shadow-2xs"
           >
             <FiInfo className="text-xs" /> 
@@ -196,7 +239,7 @@ export default function DailySaintTicker() {
               className="whitespace-nowrap absolute flex items-center"
             >
               <button
-                onClick={() => setShowModal(true)}
+                onClick={handleOpenModal}
                 className="text-white font-semibold hover:text-church-gold transition-colors flex items-center gap-2 cursor-pointer"
               >
                 <span className="notranslate" translate="no">
@@ -241,6 +284,7 @@ export default function DailySaintTicker() {
                       shadow-2xl
                       overflow-hidden
                       max-h-[92vh]
+                      h-auto
                       md:h-[460px]
                       flex flex-col
                       border border-gray-100
@@ -273,9 +317,9 @@ export default function DailySaintTicker() {
                       <FiX className="text-xl" />
                     </button>
 
-                    <div className="flex flex-col md:flex-row flex-1 overflow-y-auto md:overflow-hidden">
+                    <div className="flex flex-col md:flex-row flex-1 h-full md:h-full overflow-y-auto md:overflow-hidden">
                       {/* SAINT IMAGE BANNER (LEFT SIDE: ONLY SAINT NAME UNDER SAINT OF THE DAY) */}
-                      <div className="w-full md:w-5/12 relative h-[260px] sm:h-[300px] md:h-full flex-shrink-0 bg-slate-950 overflow-hidden">
+                      <div className="w-full md:w-5/12 relative min-h-[280px] h-[280px] sm:h-[320px] md:min-h-full md:h-full flex-shrink-0 bg-slate-950 overflow-hidden flex flex-col justify-end">
                         {activeImage ? (
                           <img
                             src={activeImage}
@@ -317,14 +361,24 @@ export default function DailySaintTicker() {
                             </h2>
                           </div>
 
-                          {/* Biography text */}
+                          {/* Biography text — strictly 5 lines of content */}
                           <div className="text-gray-700 leading-relaxed text-sm sm:text-base font-normal">
-                            <p>{displayDescription}</p>
+                            <p
+                              className="line-clamp-5"
+                              style={{
+                                display: '-webkit-box',
+                                WebkitLineClamp: 5,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden'
+                              }}
+                            >
+                              {formatFiveLines(displayDescription)}
+                            </p>
                           </div>
                         </div>
 
-                        {/* Link to Vatican News Official Page */}
-                        <div className="pt-5 mt-4 border-t border-gray-100">
+                        {/* Link to Original Website Page */}
+                        <div className="pt-4 mt-3 border-t border-gray-100">
                           {saintOfDay.sourceUrl && (
                             <a
                               href={saintOfDay.sourceUrl}
@@ -354,7 +408,14 @@ export default function DailySaintTicker() {
                               "
                             >
                               <FiExternalLink className="text-base" />
-                              <span>{isTamil ? 'வத்திக்கான் செய்திகளில் வாசிக்க (Vatican State City)' : 'Read on Vatican State City'}</span>
+                              <span>
+                                {(() => {
+                                  const siteName = saintOfDay.source && !saintOfDay.source.toLowerCase().includes('vatican')
+                                    ? saintOfDay.source.split('/')[0].trim()
+                                    : 'Catholic Readings';
+                                  return isTamil ? `${siteName}-ல் வாசிக்க` : `Read on ${siteName}`;
+                                })()}
+                              </span>
                             </a>
                           )}
                         </div>

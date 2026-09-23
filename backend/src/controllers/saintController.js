@@ -42,9 +42,9 @@ const getSaint = async (req, res) => {
             imageSourceUrl: fallbackSaint.link,
             imageFallback: true,
             feastDay: fallbackSaint.feastDay || targetDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' }),
-            source: "Vatican State / Catholic Liturgical Calendar",
-            sourceUrl: "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html",
-            link: fallbackSaint.link || "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html",
+            source: "Catholic Readings / Catholic Liturgical Calendar",
+            sourceUrl: "https://catholicreadings.org/catholic-saint-of-the-day/",
+            link: fallbackSaint.link || "https://catholicreadings.org/catholic-saint-of-the-day/",
             status: "Synced"
           };
         }
@@ -85,11 +85,11 @@ const getSaint = async (req, res) => {
       description: saint.description,
       descriptionTa: saint.descriptionTa,
       image: saint.image,
-      imageSource: saint.imageSource || (saint.imageFallback ? 'fallback' : 'vatican'),
+      imageSource: saint.imageSource || (saint.imageFallback ? 'fallback' : 'catholicreadings'),
       imageSourceUrl: saint.imageSourceUrl || saint.sourceUrl || saint.link,
       imageFallback: typeof saint.imageFallback === 'boolean' ? saint.imageFallback : false,
       feastDay: saint.feastDay || `${month} ${day}`,
-      source: saint.source || "Vatican State",
+      source: saint.source || "Catholic Readings",
       sourceUrl: saint.sourceUrl || saint.link,
       link: saint.link || saint.sourceUrl,
       saint
@@ -129,11 +129,11 @@ const refreshSaint = async (req, res) => {
       description: saint.description,
       descriptionTa: saint.descriptionTa,
       image: saint.image,
-      imageSource: saint.imageSource || (saint.imageFallback ? 'fallback' : 'vatican'),
+      imageSource: saint.imageSource || (saint.imageFallback ? 'fallback' : 'catholicreadings'),
       imageSourceUrl: saint.imageSourceUrl || saint.sourceUrl || saint.link,
       imageFallback: typeof saint.imageFallback === 'boolean' ? saint.imageFallback : false,
       feastDay: saint.feastDay || `${month} ${day}`,
-      source: saint.source || "Vatican State",
+      source: saint.source || "Catholic Readings",
       sourceUrl: saint.sourceUrl || saint.link,
       link: saint.link || saint.sourceUrl,
       saint
@@ -149,7 +149,7 @@ const getSaintStatus = async (req, res) => {
     const today = new Date();
     const month = String(today.getMonth() + 1).padStart(2, "0");
     const day = String(today.getDate()).padStart(2, "0");
-    const vaticanUrl = "https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html";
+    const catholicReadingsUrl = "https://catholicreadings.org/catholic-saint-of-the-day/";
 
     res.json({
       success: true,
@@ -157,11 +157,11 @@ const getSaintStatus = async (req, res) => {
       status: saint ? saint.status : 'Synced',
       lastSynced: saint ? saint.lastSynced : null,
       name: saint ? (saint.saintName || saint.name) : 'Unknown',
-      link: saint ? (saint.sourceUrl || saint.link) : vaticanUrl,
-      sourceUrl: vaticanUrl,
+      link: saint ? (saint.sourceUrl || saint.link) : catholicReadingsUrl,
+      sourceUrl: catholicReadingsUrl,
       image: saint ? saint.image : null,
-      imageSource: saint ? saint.imageSource : 'vatican',
-      imageSourceUrl: saint ? saint.imageSourceUrl : vaticanUrl,
+      imageSource: saint ? saint.imageSource : 'catholicreadings',
+      imageSourceUrl: saint ? saint.imageSourceUrl : catholicReadingsUrl,
       imageFallback: saint ? saint.imageFallback : false
     });
   } catch (err) {

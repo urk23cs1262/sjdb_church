@@ -258,8 +258,8 @@ async function getTodayDailyContent(targetDate = new Date()) {
     descriptionEnglish: saintData?.description || '',
     feastDay: saintData?.feastDay || formattedEn,
     image: saintImageUrl,
-    imageSource: saintData?.imageSource || 'Vatican State',
-    sourceUrl: saintData?.sourceUrl || saintData?.link || 'https://www.vaticanstate.va/en/state-and-government/general-informations/saint-of-the-day.html'
+    imageSource: saintData?.imageSource || 'Catholic Readings',
+    sourceUrl: saintData?.sourceUrl || saintData?.link || 'https://catholicreadings.org/catholic-saint-of-the-day/'
   };
 
   const { getSiteUrl } = require('../config/siteRoutes');

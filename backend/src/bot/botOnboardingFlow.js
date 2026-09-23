@@ -20,6 +20,8 @@
  * Main Menu
  */
 
+const { SITE_ROUTES, getSiteUrl } = require('../config/siteRoutes');
+
 function getStep1BotLanguageMessage() {
   return `👋 *Welcome to SJDB Connect!*
 ⛪ *St. John de Britto Church, Kalayarkoil*
@@ -133,7 +135,7 @@ Select your preferred language for Daily Bible Verse, Mass Readings, Reflection 
 👉 Reply with *1*, *2*, or *3*.`;
 }
 
-function getStep7AllSetMessage(preferences, contentLang, botLang = 'en') {
+function getStep7AllSetMessage(preferences, contentLang, botLang = 'en', hasWebsiteAccount = false) {
   const defaultServices = `• 📖 Daily Bible Verse
 • 🕊️ Saint of the Day
 • ⛪ Daily Mass Readings & Reflection
@@ -166,14 +168,20 @@ function getStep7AllSetMessage(preferences, contentLang, botLang = 'en') {
   else if (contentLang === 'en') langLabel = 'English';
   else if (contentLang === 'both') langLabel = 'Both (Tamil + English)';
 
+  const regUrl = getSiteUrl(SITE_ROUTES.REGISTER);
+
   if (botLang === 'ta') {
+    const accountNotice = !hasWebsiteAccount
+      ? `\n\n💡 *முக்கிய குறிப்பு:*\nஅனைத்து தகவல்களையும் உடனுக்குடனும் சரியாகவும் பெற்று எங்களோடு *இணைந்திருக்க (BE CONNECTED)*, தயவுசெய்து எமது ஆலய இணையதளத்தில் ஒரு கணக்கை உருவாக்கவும்: ⛪🤝\n🔗 *பதிவு செய்ய:* ${regUrl}`
+      : `\n\n🌟 *பங்கு உறுப்பினர் கணக்கு:* உங்கள் தொலைபேசி எண் எமது ஆலய இணையதளத்துடன் வெற்றிகரமாக இணைக்கப்பட்டுள்ளது!`;
+
     return `✅ *You're all set! (அனைத்தும் தயார்!)*
 
 📋 *Your Subscribed Services:*
 ${prefList}
 
 🌐 Daily Catholic Content Language: *${langLabel}*
-⏰ Daily Catholic broadcast is delivered sharply at *4:00 AM IST*.
+⏰ Daily Catholic broadcast is delivered sharply at *4:00 AM IST*.${accountNotice}
 
 May God bless you and your family! 🙏❤️
 — *SJDB Connect*
@@ -183,13 +191,17 @@ _St. John de Britto's Church, Kalayarkoil_
 ➡️ Type *Services* for Help Desk`;
   }
 
+  const accountNotice = !hasWebsiteAccount
+    ? `\n\n💡 *Important Note:*\nPlease create a parish account to receive all information correctly and immediately and *BE CONNECTED* with our church community! ⛪🤝\n🔗 *Register here:* ${regUrl}`
+    : `\n\n🌟 *Parish Account:* Your mobile number is registered with our parish website!`;
+
   return `✅ *You're all set!*
 
 📋 *Your Subscribed Services:*
 ${prefList}
 
 🌐 Daily Catholic Content Language: *${langLabel}*
-⏰ Daily Catholic broadcast is delivered sharply at *4:00 AM IST*.
+⏰ Daily Catholic broadcast is delivered sharply at *4:00 AM IST*.${accountNotice}
 
 May God bless you and your family! 🙏❤️
 — *SJDB Connect*
@@ -227,33 +239,41 @@ function getStep8MainMenuMessage(userName, botLang = 'en') {
     return `⛪ *Main Menu (முதன்மை மெனு)*
 ${userName ? `வணக்கம், *${userName}*! ` : ''}உங்களுக்கு எவ்வாறு உதவ முடியும்?
 
-1️⃣ 📖 தினசரி விவிலிய வசனம் (Daily Bible)
-2️⃣ ⛪ திருப்பலி நேரங்கள் (Mass Timings)
-3️⃣ 🕊️ பங்கு சேவைகள் (Services & Help Desk)
-4️⃣ 📅 திருவிழா & நிகழ்வுகள் (Events)
-5️⃣ 📢 பங்கு அறிவிப்புகள் (Announcements)
-6️⃣ 📜 திருத்தல வரலாறு & தகவல்கள் (Church Info)
-7️⃣ 🌟 அன்றைய புனிதர் (Saint of the Day)
-8️⃣ ❓ உதவி (Help)
+1️⃣ ⛪ *திருப்பலி நேரங்கள்* (Mass Timings)
+2️⃣ 🕊️ *ஒப்புரவு அருட்சாதனம்* (Confession Timings)
+3️⃣ 📖 *தினசரி விவிலிய வசனம்* (Daily Bible Verse)
+4️⃣ 📜 *திருப்பலி வாசகங்கள்* (Daily Mass Readings)
+5️⃣ 🌟 *இன்றைய புனிதர்* (Saint of the Day)
+6️⃣ 🙏 *கத்தோலிக்க செபங்கள்* (Catholic Prayers)
+7️⃣ 📅 *பங்கு நிகழ்வுகள்* (Church Events)
+8️⃣ 📢 *பங்கு அறிவிப்புகள்* (Parish Announcements)
+9️⃣ 📍 *ஆலய அமைவிடம் & வரைபடம்* (Church Location & Map)
+1️⃣0️⃣ 👥 *பங்கு அமைப்புகள் & அன்பியங்கள்* (Parish Ministries & Anbiyams)
+1️⃣1️⃣ 👑 *பங்குத்தந்தையர்கள்* (Parish Priest & Clergy)
+1️⃣2️⃣ 🏛️ *ஆலய வரலாறு* (Church History)
+1️⃣3️⃣ 📞 *தொடர்பு விபரம்* (Contact Church)
 
-👉 *எண்ணை அனுப்பலாம் அல்லது உங்கள் கேள்வியை நேரடியாகக் கேட்கலாம்.*
-➡️ *14 பங்கு உதவி சேவைகளுக்கு "Services" என தட்டச்சு செய்யவும்.*`;
+👉 *1 முதல் 13 வரை உள்ள எண்ணை அழுத்தவும் அல்லது உங்கள் கேள்வியை நேரடியாகக் கேட்கவும்!*`;
   }
 
   return `⛪ *Main Menu*
 ${userName ? `Welcome, *${userName}*! ` : ''}How can I help you today?
 
-1️⃣ 📖 *Daily Bible*
-2️⃣ ⛪ *Mass Timings*
-3️⃣ 🕊️ *Services & Help Desk*
-4️⃣ 📅 *Events*
-5️⃣ 📢 *Announcements*
-6️⃣ 📜 *Church Information*
-7️⃣ 🌟 *Saint of the Day*
-8️⃣ ❓ *Help*
+1️⃣ ⛪ *Mass Timings*
+2️⃣ 🕊️ *Confession Timings*
+3️⃣ 📖 *Daily Bible Verse*
+4️⃣ 📜 *Daily Mass Readings*
+5️⃣ 🌟 *Saint of the Day*
+6️⃣ 🙏 *Catholic Prayers*
+7️⃣ 📅 *Church Events*
+8️⃣ 📢 *Parish Announcements*
+9️⃣ 📍 *Church Location & Map*
+1️⃣0️⃣ 👥 *Parish Ministries & Anbiyams*
+1️⃣1️⃣ 👑 *Parish Priest & Clergy*
+1️⃣2️⃣ 🏛️ *Church History*
+1️⃣3️⃣ 📞 *Contact Church*
 
-👉 *You can reply with a number or ask your question naturally.*
-➡️ *Type "Services" for the complete 14 Parish Help Desk services.*`;
+👉 *Reply with a number (1-13) or ask your question naturally.*`;
 }
 
 function parseBotLanguage(rawText) {

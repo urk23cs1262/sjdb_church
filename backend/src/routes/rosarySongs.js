@@ -25,7 +25,7 @@ router.get('/', getActiveSongs);
 router.get('/admin', protect, adminOnly, getAllSongsAdmin);
 
 // Admin: Upload individual song audio files (Zero-RAM disk streaming)
-router.post('/individual', protect, adminOnly, diskUpload.array('files', 50), uploadIndividualSongs);
+router.post('/individual', protect, adminOnly, diskUpload.array('files', 200), uploadIndividualSongs);
 
 // Admin: Upload ZIP archive with songs (Zero-RAM disk streaming & duplicate detection)
 router.post('/zip', protect, adminOnly, diskUpload.single('file'), uploadZipSongs);

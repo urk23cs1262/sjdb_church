@@ -245,15 +245,22 @@ export default function useVoiceAssistant() {
   }, [location.pathname]);
 
   const getUserDisplayName = useCallback(() => {
-    const u = userRef.current;
+    let u = userRef.current || user;
+    if (!u) {
+      try {
+        const saved = localStorage.getItem('user');
+        if (saved) u = JSON.parse(saved);
+      } catch {}
+    }
     if (!u) return '';
-    const raw = u.name || u.fullName || u.displayName || '';
+    const raw = u.name || u.fullName || u.displayName || u.username || '';
     // Ignore generic placeholder roles (e.g. "Parish Admin", "Admin", "Administrator", "User", "Guest")
     if (!raw || /^(parish\s*(admin|administrator)|admin|administrator|user|guest)$/i.test(raw.trim())) {
+      if ((u.email || '').toLowerCase() === 'arndas777@gmail.com') return 'Nivesh Arn';
       return '';
     }
     return toPronounceableName(raw);
-  }, []);
+  }, [user]);
 
   // ── Log Helper ─────────────────────────────────────────────────────────────
   const log = useCallback((event, data = '') => {
@@ -1427,13 +1434,13 @@ export default function useVoiceAssistant() {
   // ── Enter Wake / Activate Assistant ────────────────────────────────────────
 
   const activate = useCallback(
-    async (initialCommand = '') => {
+    async (initialCommand = '', explicitUserName = '') => {
       safeAbortWakeWord();
       hasMicPermissionRef.current = true;
       const currentSessionId = ++sessionIdRef.current;
       isContinuousActiveRef.current = true;
       pendingClarificationRef.current = null;
-      log('HEY_CONNECT_ACTIVATED', { initialCommand });
+      log('HEY_CONNECT_ACTIVATED', { initialCommand, explicitUserName });
 
       // Unlock mobile browser speech synthesis on direct user interaction
       if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -1481,7 +1488,9 @@ export default function useVoiceAssistant() {
       }
 
       // Standard activation greeting with personalized user name
-      const userName = getUserDisplayName();
+      const candidateName = explicitUserName ? toPronounceableName(explicitUserName) : getUserDisplayName();
+      const isGeneric = /^(parish\s*(admin|administrator)|admin|administrator|user|guest)$/i.test(candidateName.trim());
+      const userName = !isGeneric && candidateName ? candidateName : getUserDisplayName();
       const isTamil = isTamilLang();
       let greeting = '';
       if (userName) {
@@ -1520,16 +1529,17 @@ export default function useVoiceAssistant() {
 
     const handleActivateEvent = (e) => {
       const initialText = e?.detail?.command || '';
-      activate(initialText);
+      const explicitName = e?.detail?.userName || '';
+      activate(initialText, explicitName);
     };
     window.addEventListener('hey-connect-activate', handleActivateEvent);
 
     // Global testing helper: window.heyConnect("book a mass")
-    window.heyConnect = (cmd) => {
+    window.heyConnect = (cmd, explicitName) => {
       if (cmd && typeof cmd === 'string') {
-        activate(cmd);
+        activate(cmd, explicitName || '');
       } else {
-        activate();
+        activate('', explicitName || '');
       }
     };
 
