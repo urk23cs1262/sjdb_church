@@ -104,20 +104,21 @@ async function enrichSongDetails(song) {
   return song;
 }
 
-const defaultSongsCatalog = require('../data/defaultDevotionalSongs.json');
+const { getDefaultSongsCatalog, syncDefaultSongsToDiskAndDatabase } = require('../services/devotionalSongsCatalog');
 
 /**
  * Auto-seeds default devotional songs from Devos archive if database is empty or missing songs
  */
 const seedDefaultDevosSongs = async () => {
   try {
-    if (!defaultSongsCatalog || defaultSongsCatalog.length === 0) return;
+    const defaultSongs = getDefaultSongsCatalog() || [];
+    if (!defaultSongs || defaultSongs.length === 0) return;
 
     const existingSongs = await RosarySong.find().lean();
     const existingNames = new Set(existingSongs.map(s => s.fileName));
 
     const missingDocs = [];
-    defaultSongsCatalog.forEach((s, idx) => {
+    defaultSongs.forEach((s, idx) => {
       if (!existingNames.has(s.fileName)) {
         missingDocs.push({
           title: s.title,
@@ -161,7 +162,7 @@ const getActiveSongs = async (req, res) => {
     }
 
     if (songs.length === 0) {
-      const fallbackActive = (defaultSongsCatalog || []).filter(s => s.isActive);
+      const fallbackActive = (getDefaultSongsCatalog() || []).filter(s => s.isActive);
       return res.json({ success: true, songs: fallbackActive });
     }
 
@@ -169,7 +170,7 @@ const getActiveSongs = async (req, res) => {
     res.set('Cache-Control', 'public, max-age=120, stale-while-revalidate=300');
     res.json({ success: true, songs });
   } catch (err) {
-    const fallbackActive = (defaultSongsCatalog || []).filter(s => s.isActive);
+    const fallbackActive = (getDefaultSongsCatalog() || []).filter(s => s.isActive);
     res.json({ success: true, songs: fallbackActive });
   }
 };
@@ -194,13 +195,13 @@ const getAllSongsAdmin = async (req, res) => {
     }
 
     if (songs.length === 0) {
-      return res.json({ success: true, songs: defaultSongsCatalog || [] });
+      return res.json({ success: true, songs: getDefaultSongsCatalog() || [] });
     }
 
     songs = await Promise.all(songs.map(enrichSongDetails));
     res.json({ success: true, songs });
   } catch (err) {
-    res.json({ success: true, songs: defaultSongsCatalog || [] });
+    res.json({ success: true, songs: getDefaultSongsCatalog() || [] });
   }
 };
 
@@ -785,7 +786,9 @@ const restoreDefaultSongs = async (req, res) => {
     await SiteSettings.deleteOne({ key: 'devotionalSongsCleared' });
     await RosarySong.deleteMany({});
 
-    const defaultList = defaultSongsCatalog || [];
+    // Ensure songs are freshly scanned and synced from Devos
+    await syncDefaultSongsToDiskAndDatabase();
+    const defaultList = getDefaultSongsCatalog() || [];
     const docs = defaultList.map((s, idx) => ({
       title: s.title,
       fileName: s.fileName,

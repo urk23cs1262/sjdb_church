@@ -123,28 +123,28 @@ app.use(morgan('dev'));
 // Static files & Devotional Songs streaming
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// Direct static streaming for Devos directory if present on disk
-const devosCandidates = [
-  path.join(__dirname, '../uploads/Devos'),
-  path.join(__dirname, '../../frontend/public/devotional-songs'),
-  path.join(__dirname, '../../frontend/src/assets/Devos'),
-  path.join(__dirname, '../Devos'),
-  path.join(__dirname, '../../Devos'),
-  'C:\\Users\\Admin\\Desktop\\Devos'
-];
-const devosDir = devosCandidates.find(p => fs.existsSync(p));
-if (devosDir) {
-  app.use('/devotional-songs', express.static(devosDir));
-  app.use('/api/devotional-songs', express.static(devosDir));
-}
+// Direct static streaming for Devotional Songs from Devos assets & public folders
+const { devosDirs, initDevosWatcher } = require('./services/devotionalSongsCatalog');
+initDevosWatcher();
 
-// Direct streamed MP3 handler for devotional songs if filename requested
+devosDirs.forEach(dir => {
+  app.use('/devotional-songs', express.static(dir, { maxAge: '1d', acceptRanges: true }));
+  app.use('/api/devotional-songs', express.static(dir, { maxAge: '1d', acceptRanges: true }));
+});
+
+// Direct streamed audio handler for devotional songs if filename requested
 app.get(['/api/devotional-songs/:filename', '/devotional-songs/:filename'], (req, res) => {
-  const filename = path.basename(req.params.filename);
-  if (devosDir) {
-    const target = path.join(devosDir, filename);
+  const rawName = req.params.filename;
+  const decoded = decodeURIComponent(rawName);
+  const cleanName = path.basename(decoded);
+
+  for (const dir of devosDirs) {
+    const target = path.join(dir, cleanName);
     if (fs.existsSync(target)) {
-      return res.sendFile(target);
+      const ext = path.extname(cleanName).toLowerCase();
+      const mime = ext === '.m4a' ? 'audio/mp4' : (ext === '.mp3' ? 'audio/mpeg' : (ext === '.wav' ? 'audio/wav' : 'application/octet-stream'));
+      res.setHeader('Content-Type', mime);
+      return res.sendFile(target, { acceptRanges: true });
     }
   }
   res.status(404).json({ success: false, message: 'Audio file not found' });

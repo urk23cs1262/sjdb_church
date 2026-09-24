@@ -91,10 +91,11 @@ export default function RosarySongsManager() {
     }
   };
 
-  // Restore Default 31 Devotional Songs from Devos Archive
+  // Restore Default Devotional Songs from Devos Archive
   const handleRestoreDefaults = async () => {
+    const defaultCount = defaultDevotionalSongs?.length || 53;
     setRestoringDefaults(true);
-    const toastId = toast.loading('Restoring 31 default devotional songs from Devos archive...');
+    const toastId = toast.loading(`Restoring ${defaultCount} default devotional songs from Devos archive...`);
     try {
       const res = await api.post('/rosary-songs/restore-defaults');
       if (res.data && res.data.songs) {
@@ -102,10 +103,10 @@ export default function RosarySongsManager() {
       } else {
         setSongs(defaultDevotionalSongs || []);
       }
-      toast.success(res.data?.message || 'Successfully restored 31 default devotional songs!', { id: toastId });
+      toast.success(res.data?.message || `Successfully restored ${res.data?.songs?.length || defaultCount} default devotional songs!`, { id: toastId });
     } catch (err) {
       setSongs(defaultDevotionalSongs || []);
-      toast.success('Restored 31 default devotional songs from catalog.', { id: toastId });
+      toast.success(`Restored ${defaultCount} default devotional songs from catalog.`, { id: toastId });
     } finally {
       setRestoringDefaults(false);
     }
@@ -769,10 +770,10 @@ export default function RosarySongsManager() {
               disabled={restoringDefaults || uploadPercent !== null}
               onClick={handleRestoreDefaults}
               className={`w-full sm:w-auto px-2.5 sm:px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex flex-row items-center justify-center gap-1.5 cursor-pointer border border-emerald-200 whitespace-nowrap active:scale-98 shadow-2xs ${songs.length === 0 ? 'col-span-2 sm:col-span-1' : ''}`}
-              title="Restore 31 default devotional songs from Devos archive"
+              title={`Restore default devotional songs (${defaultDevotionalSongs?.length || 53}) from Devos archive`}
             >
               {restoringDefaults ? <FiLoader className="animate-spin text-sm shrink-0" /> : <FiRefreshCw className="text-sm shrink-0" />}
-              <span className="truncate">Restore Defaults (31)</span>
+              <span className="truncate">Restore Defaults ({defaultDevotionalSongs?.length || 53})</span>
             </button>
 
             {/* Delete All Songs Button (Destructive Red Style) */}
@@ -863,7 +864,7 @@ export default function RosarySongsManager() {
               className="px-4 py-2 bg-church-royal-blue hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all inline-flex items-center gap-2 cursor-pointer shadow-xs active:scale-98"
             >
               {restoringDefaults ? <FiLoader className="animate-spin text-sm" /> : <FiRefreshCw className="text-sm" />}
-              <span>Restore 31 Default Devotional Songs</span>
+              <span>Restore Default Devotional Songs ({defaultDevotionalSongs?.length || 53})</span>
             </button>
           </div>
         ) : (
