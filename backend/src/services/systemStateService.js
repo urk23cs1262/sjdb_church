@@ -127,14 +127,14 @@ async function dispatchTransitionNotificationsBackground(settings, event) {
 
     if (isLive) {
       // ✅ Maintenance Completed / Services Restored
-      emailSubject = `✅ Church Website Is Live Again — St. John de Britto's Church`;
-      emailBody = `Dear User,\n\nWe are happy to inform you that the maintenance has been completed and the St. John de Britto's Church website and services are now live again.\n\nYou can now access the website/app and use the available services normally.\n\n👉 Visit: ${siteUrl}\n\nThank you for your patience and understanding.\n\n— St. John de Britto's Church`;
-      smsBody = `✅ Church Website Is Live Again! The St. John de Britto's Church website maintenance is complete. All services are now available. Visit: ${siteUrl}`;
+      emailSubject = `✅ Church Website Is Live Again — St. John de Britto Church`;
+      emailBody = `Dear User,\n\nWe are happy to inform you that the maintenance has been completed and the St. John de Britto Church website and services are now live again.\n\nYou can now access the website/app and use the available services normally.\n\n👉 Visit: ${siteUrl}\n\nThank you for your patience and understanding.\n\n— St. John de Britto Church`;
+      smsBody = `✅ Church Website Is Live Again! The St. John de Britto Church website maintenance is complete. All services are now available. Visit: ${siteUrl}`;
       waMsg = `✅ *Services Are Live Again*
 
 Dear User,
 
-The St. John de Britto's Church website and services are now live again.
+The St. John de Britto Church website and services are now live again.
 
 The maintenance has been completed, and you can now access the website/app and use the available services normally.
 
@@ -142,17 +142,17 @@ The maintenance has been completed, and you can now access the website/app and u
 
 Thank you for your patience and understanding.
 
-— *St. John de Britto's Church*`;
+— *St. John de Britto Church*`;
     } else if (isEmergency) {
       // 🚨 Emergency Shutdown
-      emailSubject = `🚨 Emergency Notice — St. John de Britto's Church Website`;
-      emailBody = `Dear User,\n\nThe St. John de Britto's Church website and services are currently under emergency maintenance.\n\nReason: ${settings.emergencyReason || settings.message || 'Emergency system event'}\n\nDuring this period, the website/app and some services will be temporarily unavailable.\n\nWe are working swiftly to restore services. We apologize for the inconvenience and thank you for your patience.\n\n— St. John de Britto's Church`;
-      smsBody = `🚨 Emergency Notice: St. John de Britto's Church website is temporarily down due to emergency maintenance. We will notify you once services are restored.`;
+      emailSubject = `🚨 Emergency Notice — St. John de Britto Church Website`;
+      emailBody = `Dear User,\n\nThe St. John de Britto Church website and services are currently under emergency maintenance.\n\nReason: ${settings.emergencyReason || settings.message || 'Emergency system event'}\n\nDuring this period, the website/app and some services will be temporarily unavailable.\n\nWe are working swiftly to restore services. We apologize for the inconvenience and thank you for your patience.\n\n— St. John de Britto Church`;
+      smsBody = `🚨 Emergency Notice: St. John de Britto Church website is temporarily down due to emergency maintenance. We will notify you once services are restored.`;
       waMsg = `🚨 *Emergency Maintenance Notice*
 
 Dear User,
 
-The St. John de Britto's Church website and services are currently under emergency maintenance.
+The St. John de Britto Church website and services are currently under emergency maintenance.
 
 *Reason:* ${settings.emergencyReason || settings.message || 'Emergency system event'}
 
@@ -160,17 +160,17 @@ The website/app and services will be temporarily unavailable during this period.
 
 We are working swiftly to restore normal operation. Thank you for your prayers and understanding. 🙏
 
-— *St. John de Britto's Church*`;
+— *St. John de Britto Church*`;
     } else {
       // 🔧 Maintenance Started / In Progress
-      emailSubject = `🔧 Church Website Maintenance Notice — St. John de Britto's Church`;
-      emailBody = `Dear User,\n\nThe St. John de Britto's Church website and services are currently under maintenance.\n\nDuring this maintenance period, the website/app and some services may be temporarily unavailable.\n\nWe apologize for the inconvenience and appreciate your patience. We will notify you once the services are available again.\n\n— St. John de Britto's Church`;
-      smsBody = `🔧 Maintenance Notice: The St. John de Britto's Church website is currently under maintenance. We will notify you once services are available again.`;
+      emailSubject = `🔧 Church Website Maintenance Notice — St. John de Britto Church`;
+      emailBody = `Dear User,\n\nThe St. John de Britto Church website and services are currently under maintenance.\n\nDuring this maintenance period, the website/app and some services may be temporarily unavailable.\n\nWe apologize for the inconvenience and appreciate your patience. We will notify you once the services are available again.\n\n— St. John de Britto Church`;
+      smsBody = `🔧 Maintenance Notice: The St. John de Britto Church website is currently under maintenance. We will notify you once services are available again.`;
       waMsg = `🔧 *Maintenance Notice*
 
 Dear User,
 
-The St. John de Britto's Church website and services are currently under maintenance.
+The St. John de Britto Church website and services are currently under maintenance.
 
 The website/app and some services may be temporarily unavailable during this period.
 
@@ -178,7 +178,7 @@ We apologize for the inconvenience and thank you for your patience.
 
 We will notify you once the services are live again.
 
-— *St. John de Britto's Church*`;
+— *St. John de Britto Church*`;
     }
 
     const users = await User.find({ isActive: { $ne: false } }).select('name email phone role whatsappOptIn');

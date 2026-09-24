@@ -18,38 +18,38 @@ import churchLogo from '../../assets/church_extirior.png';
 const ITEMS_PER_PAGE = 10;
 
 const DONATION_TYPES = [
-  { id: 'general',  label: 'General Offering' },
-  { id: 'feast',    label: 'Feast Donation' },
+  { id: 'general', label: 'General Offering' },
+  { id: 'feast', label: 'Feast Donation' },
   { id: 'building', label: 'Building Fund' },
-  { id: 'candle',   label: 'Candle Offering' },
+  { id: 'candle', label: 'Candle Offering' },
 ];
 
 const STATUS_OPTIONS = [
-  { id: 'all',      label: 'All Status' },
-  { id: 'paid',     label: 'Paid' },
+  { id: 'all', label: 'All Status' },
+  { id: 'paid', label: 'Paid' },
   { id: 'verified', label: 'Verified' },
-  { id: 'created',  label: 'Created' },
-  { id: 'pending',  label: 'Pending' },
+  { id: 'created', label: 'Created' },
+  { id: 'pending', label: 'Pending' },
   { id: 'rejected', label: 'Rejected' },
 ];
 
 const STATUS_STYLE = {
-  paid:     'bg-green-100 text-green-700 border border-green-200',
+  paid: 'bg-green-100 text-green-700 border border-green-200',
   verified: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
-  created:  'bg-amber-100  text-amber-800  border border-amber-200',
-  pending:  'bg-amber-100  text-amber-800  border border-amber-200',
+  created: 'bg-amber-100  text-amber-800  border border-amber-200',
+  pending: 'bg-amber-100  text-amber-800  border border-amber-200',
   rejected: 'bg-red-100   text-red-700   border border-red-200',
 };
 
 export default function UserDonations() {
   const { user } = useAuth();
-  const [donations, setDonations]   = useState([]);
-  const [loading, setLoading]       = useState(true);
+  const [donations, setDonations] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [search, setSearch]         = useState('');
+  const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [page, setPage]             = useState(1);
+  const [page, setPage] = useState(1);
   const [viewingDonation, setViewingDonation] = useState(null);
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const receiptRef = useRef(null);
@@ -90,7 +90,7 @@ export default function UserDonations() {
   }, [donations, search, typeFilter, statusFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
-  const paginated  = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   const totalDonated = donations
     .filter(d => d.status === 'paid' || d.status === 'verified')
@@ -178,11 +178,13 @@ export default function UserDonations() {
             {[
               { label: 'Total Offerings', value: donations.length, color: 'text-church-royal-blue' },
               { label: 'Total Donated', value: `₹${totalDonated.toLocaleString('en-IN')}`, color: 'text-green-600' },
-              { label: 'This Month', value: donations.filter(d => {
+              {
+                label: 'This Month', value: donations.filter(d => {
                   const m = new Date(d.createdAt);
                   const now = new Date();
                   return m.getMonth() === now.getMonth() && m.getFullYear() === now.getFullYear();
-                }).length, color: 'text-church-gold' },
+                }).length, color: 'text-church-gold'
+              },
             ].map(stat => (
               <div key={stat.label} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 text-center">
                 <p className={`text-lg sm:text-2xl font-black ${stat.color}`}>{stat.value}</p>
@@ -351,9 +353,8 @@ export default function UserDonations() {
                     <button
                       key={p}
                       onClick={() => setPage(p)}
-                      className={`w-8 h-8 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
-                        page === p ? 'bg-church-gold text-white' : 'text-gray-600 hover:bg-gray-100'
-                      }`}
+                      className={`w-8 h-8 rounded-xl text-xs font-bold transition-colors cursor-pointer ${page === p ? 'bg-church-gold text-white' : 'text-gray-600 hover:bg-gray-100'
+                        }`}
                     >
                       {p}
                     </button>
@@ -528,7 +529,7 @@ export default function UserDonations() {
               <div style={{ marginTop: '40px', textAlign: 'center', lineHeight: '1.9', fontSize: '15px' }}>
                 Thank you for your generous contribution<br />
                 towards the ministry and mission of<br />
-                <strong>St. John de Britto's Church.</strong><br /><br />
+                <strong>St. John de Britto Church.</strong><br /><br />
                 May God bless you abundantly.
               </div>
               <div style={{ marginTop: '45px', textAlign: 'center', fontSize: '14px', lineHeight: '1.8', color: '#555' }}>

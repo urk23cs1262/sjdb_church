@@ -1,9 +1,11 @@
 {
   "watch": ["src"],
-  "ext": "js,mjs,cjs,json",
+  "ext": "js,mjs,cjs",
   "ignore": [
     "src/bot/session/*",
     "src/bot/session/**/*",
+    "src/data/*",
+    "src/data/**/*",
     "uploads/*",
     "uploads/**/*"
   ],

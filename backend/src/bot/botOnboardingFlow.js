@@ -185,7 +185,7 @@ ${prefList}
 
 May God bless you and your family! 🙏❤️
 — *SJDB Connect*
-_St. John de Britto's Church, Kalayarkoil_
+_St. John de Britto Church, Kalayarkoil_
 
 ➡️ Type *Menu* for Quick Commands
 ➡️ Type *Services* for Help Desk`;
@@ -205,7 +205,7 @@ ${prefList}
 
 May God bless you and your family! 🙏❤️
 — *SJDB Connect*
-_St. John de Britto's Church, Kalayarkoil_
+_St. John de Britto Church, Kalayarkoil_
 
 ➡️ Type *Menu* for Quick Commands
 ➡️ Type *Services* for Help Desk`;

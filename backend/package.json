@@ -5,7 +5,7 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node -e \"require('kill-port')(5000).then(() => console.log('Port 5000 cleared')).catch(() => {})\" && nodemon src/server.js",
+    "dev": "node -e \"require('kill-port')(5000).then(() => console.log('Port 5000 cleared')).catch(() => {})\" && nodemon",
     "seed": "node src/utils/seed.js"
   },
   "keywords": [

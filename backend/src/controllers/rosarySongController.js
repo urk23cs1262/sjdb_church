@@ -104,7 +104,7 @@ async function enrichSongDetails(song) {
   return song;
 }
 
-const { getDefaultSongsCatalog, syncDefaultSongsToDiskAndDatabase } = require('../services/devotionalSongsCatalog');
+const { getDefaultSongsCatalog, syncDefaultSongsToDisk, syncDefaultSongsToDiskAndDatabase } = require('../services/devotionalSongsCatalog');
 
 /**
  * Auto-seeds default devotional songs from Devos archive if database is empty or missing songs
@@ -786,18 +786,28 @@ const restoreDefaultSongs = async (req, res) => {
     await SiteSettings.deleteOne({ key: 'devotionalSongsCleared' });
     await RosarySong.deleteMany({});
 
-    // Ensure songs are freshly scanned and synced from Devos
-    await syncDefaultSongsToDiskAndDatabase();
+    // Ensure songs are freshly scanned and synced to disk (not DB to avoid double-insertion)
+    await syncDefaultSongsToDisk();
     const defaultList = getDefaultSongsCatalog() || [];
-    const docs = defaultList.map((s, idx) => ({
-      title: s.title,
-      fileName: s.fileName,
-      fileUrl: s.fileUrl,
-      fileSize: s.fileSize || 0,
-      mimeType: s.mimeType || 'audio/mpeg',
-      isActive: true,
-      sortOrder: idx + 1
-    }));
+
+    // Strictly deduplicate by filename to prevent any duplicates
+    const seenNames = new Set();
+    const docs = [];
+    defaultList.forEach(s => {
+      const norm = String(s.fileName).toLowerCase().trim();
+      if (!seenNames.has(norm)) {
+        seenNames.add(norm);
+        docs.push({
+          title: s.title,
+          fileName: s.fileName,
+          fileUrl: s.fileUrl,
+          fileSize: s.fileSize || 0,
+          mimeType: s.mimeType || 'audio/mpeg',
+          isActive: true,
+          sortOrder: docs.length + 1
+        });
+      }
+    });
 
     if (docs.length > 0) {
       await RosarySong.insertMany(docs);

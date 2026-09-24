@@ -157,20 +157,30 @@ function getDefaultSongsCatalog() {
  * 2. frontend/public/devotional-songs (for static client streaming)
  * 3. MongoDB RosarySong collection (auto-seed missing default songs)
  */
-async function syncDefaultSongsToDiskAndDatabase() {
+/**
+ * Syncs default devotional songs catalog to disk (JSON files and public directory)
+ * Does NOT touch MongoDB, avoiding duplicate seeding during restore operations.
+ */
+async function syncDefaultSongsToDisk() {
   try {
     const songs = scanDevosFolder();
     if (!songs || songs.length === 0) return;
 
-    // 1. Update JSON files
+    // 1. Update JSON files only if changed (prevents nodemon restart loops)
     const jsonStr = JSON.stringify(songs, null, 2);
     try {
-      fs.writeFileSync(backendJsonPath, jsonStr, 'utf8');
+      const currentBackend = fs.existsSync(backendJsonPath) ? fs.readFileSync(backendJsonPath, 'utf8') : '';
+      if (currentBackend !== jsonStr) {
+        fs.writeFileSync(backendJsonPath, jsonStr, 'utf8');
+      }
     } catch (_) {}
 
     try {
       if (fs.existsSync(path.dirname(frontendJsonPath))) {
-        fs.writeFileSync(frontendJsonPath, jsonStr, 'utf8');
+        const currentFrontend = fs.existsSync(frontendJsonPath) ? fs.readFileSync(frontendJsonPath, 'utf8') : '';
+        if (currentFrontend !== jsonStr) {
+          fs.writeFileSync(frontendJsonPath, jsonStr, 'utf8');
+        }
       }
     } catch (_) {}
 
@@ -200,48 +210,61 @@ async function syncDefaultSongsToDiskAndDatabase() {
     } catch (pubErr) {
       console.warn('[Devos] Notice copying to public dir:', pubErr.message);
     }
-
-    // 3. Auto-seed missing songs to MongoDB if database is actively connected
-    try {
-      const mongoose = require('mongoose');
-      if (mongoose.connection && mongoose.connection.readyState === 1) {
-        const RosarySong = require('../models/RosarySong');
-        const SiteSettings = require('../models/SiteSettings');
-
-        const cleared = await SiteSettings.findOne({ key: 'devotionalSongsCleared' }).lean();
-        if (!cleared || cleared.value !== 'true') {
-          const existing = await RosarySong.find().lean();
-          const existingNames = new Set(existing.map(s => s.fileName));
-
-        const missing = [];
-        songs.forEach((s, idx) => {
-          if (!existingNames.has(s.fileName)) {
-            missing.push({
-              title: s.title,
-              fileName: s.fileName,
-              fileUrl: s.fileUrl,
-              fileSize: s.fileSize || 0,
-              mimeType: s.mimeType || 'audio/mpeg',
-              isActive: true,
-              sortOrder: existing.length + idx + 1
-            });
-          }
-        });
-
-        if (missing.length > 0) {
-          await RosarySong.insertMany(missing);
-          console.log(`[Devos] Auto-seeded ${missing.length} new devotional songs from Devos folder into database.`);
-        }
-      }
-    }
-  } catch (_) {
-    // Database not connected or model unavailable, which is fine
-  }
-
-    console.log(`[Devos] Successfully synchronized ${songs.length} default devotional songs.`);
   } catch (err) {
-    console.error('[Devos] Sync error:', err.message);
+    console.error('[Devos] Disk sync error:', err.message);
   }
+}
+
+/**
+ * Auto-seeds any missing devotional songs from Devos into MongoDB
+ * Checks against existing fileNames (case-insensitive) to prevent duplicate entries
+ */
+async function autoSeedMissingSongsToDatabase() {
+  try {
+    const mongoose = require('mongoose');
+    if (!mongoose.connection || mongoose.connection.readyState !== 1) return;
+
+    const songs = scanDevosFolder();
+    if (!songs || songs.length === 0) return;
+
+    const RosarySong = require('../models/RosarySong');
+    const SiteSettings = require('../models/SiteSettings');
+
+    const cleared = await SiteSettings.findOne({ key: 'devotionalSongsCleared' }).lean();
+    if (cleared && cleared.value === 'true') return;
+
+    const existing = await RosarySong.find().lean();
+    const existingNames = new Set(existing.map(s => String(s.fileName).toLowerCase().trim()));
+
+    const missing = [];
+    songs.forEach((s, idx) => {
+      const norm = String(s.fileName).toLowerCase().trim();
+      if (!existingNames.has(norm)) {
+        existingNames.add(norm); // Prevent duplicates within the missing array
+        missing.push({
+          title: s.title,
+          fileName: s.fileName,
+          fileUrl: s.fileUrl,
+          fileSize: s.fileSize || 0,
+          mimeType: s.mimeType || 'audio/mpeg',
+          isActive: true,
+          sortOrder: existing.length + idx + 1
+        });
+      }
+    });
+
+    if (missing.length > 0) {
+      await RosarySong.insertMany(missing);
+      console.log(`[Devos] Auto-seeded ${missing.length} new devotional songs from Devos folder into database.`);
+    }
+  } catch (err) {
+    console.error('[Devos] Auto-seed error:', err.message);
+  }
+}
+
+async function syncDefaultSongsToDiskAndDatabase() {
+  await syncDefaultSongsToDisk();
+  await autoSeedMissingSongsToDatabase();
 }
 
 /**
@@ -283,6 +306,7 @@ module.exports = {
   devosAssetDir,
   devosPublicDir,
   getDefaultSongsCatalog,
+  syncDefaultSongsToDisk,
   syncDefaultSongsToDiskAndDatabase,
   initDevosWatcher,
   formatTitle

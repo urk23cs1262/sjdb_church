@@ -153,7 +153,7 @@ async function broadcastEventPublished({ event, action = 'created' }) {
 
     if (action === 'cancelled') {
       waMessage =
-`⚠️ *Parish Event Cancelled*
+        `⚠️ *Parish Event Cancelled*
 
 ⛪ *${cleanTitle}*
 
@@ -182,7 +182,7 @@ _SJDB Connect_`;
       if (organizerVal) infoLines.push(`👤 *Organizer:* ${organizerVal}`);
 
       waMessage =
-`🔄 *Parish Event Details Updated*
+        `🔄 *Parish Event Details Updated*
 
 ⛪ *${cleanTitle}*
 
@@ -210,7 +210,7 @@ _SJDB Connect_`;
       if (organizerVal) infoLines.push(`👤 *Organizer:* ${organizerVal}`);
 
       waMessage =
-`📅 *New Parish Event Announced*
+        `📅 *New Parish Event Announced*
 
 ⛪ *${cleanTitle}*
 
@@ -550,11 +550,11 @@ async function broadcastMaintenanceScheduled({ settings, action = 'scheduled' })
 
     if (action === 'completed') {
       waMessage =
-`✅ *Services Are Live Again*
+        `✅ *Services Are Live Again*
 
 Dear User,
 
-The St. John de Britto's Church website and services are now live again.
+The St. John de Britto Church website and services are now live again.
 
 The maintenance has been completed, and you can now access the website/app and use the available services normally.
 
@@ -562,18 +562,18 @@ The maintenance has been completed, and you can now access the website/app and u
 
 Thank you for your patience and understanding.
 
-— *St. John de Britto's Church*`;
+— *St. John de Britto Church*`;
 
-      emailSubject = `✅ Church Website Is Live Again — St. John de Britto's Church`;
+      emailSubject = `✅ Church Website Is Live Again — St. John de Britto Church`;
       notifTitle = `✅ Church Website Is Live Again`;
-      notifMessage = `The St. John de Britto's Church website maintenance is complete. All services are now available. Visit: ${getClientUrl()}`;
+      notifMessage = `The St. John de Britto Church website maintenance is complete. All services are now available. Visit: ${getClientUrl()}`;
     } else if (action === 'started' || action === 'emergency') {
       waMessage =
-`🔧 *Maintenance Notice*
+        `🔧 *Maintenance Notice*
 
 Dear User,
 
-The St. John de Britto's Church website and services are currently under maintenance.
+The St. John de Britto Church website and services are currently under maintenance.
 
 The website/app and some services may be temporarily unavailable during this period.
 
@@ -581,15 +581,15 @@ We apologize for the inconvenience and thank you for your patience.
 
 We will notify you once the services are live again.
 
-— *St. John de Britto's Church*`;
+— *St. John de Britto Church*`;
 
-      emailSubject = `🔧 Church Website Maintenance Notice — St. John de Britto's Church`;
+      emailSubject = `🔧 Church Website Maintenance Notice — St. John de Britto Church`;
       notifTitle = `🔧 Church Website Under Maintenance`;
-      notifMessage = `The St. John de Britto's Church website is currently under maintenance. We will notify you once services are available again.`;
+      notifMessage = `The St. John de Britto Church website is currently under maintenance. We will notify you once services are available again.`;
     } else {
       // 'scheduled' or 'updated'
       waMessage =
-`🛠️ *${action === 'updated' ? 'Updated Notice:' : ''} Scheduled Website Maintenance*
+        `🛠️ *${action === 'updated' ? 'Updated Notice:' : ''} Scheduled Website Maintenance*
 
 🔧 *${title}*
 ⚙️ *Category:* ${category}
