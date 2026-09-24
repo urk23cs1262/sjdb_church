@@ -330,13 +330,14 @@ export default function BibleVerse() {
     fetchSaintOfTheDay(date)
       .then(async (data) => {
         if (data) {
-          // If image is missing or broken placeholder, fetch from Google/online search
-          if (!data.image || data.image.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato')) {
+          // If image is missing, a fallback, or broken placeholder, fetch authentic portrait from Wikipedia / online search
+          const isBrittoFallback = data.image?.includes('St._John_De_Britto.jpg') && !data.saintName?.toLowerCase().includes('britto');
+          if (!data.image || data.imageFallback || isBrittoFallback || data.image.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato')) {
             try {
               const found = await searchSaintImage(data.englishName || data.saintName);
-              if (found && found.image) {
+              if (found && found.image && !found.imageFallback) {
                 data.image = found.image;
-                data.imageSource = found.imageSource || 'google_web_search';
+                data.imageSource = found.imageSource || 'wikipedia';
                 data.imageFallback = false;
               }
             } catch (err) {
@@ -895,7 +896,7 @@ export default function BibleVerse() {
                         )}
                       </motion.div>
                     ))}
-                    
+
 
                     {/* ── Daily Reflection ("இன்றைய சிந்தனை") ────────────────── */}
                     {reading.reflection && (reading.reflection.title || reading.reflection.content || reading.reflection.paragraphs?.length > 0) && (
@@ -950,16 +951,20 @@ export default function BibleVerse() {
                         )}
 
                         {/* Source Attribution Link */}
-                        <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
-                          <span className="flex items-center gap-1.5">
-                            Source:
+                        <div className="pt-3.5 border-t border-emerald-100/80 flex items-center justify-between text-xs text-gray-500 flex-wrap gap-2">
+                          <span className="flex items-center gap-1.5 flex-wrap">
+                            <span className="flex items-center gap-1.5">
+                              {displayLang === 'ta' ? 'Source:' : 'Source:'}
+                            </span>
                             <a
-                              href={reading.reflection.sourceUrl || 'https://www.tamilcatholicdaily.com/dailyverse'}
+                              href="https://www.tamilcatholicdaily.com/dailyverse"
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-emerald-700 hover:text-emerald-800 hover:underline font-semibold inline-flex items-center gap-1"
+                              title="https://www.tamilcatholicdaily.com/dailyverse"
                             >
-                              Tamil Catholic Daily <FiExternalLink className="text-[10px]" />
+                              <span>{displayLang === 'ta' ? 'Tamil Catholic Daily' : 'Tamil Catholic Daily'}</span>
+                              <FiExternalLink className="text-[11px]" />
                             </a>
                           </span>
                           <span className="text-[11px] text-gray-400 font-medium">SJDB Church</span>
@@ -995,13 +1000,14 @@ export default function BibleVerse() {
             <div className="glass-card p-6 sm:p-8 md:p-10 bg-white shadow-xl rounded-3xl border border-amber-100 overflow-hidden relative">
               <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8">
                 {/* Image portrait */}
-                <div className="w-full md:w-5/12 h-[260px] sm:h-[300px] rounded-2xl overflow-hidden bg-slate-950 shadow-md relative flex-shrink-0">
+                <div className="w-full md:w-5/12 h-[260px] sm:h-[300px] rounded-2xl overflow-hidden bg-slate-950 shadow-md relative flex-shrink-0 flex items-center justify-center">
                   {(!saintImgError && saintData?.image) ? (
                     <img
                       src={saintData.image}
                       alt={saintData.saintName || saintData.name}
+                      referrerPolicy="no-referrer"
                       onError={handleSaintImageError}
-                      className="w-full h-full object-cover object-top transition-transform duration-700 hover:scale-105"
+                      className="w-full h-full object-contain object-center transition-transform duration-700 hover:scale-105"
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-church-royal-blue to-indigo-950 text-church-gold text-5xl">
@@ -1028,10 +1034,20 @@ export default function BibleVerse() {
                     <h3 className="text-xl sm:text-2xl font-bold text-church-gold font-display mt-0.5">
                       {saintData?.feastDay || formatDisplay(date)}
                     </h3>
-
+                    {saintData?.hasFeastInfo && (saintData?.feastTitle || saintData?.feastTitleTa) && (
+                      <p className="text-sm font-semibold text-amber-700 mt-1 flex items-center gap-1.5 flex-wrap">
+                        <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                          {isTamil && saintData?.feastTypeTa ? saintData.feastTypeTa : (saintData?.feastType || 'Feast')}
+                        </span>
+                        <span>{isTamil && saintData?.feastTitleTa ? saintData.feastTitleTa : saintData.feastTitle}</span>
+                      </p>
+                    )}
                   </div>
 
                   <div className="text-gray-700 leading-relaxed text-sm sm:text-base font-normal">
+                    <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400 mb-1">
+                      {isTamil ? 'புனிதரைப் பற்றி' : 'ABOUT THE SAINT'}
+                    </p>
                     <p
                       className="line-clamp-5"
                       style={{
@@ -1056,9 +1072,9 @@ export default function BibleVerse() {
                         <FiExternalLink />
                         <span>
                           {(() => {
-                            const siteName = saintData?.source && !saintData.source.toLowerCase().includes('vatican')
+                            const siteName = saintData?.source
                               ? saintData.source.split('/')[0].trim()
-                              : 'Catholic Readings';
+                              : 'Vatican News';
                             return isTamil ? `${siteName}-ல் வாசிக்க` : `Read on ${siteName}`;
                           })()}
                         </span>

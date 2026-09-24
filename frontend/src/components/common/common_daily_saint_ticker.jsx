@@ -3,7 +3,12 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiX, FiExternalLink, FiInfo } from 'react-icons/fi';
 import { useTranslation } from 'react-i18next';
-import { fetchSaintOfTheDay, searchSaintImage } from '../../services/saintOfDay';
+import { 
+  fetchSaintOfTheDay, 
+  searchSaintImage, 
+  cleanSaintName, 
+  formatFiveLines 
+} from '../../services/saintOfDay';
 import { getSaintForDate } from '../../data/catholic_saints_calendar';
 
 function checkIsTamil() {
@@ -17,7 +22,7 @@ function checkIsTamil() {
 
 export default function DailySaintTicker() {
   const { i18n } = useTranslation();
-  
+
   // Default authentic liturgical saint for today's date
   const todayLiturgical = useMemo(() => getSaintForDate(new Date()), []);
 
@@ -36,9 +41,14 @@ export default function DailySaintTicker() {
       descriptionTa: fallback.descriptionTa,
       image: fallback.image,
       feastDay: fallback.feastDay,
-      source: "Catholic Readings",
-      sourceUrl: "https://catholicreadings.org/catholic-saint-of-the-day/",
-      link: fallback.link || "https://catholicreadings.org/catholic-saint-of-the-day/"
+      feastTitle: fallback.feastTitle || null,
+      feastTitleTa: fallback.feastTitleTa || null,
+      feastType: fallback.feastType || null,
+      feastTypeTa: fallback.feastTypeTa || null,
+      hasFeastInfo: Boolean(fallback.hasFeastInfo),
+      source: "Vatican News",
+      sourceUrl: `https://www.vaticannews.va/en/saints/${month}/${day}.html`,
+      link: fallback.link || `https://www.vaticannews.va/en/saints/${month}/${day}.html`
     };
   });
 
@@ -53,22 +63,23 @@ export default function DailySaintTicker() {
       try {
         const data = await fetchSaintOfTheDay();
         if (isMounted && data && (data.saintName || data.englishName)) {
-          // If original image is missing or from catholicreadings banner graphic, fetch clean portrait from Google
+          // If original image is missing, a fallback, or banner graphic, fetch clean verified portrait
           const isBannerGraphic = data.image && (
             data.image.includes('catholicreadings.org/wp-content') ||
             data.image.includes('Whatsapp-50x50') ||
             data.imageSource === 'catholicreadings'
           );
-          if (!data.image || data.image.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato') || isBannerGraphic) {
+          const isBrittoFallback = data.image?.includes('St._John_De_Britto.jpg') && !data.saintName?.toLowerCase().includes('britto');
+          if (!data.image || data.imageFallback || isBrittoFallback || data.image.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato') || isBannerGraphic) {
             try {
               const targetName = (data.englishName || data.saintName || '')
                 .replace(/\s*[-–—|]\s*Saint of the Day.*$/i, '')
                 .replace(/\s+\d{4}\s*$/g, '')
                 .trim();
               const found = await searchSaintImage(targetName);
-              if (found && found.image) {
+              if (found && found.image && !found.imageFallback) {
                 data.image = found.image;
-                data.imageSource = found.imageSource || 'google_web_search';
+                data.imageSource = found.imageSource || 'wikipedia';
                 data.imageFallback = false;
               }
             } catch (err) {
@@ -85,10 +96,13 @@ export default function DailySaintTicker() {
 
     loadSaint();
 
-    // Automatically check for date rollover at midnight (every 60s)
+    // Automatically check for date rollover or scheduled refresh at 12:00 AM & 12:00 PM
+    let lastCheckedDate = new Date().toDateString();
     const timer = setInterval(() => {
       const now = new Date();
-      if (now.getHours() === 0 && now.getMinutes() === 0) {
+      const currentDate = now.toDateString();
+      if (currentDate !== lastCheckedDate || (now.getMinutes() === 0 && (now.getHours() === 0 || now.getHours() === 12))) {
+        lastCheckedDate = currentDate;
         loadSaint();
       }
     }, 60000);
@@ -104,24 +118,38 @@ export default function DailySaintTicker() {
 
   // Helper to strip website title noise from display name
   const cleanDisplayName = (name) => {
-    if (!name) return 'Saint of the Day';
-    return name
-      .replace(/\s*[-–—|]\s*Saint of the Day.*$/i, '')
-      .replace(/\s*[-–—|]\s*Catholic Readings.*$/i, '')
-      .replace(/\s+\d{4}\s*$/g, '')
-      .trim();
+    return cleanSaintName(name);
   };
 
   // Extract display values from the SAME single saintOfDay object
-  const rawDisplayName = isTamil && saintOfDay.tamilName 
-    ? saintOfDay.tamilName 
+  const rawDisplayName = isTamil && saintOfDay.tamilName
+    ? saintOfDay.tamilName
     : (saintOfDay.englishName || saintOfDay.saintName || "Saint of the Day");
 
   const displayName = cleanDisplayName(rawDisplayName);
 
-  const displayDescription = isTamil && saintOfDay.descriptionTa 
-    ? saintOfDay.descriptionTa 
+  const displayDescription = isTamil && saintOfDay.descriptionTa
+    ? saintOfDay.descriptionTa
     : (saintOfDay.description || "");
+
+  // Truncate at clean word boundary for ticker running marquee
+  const fewWords = useMemo(() => {
+    if (!displayDescription) return '';
+    const clean = displayDescription.replace(/\s+/g, ' ').trim();
+    if (clean.length <= 80) return clean;
+    const truncated = clean.slice(0, 80);
+    const lastSpace = truncated.lastIndexOf(' ');
+    return (lastSpace > 40 ? truncated.slice(0, lastSpace) : truncated) + '...';
+  }, [displayDescription]);
+
+  // Extract feast information cleanly for ticker display
+  const displayFeastTitle = (isTamil && saintOfDay.feastTitleTa)
+    ? saintOfDay.feastTitleTa
+    : (saintOfDay.feastTitle || null);
+
+  const displayFeastType = (isTamil && saintOfDay.feastTypeTa)
+    ? saintOfDay.feastTypeTa
+    : (saintOfDay.feastType || (isTamil ? 'திருவிழா' : 'Feast'));
 
   // Dynamic formatted feast date (e.g., "Friday, August 28, 2026")
   const formattedFeastDate = useMemo(() => {
@@ -204,7 +232,7 @@ export default function DailySaintTicker() {
         if (data && (data.saintName || data.englishName)) {
           setSaintOfDay(data);
         }
-      }).catch(() => {});
+      }).catch(() => { });
     }
   };
 
@@ -222,7 +250,7 @@ export default function DailySaintTicker() {
             onClick={handleOpenModal}
             className="flex-shrink-0 bg-church-gold text-white text-[10px] font-bold px-2 py-1 rounded mr-2 z-10 flex items-center gap-1.5 hover:bg-church-gold/90 transition-colors cursor-pointer uppercase tracking-wider shadow-2xs"
           >
-            <FiInfo className="text-xs" /> 
+            <FiInfo className="text-xs" />
             <span>{isTamil ? 'இன்றைய புனிதர்' : 'SAINT OF THE DAY'}</span>
           </button>
 
@@ -243,7 +271,10 @@ export default function DailySaintTicker() {
                 className="text-white font-semibold hover:text-church-gold transition-colors flex items-center gap-2 cursor-pointer"
               >
                 <span className="notranslate" translate="no">
-                  {isTamil ? "இன்றைய புனிதர்" : "Today's Saint"}: <span className="font-bold text-amber-300">{displayName}</span> - {displayDescription.slice(0, 85)}... <span className="text-church-gold italic text-sm">({isTamil ? "முழு விவரம்" : "Click for details"} →)</span>
+                  <span>{isTamil ? "இன்றைய புனிதர்" : "Today's Saint"}: <span className="font-bold text-amber-300">{displayName}</span></span>
+                  <span className="mx-2 text-white/40">-</span>
+                  <span>{fewWords}</span>
+                  <span className="text-amber-300 underline underline-offset-2 italic text-sm ml-2 font-medium">({isTamil ? "முழு விவரம் அறிய கிளிக் செய்யவும்" : "click for details"})</span>
                 </span>
               </button>
             </motion.div>
@@ -319,16 +350,17 @@ export default function DailySaintTicker() {
 
                     <div className="flex flex-col md:flex-row flex-1 h-full md:h-full overflow-y-auto md:overflow-hidden">
                       {/* SAINT IMAGE BANNER (LEFT SIDE: ONLY SAINT NAME UNDER SAINT OF THE DAY) */}
-                      <div className="w-full md:w-5/12 relative min-h-[280px] h-[280px] sm:h-[320px] md:min-h-full md:h-full flex-shrink-0 bg-slate-950 overflow-hidden flex flex-col justify-end">
+                      <div className="w-full md:w-5/12 relative min-h-[280px] h-[280px] sm:h-[320px] md:min-h-full md:h-full flex-shrink-0 bg-slate-950 overflow-hidden flex items-center justify-center">
                         {activeImage ? (
                           <img
                             src={activeImage}
                             alt={displayName}
+                            referrerPolicy="no-referrer"
                             onError={handleImageError}
-                            className="absolute inset-0 w-full h-full object-cover object-top transition-transform duration-700 hover:scale-105"
+                            className="w-full h-full object-contain object-center transition-transform duration-700 hover:scale-105"
                           />
                         ) : (
-                          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-church-royal-blue to-indigo-950 text-church-gold text-6xl">
+                          <div className="flex items-center justify-center bg-gradient-to-br from-church-royal-blue to-indigo-950 text-church-gold text-6xl w-full h-full">
                             ✝
                           </div>
                         )}
@@ -359,10 +391,21 @@ export default function DailySaintTicker() {
                             <h2 className="text-xl sm:text-2xl font-bold text-church-gold font-display">
                               {formattedFeastDate}
                             </h2>
+                            {saintOfDay.hasFeastInfo && displayFeastTitle && (
+                              <p className="text-sm sm:text-base font-semibold text-amber-700 mt-1 flex items-center gap-1.5 flex-wrap">
+                                <span className="bg-amber-100 text-amber-800 text-[11px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                                  {displayFeastType}
+                                </span>
+                                <span>{displayFeastTitle}</span>
+                              </p>
+                            )}
                           </div>
 
                           {/* Biography text — strictly 5 lines of content */}
                           <div className="text-gray-700 leading-relaxed text-sm sm:text-base font-normal">
+                            <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400 mb-1">
+                              {isTamil ? 'புனிதரைப் பற்றி' : 'ABOUT THE SAINT'}
+                            </p>
                             <p
                               className="line-clamp-5"
                               style={{
@@ -410,9 +453,9 @@ export default function DailySaintTicker() {
                               <FiExternalLink className="text-base" />
                               <span>
                                 {(() => {
-                                  const siteName = saintOfDay.source && !saintOfDay.source.toLowerCase().includes('vatican')
+                                  const siteName = saintOfDay.source
                                     ? saintOfDay.source.split('/')[0].trim()
-                                    : 'Catholic Readings';
+                                    : 'Vatican News';
                                   return isTamil ? `${siteName}-ல் வாசிக்க` : `Read on ${siteName}`;
                                 })()}
                               </span>

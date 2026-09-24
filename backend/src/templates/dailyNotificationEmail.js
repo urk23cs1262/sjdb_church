@@ -251,11 +251,11 @@ function generateDailyNotificationHtml({
                       <!-- Saint Image Attached -->
                       ${hasSaintImageAttachment ? `
                       <div style="text-align: center; margin-bottom: 16px;">
-                        <img src="cid:saintOfTheDayImage" alt="${escapeHtml(saint.nameEnglish)}" style="max-width: 100%; max-height: 400px; width: auto; border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,0.1); display: block; margin: 0 auto; object-fit: cover;" />
+                        <img src="cid:saintOfTheDayImage" alt="${escapeHtml(saint.nameEnglish)}" style="max-width: 100%; max-height: 400px; width: auto; border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,0.1); display: block; margin: 0 auto; object-fit: contain;" />
                       </div>
                       ` : (saint.image ? `
                       <div style="text-align: center; margin-bottom: 16px;">
-                        <img src="${escapeHtml(saint.image)}" alt="${escapeHtml(saint.nameEnglish)}" style="max-width: 100%; max-height: 400px; width: auto; border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,0.1); display: block; margin: 0 auto; object-fit: cover;" />
+                        <img src="${escapeHtml(saint.image)}" alt="${escapeHtml(saint.nameEnglish)}" style="max-width: 100%; max-height: 400px; width: auto; border-radius: 10px; box-shadow: 0 4px 14px rgba(0,0,0,0.1); display: block; margin: 0 auto; object-fit: contain;" />
                       </div>
                       ` : '')}
 
@@ -263,6 +263,9 @@ function generateDailyNotificationHtml({
                       <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed #CBD5E1;">
                         <div style="font-size: 12px; font-weight: 700; color: #C5A059; text-transform: uppercase; margin-bottom: 4px;">தமிழ் (Tamil)</div>
                         <h4 style="margin: 0 0 6px 0; font-size: 16px; color: #0F172A; font-weight: 700;">${escapeHtml(saint.nameTamil)}</h4>
+                        ${saint.hasFeastInfo && saint.feastTitleTa ? `
+                        <div style="font-size: 13px; font-weight: 600; color: #B45309; margin-bottom: 6px;">🎉 ${escapeHtml(saint.feastTypeTa ? `${saint.feastTypeTa}: ` : '')}${escapeHtml(saint.feastTitleTa)}</div>
+                        ` : ''}
                         <div style="color: #334155; font-size: 14px; line-height: 1.6;">${formatParagraphs(saint.descriptionTamil)}</div>
                       </div>
 
@@ -270,12 +273,15 @@ function generateDailyNotificationHtml({
                       <div>
                         <div style="font-size: 12px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 4px;">English</div>
                         <h4 style="margin: 0 0 6px 0; font-size: 16px; color: #0F172A; font-weight: 700;">${escapeHtml(saint.nameEnglish)}</h4>
+                        ${saint.hasFeastInfo && saint.feastTitle ? `
+                        <div style="font-size: 13px; font-weight: 600; color: #B45309; margin-bottom: 6px;">🎉 ${escapeHtml(saint.feastType ? `${saint.feastType}: ` : '')}${escapeHtml(saint.feastTitle)}</div>
+                        ` : ''}
                         <div style="color: #334155; font-size: 14px; line-height: 1.6;">${formatParagraphs(saint.descriptionEnglish)}</div>
                       </div>
 
                       <!-- Attribution -->
                       <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #E2E8F0; font-size: 12px; color: #64748B; text-align: right;">
-                        Source: <a href="${escapeHtml(saint.sourceUrl || 'https://catholicreadings.org/catholic-saint-of-the-day/')}" target="_blank" style="color: #C5A059; text-decoration: none; font-weight: 600;">${escapeHtml(saint.source || 'Catholic Readings / Catholic Liturgical Calendar')}</a>
+                        Source: <a href="${escapeHtml(saint.sourceUrl || 'https://www.vaticannews.va/en/saints.html')}" target="_blank" style="color: #C5A059; text-decoration: none; font-weight: 600;">${escapeHtml(saint.source || 'Vatican News / Catholic Liturgical Calendar')}</a>
                       </div>
                     </div>
                   </td>

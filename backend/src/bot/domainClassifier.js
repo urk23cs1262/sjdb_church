@@ -5,7 +5,7 @@
  * - Checks if the user's query is strictly related to:
  *   1. St. John de Britto Church, Kalayarkoil (parish info, history, timings, priests, anbiyams)
  *   2. Catholic faith, Scripture, Bible, Catechism, Sacraments, Prayers, Liturgical seasons
- *   3. Daily Catholic readings, Saints, Reflections, Feasts
+ *   3. Daily Vatican News, Saints, Reflections, Feasts
  *   4. SJDB Connect bot commands, portal features, registrations, donations, contact, ministries
  * - Refuses general/unrelated topics (sports, politics, weather, programming, stocks, general jokes, etc.)
  */

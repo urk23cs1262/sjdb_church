@@ -257,9 +257,14 @@ async function getTodayDailyContent(targetDate = new Date()) {
     descriptionTamil: saintData?.descriptionTa || saintData?.description || '',
     descriptionEnglish: saintData?.description || '',
     feastDay: saintData?.feastDay || formattedEn,
+    feastTitle: saintData?.feastTitle || null,
+    feastTitleTa: saintData?.feastTitleTa || null,
+    feastType: saintData?.feastType || null,
+    feastTypeTa: saintData?.feastTypeTa || null,
+    hasFeastInfo: Boolean(saintData?.hasFeastInfo),
     image: saintImageUrl,
-    imageSource: saintData?.imageSource || 'Catholic Readings',
-    sourceUrl: saintData?.sourceUrl || saintData?.link || 'https://catholicreadings.org/catholic-saint-of-the-day/'
+    imageSource: saintData?.imageSource || 'Vatican News',
+    sourceUrl: saintData?.sourceUrl || saintData?.link || 'https://www.vaticannews.va/en/saints.html'
   };
 
   const { getSiteUrl } = require('../config/siteRoutes');

@@ -452,6 +452,11 @@ function generateSaintInfoMessage({ dailyContent, language = 'ta' }) {
   if (feastDay) {
     msg += `📅 *${isTamil ? 'திருவிழா / நாள்' : 'Feast Day'}:* ${feastDay}\n\n`;
   }
+  if (dailyContent?.saint?.feastTitle) {
+    const fType = isTamil ? (dailyContent.saint.feastTypeTa || 'திருவிழா') : (dailyContent.saint.feastType || 'Feast');
+    const fTitle = isTamil ? (dailyContent.saint.feastTitleTa || dailyContent.saint.feastTitle) : dailyContent.saint.feastTitle;
+    msg += `🎉 *${fType}:* ${fTitle}\n\n`;
+  }
   if (desc) {
     msg += `${desc}\n\n`;
   }
@@ -470,6 +475,14 @@ function generateSaintCaption({ dailyContent }) {
   const saintNameTa = dailyContent?.saint?.nameTamil || dailyContent?.saintOfTheDay?.tamil?.name || dailyContent?.saintNameTa || saintNameEn;
   const feastDay = dailyContent?.saint?.feastDay || dailyContent?.saintOfTheDay?.english?.feastDay || dailyContent?.saintFeastDay || 'Today';
 
+  const feastTitleEn = dailyContent?.saint?.feastTitle;
+  const feastTitleTa = dailyContent?.saint?.feastTitleTa || feastTitleEn;
+  const feastTypeEn = dailyContent?.saint?.feastType || 'Feast';
+  const feastTypeTa = dailyContent?.saint?.feastTypeTa || 'திருவிழா';
+  const feastLine = feastTitleEn 
+    ? `🎉 *${feastTypeEn} / ${feastTypeTa}:* ${feastTitleEn}${feastTitleTa && feastTitleTa !== feastTitleEn ? ` (${feastTitleTa})` : ''}\n` 
+    : '';
+
   const descEn = dailyContent?.saint?.description || dailyContent?.saintOfTheDay?.english?.description || dailyContent?.saintDescription || '';
   const descTa = dailyContent?.saint?.descriptionTamil || dailyContent?.saintOfTheDay?.tamil?.description || descEn;
 
@@ -477,6 +490,7 @@ function generateSaintCaption({ dailyContent }) {
 👑 *${saintNameEn}* ${saintNameTa && saintNameTa !== saintNameEn ? `(${saintNameTa})` : ''}
 
 📅 *Feast Day / திருவிழா:* ${feastDay}
+${feastLine}
 
 📖 *Biography / புனிதர் வரலாறு:*
 ${descEn}

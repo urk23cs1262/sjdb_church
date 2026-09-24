@@ -430,7 +430,7 @@ async function sendTodayDevotionsToUser(replyTarget, session, wa) {
     await wa.sendWhatsAppMessage(replyTarget, `${msg1}${readingsLink}`);
   } catch (err) {
     console.error('[BotHandler] Error delivering devotions:', err.message);
-    await wa.sendWhatsAppMessage(replyTarget, `📖 *Daily Catholic Readings & Devotions*\n\nView today's Mass readings, verse and reflection online:\n${getSiteUrl(SITE_ROUTES.DAILY_READINGS)}`);
+    await wa.sendWhatsAppMessage(replyTarget, `📖 *Daily Vatican News & Devotions*\n\nView today's Mass readings, verse and reflection online:\n${getSiteUrl(SITE_ROUTES.DAILY_READINGS)}`);
   }
 }
 
@@ -1326,9 +1326,9 @@ Call Parish Office: +91 96556 39144
           isPublished: { $ne: false },
           date: { $gte: today }
         })
-        .sort({ date: 1 })
-        .limit(5)
-        .lean();
+          .sort({ date: 1 })
+          .limit(5)
+          .lean();
 
         const eventsUrl = `${getSiteUrl(SITE_ROUTES.EVENTS)}`;
 
@@ -1379,9 +1379,9 @@ Call Parish Office: +91 96556 39144
             { expiresAt: { $exists: false } }
           ]
         })
-        .sort({ priority: -1, createdAt: -1 })
-        .limit(5)
-        .lean();
+          .sort({ priority: -1, createdAt: -1 })
+          .limit(5)
+          .lean();
 
         const annUrl = `${getSiteUrl(SITE_ROUTES.ANNOUNCEMENTS)}`;
 
@@ -1758,8 +1758,8 @@ _St. John de Britto Church, Kalayarkoil_
 • *SERVICES* — 13-Option Parish Services Directory
 • *PREFERENCES* — Update your subscribed services
 • *LANGUAGE* — Choose Tamil or English for Daily Catholic Devotions
-• *TAMIL* — Set Catholic readings to Tamil
-• *ENGLISH* — Set Catholic readings to English
+• *TAMIL* — Set Vatican News to Tamil
+• *ENGLISH* — Set Vatican News to English
 • *STOP* — Unsubscribe from daily broadcasts
 
 💡 You can reply with numbers 1 to 13 or type your questions naturally in English or Tamil!`;

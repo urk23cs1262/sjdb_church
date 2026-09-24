@@ -202,7 +202,7 @@ app.use('/api/bot', require('./routes/bot'));
 app.use('/api/moderation', require('./routes/moderationRoutes'));
 
 // Background Services
-require('./services/saintService'); // 12:00 AM IST Daily Saint of the Day automated Catholic Readings sync
+require('./services/saintService'); // 12:00 AM IST Daily Saint of the Day automated Vatican News sync
 require('./services/birthdayService');
 require('./services/dailyBroadcastService'); // 12:00 AM Birthday & Unified Broadcast triggers
 require('./services/reminderSchedulerService'); // Automated Event & Announcement reminders via Email, WhatsApp bot & In-App

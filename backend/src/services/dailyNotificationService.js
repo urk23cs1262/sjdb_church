@@ -113,12 +113,12 @@ async function sendDailyChurchNotifications({
 
     // Verify today's Saint of the Day is synchronized
     if (!dailyContent || !dailyContent.saint || dailyContent.saint.date !== currentIstDate) {
-      console.log(`[Daily Notification Service] Saint of the Day not yet synchronized for today (${currentIstDate}). Synchronizing from Catholic Readings...`);
+      console.log(`[Daily Notification Service] Saint of the Day not yet synchronized for today (${currentIstDate}). Synchronizing from Vatican News...`);
       try {
         await fetchDailySaint(today);
         dailyContent = await getTodayDailyContent(today);
       } catch (syncErr) {
-        console.warn(`[Daily Notification Service] Catholic Readings sync attempt notice:`, syncErr.message);
+        console.warn(`[Daily Notification Service] Vatican News sync attempt notice:`, syncErr.message);
       }
     }
 

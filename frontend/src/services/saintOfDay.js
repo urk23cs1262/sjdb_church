@@ -11,7 +11,7 @@ export function cleanSaintName(name) {
   if (!name) return 'Saint of the Day';
   return name
     .replace(/\s*[-–—|]\s*Saint of the Day.*$/i, '')
-    .replace(/\s*[-–—|]\s*Catholic Readings.*$/i, '')
+    .replace(/\s*[-–—|]\s*Vatican News.*$/i, '')
     .replace(/\s+\d{4}\s*$/g, '')
     .trim();
 }
@@ -40,11 +40,11 @@ export async function fetchSaintOfTheDay(dateStr) {
   const dateKey = `${yearNum}-${monthNum}-${dayNum}`;
   const fallbackSaint = getSaintForDate(targetDate);
 
-  // Check client memory cache first (only if it has full multi-line bio)
+  // Check client memory cache first (only valid for 60 seconds)
   if (saintClientCache.has(dateKey)) {
-    const cached = saintClientCache.get(dateKey);
-    if (cached && cached.description && cached.description.length >= 200) {
-      return cached;
+    const entry = saintClientCache.get(dateKey);
+    if (entry && entry._cachedAt && (Date.now() - entry._cachedAt < 60000)) {
+      return entry.data;
     }
   }
 
@@ -68,16 +68,21 @@ export async function fetchSaintOfTheDay(dateStr) {
         description: res.data.description || fallbackSaint.description,
         descriptionTa: res.data.descriptionTa || fallbackSaint.descriptionTa,
         image: res.data.image || fallbackSaint.image,
-        imageSource: res.data.imageSource || (res.data.imageFallback ? 'fallback' : 'catholicreadings'),
+        imageSource: res.data.imageSource || (res.data.imageFallback ? 'fallback' : 'vatican'),
         imageSourceUrl: res.data.imageSourceUrl || res.data.sourceUrl || res.data.link,
         imageFallback: typeof res.data.imageFallback === 'boolean' ? res.data.imageFallback : false,
         feastDay: res.data.feastDay || fallbackSaint.feastDay || `${targetDate.toLocaleDateString('en-US', { month: 'long' })} ${dayNum}`,
-        source: res.data.source || "Catholic Readings / Catholic Liturgical Calendar",
-        sourceUrl: res.data.sourceUrl || "https://catholicreadings.org/catholic-saint-of-the-day/",
-        link: res.data.link || res.data.sourceUrl || "https://catholicreadings.org/catholic-saint-of-the-day/"
+        feastTitle: res.data.feastTitle || null,
+        feastTitleTa: res.data.feastTitleTa || null,
+        feastType: res.data.feastType || null,
+        feastTypeTa: res.data.feastTypeTa || null,
+        hasFeastInfo: Boolean(res.data.hasFeastInfo),
+        source: res.data.source || "Vatican News / Catholic Liturgical Calendar",
+        sourceUrl: res.data.sourceUrl || `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`,
+        link: res.data.link || res.data.sourceUrl || `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`
       };
 
-      saintClientCache.set(dateKey, saintPayload);
+      saintClientCache.set(dateKey, { data: saintPayload, _cachedAt: Date.now() });
       return saintPayload;
     }
   } catch (err) {
@@ -100,12 +105,17 @@ export async function fetchSaintOfTheDay(dateStr) {
     descriptionTa: fallbackSaint.descriptionTa,
     image: fallbackSaint.image,
     imageSource: "liturgical_calendar",
-    imageSourceUrl: fallbackSaint.link || "https://catholicreadings.org/catholic-saint-of-the-day/",
+    imageSourceUrl: fallbackSaint.link || `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`,
     imageFallback: true,
     feastDay: fallbackSaint.feastDay || `${targetDate.toLocaleDateString('en-US', { month: 'long' })} ${dayNum}`,
-    source: "Catholic Readings / Catholic Liturgical Calendar",
-    sourceUrl: "https://catholicreadings.org/catholic-saint-of-the-day/",
-    link: fallbackSaint.link || "https://catholicreadings.org/catholic-saint-of-the-day/"
+    feastTitle: fallbackSaint.feastTitle || null,
+    feastTitleTa: fallbackSaint.feastTitleTa || null,
+    feastType: fallbackSaint.feastType || null,
+    feastTypeTa: fallbackSaint.feastTypeTa || null,
+    hasFeastInfo: Boolean(fallbackSaint.hasFeastInfo),
+    source: "Vatican News / Catholic Liturgical Calendar",
+    sourceUrl: `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`,
+    link: fallbackSaint.link || `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`
   };
 
   saintClientCache.set(dateKey, fallbackPayload);
