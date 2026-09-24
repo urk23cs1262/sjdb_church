@@ -829,14 +829,27 @@ async function loadCachedSaint() {
       if (cacheSetting && cacheSetting.value) {
         const parsed = JSON.parse(cacheSetting.value);
         const isBrokenVirginMary = parsed.image && parsed.image.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato');
-        // Valid cache: matches today's date AND has a valid image
-        if (parsed && parsed.date === todayStr && (parsed.saintName || parsed.name) && parsed.image && !isBrokenVirginMary) {
+        const isStaleCatholicReadings = (parsed.source && parsed.source.includes('Catholic Readings')) ||
+          (parsed.sourceUrl && parsed.sourceUrl.includes('catholicreadings.org')) ||
+          (parsed.link && parsed.link.includes('catholicreadings.org')) ||
+          (parsed.saintName && parsed.saintName.includes('Slomsek Our'));
+        const isGarbageImage = parsed.image && (
+          parsed.image.includes('imimg.com') ||
+          parsed.image.includes('metroprin') ||
+          parsed.image.includes('Superdome') ||
+          parsed.image.includes('stadium')
+        );
+
+        // Valid cache: matches today's date AND has a valid image AND is not from obsolete Catholic Readings source
+        if (parsed && parsed.date === todayStr && (parsed.saintName || parsed.name) && parsed.image && !isBrokenVirginMary && !isStaleCatholicReadings && !isGarbageImage) {
           dailySaint = parsed;
           if (dailySaint.lastSynced) {
             dailySaint.lastSynced = new Date(dailySaint.lastSynced);
           }
           console.log(" Loaded today's daily saint from database cache:", dailySaint.saintName || dailySaint.name);
           return;
+        } else if (isStaleCatholicReadings || isGarbageImage) {
+          console.warn("⚠️ Discarding obsolete/stale Catholic Readings cache from database. Fresh Vatican News fetch will run immediately.");
         }
       }
     }

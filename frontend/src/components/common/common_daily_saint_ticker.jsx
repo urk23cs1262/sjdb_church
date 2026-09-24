@@ -424,7 +424,11 @@ export default function DailySaintTicker() {
                         <div className="pt-4 mt-3 border-t border-gray-100">
                           {saintOfDay.sourceUrl && (
                             <a
-                              href={saintOfDay.sourceUrl}
+                              href={
+                                saintOfDay.sourceUrl && !saintOfDay.sourceUrl.includes('catholicreadings.org')
+                                  ? saintOfDay.sourceUrl
+                                  : 'https://www.vaticannews.va/en/saints.html'
+                              }
                               target="_blank"
                               rel="noreferrer"
                               className="
@@ -453,9 +457,10 @@ export default function DailySaintTicker() {
                               <FiExternalLink className="text-base" />
                               <span>
                                 {(() => {
-                                  const siteName = saintOfDay.source
-                                    ? saintOfDay.source.split('/')[0].trim()
-                                    : 'Vatican News';
+                                  const rawSite = saintOfDay.source || '';
+                                  const siteName = (!rawSite || rawSite.includes('Catholic Readings'))
+                                    ? 'Vatican News'
+                                    : rawSite.split('/')[0].trim();
                                   return isTamil ? `${siteName}-ல் வாசிக்க` : `Read on ${siteName}`;
                                 })()}
                               </span>

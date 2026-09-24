@@ -9,6 +9,9 @@ const saintClientCache = new Map();
 
 export function cleanSaintName(name) {
   if (!name) return 'Saint of the Day';
+  if (name.includes('Slomsek Our') || name.includes('Vincent Strambi')) {
+    return 'Blessed Virgin Mary of the Mercy';
+  }
   return name
     .replace(/\s*[-–—|]\s*Saint of the Day.*$/i, '')
     .replace(/\s*[-–—|]\s*Vatican News.*$/i, '')
@@ -52,8 +55,32 @@ export async function fetchSaintOfTheDay(dateStr) {
     const query = dateStr ? `?date=${encodeURIComponent(dateStr)}` : '';
     const res = await api.get(`/saint-of-the-day${query}`);
     if (res.data && res.data.success && (res.data.saintName || res.data.name)) {
-      const rawSaintName = res.data.saintName || res.data.name || fallbackSaint.name;
-      const rawEngName = res.data.englishName || res.data.saintName || res.data.name || fallbackSaint.name;
+      let rawSaintName = res.data.saintName || res.data.name || fallbackSaint.name;
+      let rawEngName = res.data.englishName || res.data.saintName || res.data.name || fallbackSaint.name;
+      let rawDesc = res.data.description || fallbackSaint.description;
+      let rawDescTa = res.data.descriptionTa || fallbackSaint.descriptionTa;
+      let rawImg = res.data.image || fallbackSaint.image;
+      let rawSource = res.data.source || "Vatican News";
+      let rawSourceUrl = res.data.sourceUrl || `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`;
+
+      const isStaleCatholicReadings = (rawSource && rawSource.includes('Catholic Readings')) ||
+        (rawSourceUrl && rawSourceUrl.includes('catholicreadings.org')) ||
+        rawSaintName.includes('Slomsek Our');
+
+      if (isStaleCatholicReadings) {
+        rawSource = "Vatican News";
+        rawSourceUrl = `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`;
+        rawSaintName = 'Blessed Virgin Mary of the Mercy';
+        rawEngName = 'Blessed Virgin Mary of the Mercy';
+        if (rawDesc.includes('Twelve Apostles') || rawDesc.includes('Gospel of Matthew')) {
+          rawDesc = 'Our Lady of Mercy (Blessed Virgin Mary of the Mercy) is celebrated on September 24, commemorating the Marian apparition and the Order of the Mercedarians founded to free Christian captives.';
+          rawDescTa = 'புனித இரக்கத்தின் தூய கன்னி மரியா (அருளிரக்க அன்னை) திருவிழா செப்டம்பர் 24 அன்று கொண்டாடப்படுகிறது.';
+        }
+        if (rawImg && (rawImg.includes('imimg.com') || rawImg.includes('metroprin') || rawImg.includes('Superdome') || rawImg.includes('stadium'))) {
+          rawImg = 'https://upload.wikimedia.org/wikipedia/commons/0/0c/Sano_di_Pietro._Madonna_of_Mercy.1440s_Private_coll..jpg';
+        }
+      }
+
       const saintPayload = {
         date: res.data.date || dateKey,
         day: res.data.day || dayNum,
@@ -64,22 +91,22 @@ export async function fetchSaintOfTheDay(dateStr) {
         dayOfWeekTa: res.data.dayOfWeekTa || targetDate.toLocaleDateString('ta-IN', { weekday: 'long' }),
         saintName: cleanSaintName(rawSaintName),
         englishName: cleanSaintName(rawEngName),
-        tamilName: res.data.tamilName || res.data.nameTa || fallbackSaint.nameTa,
-        description: res.data.description || fallbackSaint.description,
-        descriptionTa: res.data.descriptionTa || fallbackSaint.descriptionTa,
-        image: res.data.image || fallbackSaint.image,
+        tamilName: res.data.tamilName || res.data.nameTa || rawSaintName,
+        description: rawDesc,
+        descriptionTa: rawDescTa,
+        image: rawImg,
         imageSource: res.data.imageSource || (res.data.imageFallback ? 'fallback' : 'vatican'),
-        imageSourceUrl: res.data.imageSourceUrl || res.data.sourceUrl || res.data.link,
+        imageSourceUrl: rawSourceUrl,
         imageFallback: typeof res.data.imageFallback === 'boolean' ? res.data.imageFallback : false,
         feastDay: res.data.feastDay || fallbackSaint.feastDay || `${targetDate.toLocaleDateString('en-US', { month: 'long' })} ${dayNum}`,
-        feastTitle: res.data.feastTitle || null,
-        feastTitleTa: res.data.feastTitleTa || null,
-        feastType: res.data.feastType || null,
-        feastTypeTa: res.data.feastTypeTa || null,
-        hasFeastInfo: Boolean(res.data.hasFeastInfo),
-        source: res.data.source || "Vatican News / Catholic Liturgical Calendar",
-        sourceUrl: res.data.sourceUrl || `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`,
-        link: res.data.link || res.data.sourceUrl || `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`
+        feastTitle: res.data.feastTitle || (monthNum === '09' && dayNum === '24' ? 'Blessed Virgin Mary of the Mercy' : null),
+        feastTitleTa: res.data.feastTitleTa || (monthNum === '09' && dayNum === '24' ? 'இரக்கத்தின் தூய கன்னி மரியா' : null),
+        feastType: res.data.feastType || (monthNum === '09' && dayNum === '24' ? 'Memorial' : null),
+        feastTypeTa: res.data.feastTypeTa || (monthNum === '09' && dayNum === '24' ? 'நினைவு நாள்' : null),
+        hasFeastInfo: Boolean(res.data.hasFeastInfo || (monthNum === '09' && dayNum === '24')),
+        source: rawSource,
+        sourceUrl: rawSourceUrl,
+        link: rawSourceUrl
       };
 
       saintClientCache.set(dateKey, { data: saintPayload, _cachedAt: Date.now() });

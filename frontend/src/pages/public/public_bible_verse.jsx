@@ -1064,7 +1064,11 @@ export default function BibleVerse() {
                   <div className="pt-4 border-t border-gray-100 flex items-center gap-3 flex-wrap">
                     {saintData?.sourceUrl && (
                       <a
-                        href={saintData.sourceUrl}
+                        href={
+                          saintData.sourceUrl && !saintData.sourceUrl.includes('catholicreadings.org')
+                            ? saintData.sourceUrl
+                            : 'https://www.vaticannews.va/en/saints/09/24.html'
+                        }
                         target="_blank"
                         rel="noreferrer"
                         className="btn-royal text-xs sm:text-sm py-2 px-4 rounded-xl flex items-center gap-1.5 shadow-sm hover:shadow-md"
@@ -1072,9 +1076,10 @@ export default function BibleVerse() {
                         <FiExternalLink />
                         <span>
                           {(() => {
-                            const siteName = saintData?.source
-                              ? saintData.source.split('/')[0].trim()
-                              : 'Vatican News';
+                            const rawSite = saintData?.source || '';
+                            const siteName = (!rawSite || rawSite.includes('Catholic Readings'))
+                              ? 'Vatican News'
+                              : rawSite.split('/')[0].trim();
                             return isTamil ? `${siteName}-ல் வாசிக்க` : `Read on ${siteName}`;
                           })()}
                         </span>

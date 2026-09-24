@@ -23,7 +23,16 @@ const getSaint = async (req, res) => {
 
         if (isToday) {
           saint = getDailySaint();
-          if (!saint || saint.source === 'Catholic Liturgical Calendar' || saint.imageFallback) {
+          const isStale = !saint ||
+            saint.source === 'Catholic Liturgical Calendar' ||
+            saint.source?.includes('Catholic Readings') ||
+            saint.sourceUrl?.includes('catholicreadings.org') ||
+            saint.saintName?.includes('Slomsek Our') ||
+            saint.image?.includes('imimg.com') ||
+            saint.image?.includes('metroprin') ||
+            saint.image?.includes('Superdome') ||
+            saint.imageFallback;
+          if (isStale) {
             saint = await fetchDailySaint();
           }
         } else {
@@ -34,7 +43,16 @@ const getSaint = async (req, res) => {
 
     if (!saint) {
       saint = getDailySaint();
-      if (!saint || saint.source === 'Catholic Liturgical Calendar' || saint.imageFallback) {
+      const isStale = !saint ||
+        saint.source === 'Catholic Liturgical Calendar' ||
+        saint.source?.includes('Catholic Readings') ||
+        saint.sourceUrl?.includes('catholicreadings.org') ||
+        saint.saintName?.includes('Slomsek Our') ||
+        saint.image?.includes('imimg.com') ||
+        saint.image?.includes('metroprin') ||
+        saint.image?.includes('Superdome') ||
+        saint.imageFallback;
+      if (isStale) {
         saint = await fetchDailySaint();
       }
     }
