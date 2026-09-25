@@ -15,6 +15,28 @@ if (!fs.existsSync(CACHE_DIR)) {
   }
 }
 
+// Pre-load Tamil font for embedded SVG rendering (prevents tofu boxes across OS environments)
+let tamilFontBase64 = '';
+try {
+  const fontPaths = [
+    path.join(__dirname, '../../assets/fonts/NotoSansTamil-Bold.ttf'),
+    path.join(__dirname, '../../assets/fonts/TamilBold.ttf'),
+    path.join(__dirname, '../../assets/fonts/NotoSansTamil-Regular.ttf'),
+    path.join(__dirname, '../../assets/fonts/TamilRegular.ttf'),
+    'C:\\Windows\\Fonts\\lathab.ttf',
+    'C:\\Windows\\Fonts\\latha.ttf'
+  ];
+  for (const fp of fontPaths) {
+    if (fs.existsSync(fp)) {
+      tamilFontBase64 = fs.readFileSync(fp).toString('base64');
+      console.log(`[BibleVerseImageService] Embedded Tamil font loaded from ${path.basename(fp)} (${Math.round(tamilFontBase64.length / 1024)} KB base64)`);
+      break;
+    }
+  }
+} catch (e) {
+  console.warn('[BibleVerseImageService] Could not preload Tamil font:', e.message);
+}
+
 function escapeXml(unsafe) {
   if (!unsafe) return '';
   return String(unsafe)
@@ -162,6 +184,16 @@ async function renderBibleVerseCard({ verseEn, verseTa, ref, dateKey, dateStr, c
   const svg = `
   <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" text-rendering="geometricPrecision" shape-rendering="geometricPrecision">
     <defs>
+      ${tamilFontBase64 ? `
+      <style type="text/css">
+        @font-face {
+          font-family: 'SJDBTamil';
+          src: url(data:font/truetype;charset=utf-8;base64,${tamilFontBase64}) format('truetype');
+          font-weight: normal;
+          font-style: normal;
+        }
+      </style>
+      ` : ''}
       <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stop-color="#051329" />
         <stop offset="50%" stop-color="#0b1f48" />
@@ -223,7 +255,7 @@ async function renderBibleVerseCard({ verseEn, verseTa, ref, dateKey, dateStr, c
     </g>
 
     <!-- Church Header -->
-    <text x="600" y="132" font-family="'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', 'Mukta Malar', 'Arial Unicode MS', sans-serif" font-size="30" font-weight="bold" fill="url(#goldGrad)" text-anchor="middle" letter-spacing="1">
+    <text x="600" y="132" font-family="'SJDBTamil', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', 'Mukta Malar', 'Arial Unicode MS', sans-serif" font-size="30" font-weight="bold" fill="url(#goldGrad)" text-anchor="middle" letter-spacing="1">
       ${escapeXml(churchTitleTa)}
     </text>
     <text x="600" y="164" font-family="'Cinzel', 'Trajan Pro', 'Georgia', serif" font-size="17" font-weight="600" fill="#cbd5e1" text-anchor="middle" letter-spacing="3.5">
@@ -242,12 +274,12 @@ async function renderBibleVerseCard({ verseEn, verseTa, ref, dateKey, dateStr, c
     <rect x="75" y="${cardTop}" width="${width - 150}" height="${cardHeight}" rx="20" fill="#ffffff" fill-opacity="0.04" stroke="#ffffff" stroke-opacity="0.1" stroke-width="1.2" filter="url(#shadow)"/>
 
     <!-- 1. Tamil Bible Verse -->
-    <text x="600" y="${taStartY}" font-family="'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', 'Mukta Malar', 'Arial Unicode MS', sans-serif" font-size="${taFontSize}" font-weight="bold" fill="#ffffff" text-anchor="middle">
+    <text x="600" y="${taStartY}" font-family="'SJDBTamil', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', 'Mukta Malar', 'Arial Unicode MS', sans-serif" font-size="${taFontSize}" font-weight="bold" fill="#ffffff" text-anchor="middle">
       ${taTspans}
     </text>
 
     <!-- Tamil Chapter / Verse Reference (Under Tamil Bible Verses) -->
-    <text x="600" y="${taRefY}" font-family="'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', sans-serif" font-size="22" font-weight="bold" fill="url(#goldGrad)" text-anchor="middle" letter-spacing="1">
+    <text x="600" y="${taRefY}" font-family="'SJDBTamil', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', sans-serif" font-size="22" font-weight="bold" fill="url(#goldGrad)" text-anchor="middle" letter-spacing="1">
       — ${escapeXml(refTa)} —
     </text>
 
