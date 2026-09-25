@@ -68,22 +68,34 @@ async function validateUrl(url) {
 function extractLiturgicalReadings(massReadingsLangObj) {
   const readings = massReadingsLangObj?.readings || [];
   let firstReading = '';
+  let firstRef = '';
   let secondReading = '';
+  let secondRef = '';
   let psalm = '';
+  let psalmRef = '';
   let gospel = '';
+  let gospelRef = '';
 
   readings.forEach((r) => {
     const heading = (r.type || '').toLowerCase();
     const content = (r.text || '').trim();
+    const ref = (r.reference || '').trim();
 
     if (heading.includes('முதல்') || heading.includes('first')) {
       firstReading = content;
+      firstRef = ref;
     } else if (heading.includes('இரண்டாம்') || heading.includes('second')) {
       secondReading = content;
+      secondRef = ref;
     } else if (heading.includes('பாடல்') || heading.includes('psalm') || heading.includes('பதிலுரை')) {
       psalm = content;
+      psalmRef = ref;
     } else if (heading.includes('நற்செய்தி') || heading.includes('gospel')) {
-      gospel = content;
+      // Avoid acclamations (e.g. 'Gospel Acclamation', 'நற்செய்திக்கு முன் வாழ்த்தொலி')
+      if (!heading.includes('முன்') && !heading.includes('acclamation')) {
+        gospel = content;
+        gospelRef = ref;
+      }
     }
   });
 
@@ -92,7 +104,21 @@ function extractLiturgicalReadings(massReadingsLangObj) {
     firstReading = massReadingsLangObj.fullText;
   }
 
-  return { firstReading, secondReading, psalm, gospel };
+  // Prepend reference cleanly if available and not already in reading text
+  if (firstRef && !firstReading.includes(firstRef)) {
+    firstReading = `_${firstRef}_\n\n${firstReading}`;
+  }
+  if (secondRef && !secondReading.includes(secondRef)) {
+    secondReading = `_${secondRef}_\n\n${secondReading}`;
+  }
+  if (psalmRef && !psalm.includes(psalmRef)) {
+    psalm = `_${psalmRef}_\n\n${psalm}`;
+  }
+  if (gospelRef && !gospel.includes(gospelRef)) {
+    gospel = `_${gospelRef}_\n\n${gospel}`;
+  }
+
+  return { firstReading, firstRef, secondReading, secondRef, psalm, psalmRef, gospel, gospelRef };
 }
 
 /**
@@ -103,6 +129,366 @@ function createExcerpt(text, maxLength = 300) {
   const clean = text.trim();
   if (clean.length <= maxLength) return clean;
   return clean.slice(0, maxLength).trim() + '...';
+}
+
+/**
+ * CAPTION FOR DAILY BIBLE VERSE IMAGE (Displays directly under the image in WhatsApp)
+ *
+ * Example:
+ * 📖 இன்றைய இறைவார்த்தை / DAILY BIBLE VERSE
+ *
+ * "But in your hearts revere Christ as Lord. Always be prepared to give an answer to everyone who asks you to give the reason for the hope that you have."
+ *
+ * "நீங்கள் உங்கள் இருதயங்களில் கர்த்தராகிய கிறிஸ்துவைப் பரிசுத்தப்படுத்தி, உங்களில் இருக்கும் நம்பிக்கையைக்குறித்துக் காரணம் கேட்கிற எவருக்கும், சாந்தத்தோடும் வணக்கத்தோடும் உத்தரவு கொடுக்க எப்பொழுதும் ஆயத்தமாயிருங்கள்."
+ * — 1 Peter 3:15
+ */
+function generateDailyVerseCaption({ dailyContent }) {
+  const verseEn = (dailyContent?.bible?.english || dailyContent?.verse?.english || '').trim();
+  const verseTa = (dailyContent?.bible?.tamil || dailyContent?.verse?.tamil || '').trim();
+  const rawRef = (dailyContent?.bible?.ref || dailyContent?.verse?.reference || '').trim();
+
+  const { getTamilBibleReference, getEnglishBibleReference } = require('../utils/bibleRefHelper');
+  const refEn = getEnglishBibleReference(rawRef);
+  const refTa = getTamilBibleReference(rawRef);
+
+  let caption = `📖 *இன்றைய இறைவார்த்தை / DAILY BIBLE VERSE*\n\n`;
+  if (verseEn) {
+    caption += `"${verseEn}"\n`;
+    if (refEn) caption += `— *${refEn}*\n\n`;
+    else caption += `\n`;
+  }
+  if (verseTa) {
+    caption += `"${verseTa}"\n`;
+    if (refTa) caption += `— *${refTa}*`;
+  }
+  return removeAllUrls(caption.trim());
+}
+
+/**
+ * MESSAGE 1 — DAILY BIBLE VERSE (Sent as its own separate WhatsApp message or fallback)
+ *
+ * Guaranteed to contain 0 URLs. Contains both English and Tamil verses with scripture reference under each language.
+ */
+function generateDailyVerseMessage({ dailyContent, language = 'ta' }) {
+  const verseEn = (dailyContent?.bible?.english || dailyContent?.verse?.english || '').trim();
+  const verseTa = (dailyContent?.bible?.tamil || dailyContent?.verse?.tamil || '').trim();
+  const rawRef = (dailyContent?.bible?.ref || dailyContent?.verse?.reference || '').trim();
+
+  const { getTamilBibleReference, getEnglishBibleReference } = require('../utils/bibleRefHelper');
+  const refEn = getEnglishBibleReference(rawRef);
+  const refTa = getTamilBibleReference(rawRef);
+
+  const msg = `⛪ *St. John de Britto Church, Kalayarkoil*
+_புனித ஜான் டி பிரிட்டோ திருத்தலம்_
+
+📖 *இன்றைய இறைவார்த்தை / DAILY BIBLE VERSE*
+
+"${verseEn}"
+— *${refEn}*
+
+"${verseTa}"
+— *${refTa}*`;
+
+  return removeAllUrls(msg.trim());
+}
+
+/**
+ * MESSAGE 2 — DAILY MASS READINGS (Sent as its own separate WhatsApp message)
+ *
+ * Contains:
+ * - Header with Date
+ * - First Reading
+ * - Responsorial Psalm
+ * - Second Reading (if applicable)
+ * - Gospel
+ * - All required references
+ * Complete readings without unnecessary truncation. Guaranteed 0 URLs.
+ */
+function generateDailyMassReadingsMessage({ dailyContent, language = 'ta', readingPreference = 'full' }) {
+  const rawLang = String(language || 'ta').toLowerCase();
+  let lang = 'ta';
+  if (rawLang === 'en' || rawLang.startsWith('en')) lang = 'en';
+  else if (rawLang === 'ml' || rawLang.startsWith('ml')) lang = 'ml';
+  else if (rawLang === 'both' || (rawLang.includes('ta') && rawLang.includes('en'))) lang = 'both';
+
+  const isShort = String(readingPreference || 'full').toLowerCase() === 'short';
+
+  const dateEn = dailyContent.formattedDate || new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' });
+  const dateTa = dailyContent.formattedDateTa || dateEn;
+
+  const enReadings = extractLiturgicalReadings(dailyContent.massReadings?.english);
+  const taReadings = extractLiturgicalReadings(dailyContent.massReadings?.tamil);
+
+  let msg = '';
+
+  if (lang === 'en') {
+    const firstR = isShort ? createExcerpt(enReadings.firstReading, 350) : (enReadings.firstReading || 'First reading is not available today.');
+    const psalmR = isShort ? createExcerpt(enReadings.psalm, 250) : (enReadings.psalm || 'Responsorial Psalm is not available today.');
+    const secondR = enReadings.secondReading ? (isShort ? createExcerpt(enReadings.secondReading, 300) : enReadings.secondReading) : '';
+    const gospelR = isShort ? createExcerpt(enReadings.gospel, 400) : (enReadings.gospel || 'Gospel reading is not available today.');
+
+    msg = `✝️ *Today's Catholic Mass Readings*
+📅 ${dateEn}
+
+📖 *First Reading*
+${firstR}
+
+📖 *Responsorial Psalm*
+${psalmR}
+${secondR ? `\n📖 *Second Reading*\n${secondR}\n` : ''}
+✝️ *Gospel*
+${gospelR}`;
+
+  } else if (lang === 'both') {
+    const firstEn = isShort ? createExcerpt(enReadings.firstReading, 300) : enReadings.firstReading;
+    const firstTa = isShort ? createExcerpt(taReadings.firstReading, 300) : taReadings.firstReading;
+
+    const psalmEn = isShort ? createExcerpt(enReadings.psalm, 200) : enReadings.psalm;
+    const psalmTa = isShort ? createExcerpt(taReadings.psalm, 200) : taReadings.psalm;
+
+    const secondEn = enReadings.secondReading ? (isShort ? createExcerpt(enReadings.secondReading, 250) : enReadings.secondReading) : '';
+    const secondTa = taReadings.secondReading ? (isShort ? createExcerpt(taReadings.secondReading, 250) : taReadings.secondReading) : '';
+
+    const gospelEn = isShort ? createExcerpt(enReadings.gospel, 350) : enReadings.gospel;
+    const gospelTa = isShort ? createExcerpt(taReadings.gospel, 350) : taReadings.gospel;
+
+    msg = `✝️ *Today's Catholic Mass Readings / திருப்பலி வாசகங்கள்*
+📅 ${dateEn} / ${dateTa}
+
+📖 *First Reading / முதல் வாசகம்*
+${firstEn || ''}
+${firstTa && firstTa !== firstEn ? `\n${firstTa}` : ''}
+
+📖 *Responsorial Psalm / பதிலுரைப் பாடல்*
+${psalmEn || ''}
+${psalmTa && psalmTa !== psalmEn ? `\n${psalmTa}` : ''}
+${(secondEn || secondTa) ? `\n📖 *Second Reading / இரண்டாம் வாசகம்*\n${secondEn || ''}\n${secondTa && secondTa !== secondEn ? `\n${secondTa}` : ''}\n` : ''}
+✝️ *Gospel / நற்செய்தி வாசகம்*
+${gospelEn || ''}
+${gospelTa && gospelTa !== gospelEn ? `\n${gospelTa}` : ''}`;
+
+  } else {
+    // Tamil (default)
+    let firstR = isShort ? createExcerpt(taReadings.firstReading, 350) : taReadings.firstReading;
+    let psalmR = isShort ? createExcerpt(taReadings.psalm, 250) : taReadings.psalm;
+    let secondR = taReadings.secondReading ? (isShort ? createExcerpt(taReadings.secondReading, 300) : taReadings.secondReading) : '';
+    let gospelR = isShort ? createExcerpt(taReadings.gospel, 400) : taReadings.gospel;
+
+    // Fallbacks if Tamil readings not available
+    if (!firstR && enReadings.firstReading) firstR = enReadings.firstReading;
+    if (!psalmR && enReadings.psalm) psalmR = enReadings.psalm;
+    if (!secondR && enReadings.secondReading) secondR = enReadings.secondReading;
+    if (!gospelR && enReadings.gospel) gospelR = enReadings.gospel;
+
+    msg = `✝️ *இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள்*
+📅 ${dateTa}
+
+📖 *முதல் வாசகம்*
+${firstR || 'இன்றைய வாசகம் கிடைக்கவில்லை.'}
+
+📖 *பதிலுரைப் பாடல்*
+${psalmR || 'இன்றைய திருப்பாடல் கிடைக்கவில்லை.'}
+${secondR ? `\n📖 *இரண்டாம் வாசகம்*\n${secondR}\n` : ''}
+✝️ *நற்செய்தி வாசகம்*
+${gospelR || 'இன்றைய நற்செய்தி வாசகம் கிடைக்கவில்லை.'}`;
+  }
+
+  return removeAllUrls(msg.trim());
+}
+
+/**
+ * MESSAGE 3 — DAILY REFLECTION (Sent as its own separate WhatsApp text message)
+ *
+ * Contains:
+ * - Title: இன்றைய தியானம் (DAILY REFLECTION) or language-appropriate title
+ * - Complete reflection content fetched from dailyContent.reflection
+ * - Relevant Bible references and prayer/closing content if included
+ * - Formatted according to user's selected language: English, Tamil, or Both
+ *
+ * Guaranteed 0 URLs. Delivered strictly after Daily Mass Readings and before Saint of the Day image.
+ */
+function generateDailyReflectionMessage({ dailyContent, language = 'ta' }) {
+  const rawLang = String(language || 'ta').toLowerCase();
+  let lang = 'ta';
+  if (rawLang === 'en' || rawLang.startsWith('en')) lang = 'en';
+  else if (rawLang === 'ml' || rawLang.startsWith('ml')) lang = 'ml';
+  else if (rawLang === 'both' || (rawLang.includes('ta') && rawLang.includes('en'))) lang = 'both';
+
+  const reflTa = (dailyContent?.reflection?.tamil || '').trim();
+  const reflEn = (dailyContent?.reflection?.english || '').trim();
+
+  let msg = '';
+
+  if (lang === 'en') {
+    const text = reflEn || reflTa || 'The Word of God is a lamp to our feet and a light to our path. May God bless and guide you today.';
+    msg = `🕊️ *Daily Reflection (இன்றைய தியானம்)*
+
+${text}
+
+— *St. John de Britto Church, Kalayarkoil*
+_SJDB Connect_`;
+  } else if (lang === 'both') {
+    const textTa = reflTa || reflEn || 'இறைவனின் வார்த்தை நம் வாழ்வின் வழிகாட்டி. இன்றைய நாளில் இறைவனின் அன்பிலும் இரக்கத்திலும் திளைப்போம்.';
+    const textEn = reflEn && reflEn !== reflTa ? `\n\n*English Reflection:*\n${reflEn}` : '';
+    msg = `🕊️ *இன்றைய தியானம் (DAILY REFLECTION)*
+
+${textTa}${textEn}
+
+— *புனித அருளானந்தர் ஆலயம் (St. John de Britto Church), காளையார்கோவில்*
+_SJDB Connect_`;
+  } else {
+    // Tamil (default)
+    const text = reflTa || reflEn || 'இறைவனின் வார்த்தை நம் வாழ்வின் வழிகாட்டி. இன்றைய நாளில் இறைவனின் அன்பிலும் இரக்கத்திலும் திளைப்போம்.';
+    msg = `🕊️ *இன்றைய தியானம் (DAILY REFLECTION)*
+
+${text}
+
+— *புனித அருளானந்தர் ஆலயம் (St. John de Britto Church), காளையார்கோவில்*
+_SJDB Connect_`;
+  }
+
+  return removeAllUrls(msg.trim());
+}
+
+/**
+ * MESSAGE 4 — SAINT IMAGE PAYLOAD
+ *
+ * Prepares image buffer or URL for Baileys sendWhatsAppMedia.
+ * Caption is kept clean and minimal without combining the entire bio.
+ */
+function getDailySaintImagePayload({ dailyContent }) {
+  const saintImageUrl = dailyContent?.saintImage || 
+                        dailyContent?.saint?.image || 
+                        dailyContent?.saintOfTheDay?.english?.imageUrl ||
+                        null;
+  const saintImageBuffer = dailyContent?.saint?.imageAttachment?.content || null;
+
+  if (!saintImageBuffer && !saintImageUrl) {
+    return null;
+  }
+
+  if (saintImageBuffer) {
+    return {
+      buffer: saintImageBuffer,
+      mimetype: 'image/jpeg',
+      caption: ''
+    };
+  }
+
+  return {
+    url: saintImageUrl,
+    mimetype: 'image/jpeg',
+    caption: ''
+  };
+}
+
+/**
+ * MESSAGE 4 — SAINT OF THE DAY CONTENT (Sent as its own separate WhatsApp text message)
+ *
+ * Contains:
+ * - Saint's name
+ * - Saint's title / feast information if available
+ * - Feast day information
+ * - Biography / description in selected language
+ * - Church footer
+ *
+ * Guaranteed 0 URLs. No Read More link.
+ */
+function generateSaintContentMessage({ dailyContent, language = 'ta' }) {
+  const rawLang = String(language || 'ta').toLowerCase();
+  let lang = 'ta';
+  if (rawLang === 'en' || rawLang.startsWith('en')) lang = 'en';
+  else if (rawLang === 'ml' || rawLang.startsWith('ml')) lang = 'ml';
+  else if (rawLang === 'both' || (rawLang.includes('ta') && rawLang.includes('en'))) lang = 'both';
+
+  const saintNameEn = dailyContent?.saint?.nameEnglish || dailyContent?.saintOfTheDay?.english?.name || dailyContent?.saintName || 'Saint of the Day';
+  const saintNameTa = dailyContent?.saint?.nameTamil || dailyContent?.saintOfTheDay?.tamil?.name || dailyContent?.saintNameTa || saintNameEn;
+  const feastDay = dailyContent?.saint?.feastDay || dailyContent?.saintOfTheDay?.english?.feastDay || dailyContent?.formattedDate || '';
+  const descEn = (dailyContent?.saint?.description || dailyContent?.saintOfTheDay?.english?.description || dailyContent?.saintDescription || '').trim();
+  const descTa = (dailyContent?.saint?.descriptionTamil || dailyContent?.saintOfTheDay?.tamil?.description || descEn).trim();
+
+  const feastTitleEn = dailyContent?.saint?.feastTitle;
+  const feastTitleTa = dailyContent?.saint?.feastTitleTa || feastTitleEn;
+  const feastTypeEn = dailyContent?.saint?.feastType || 'Feast';
+  const feastTypeTa = dailyContent?.saint?.feastTypeTa || 'திருவிழா';
+
+  let msg = '';
+
+  if (lang === 'en') {
+    msg = `✨ *Saint of the Day*
+
+👑 *${saintNameEn}*
+
+`;
+    if (feastDay) {
+      msg += `📅 *Feast Day:* ${feastDay}\n\n`;
+    }
+    if (feastTitleEn) {
+      msg += `🎉 *${feastTypeEn}:* ${feastTitleEn}\n\n`;
+    }
+    if (descEn) {
+      msg += `${descEn}\n\n`;
+    }
+    msg += `— *St. John de Britto Church, Kalayarkoil*\n_SJDB Connect_`;
+
+  } else if (lang === 'both') {
+    msg = `✨ *Saint of the Day / இன்றைய புனிதர்*
+
+👑 *${saintNameEn}* ${saintNameTa && saintNameTa !== saintNameEn ? `/ *${saintNameTa}*` : ''}
+
+`;
+    if (feastDay) {
+      msg += `📅 *Feast Day / திருவிழா:* ${feastDay}\n\n`;
+    }
+    if (feastTitleEn) {
+      msg += `🎉 *${feastTypeEn} / ${feastTypeTa}:* ${feastTitleEn}${feastTitleTa && feastTitleTa !== feastTitleEn ? ` (${feastTitleTa})` : ''}\n\n`;
+    }
+    if (descEn) {
+      msg += `${descEn}\n\n`;
+    }
+    if (descTa && descTa !== descEn) {
+      msg += `*தமிழ் குறிப்பு:*\n${descTa}\n\n`;
+    }
+    msg += `— *St. John de Britto Church, Kalayarkoil*\n_புனித ஜான் டி பிரிட்டோ திருத்தலம்_`;
+
+  } else {
+    // Tamil (default)
+    const name = saintNameTa || saintNameEn;
+    const desc = descTa || descEn;
+
+    msg = `✨ *இன்றைய புனிதர் (Saint of the Day)*
+
+👑 *${name}*
+
+`;
+    if (feastDay) {
+      msg += `📅 *திருவிழா / நாள்:* ${feastDay}\n\n`;
+    }
+    if (feastTitleTa || feastTitleEn) {
+      msg += `🎉 *${feastTypeTa}:* ${feastTitleTa || feastTitleEn}\n\n`;
+    }
+    if (desc) {
+      msg += `${desc}\n\n`;
+    }
+    msg += `— *புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்*\n_SJDB Connect_`;
+  }
+
+  return removeAllUrls(msg.trim());
+}
+
+/**
+ * MESSAGE 5 — READ MORE LINK (Sent as final separate message)
+ *
+ * Dedicated Read More message with website URL to produce WhatsApp link preview.
+ */
+function generateReadMoreMessage({ dailyContent, language = 'ta' }) {
+  const churchUrl = getBaseClientUrl();
+  const rawLang = String(language || 'ta').toLowerCase();
+
+  if (rawLang === 'en' || rawLang.startsWith('en')) {
+    return `🌐 *Read More*\n${churchUrl}`;
+  }
+  return `🌐 *மேலும் வாசிக்க (Read More)*\n${churchUrl}`;
 }
 
 /**
@@ -557,6 +943,13 @@ _SJDB Connect_`;
 }
 
 module.exports = {
+  generateDailyVerseCaption,
+  generateDailyVerseMessage,
+  generateDailyMassReadingsMessage,
+  generateDailyReflectionMessage,
+  getDailySaintImagePayload,
+  generateSaintContentMessage,
+  generateReadMoreMessage,
   generateDailyCatholicMessage,
   generateSaintCaption,
   generateSaintInfoMessage,
@@ -564,3 +957,4 @@ module.exports = {
   validateUrl,
   removeAllUrls
 };
+

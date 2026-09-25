@@ -278,6 +278,7 @@ async function getTodayDailyContent(targetDate = new Date()) {
       tamil: verseData.verseTa || verseData.verseTextTa || verseData.tamil || '',
       english: verseData.verseEn || verseData.verseTextEn || verseData.english || '',
       ref: verseData.ref || verseData.verseRef || verseData.reference || '',
+      category: verseData.category || 'Word of God',
       imageUrl: bibleImageUrl,
       imageAttachment: bibleImgBuffer ? {
         filename: 'daily-bible.jpg',

@@ -122,12 +122,24 @@ async function runTests() {
     const run1 = await sendDailyChurchNotifications({ force: false });
     assert(run1.success === true, 'First broadcast execution succeeded');
     const userDeliveriesRun1 = outboundMessages.filter(m => m.recipient.includes(testPhone10));
-    assert(userDeliveriesRun1.length >= 1 && userDeliveriesRun1.length <= 3, `Single pass delivery to user (got ${userDeliveriesRun1.length} messages, expected 1-3 messages, NOT duplicated)`);
+    const userMediaRun1 = outboundMedia.filter(m => m.recipient.includes(testPhone10));
+
+    assert(userDeliveriesRun1.length === 4, `4 separate text messages sent to user (got ${userDeliveriesRun1.length})`);
+    assert(userMediaRun1.length === 2, `2 separate media messages sent to user (Verse Image & Saint Image) (got ${userMediaRun1.length})`);
+
+    // Verify exact content of each separated message in strict order
+    assert(userMediaRun1[0].media && (userMediaRun1[0].media.buffer || userMediaRun1[0].media.url), 'Stage 1 is Daily Bible Verse Image');
+    assert(userDeliveriesRun1[0].text.includes('Mass Readings') || userDeliveriesRun1[0].text.includes('திருப்பலி வாசகங்கள்'), 'Stage 2 is Daily Mass Readings');
+    assert(userDeliveriesRun1[1].text.includes('DAILY REFLECTION') || userDeliveriesRun1[1].text.includes('இன்றைய தியானம்'), 'Stage 3 is Daily Reflection');
+    assert(userMediaRun1[1].media, 'Stage 4 is Saint of the Day Image');
+    assert(userDeliveriesRun1[2].text.includes('Saint of the Day') || userDeliveriesRun1[2].text.includes('இன்றைய புனிதர்'), 'Stage 5 is Saint of the Day Content');
+    assert(userDeliveriesRun1[3].text.includes('Read More') || userDeliveriesRun1[3].text.includes('மேலும் வாசிக்க'), 'Stage 6 is Read More Link');
 
     // Verify DB delivery log
     const log1 = await DailyNotificationLog.find({ dateKey: todayIst, recipientPhone10: testPhone10 });
     assert(log1.length === 1, `Exactly 1 DailyNotificationLog created for phone10 (found ${log1.length})`);
     assert(log1[0].status === 'sent', `Log status is 'sent'`);
+    assert(log1[0].channels?.whatsapp?.messagesSent?.length >= 4, `Delivery log records all stages: ${log1[0].channels?.whatsapp?.messagesSent?.join(', ')}`);
 
     // Second broadcast run (should skip duplicate)
     const run2 = await sendDailyChurchNotifications({ force: false });
@@ -195,25 +207,42 @@ async function runTests() {
     // ── SCENARIO 5: Explicit User Requests & No Unnecessary Chaining ────────────
     console.log('\n--- Scenario 5: Explicit User Requests & No Unnecessary Chaining ---');
     outboundMessages.length = 0;
+    outboundMedia.length = 0;
 
-    // Explicit request for today's Bible verse
-    await handleIncomingMessage(testPhone, 'verse', null, 'Test Parishioner', `MSG_VERSE_1_${Date.now()}`);
-    const verseReply1 = outboundMessages[outboundMessages.length - 1]?.text || '';
-    assert(verseReply1.includes('இறைவார்த்தை') || verseReply1.includes('Bible Verse'), 'Responded to explicit Bible verse request');
-    assert(!verseReply1.includes('முதல் வாசகம்') && !verseReply1.includes('First Reading'), 'Did NOT chain Mass readings to Bible verse request');
-    assert(!verseReply1.includes('புனிதர் வரலாறு') && !verseReply1.includes('Saint of the Day'), 'Did NOT chain Saint to Bible verse request');
+    // Explicit request for today's Bible verse (image only)
+    await handleIncomingMessage(testPhone, "Today's Bible Verse", null, 'Test Parishioner', `MSG_VERSE_1_${Date.now()}`);
+    assert(outboundMedia.length === 1, 'Responded to explicit Bible verse request with 1 image');
+    assert(outboundMessages.length === 0, 'Did not send text messages when verse image was requested');
 
     // User explicitly requests the verse AGAIN
-    const countBeforeSecondVerse = outboundMessages.length;
+    const countBeforeSecondVerse = outboundMedia.length;
     await handleIncomingMessage(testPhone, "Send today's Bible verse again", null, 'Test Parishioner', `MSG_VERSE_2_${Date.now()}`);
-    const countAfterSecondVerse = outboundMessages.length;
+    const countAfterSecondVerse = outboundMedia.length;
     assert(countAfterSecondVerse > countBeforeSecondVerse, 'Permitted repeated Bible verse because it was explicitly requested again');
 
-    // Explicit request for Mass readings
+    // Explicit request for Mass readings (text only)
     outboundMessages.length = 0;
-    await handleIncomingMessage(testPhone, 'readings', null, 'Test Parishioner', `MSG_READ_1_${Date.now()}`);
+    outboundMedia.length = 0;
+    await handleIncomingMessage(testPhone, "Today's Mass Readings", null, 'Test Parishioner', `MSG_READ_1_${Date.now()}`);
     const readingsReply = outboundMessages[outboundMessages.length - 1]?.text || '';
     assert(readingsReply.includes('வாசகங்கள்') || readingsReply.includes('Mass Readings'), 'Responded specifically to Mass readings request without unnecessary chaining');
+    assert(outboundMedia.length === 0, 'Did NOT send media for Mass readings');
+
+    // Explicit request for Daily Reflection (text only)
+    outboundMessages.length = 0;
+    outboundMedia.length = 0;
+    await handleIncomingMessage(testPhone, "Daily Reflection", null, 'Test Parishioner', `MSG_REFL_1_${Date.now()}`);
+    const reflReply = outboundMessages[outboundMessages.length - 1]?.text || '';
+    assert(reflReply.includes('DAILY REFLECTION') || reflReply.includes('இன்றைய தியானம்'), 'Responded specifically to Daily Reflection request');
+    assert(!reflReply.includes('First Reading') && !reflReply.includes('முதல் வாசகம்'), 'Did NOT chain Mass readings to reflection');
+    assert(outboundMedia.length === 0, 'Did NOT send media for Daily Reflection');
+
+    // Explicit request for Saint of the Day (Image + Content)
+    outboundMessages.length = 0;
+    outboundMedia.length = 0;
+    await handleIncomingMessage(testPhone, "Saint of the Day", null, 'Test Parishioner', `MSG_SAINT_1_${Date.now()}`);
+    assert(outboundMedia.length === 1, 'Sent Saint Image for Saint request');
+    assert(outboundMessages.length === 1 && (outboundMessages[0].text.includes('Saint') || outboundMessages[0].text.includes('புனிதர்')), 'Sent Saint Content for Saint request');
 
     // ── SCENARIO 6: Invalid Input Streak Policy ────────────────────────────────
     console.log('\n--- Scenario 6: Invalid Input Streak Policy ---');

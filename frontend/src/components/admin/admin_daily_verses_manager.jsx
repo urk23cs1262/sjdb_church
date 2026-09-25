@@ -511,7 +511,12 @@ export default function DailyVersesManager() {
                 </blockquote>
 
                 {todayVerse.tamil && (
-                  <p className="text-gray-600 font-tamil text-sm mb-4 px-4">{todayVerse.tamil}</p>
+                  <div className="mb-4 px-4">
+                    <p className="text-gray-600 font-tamil text-sm">{todayVerse.tamil}</p>
+                    {(todayVerse.refTa || todayVerse.referenceTa) && (
+                      <p className="text-amber-800 font-tamil text-xs font-bold mt-1">— {todayVerse.refTa || todayVerse.referenceTa}</p>
+                    )}
+                  </div>
                 )}
 
                 <div className="pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500 font-bold px-2">

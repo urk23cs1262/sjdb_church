@@ -3,13 +3,15 @@ const mongoose = require('mongoose');
 const channelStatusSchema = new mongoose.Schema({
   status: {
     type: String,
-    enum: ['sent', 'failed', 'disabled', 'skipped', 'pending'],
+    enum: ['sent', 'partially_sent', 'failed', 'disabled', 'skipped', 'pending'],
     default: 'pending'
   },
   messageId: { type: String, default: null },
   notificationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Notification', default: null },
   phone: { type: String, default: null },
   error: { type: String, default: null },
+  messagesSent: { type: [String], default: [] },
+  stepsCompleted: { type: Number, default: 0 },
   sentAt: { type: Date, default: null }
 }, { _id: false });
 

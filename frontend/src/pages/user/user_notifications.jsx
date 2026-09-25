@@ -205,7 +205,17 @@ function NotifCard({ notif, onMarkRead, onDelete, onTogglePin, onAction, isHighl
           </div>
         </div>
 
-        <p className="text-gray-500 text-xs mt-1 leading-relaxed line-clamp-2">{notif.message}</p>
+        {notif.fileUrl && (
+          <div className="mt-2.5 max-w-sm rounded-xl overflow-hidden border border-gray-200 shadow-xs">
+            <img
+              src={notif.fileUrl.startsWith('http') ? notif.fileUrl : `${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000'}${notif.fileUrl}`}
+              alt="Daily Spiritual Card"
+              className="w-full h-auto object-cover max-h-64"
+            />
+          </div>
+        )}
+
+        <p className="text-gray-600 text-xs mt-2 leading-relaxed whitespace-pre-line">{notif.message}</p>
 
         <div className="flex items-center justify-between gap-3 mt-3 pt-2 border-t border-gray-100 flex-wrap">
           <div className="flex items-center gap-2">

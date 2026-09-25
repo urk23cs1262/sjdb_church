@@ -49,6 +49,10 @@ self.addEventListener('push', (event) => {
     }
   };
 
+  if (data.image) {
+    options.image = data.image;
+  }
+
   event.waitUntil(
     self.registration.showNotification(data.title || "St. John de Britto Church", options)
   );

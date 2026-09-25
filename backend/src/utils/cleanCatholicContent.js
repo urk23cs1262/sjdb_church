@@ -44,6 +44,8 @@ function cleanCatholicContent(text) {
   cleaned = cleaned.replace(/\biOS\b/gi, '');
   cleaned = cleaned.replace(/^New:\s*$/gim, '');
   cleaned = cleaned.replace(/Install Now[^\n]*/gi, '');
+  cleaned = cleaned.replace(/English Mass Readings[^\n]*/gi, '');
+  cleaned = cleaned.replace(/Tamil Mass Readings[^\n]*/gi, '');
 
   // 6. Clean line by line: discard any line with CSS syntax or garbage
   return cleaned

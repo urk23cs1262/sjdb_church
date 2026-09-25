@@ -7,7 +7,19 @@ const { sendMail } = require('../config/mailer');
 const { getTodayDailyContent } = require('./dailyContentService');
 const { generateDailyNotificationHtml } = require('../templates/dailyNotificationEmail');
 const { sendPushBroadcast, sendPushToUser } = require('./webPushService');
-const { generateDailyCatholicMessage, generateDailyLinksMessage, generateSaintInfoMessage } = require('./whatsappDailyFormatter');
+const {
+  generateDailyVerseCaption,
+  generateDailyVerseMessage,
+  generateDailyMassReadingsMessage,
+  generateDailyReflectionMessage,
+  getDailySaintImagePayload,
+  generateSaintContentMessage,
+  generateReadMoreMessage,
+  generateDailyCatholicMessage,
+  generateDailyLinksMessage,
+  generateSaintInfoMessage
+} = require('./whatsappDailyFormatter');
+const { getDailyVerseImage } = require('./bibleVerseImageService');
 const { SITE_ROUTES, EXTERNAL_LINKS, getSiteUrl, getBaseClientUrl } = require('../config/siteRoutes');
 
 // Lazy-load WhatsApp bot to avoid startup race conditions
@@ -45,6 +57,7 @@ function resolveUserLanguage(user) {
 
 /**
  * Format In-App notification text based on user language preference
+ * Contains bilingual Bible verse (English & Tamil) under heading, followed by liturgy highlights
  */
 function formatInAppMessage(dailyContent, userLang = 'ta') {
   const lang = userLang || 'ta';
@@ -53,7 +66,23 @@ function formatInAppMessage(dailyContent, userLang = 'ta') {
   const reflectionSnippet = isEn ? dailyContent.reflection?.english : dailyContent.reflection?.tamil;
   const saintName = isEn ? dailyContent.saint?.nameEnglish : (dailyContent.saint?.nameTamil || dailyContent.saint?.nameEnglish);
 
-  return `${isEn ? 'Daily Verse' : 'இன்றைய இறைவார்த்தை'} (${dailyContent.bible.ref}): "${isEn ? dailyContent.bible.english : dailyContent.bible.tamil}"
+  const verseEn = (dailyContent?.bible?.english || dailyContent?.verse?.english || '').trim();
+  const verseTa = (dailyContent?.bible?.tamil || dailyContent?.verse?.tamil || '').trim();
+  const rawRef = (dailyContent?.bible?.ref || dailyContent?.verse?.reference || '').trim();
+
+  const { getTamilBibleReference, getEnglishBibleReference } = require('../utils/bibleRefHelper');
+  const refEn = getEnglishBibleReference(rawRef);
+  const refTa = getTamilBibleReference(rawRef);
+
+  let verseSection = `📖 இன்றைய இறைவார்த்தை / DAILY BIBLE VERSE\n\n`;
+  if (verseEn) {
+    verseSection += `"${verseEn}"\n— ${refEn}\n\n`;
+  }
+  if (verseTa) {
+    verseSection += `"${verseTa}"\n— ${refTa}`;
+  }
+
+  return `${verseSection}
 
 ${isEn ? 'Mass Readings' : 'திருப்பலி வாசகங்கள்'}: ${massTitle || 'Daily Liturgy'}
 ${isEn ? 'Saint of the Day' : 'இன்றைய புனிதர்'}: ${saintName || 'Holy Saint'}
@@ -65,16 +94,20 @@ ${isEn ? 'Reflection' : 'தியானம்'}: ${(reflectionSnippet || '').sl
  */
 function formatPushPayload(dailyContent, lang = 'ta') {
   const isEn = lang === 'en';
-  const saintName = isEn ? dailyContent.saint?.nameEnglish : (dailyContent.saint?.nameTamil || dailyContent.saint?.nameEnglish);
-  const verseText = isEn ? dailyContent.bible?.english : dailyContent.bible?.tamil;
+  const verseEn = (dailyContent?.bible?.english || dailyContent?.verse?.english || '').trim();
+  const verseTa = (dailyContent?.bible?.tamil || dailyContent?.verse?.tamil || '').trim();
+  const rawRef = (dailyContent?.bible?.ref || dailyContent?.verse?.reference || '').trim();
+
+  const { getTamilBibleReference, getEnglishBibleReference } = require('../utils/bibleRefHelper');
+  const refEn = getEnglishBibleReference(rawRef);
+  const refTa = getTamilBibleReference(rawRef);
 
   const bibleUrl = getSiteUrl(SITE_ROUTES.BIBLE_VERSE);
   return {
-    title: isEn
-      ? `✝️ Daily Catholic Word — ${dailyContent.bible.ref}`
-      : `✝️ இன்றைய இறைவார்த்தை — ${dailyContent.bible.ref}`,
-    body: `"${(verseText || '').slice(0, 90)}..." • ${isEn ? 'Saint' : 'புனிதர்'}: ${saintName || 'Holy Saint'}`,
+    title: `📖 இன்றைய இறைவார்த்தை / DAILY BIBLE VERSE`,
+    body: `"${verseEn.slice(0, 80)}..." — ${refEn}\n"${verseTa.slice(0, 80)}..." — ${refTa}`,
     url: bibleUrl,
+    image: `/api/settings/daily-verses/today/image`,
     tag: `sjdb-daily-${dailyContent.dateKey}`,
     icon: '/icons/icon-192x192.png',
     badge: '/icons/icon-72x72.png',
@@ -86,8 +119,204 @@ function formatPushPayload(dailyContent, lang = 'ta') {
 }
 
 /**
+ * Strict 6-Stage Sequential Delivery of Daily Catholic Content:
+ * 1. 📖 Bible Verse (Image message)
+ * 2. ✝️ Daily Mass Readings (Text message)
+ * 3. 🕊️ இன்றைய தியானம் (DAILY REFLECTION) (Text message)
+ * 4. 🖼️ Saint of the Day Image (Image message)
+ * 5. ✨ Saint of the Day Content (Text message)
+ * 6. 🌐 Read More (Website link message)
+ *
+ * Messages are sent sequentially using await with an inter-message delay
+ * to ensure WhatsApp renders them in the exact specified order.
+ */
+async function sendDailyWhatsAppSequence({
+  waService,
+  phone,
+  dailyContent,
+  userLang = 'ta',
+  readingPreference = 'full',
+  sendLinks = true,
+  alreadySentStages = []
+}) {
+  const messagesSent = [...alreadySentStages];
+  const stageErrors = [];
+  const STAGE_DELAY_MS = 650;
+
+  if (!waService || typeof waService.sendWhatsAppMessage !== 'function') {
+    return {
+      success: false,
+      messagesSent,
+      stageErrors: [{ stage: 'init', error: 'WhatsApp service unavailable' }]
+    };
+  }
+
+  // ── 1. 📖 Bible Verse Image message ───────────────────────────────────────
+  if (!messagesSent.includes('verse_image') && !messagesSent.includes('verse')) {
+    let verseSent = false;
+    try {
+      const verseImg = await getDailyVerseImage({ dailyContent, dateKey: dailyContent.dateKey });
+      if (verseImg?.buffer && typeof waService.sendWhatsAppMedia === 'function') {
+        const verseCaption = generateDailyVerseCaption({ dailyContent });
+        verseSent = await waService.sendWhatsAppMedia(phone, {
+          buffer: verseImg.buffer,
+          mimetype: 'image/png',
+          caption: verseCaption
+        });
+        if (verseSent) {
+          messagesSent.push('verse_image');
+          console.log(`[DELIVERY 1/6] 📖 Bible Verse Image with bilingual text caption sent to ${phone}`);
+        }
+      }
+    } catch (imgErr) {
+      console.warn(`[DELIVERY 1/6] Verse image render/send error: ${imgErr.message}. Falling back to formatted text.`);
+    }
+
+    // Fallback: If image generation failed, send formatted text so the recipient never misses the verse
+    if (!verseSent && !messagesSent.includes('verse_image')) {
+      try {
+        const verseMsg = generateDailyVerseMessage({ dailyContent, language: userLang });
+        const ok = await waService.sendWhatsAppMessage(phone, verseMsg);
+        if (ok) {
+          messagesSent.push('verse');
+          console.log(`[DELIVERY 1/6 fallback] 📖 Bible Verse text sent to ${phone}`);
+        } else {
+          stageErrors.push({ stage: 'verse_image', error: 'Socket send returned false' });
+          console.error(`❌ [DELIVERY FAILED 1/6] Bible Verse failed for ${phone}`);
+        }
+      } catch (err) {
+        stageErrors.push({ stage: 'verse_image', error: err.message });
+        console.error(`❌ [DELIVERY FAILED 1/6] Bible Verse text error for ${phone}:`, err.message);
+      }
+    }
+  }
+
+  await new Promise(r => setTimeout(r, STAGE_DELAY_MS));
+
+  // ── 2. ✝️ Daily Mass Readings message ─────────────────────────────────────
+  if (!messagesSent.includes('readings')) {
+    try {
+      const readingsMsg = generateDailyMassReadingsMessage({
+        dailyContent,
+        language: userLang,
+        readingPreference
+      });
+      const ok = await waService.sendWhatsAppMessage(phone, readingsMsg);
+      if (ok) {
+        messagesSent.push('readings');
+        console.log(`[DELIVERY 2/6] ✝️ Mass Readings sent to ${phone}`);
+      } else {
+        stageErrors.push({ stage: 'readings', error: 'Socket send returned false' });
+        console.error(`❌ [DELIVERY FAILED 2/6] Mass Readings failed for ${phone}`);
+      }
+    } catch (err) {
+      stageErrors.push({ stage: 'readings', error: err.message });
+      console.error(`❌ [DELIVERY FAILED 2/6] Mass Readings error for ${phone}:`, err.message);
+    }
+  }
+
+  await new Promise(r => setTimeout(r, STAGE_DELAY_MS));
+
+  // ── 3. 🕊️ இன்றைய தியானம் (DAILY REFLECTION) message ────────────────────────
+  if (!messagesSent.includes('reflection')) {
+    try {
+      const reflectionMsg = generateDailyReflectionMessage({
+        dailyContent,
+        language: userLang
+      });
+      const ok = await waService.sendWhatsAppMessage(phone, reflectionMsg);
+      if (ok) {
+        messagesSent.push('reflection');
+        console.log(`[DELIVERY 3/6] 🕊️ Daily Reflection sent to ${phone}`);
+      } else {
+        stageErrors.push({ stage: 'reflection', error: 'Socket send returned false' });
+        console.error(`❌ [DELIVERY FAILED 3/6] Daily Reflection failed for ${phone}`);
+      }
+    } catch (err) {
+      stageErrors.push({ stage: 'reflection', error: err.message });
+      console.error(`❌ [DELIVERY FAILED 3/6] Daily Reflection error for ${phone}:`, err.message);
+    }
+  }
+
+  await new Promise(r => setTimeout(r, STAGE_DELAY_MS));
+
+  // ── 4. 🖼️ Saint of the Day image message ──────────────────────────────────
+  if (!messagesSent.includes('saint_image')) {
+    const saintImagePayload = getDailySaintImagePayload({ dailyContent });
+    if (saintImagePayload && typeof waService.sendWhatsAppMedia === 'function') {
+      try {
+        const imgOk = await waService.sendWhatsAppMedia(phone, saintImagePayload);
+        if (imgOk) {
+          messagesSent.push('saint_image');
+          console.log(`[DELIVERY 4/6] 🖼️ Saint image sent to ${phone}`);
+        } else {
+          console.warn(`⚠️ [DELIVERY 4/6] Saint image send returned false for ${phone}`);
+        }
+      } catch (mediaErr) {
+        console.warn(`⚠️ [DELIVERY 4/6] Saint image error for ${phone}:`, mediaErr.message);
+      }
+    } else {
+      console.log(`[DELIVERY 4/6] Saint image skipped (no image payload available) for ${phone}`);
+    }
+  }
+
+  await new Promise(r => setTimeout(r, STAGE_DELAY_MS));
+
+  // ── 5. ✨ Saint of the Day Content message ────────────────────────────────
+  if (!messagesSent.includes('saint_content')) {
+    try {
+      const saintContentMsg = generateSaintContentMessage({ dailyContent, language: userLang });
+      const ok = await waService.sendWhatsAppMessage(phone, saintContentMsg);
+      if (ok) {
+        messagesSent.push('saint_content');
+        console.log(`[DELIVERY 5/6] ✨ Saint content sent to ${phone}`);
+      } else {
+        stageErrors.push({ stage: 'saint_content', error: 'Socket send returned false' });
+        console.error(`❌ [DELIVERY FAILED 5/6] Saint content failed for ${phone}`);
+      }
+    } catch (err) {
+      stageErrors.push({ stage: 'saint_content', error: err.message });
+      console.error(`❌ [DELIVERY FAILED 5/6] Saint content error for ${phone}:`, err.message);
+    }
+  }
+
+  await new Promise(r => setTimeout(r, STAGE_DELAY_MS));
+
+  // ── 6. 🌐 Read More (Website link) message ────────────────────────────────
+  if (sendLinks && !messagesSent.includes('read_more')) {
+    try {
+      const readMoreMsg = generateReadMoreMessage({ dailyContent, language: userLang });
+      const ok = await waService.sendWhatsAppMessage(phone, readMoreMsg);
+      if (ok) {
+        messagesSent.push('read_more');
+        console.log(`[DELIVERY 6/6] 🌐 Read More link sent to ${phone}`);
+      } else {
+        stageErrors.push({ stage: 'read_more', error: 'Socket send returned false' });
+        console.warn(`⚠️ [DELIVERY 6/6] Read More link failed for ${phone}`);
+      }
+    } catch (err) {
+      stageErrors.push({ stage: 'read_more', error: err.message });
+      console.warn(`⚠️ [DELIVERY 6/6] Read More link error for ${phone}:`, err.message);
+    }
+  } else if (!sendLinks) {
+    messagesSent.push('read_more_skipped_by_pref');
+  }
+
+  const hasRequiredContent = (messagesSent.includes('verse_image') || messagesSent.includes('verse')) &&
+                             messagesSent.includes('readings') &&
+                             messagesSent.includes('reflection') &&
+                             messagesSent.includes('saint_content');
+
+  return {
+    success: hasRequiredContent,
+    messagesSent,
+    stageErrors
+  };
+}
+
+/**
  * Dispatch daily church notification across all enabled channels:
- * - WhatsApp Bot (Message 1 Devotional + Message 2 Links)
+ * - WhatsApp Bot (6 Separate Messages in Strict Sequence)
  * - Mobile / Web Push Notifications (WebPush to all subscribers even when closed)
  * - Email Broadcast (HTML template + Saint portrait)
  * - In-App Notifications (Notification feed)
@@ -132,12 +361,27 @@ async function sendDailyChurchNotifications({
     const toEmail = testEmail || targetEmail;
     const toPhone = testPhone || targetPhone;
 
-    // Prepare email attachments (Saint portrait)
+    // Prepare email attachments (Saint portrait & Bible verse card)
     const emailAttachments = [];
     if (dailyContent.saint.imageAttachment) {
       emailAttachments.push(dailyContent.saint.imageAttachment);
     }
     const hasSaintImage = Boolean(dailyContent.saint.imageAttachment);
+
+    let hasVerseImage = false;
+    try {
+      const verseImg = await getDailyVerseImage({ dailyContent, dateKey: dailyContent.dateKey });
+      if (verseImg?.buffer) {
+        emailAttachments.push({
+          filename: 'daily_bible_verse.png',
+          content: verseImg.buffer,
+          cid: 'daily_bible_verse_img'
+        });
+        hasVerseImage = true;
+      }
+    } catch (vErr) {
+      console.warn('[Daily Notification Service] Email verse image attachment error:', vErr.message);
+    }
 
     // ── 1. SINGLE MANUAL TEST SEND ───────────────────────────────────────────
     if (manualTest && (toEmail || toPhone)) {
@@ -150,7 +394,8 @@ async function sendDailyChurchNotifications({
           userName: testName || 'Parishioner',
           dailyContent,
           userLanguage: testLang,
-          hasSaintImageAttachment: hasSaintImage
+          hasSaintImageAttachment: hasSaintImage,
+          hasBibleImageAttachment: hasVerseImage
         });
 
         const subject = testLang === 'en'
@@ -166,51 +411,19 @@ async function sendDailyChurchNotifications({
         testResults.email = emailRes;
       }
 
-      // WhatsApp Test
+      // WhatsApp Test (Strict 5-message sequence)
       if (targetPhone) {
         const waService = getWhatsApp();
         if (waService && typeof waService.sendWhatsAppMessage === 'function') {
-          // 1. Message 1: Clean Catholic Daily Message (No URLs)
-          const waMsg1 = generateDailyCatholicMessage({
+          const waResult = await sendDailyWhatsAppSequence({
+            waService,
+            phone: targetPhone,
             dailyContent,
-            language: testLang,
-            readingPreference: 'full'
+            userLang: testLang,
+            readingPreference: 'full',
+            sendLinks: true
           });
-          const waRes1 = await waService.sendWhatsAppMessage(targetPhone, waMsg1);
-
-          const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
-
-          // 2. Message 2: Saint of the Day Image (Image only)
-          if (saintImageUrl && typeof waService.sendWhatsAppMedia === 'function') {
-            try {
-              await new Promise(r => setTimeout(r, 450));
-              await waService.sendWhatsAppMedia(targetPhone, { url: saintImageUrl, mimetype: 'image/jpeg' });
-            } catch (mediaErr) {
-              console.warn('[Daily Notification] Test Saint media send warning:', mediaErr.message);
-            }
-          }
-
-          // 3. Message 3: Saint of the Day Information
-          try {
-            await new Promise(r => setTimeout(r, 450));
-            const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: testLang });
-            await waService.sendWhatsAppMessage(targetPhone, saintInfoMsg);
-          } catch (saintInfoErr) {
-            console.warn('[Daily Notification] Test Saint info send warning:', saintInfoErr.message);
-          }
-
-          // 4. Message 4: Separate Links Message (Only valid URLs)
-          try {
-            await new Promise(r => setTimeout(r, 450));
-            const linksMsg = generateDailyLinksMessage({ dailyContent, language: testLang });
-            if (linksMsg) {
-              await waService.sendWhatsAppMessage(targetPhone, linksMsg);
-            }
-          } catch (e) {
-            console.warn('[Daily Notification] Test links send warning:', e.message);
-          }
-
-          testResults.whatsapp = { success: Boolean(waRes1) };
+          testResults.whatsapp = waResult;
         } else {
           testResults.whatsapp = { success: false, error: 'WhatsApp socket offline' };
         }
@@ -401,6 +614,8 @@ async function sendDailyChurchNotifications({
         ? `daily-catholic:${dailyContent.dateKey}:${recipient.phone10}`
         : `daily-catholic:${dailyContent.dateKey}:user:${recipient.userId}`;
 
+      let alreadySentStages = [];
+
       // DUPLICATE PROTECTION: Check database before sending
       if (!force) {
         const existingLog = await DailyNotificationLog.findOne({
@@ -411,10 +626,15 @@ async function sendDailyChurchNotifications({
           ]
         }).lean();
 
-        if (existingLog && (existingLog.status === 'sent' || existingLog.status === 'partially_sent')) {
+        if (existingLog && existingLog.status === 'sent') {
           console.log(`[DEDUPLICATION] Skipped: daily content already sent for this user and date (${idempotencyKey}).`);
           skippedCount++;
           continue;
+        }
+
+        if (existingLog && existingLog.status === 'partially_sent') {
+          alreadySentStages = existingLog.channels?.whatsapp?.messagesSent || [];
+          console.log(`[DEDUPLICATION] Resuming partially sent broadcast for ${idempotencyKey} (completed stages: ${alreadySentStages.join(', ')}).`);
         }
 
         // Atomic claim to prevent concurrent worker execution
@@ -481,7 +701,8 @@ async function sendDailyChurchNotifications({
             userName: recipient.userName,
             dailyContent,
             userLanguage: recipient.userLang,
-            hasSaintImageAttachment: hasSaintImage
+            hasSaintImageAttachment: hasSaintImage,
+            hasBibleImageAttachment: hasVerseImage
           });
 
           const subject = recipient.userLang === 'en'
@@ -526,9 +747,10 @@ async function sendDailyChurchNotifications({
               : `இன்றைய கத்தோலிக்க வாசகங்கள் — ${dailyContent.formattedDateTa || dailyContent.formattedDate}`,
             message: inAppMsg,
             type: 'daily_spiritual',
-            category: 'spiritual',
+            category: 'daily_spiritual',
             priority: 'normal',
             recipient: 'user',
+            fileUrl: '/api/settings/daily-verses/today/image',
             actionUrl: `/notifications`,
             channels: [
               ...(recipient.isInAppEnabled ? ['inApp'] : []),
@@ -562,59 +784,55 @@ async function sendDailyChurchNotifications({
         channelStats.push.disabled++;
       }
 
-      // ── CHANNEL 4: WHATSAPP BOT (Single Guaranteed Execution per Subscriber) ──
+      // ── CHANNEL 4: WHATSAPP BOT (Strict 5-Stage Ordered Delivery) ──
       if (recipient.isWhatsAppEnabled && recipient.userPhone) {
         userHadAnyAttempt = true;
         try {
           if (waService && typeof waService.sendWhatsAppMessage === 'function') {
-            // 1. Message 1: Clean devotional/reading message (0 URLs)
-            const waMsg = generateDailyCatholicMessage({
+            const waSeqResult = await sendDailyWhatsAppSequence({
+              waService,
+              phone: recipient.userPhone,
               dailyContent,
-              language: recipient.userLang,
-              readingPreference: recipient.readingPreference
+              userLang: recipient.userLang,
+              readingPreference: recipient.readingPreference,
+              sendLinks: recipient.sendLinks,
+              alreadySentStages
             });
-            const waOk = await waService.sendWhatsAppMessage(recipient.userPhone, waMsg);
 
-            if (waOk) {
-              logChannels.whatsapp = { status: 'sent', phone: recipient.userPhone, error: null, sentAt: new Date() };
+            if (waSeqResult.success) {
+              logChannels.whatsapp = {
+                status: 'sent',
+                phone: recipient.userPhone,
+                error: null,
+                messagesSent: waSeqResult.messagesSent,
+                stepsCompleted: waSeqResult.messagesSent.length,
+                sentAt: new Date()
+              };
               channelStats.whatsapp.sent++;
               userHadAtLeastOneSuccess = true;
-              console.log(`[DELIVERY] Sent daily content successfully to ${recipient.userPhone}`);
-
-              // 2. Message 2: Saint of the Day Separate WhatsApp Photo Message (Image only)
-              try {
-                const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
-                if (saintImageUrl && typeof waService.sendWhatsAppMedia === 'function') {
-                  await new Promise(r => setTimeout(r, 450));
-                  await waService.sendWhatsAppMedia(recipient.userPhone, { url: saintImageUrl, mimetype: 'image/jpeg' });
-                }
-              } catch (saintMediaErr) {
-                console.warn(`[Daily Notification] Failed to send Saint photo message to ${recipient.userPhone}:`, saintMediaErr.message);
-              }
-
-              // 3. Message 3: Saint of the Day Information
-              try {
-                await new Promise(r => setTimeout(r, 450));
-                const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: recipient.userLang });
-                await waService.sendWhatsAppMessage(recipient.userPhone, saintInfoMsg);
-              } catch (saintInfoErr) {
-                console.warn(`[Daily Notification] Failed to send Saint info to ${recipient.userPhone}:`, saintInfoErr.message);
-              }
-
-              // 4. Message 4: Separate Clickable Links Message (if user preference enabled)
-              if (recipient.sendLinks) {
-                try {
-                  await new Promise(r => setTimeout(r, 450));
-                  const linksMsg = generateDailyLinksMessage({ dailyContent, language: recipient.userLang });
-                  if (linksMsg) {
-                    await waService.sendWhatsAppMessage(recipient.userPhone, linksMsg);
-                  }
-                } catch (linkErr) {
-                  console.warn(`[Daily Notification] Failed to send links message to ${recipient.userPhone}:`, linkErr.message);
-                }
-              }
+              console.log(`[DELIVERY COMPLETE] All 6 Catholic content stages delivered to ${recipient.userPhone}`);
+            } else if (waSeqResult.messagesSent.length > 0) {
+              const errStr = waSeqResult.stageErrors.map(e => `${e.stage}: ${e.error}`).join('; ');
+              logChannels.whatsapp = {
+                status: 'partially_sent',
+                phone: recipient.userPhone,
+                error: errStr || 'Partial delivery',
+                messagesSent: waSeqResult.messagesSent,
+                stepsCompleted: waSeqResult.messagesSent.length,
+                sentAt: new Date()
+              };
+              channelStats.whatsapp.failed++;
+              console.warn(`⚠️ [DELIVERY PARTIAL] Some stages failed for ${recipient.userPhone}: ${errStr}`);
             } else {
-              logChannels.whatsapp = { status: 'failed', phone: recipient.userPhone, error: 'Socket unreachable', sentAt: new Date() };
+              const errStr = waSeqResult.stageErrors[0]?.error || 'Socket unreachable';
+              logChannels.whatsapp = {
+                status: 'failed',
+                phone: recipient.userPhone,
+                error: errStr,
+                messagesSent: [],
+                stepsCompleted: 0,
+                sentAt: new Date()
+              };
               channelStats.whatsapp.failed++;
             }
           } else {
@@ -629,13 +847,20 @@ async function sendDailyChurchNotifications({
         channelStats.whatsapp.disabled++;
       }
 
-      // Determine overall user delivery status
-      const overallStatus = userHadAtLeastOneSuccess
-        ? 'sent'
-        : (userHadAnyAttempt ? 'failed' : 'skipped');
+      // Determine overall user delivery status:
+      // If WhatsApp was enabled for this user, do not mark as 'sent' if required messages failed
+      let overallStatus = 'skipped';
+      if (recipient.isWhatsAppEnabled && logChannels.whatsapp.status === 'partially_sent') {
+        overallStatus = 'partially_sent';
+      } else if (userHadAtLeastOneSuccess) {
+        overallStatus = 'sent';
+      } else if (userHadAnyAttempt) {
+        overallStatus = 'failed';
+      }
 
       if (overallStatus === 'sent') sentCount++;
       else if (overallStatus === 'failed') failedCount++;
+      else if (overallStatus === 'partially_sent') failedCount++;
       else skippedCount++;
 
       // Save / Upsert final result to DailyNotificationLog

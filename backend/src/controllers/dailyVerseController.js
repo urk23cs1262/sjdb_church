@@ -2,6 +2,7 @@ const DailyVerse = require('../models/DailyVerse');
 const DEFAULT_VERSES = require('../data/defaultVerses');
 const axios = require('axios');
 const mongoose = require('mongoose');
+const { getTamilBibleReference, getEnglishBibleReference } = require('../utils/bibleRefHelper');
 
 // Helper to safely build query for verse lookup by numeric id or MongoDB _id without CastError
 function buildVerseIdFilter(identifier) {
@@ -43,6 +44,10 @@ let cachedVerseExpiry = 0;
 function invalidateVerseCache() {
   cachedVerseData = null;
   cachedVerseExpiry = 0;
+  try {
+    const { invalidateVerseImageCache } = require('../services/bibleVerseImageService');
+    invalidateVerseImageCache();
+  } catch (_) {}
 }
 
 // Helper to drop stale legacy date_1 index from MongoDB
@@ -142,12 +147,19 @@ const getTodayVerseData = async (forceRefresh = false) => {
   const refStr = verse?.ref || 'John 3:16';
   const textEn = verse?.verseTextEn || 'For God so loved the world...';
   const textTa = verse?.verseTextTa || '';
+  const refEn = getEnglishBibleReference(refStr);
+  const refTa = getTamilBibleReference(refStr);
 
   const result = {
     id: verse?.id || 1,
-    ref: refStr,
-    reference: refStr,
-    verseRef: refStr,
+    ref: refEn,
+    reference: refEn,
+    verseRef: refEn,
+    refEn,
+    refTa,
+    referenceEn: refEn,
+    referenceTa: refTa,
+    referenceTamil: refTa,
     english: textEn,
     verseTextEn: textEn,
     tamil: textTa,
@@ -478,9 +490,26 @@ const changeTodayVerse = async (req, res) => {
   }
 };
 
+// GET /api/settings/daily-verses/today/image
+const getTodayVerseImage = async (req, res) => {
+  try {
+    const { getDailyVerseImage } = require('../services/bibleVerseImageService');
+    const verseImg = await getDailyVerseImage();
+    if (!verseImg || !verseImg.buffer) {
+      return res.status(404).json({ success: false, message: 'Verse image not found' });
+    }
+    res.setHeader('Content-Type', verseImg.mimetype || 'image/png');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.send(verseImg.buffer);
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   getTodayVerse,
   getTodayVerseData,
+  getTodayVerseImage,
   changeTodayVerse,
   getAllVerses,
   uploadVerses,

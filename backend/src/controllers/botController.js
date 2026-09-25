@@ -3,7 +3,17 @@ const BotSession = require('../models/BotSession');
 const User = require('../models/User');
 const DailyNotificationLog = require('../models/DailyNotificationLog');
 const { getTodayDailyContent } = require('../services/dailyContentService');
-const { generateDailyCatholicMessage, generateDailyLinksMessage, generateSaintInfoMessage } = require('../services/whatsappDailyFormatter');
+const {
+  generateDailyVerseCaption,
+  generateDailyVerseMessage,
+  generateDailyMassReadingsMessage,
+  generateDailyReflectionMessage,
+  generateSaintContentMessage,
+  generateReadMoreMessage,
+  generateDailyCatholicMessage,
+  generateDailyLinksMessage,
+  generateSaintInfoMessage
+} = require('../services/whatsappDailyFormatter');
 const { answerChurchQuestion } = require('../bot/churchRAGService');
 const {
   getStep1BotLanguageMessage,
@@ -280,6 +290,18 @@ const getTodayPreview = async (req, res) => {
       readingPreference: 'full'
     });
 
+    // 6 Separated message previews
+    const verseTa = generateDailyVerseMessage({ dailyContent, language: 'ta' });
+    const verseEn = generateDailyVerseMessage({ dailyContent, language: 'en' });
+    const readingsTa = generateDailyMassReadingsMessage({ dailyContent, language: 'ta' });
+    const readingsEn = generateDailyMassReadingsMessage({ dailyContent, language: 'en' });
+    const reflectionTa = generateDailyReflectionMessage({ dailyContent, language: 'ta' });
+    const reflectionEn = generateDailyReflectionMessage({ dailyContent, language: 'en' });
+    const saintTa = generateSaintContentMessage({ dailyContent, language: 'ta' });
+    const saintEn = generateSaintContentMessage({ dailyContent, language: 'en' });
+    const readMoreTa = generateReadMoreMessage({ dailyContent, language: 'ta' });
+    const readMoreEn = generateReadMoreMessage({ dailyContent, language: 'en' });
+
     res.json({
       success: true,
       date: new Intl.DateTimeFormat('en-IN', { dateStyle: 'full', timeZone: 'Asia/Kolkata' }).format(new Date()),
@@ -290,7 +312,20 @@ const getTodayPreview = async (req, res) => {
       saintDescription: dailyContent?.saintDescription || dailyContent?.saint?.description || dailyContent?.saintOfTheDay?.english?.description || '',
       bibleRef: dailyContent?.bible?.ref || dailyContent?.dailyVerse?.reference || dailyContent?.readings?.gospel?.reference || 'Holy Bible',
       previewTa,
-      previewEn
+      previewEn,
+      separatedMessages: {
+        verse: {
+          ta: verseTa,
+          en: verseEn,
+          caption: generateDailyVerseCaption({ dailyContent }),
+          image: '/api/settings/daily-verses/today/image'
+        },
+        readings: { ta: readingsTa, en: readingsEn },
+        reflection: { ta: reflectionTa, en: reflectionEn },
+        saintImage: dailyContent?.saintImage || dailyContent?.saint?.image || null,
+        saintContent: { ta: saintTa, en: saintEn },
+        readMore: { ta: readMoreTa, en: readMoreEn }
+      }
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

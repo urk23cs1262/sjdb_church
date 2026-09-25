@@ -6,6 +6,7 @@ const memoryUpload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } })
 const { getSettings, getSetting, updateTextSetting, uploadFileSetting, deleteSetting } = require('../controllers/settingsController');
 const {
   getTodayVerse,
+  getTodayVerseImage,
   changeTodayVerse,
   getAllVerses,
   uploadVerses,
@@ -21,6 +22,7 @@ const upload = require('../middleware/upload');
 // Public routes
 router.get('/', getSettings);
 router.get('/daily-verses/today', getTodayVerse);
+router.get('/daily-verses/today/image', getTodayVerseImage);
 router.get('/:key', getSetting);
 
 // Admin site settings routes

@@ -23,12 +23,23 @@ const User = require('../models/User');
 const Event = require('../models/Event');
 const Announcement = require('../models/Announcement');
 const Priest = require('../models/Priest');
-const { getTodayDailyContent } = require('../services/dailyContentService');
-const { generateDailyCatholicMessage, generateSaintCaption, generateSaintInfoMessage } = require('../services/whatsappDailyFormatter');
+const {
+  generateDailyVerseCaption,
+  generateDailyVerseMessage,
+  generateDailyMassReadingsMessage,
+  generateDailyReflectionMessage,
+  getDailySaintImagePayload,
+  generateSaintContentMessage,
+  generateReadMoreMessage,
+  generateDailyCatholicMessage,
+  generateSaintCaption,
+  generateSaintInfoMessage
+} = require('../services/whatsappDailyFormatter');
+const { getDailyVerseImage } = require('../services/bibleVerseImageService');
 const { processIncomingMessage, isPhoneBlocked } = require('../services/userModerationService');
 const { answerChurchQuestion } = require('./churchRAGService');
 const { notifyAdmin } = require('../services/adminNotificationService');
-const { SITE_ROUTES, EXTERNAL_LINKS, getSiteUrl } = require('../config/siteRoutes');
+const { SITE_ROUTES, EXTERNAL_LINKS, getSiteUrl, getBaseClientUrl } = require('../config/siteRoutes');
 const {
   getCachedDailyContent,
   getCachedPriests,
@@ -316,6 +327,50 @@ function isUnsupportedLanguage(text) {
   return foreignScriptsRegex.test(text);
 }
 
+/**
+ * Daily Catholic Content Menu (Options 1 to 6)
+ */
+function getDailyCatholicContentMenu(isTamil = false) {
+  if (isTamil) {
+    return `✝️ *SJDB Connect – Daily Catholic Content*
+_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
+
+1. 📖 *Today's Bible Verse* (இன்றைய இறைவார்த்தை)
+2. ✝️ *Daily Mass Readings* (திருப்பலி வாசகங்கள்)
+3. 🕊️ *இன்றைய தியானம் (Daily Reflection)*
+4. ✨ *Saint of the Day* (இன்றைய புனிதர்)
+5. 🙏 *Daily Prayer* (இன்றைய செபம்)
+6. 🌐 *Church Website* (ஆலய இணையதளம்)
+
+👉 *1 முதல் 6 வரை உள்ள எண்ணை அழுத்தவும் அல்லது உங்கள் விருப்பத்தை நேரடியாகக் கேட்கவும்!*
+_(எ.கா: "Today's Bible Verse", "இன்றைய தியானம்", "Saint of the Day")_`;
+  }
+
+  return `✝️ *SJDB Connect – Daily Catholic Content*
+_St. John de Britto Church, Kalayarkoil_
+
+1. 📖 *Today's Bible Verse*
+2. ✝️ *Daily Mass Readings*
+3. 🕊️ *இன்றைய தியானம் (Daily Reflection)*
+4. ✨ *Saint of the Day*
+5. 🙏 *Daily Prayer*
+6. 🌐 *Church Website*
+
+👉 *Reply with 1 to 6 or ask your question directly!*
+_(e.g., "Today's Bible Verse", "Daily Reflection", "Today's Saint")_`;
+}
+
+function formatDailyPrayerMessage(dailyContent, isTamil = false) {
+  const reflObj = isTamil ? dailyContent?.massReadings?.tamil?.reflection : dailyContent?.massReadings?.english?.reflection;
+  const prayerText = reflObj?.prayer?.trim();
+  if (prayerText) {
+    return isTamil
+      ? `🙏 *இன்றைய செபம் (Daily Prayer)*\n_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_\n\n${prayerText}\n\n✨ ஆமென்.`
+      : `🙏 *Today's Prayer*\n_St. John de Britto Church, Kalayarkoil_\n\n${prayerText}\n\n✨ Amen.`;
+  }
+  return formatCatholicPrayersMessage(isTamil);
+}
+
 function formatSingleVerseMessage(dailyContent, isTamil) {
   const vEn = dailyContent?.bible?.english || '';
   const vTa = dailyContent?.bible?.tamil || '';
@@ -414,6 +469,167 @@ Glory be to the Father, and to the Son, and to the Holy Spirit. As it was in the
 • *Glorious Mysteries* (Wednesday & Sunday)
 
 🌐 *Pray the Rosary & Devotional Songs:* ${getSiteUrl(SITE_ROUTES.ROSARY)}`;
+}
+
+/**
+ * Individual Dispatcher: Send Today's Bible Verse as an Image ONLY
+ */
+async function sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery = false) {
+  try {
+    const dailyContent = await getCachedDailyContent();
+    session.invalidInputStreak = 0;
+    session.lastBotReplyType = 'VERSE';
+    session.pendingSubmenu = '';
+    session.lastSentAt = new Date();
+    await session.save();
+
+    let sentImage = false;
+    try {
+      const verseImg = await getDailyVerseImage({ dailyContent, dateKey: dailyContent?.dateKey });
+      if (verseImg?.buffer && typeof wa.sendWhatsAppMedia === 'function') {
+        const verseCaption = generateDailyVerseCaption({ dailyContent });
+        sentImage = await wa.sendWhatsAppMedia(replyTarget, {
+          buffer: verseImg.buffer,
+          mimetype: 'image/png',
+          caption: verseCaption
+        });
+      }
+    } catch (imgErr) {
+      console.warn('[BotHandler] Verse image send error:', imgErr.message);
+    }
+
+    if (!sentImage) {
+      const userLang = session.language || (isTamilQuery ? 'ta' : 'en');
+      const fallbackMsg = generateDailyVerseMessage({ dailyContent, language: userLang });
+      await wa.sendWhatsAppMessage(replyTarget, fallbackMsg);
+    }
+  } catch (err) {
+    console.error('[BotHandler] Bible verse error:', err.message);
+  }
+}
+
+/**
+ * Individual Dispatcher: Send Daily Mass Readings Text ONLY
+ */
+async function sendTodayMassReadings(replyTarget, session, wa, isTamilQuery = false) {
+  try {
+    const dailyContent = await getCachedDailyContent();
+    const userLang = session.language || (isTamilQuery ? 'ta' : 'en');
+    session.invalidInputStreak = 0;
+    session.lastBotReplyType = 'READINGS';
+    session.pendingSubmenu = '';
+    session.lastSentAt = new Date();
+    await session.save();
+
+    const readingsMsg = generateDailyMassReadingsMessage({
+      dailyContent,
+      language: userLang,
+      readingPreference: session.readingPreference || 'full'
+    });
+    await wa.sendWhatsAppMessage(replyTarget, readingsMsg);
+  } catch (err) {
+    console.error('[BotHandler] Mass readings error:', err.message);
+  }
+}
+
+/**
+ * Individual Dispatcher: Send Daily Reflection Text ONLY
+ */
+async function sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery = false) {
+  try {
+    const dailyContent = await getCachedDailyContent();
+    const userLang = session.language || (isTamilQuery ? 'ta' : 'en');
+    session.invalidInputStreak = 0;
+    session.lastBotReplyType = 'REFLECTION';
+    session.pendingSubmenu = '';
+    session.lastSentAt = new Date();
+    await session.save();
+
+    const reflMsg = generateDailyReflectionMessage({
+      dailyContent,
+      language: userLang
+    });
+    await wa.sendWhatsAppMessage(replyTarget, reflMsg);
+  } catch (err) {
+    console.error('[BotHandler] Daily reflection error:', err.message);
+  }
+}
+
+/**
+ * Individual Dispatcher: Send Saint of the Day (1. Saint Image -> 2. Saint Content)
+ */
+async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false) {
+  try {
+    const dailyContent = await getCachedDailyContent();
+    const userLang = session.language || (isTamilQuery ? 'ta' : 'en');
+    session.invalidInputStreak = 0;
+    session.lastBotReplyType = 'SAINT';
+    session.pendingSubmenu = '';
+    session.lastSentAt = new Date();
+    await session.save();
+
+    // 1. Saint of the Day Image (separate message)
+    const saintImagePayload = getDailySaintImagePayload({ dailyContent });
+    if (saintImagePayload && typeof wa.sendWhatsAppMedia === 'function') {
+      try {
+        await wa.sendWhatsAppMedia(replyTarget, saintImagePayload);
+        await new Promise(r => setTimeout(r, 650));
+      } catch (mediaErr) {
+        console.warn('[BotHandler] Saint media send error:', mediaErr.message);
+      }
+    }
+
+    // 2. Saint of the Day Content (separate message)
+    const saintContentMsg = generateSaintContentMessage({
+      dailyContent,
+      language: userLang
+    });
+    await wa.sendWhatsAppMessage(replyTarget, saintContentMsg);
+  } catch (err) {
+    console.error('[BotHandler] Saint of the day error:', err.message);
+  }
+}
+
+/**
+ * Individual Dispatcher: Send Daily Prayer
+ */
+async function sendTodayPrayer(replyTarget, session, wa, isTamilQuery = false) {
+  try {
+    const dailyContent = await getCachedDailyContent();
+    const userLang = session.language || (isTamilQuery ? 'ta' : 'en');
+    session.invalidInputStreak = 0;
+    session.lastBotReplyType = 'PRAYERS';
+    session.pendingSubmenu = '';
+    session.lastSentAt = new Date();
+    await session.save();
+
+    const isTa = userLang === 'ta' || isTamilQuery;
+    const prayerMsg = formatDailyPrayerMessage(dailyContent, isTa);
+    await wa.sendWhatsAppMessage(replyTarget, prayerMsg);
+  } catch (err) {
+    console.error('[BotHandler] Daily prayer error:', err.message);
+  }
+}
+
+/**
+ * Individual Dispatcher: Send Church Website Link
+ */
+async function sendChurchWebsite(replyTarget, session, wa, isTamilQuery = false) {
+  try {
+    session.invalidInputStreak = 0;
+    session.lastBotReplyType = 'WEBSITE';
+    session.pendingSubmenu = '';
+    session.lastSentAt = new Date();
+    await session.save();
+
+    const churchUrl = getBaseClientUrl();
+    const websiteMsg = isTamilQuery
+      ? `🌐 *புனித ஜான் டி பிரிட்டோ திருத்தலம் — இணையதளம்*\n\nஎமது ஆலய நிகழ்வுகள், திருப்பலி நேரங்கள், வாசகங்கள் மற்றும் ஆன்மீக தகவல்களை அறிய:\n${churchUrl}`
+      : `🌐 *St. John de Britto Church — Official Website*\n\nExplore our parish events, Mass timings, daily readings and Catholic devotions online:\n${churchUrl}`;
+    await wa.sendWhatsAppMessage(replyTarget, websiteMsg);
+  } catch (err) {
+    console.error('[BotHandler] Church website error:', err.message);
+  }
 }
 
 async function sendTodayDevotionsToUser(replyTarget, session, wa) {
@@ -1060,34 +1276,129 @@ _SJDB Connect_`;
       return;
     }
 
-    // ── Non-Numeric Special Handlers (Daily Reflection & Full Devotions) ───────
-    const isSpecificReflectionQuery = /^(reflection|daily reflection|today reflection|today's reflection|தியானம்|இன்றைய தியானம்)$/i.test(normalizedText) ||
-      normalizedText.includes("daily reflection") ||
-      normalizedText.includes("reflection again");
-
-    if (isSpecificReflectionQuery) {
-      try {
-        const dailyContent = await getCachedDailyContent();
-        session.invalidInputStreak = 0;
-        session.lastBotReplyType = 'REFLECTION';
-        session.lastSentAt = new Date();
-        await session.save();
-
-        const reflMsg = formatSingleReflectionMessage(dailyContent, isTamilQuery);
-        await wa.sendWhatsAppMessage(replyTarget, reflMsg);
+    // ── Daily Catholic Content Submenu & Quick Handlers ─────────────────────
+    if (session.pendingSubmenu === 'daily_catholic') {
+      if (menuNum === 1 || /\b(verse|bible|இறைவார்த்தை|வசனம்)\b/i.test(normalizedText)) {
+        await sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery);
         return;
-      } catch (rfErr) {
-        console.error('[BotHandler] Reflection query error:', rfErr.message);
       }
+      if (menuNum === 2 || /\b(readings?|mass readings?|வாசகம்|வாசகங்கள்|திருப்பலி வாசகங்கள்)\b/i.test(normalizedText)) {
+        await sendTodayMassReadings(replyTarget, session, wa, isTamilQuery);
+        return;
+      }
+      if (menuNum === 3 || /\b(reflection|தியானம்|சிந்தனை)\b/i.test(normalizedText)) {
+        await sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery);
+        return;
+      }
+      if (menuNum === 4 || /\b(saint|புனிதர்)\b/i.test(normalizedText)) {
+        await sendTodaySaint(replyTarget, session, wa, isTamilQuery);
+        return;
+      }
+      if (menuNum === 5 || /\b(prayer|prayers?|செபம்|ஜெபம்)\b/i.test(normalizedText)) {
+        await sendTodayPrayer(replyTarget, session, wa, isTamilQuery);
+        return;
+      }
+      if (menuNum === 6 || /\b(website|site|இணையதளம்)\b/i.test(normalizedText)) {
+        await sendChurchWebsite(replyTarget, session, wa, isTamilQuery);
+        return;
+      }
+      // If user typed something else, clear submenu and proceed
+      session.pendingSubmenu = '';
+      await session.save();
     }
 
-    const isDailyDevotionsChoice = /^(daily devotions|daily catholic content|devotions|தினசரி திருப்பலி வாசகங்கள்|தினசரி பக்தி)$/i.test(normalizedText);
-    if (isDailyDevotionsChoice) {
+    // ── Daily Catholic Content Self-Service Menu Trigger ─────────────────────
+    const isDailyCatholicMenuQuery = /^(daily catholic content|daily catholic|catholic content|daily devotions|devotions|தினசரி பக்தி|ஆன்மீக உள்ளடக்கம்|catholic menu|daily menu)$/i.test(normalizedText) ||
+      normalizedText === 'daily devotions' ||
+      normalizedText === 'daily catholic' ||
+      normalizedText === 'daily catholic content';
+
+    if (isDailyCatholicMenuQuery) {
       session.invalidInputStreak = 0;
-      session.lastBotReplyType = 'DEVOTIONS';
+      session.lastBotReplyType = 'DAILY_CATHOLIC_MENU';
+      session.pendingSubmenu = 'daily_catholic';
       session.lastSentAt = new Date();
       await session.save();
-      await sendTodayDevotionsToUser(replyTarget, session, wa);
+
+      const menuMsg = getDailyCatholicContentMenu(isTamilQuery);
+      await wa.sendWhatsAppMessage(replyTarget, menuMsg);
+      return;
+    }
+
+    // ── Individual Daily Catholic Content Requests (Natural Language) ────────
+    // 3️⃣ 🕊️ Daily Reflection (இன்றைய தியானம்)
+    const isSpecificReflectionQuery = /^(today'?s reflection|today reflection|daily reflection|reflection|இன்றைய தியானம்|தியானம்|இன்றைய சிந்தனை|சிந்தனை)$/i.test(normalizedText) ||
+      normalizedText.includes("daily reflection") ||
+      normalizedText.includes("today's reflection") ||
+      normalizedText.includes("today reflection") ||
+      /(இன்றைய தியானம்|இன்றைய சிந்தனை)/.test(rawText);
+
+    if (isSpecificReflectionQuery) {
+      await sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery);
+      return;
+    }
+
+    // 1️⃣ 📖 Bible Verse (இன்றைய இறைவார்த்தை)
+    const isSpecificVerseQuery = (menuNum === 3 && session.pendingSubmenu !== 'daily_catholic') ||
+      /^(today'?s bible verse|today bible verse|bible verse|today'?s verse|today verse|daily verse|daily bible verse|scripture|இன்றைய இறைவார்த்தை|வேத வசனம்|இறைவார்த்தை|வசனம்)$/i.test(normalizedText) ||
+      normalizedText.includes("bible verse") ||
+      normalizedText.includes("today's verse") ||
+      normalizedText.includes("today verse") ||
+      /(இன்றைய இறைவார்த்தை|வேத வசனம்|இறைவார்த்தை)/.test(rawText);
+
+    if (isSpecificVerseQuery) {
+      await sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery);
+      return;
+    }
+
+    // 2️⃣ 📜 Daily Mass Readings (இன்றைய திருப்பலி வாசகங்கள்)
+    const isSpecificReadingsQuery = (menuNum === 4 && session.pendingSubmenu !== 'daily_catholic') ||
+      /^(today'?s mass readings?|today mass readings?|mass readings?|today'?s readings?|today readings?|daily readings?|daily mass readings?|readings?|gospel|இன்றைய திருப்பலி வாசகங்கள்|திருப்பலி வாசகங்கள்|வாசகங்கள்|வாசகம்|இன்றைய வாசகங்கள்)$/i.test(normalizedText) ||
+      normalizedText.includes("mass readings") ||
+      normalizedText.includes("today's readings") ||
+      normalizedText.includes("today readings") ||
+      normalizedText.includes("readings again") ||
+      /(இன்றைய திருப்பலி வாசகங்கள்|திருப்பலி வாசகங்கள்|இன்றைய வாசகங்கள்)/.test(rawText);
+
+    if (isSpecificReadingsQuery) {
+      await sendTodayMassReadings(replyTarget, session, wa, isTamilQuery);
+      return;
+    }
+
+    // 4️⃣ ✨ Saint of the Day (இன்றைய புனிதர்)
+    const isSaintChoice = (menuNum === 5 && session.pendingSubmenu !== 'daily_catholic') ||
+      /^(today'?s saint|today saint|saint of the day|saint|saints|who is today saint|who is the saint today|இன்றைய புனிதர்|புனிதர் யார்|புனிதர்)$/i.test(normalizedText) ||
+      normalizedText.includes("saint of the day") ||
+      normalizedText.includes("today's saint") ||
+      normalizedText.includes("today saint") ||
+      /(இன்றைய புனிதர்|புனிதர் யார்)/.test(rawText);
+
+    if (isSaintChoice) {
+      await sendTodaySaint(replyTarget, session, wa, isTamilQuery);
+      return;
+    }
+
+    // 5️⃣ 🙏 Daily Prayer / Catholic Prayers (இன்றைய செபம்)
+    const isPrayersChoice = (menuNum === 6 && session.pendingSubmenu !== 'daily_catholic') ||
+      /^(today'?s prayer|today prayer|daily prayer|prayer|prayers|catholic prayers?|common prayers?|our father|hail mary|holy rosary|rosary|litany|இன்றைய செபம்|செபம்|ஜெபம்|கத்தோலிக்க செபங்கள்)$/i.test(normalizedText) ||
+      normalizedText.includes("today's prayer") ||
+      normalizedText.includes("daily prayer") ||
+      normalizedText.includes("catholic prayer") ||
+      normalizedText.includes("rosary prayer") ||
+      /(இன்றைய செபம்|கத்தோலிக்க செபங்கள்|பரலோக மந்திரம்|மங்கள வார்த்தை)/.test(rawText);
+
+    if (isPrayersChoice) {
+      await sendTodayPrayer(replyTarget, session, wa, isTamilQuery);
+      return;
+    }
+
+    // 6️⃣ 🌐 Church Website
+    const isWebsiteChoice = /^(church website|website|ஆலய இணையதளம்|இணையதளம்)$/i.test(normalizedText) ||
+      normalizedText === 'website' ||
+      normalizedText === 'site';
+
+    if (isWebsiteChoice) {
+      await sendChurchWebsite(replyTarget, session, wa, isTamilQuery);
       return;
     }
 
@@ -1207,103 +1518,26 @@ Call Parish Office: +91 96556 39144
     }
 
     // 3️⃣ 📖 Option 3: Daily Bible Verse
-    const isSpecificVerseQuery = menuNum === 3 ||
-      /\b(verse|bible verse|today verse|today\'?s verse|daily verse|scripture)\b/i.test(normalizedText) ||
-      normalizedText.includes("bible verse") ||
-      normalizedText.includes("today's verse") ||
-      /(வேத வசனம்|இறைவார்த்தை|வசனம்|இன்றைய இறைவார்த்தை)/.test(rawText);
-
-    if (isSpecificVerseQuery) {
-      try {
-        const dailyContent = await getCachedDailyContent();
-        session.invalidInputStreak = 0;
-        session.lastBotReplyType = 'VERSE';
-        session.lastSentAt = new Date();
-        await session.save();
-
-        const verseMsg = formatSingleVerseMessage(dailyContent, isTamilQuery);
-        await wa.sendWhatsAppMessage(replyTarget, verseMsg);
-        return;
-      } catch (vErr) {
-        console.error('[BotHandler] Verse query error:', vErr.message);
-      }
+    if (menuNum === 3) {
+      await sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery);
+      return;
     }
 
     // 4️⃣ 📜 Option 4: Daily Mass Readings
-    const isSpecificReadingsQuery = menuNum === 4 ||
-      /\b(readings?|mass readings?|today readings?|today\'?s readings?|daily readings?|daily mass readings?|gospel)\b/i.test(normalizedText) ||
-      normalizedText.includes("mass readings") ||
-      normalizedText.includes("today's readings") ||
-      normalizedText.includes("readings again") ||
-      /(வாசகம்|வாசகங்கள்|திருப்பலி வாசகங்கள்|இன்றைய வாசகங்கள்)/.test(rawText);
-
-    if (isSpecificReadingsQuery) {
-      try {
-        const dailyContent = await getCachedDailyContent();
-        session.invalidInputStreak = 0;
-        session.lastBotReplyType = 'READINGS';
-        session.lastSentAt = new Date();
-        await session.save();
-
-        const readingsMsg = formatSingleReadingsMessage(dailyContent, isTamilQuery);
-        await wa.sendWhatsAppMessage(replyTarget, readingsMsg);
-        return;
-      } catch (rErr) {
-        console.error('[BotHandler] Readings query error:', rErr.message);
-      }
+    if (menuNum === 4) {
+      await sendTodayMassReadings(replyTarget, session, wa, isTamilQuery);
+      return;
     }
 
     // 5️⃣ 🌟 Option 5: Saint of the Day
-    const isSaintChoice = menuNum === 5 ||
-      /\b(saint|today saint|saint of the day|who is today saint|who is the saint today|today\'?s saint|saints)\b/i.test(normalizedText) ||
-      normalizedText.includes("saint of the day") ||
-      /(இன்றைய புனிதர்|புனிதர் யார்|புனிதர்)/.test(rawText);
-
-    if (isSaintChoice) {
-      try {
-        const dailyContent = await getCachedDailyContent();
-        session.invalidInputStreak = 0;
-        session.lastBotReplyType = 'SAINT';
-        session.lastSentAt = new Date();
-        await session.save();
-
-        const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
-        const saintInfoMsg = generateSaintInfoMessage({ dailyContent, language: isTamilQuery ? 'ta' : (session.language || 'en') });
-
-        let sentMedia = false;
-        if (saintImageUrl && typeof wa.sendWhatsAppMedia === 'function') {
-          try {
-            sentMedia = await wa.sendWhatsAppMedia(replyTarget, { url: saintImageUrl, caption: saintInfoMsg, mimetype: 'image/jpeg' });
-          } catch (mErr) {
-            console.warn('[BotHandler] Saint media send fallback:', mErr.message);
-            sentMedia = false;
-          }
-        }
-
-        if (!sentMedia) {
-          await wa.sendWhatsAppMessage(replyTarget, saintInfoMsg);
-        }
-        return;
-      } catch (sErr) {
-        console.error('[BotHandler] Saint fetch error:', sErr.message);
-      }
+    if (menuNum === 5) {
+      await sendTodaySaint(replyTarget, session, wa, isTamilQuery);
+      return;
     }
 
     // 6️⃣ 🙏 Option 6: Catholic Prayers
-    const isPrayersChoice = menuNum === 6 ||
-      /\b(catholic prayers?|prayers?|common prayers?|our father|hail mary|holy rosary|rosary|litany)\b/i.test(normalizedText) ||
-      normalizedText.includes("catholic prayer") ||
-      normalizedText.includes("rosary prayer") ||
-      /(செபம்|செபங்கள்|ஜெபம்|ஜெபங்கள்|கத்தோலிக்க செபங்கள்|பரலோக மந்திரம்|மங்கள வார்த்தை)/.test(rawText);
-
-    if (isPrayersChoice) {
-      session.invalidInputStreak = 0;
-      session.lastBotReplyType = 'PRAYERS';
-      session.lastSentAt = new Date();
-      await session.save();
-
-      const prayersMsg = formatCatholicPrayersMessage(isTamilQuery);
-      await wa.sendWhatsAppMessage(replyTarget, prayersMsg);
+    if (menuNum === 6) {
+      await sendTodayPrayer(replyTarget, session, wa, isTamilQuery);
       return;
     }
 
@@ -1836,7 +2070,14 @@ module.exports = {
   handleIncomingMessage,
   extractMenuNumber,
   getServicesMenuMessage,
+  getDailyCatholicContentMenu,
   formatCatholicPrayersMessage,
+  sendTodayBibleVerse,
+  sendTodayMassReadings,
+  sendTodayDailyReflection,
+  sendTodaySaint,
+  sendTodayPrayer,
+  sendChurchWebsite,
   resetBotCachesAndSessions: async () => {
     processedMessageIdsCache.clear();
     incomingMsgDeduplication.clear();

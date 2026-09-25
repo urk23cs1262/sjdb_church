@@ -14,6 +14,7 @@ import { FaCalendarAlt } from "react-icons/fa";
 import { GiPrayerBeads, GiHolyGrail, GiAngelWings } from "react-icons/gi";
 import api, { UPLOADS_URL } from '../../services/api';
 import { useAuth } from '../../context/context_auth_context';
+import { getTamilBibleReference, getEnglishBibleReference } from '../../utils/bibleRefHelper';
 import heroBgImage from '../../assets/church_extirior.png';
 import stJohnImage from '../../assets/sjdb_image.png';
 import priestImage from '../../assets/NIVESH R 1.jpg';
@@ -131,10 +132,20 @@ export default function Home() {
   }, []);
 
   const verse = dailyVerse ? {
-    ref: dailyVerse.reference,
-    en: dailyVerse.english,
-    ta: dailyVerse.tamil || BIBLE_VERSES[verseIdx].ta
-  } : BIBLE_VERSES[verseIdx];
+    ref: dailyVerse.reference || dailyVerse.ref,
+    en: dailyVerse.english || dailyVerse.verseTextEn,
+    ta: dailyVerse.tamil || dailyVerse.verseTextTa || BIBLE_VERSES[verseIdx].ta,
+    category: dailyVerse.category,
+    refEn: dailyVerse.refEn,
+    refTa: dailyVerse.refTa
+  } : {
+    ...BIBLE_VERSES[verseIdx],
+    refEn: BIBLE_VERSES[verseIdx].ref,
+    refTa: null
+  };
+
+  const refEn = verse.refEn || getEnglishBibleReference(verse.ref);
+  const refTa = verse.refTa || getTamilBibleReference(verse.ref);
 
   return (
     <div className="min-h-screen bg-church-cream ">
@@ -279,11 +290,49 @@ export default function Home() {
                 {verse.category}
               </span>
             )}
-            <blockquote className="text-xl sm:text-2xl md:text-3xl text-white font-serif italic leading-relaxed mb-4">
-              "{isTamil ? verse.ta : verse.en}"
-            </blockquote>
-            <p className="text-gold-400 font-semibold text-sm uppercase tracking-widest">— {verse.ref}</p>
-            {!isTamil && <p className="text-gray-400 text-sm mt-3 font-tamil">{verse.ta}</p>}
+            {isTamil ? (
+              <div className="space-y-6">
+                <div>
+                  <blockquote className="text-xl sm:text-2xl md:text-3xl text-white font-tamil font-bold leading-relaxed mb-3">
+                    "{verse.ta}"
+                  </blockquote>
+                  <p className="text-gold-400 font-semibold text-base sm:text-lg font-tamil tracking-wide">
+                    — {refTa}
+                  </p>
+                </div>
+                {verse.en && verse.en !== verse.ta && (
+                  <div className="pt-4 border-t border-white/15 max-w-2xl mx-auto">
+                    <p className="text-gray-300 text-sm sm:text-base font-serif italic mb-2">
+                      "{verse.en}"
+                    </p>
+                    <p className="text-gold-400/80 font-semibold text-xs sm:text-sm uppercase tracking-widest">
+                      — {refEn}
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <div>
+                  <blockquote className="text-xl sm:text-2xl md:text-3xl text-white font-serif italic leading-relaxed mb-3">
+                    "{verse.en}"
+                  </blockquote>
+                  <p className="text-gold-400 font-semibold text-sm sm:text-base uppercase tracking-widest">
+                    — {refEn}
+                  </p>
+                </div>
+                {verse.ta && (
+                  <div className="pt-4 border-t border-white/15 max-w-2xl mx-auto">
+                    <p className="text-gray-200 text-base sm:text-lg font-tamil leading-relaxed mb-2">
+                      "{verse.ta}"
+                    </p>
+                    <p className="text-gold-400 font-semibold text-base sm:text-lg font-tamil tracking-wide">
+                      — {refTa}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </motion.div>
         </div>
       </section>

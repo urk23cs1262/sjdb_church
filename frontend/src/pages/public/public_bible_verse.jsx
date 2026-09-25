@@ -11,6 +11,7 @@ import downloadjs from 'downloadjs';
 import PageHero from '../../components/common/common_page_hero';
 import api from '../../services/api';
 import { fetchSaintOfTheDay, searchSaintImage, cleanSaintName, formatFiveLines } from '../../services/saintOfDay';
+import { getTamilBibleReference, getEnglishBibleReference } from '../../utils/bibleRefHelper';
 
 
 // ── Date helpers — always use LOCAL time, never UTC ────────────────────────
@@ -399,12 +400,17 @@ export default function BibleVerse() {
   // Normalise to a single shape used throughout the JSX
   const verse = dailyVerseData
     ? {
-      ref: dailyVerseData.reference,
-      en: dailyVerseData.english,
-      ta: dailyVerseData.tamil || dailyVerseData.english,
-      category: dailyVerseData.category
+      ref: dailyVerseData.reference || dailyVerseData.ref,
+      en: dailyVerseData.english || dailyVerseData.verseTextEn,
+      ta: dailyVerseData.tamil || dailyVerseData.verseTextTa || dailyVerseData.english,
+      category: dailyVerseData.category,
+      refEn: dailyVerseData.refEn,
+      refTa: dailyVerseData.refTa
     }
     : null;
+
+  const refEn = verse ? (verse.refEn || getEnglishBibleReference(verse.ref)) : '';
+  const refTa = verse ? (verse.refTa || getTamilBibleReference(verse.ref)) : '';
 
   // Fetch Original Tamil Reading for a date
   const fetchReading = async (d) => {
@@ -498,24 +504,46 @@ export default function BibleVerse() {
 
   const shareVerse = () => {
     if (!verse) return;
-    let text = `Daily Verse / தினசரி விவிலிய வசனம்\n\n`;
-    if (verse.en) {
-      text += `"${verse.en}"\n`;
+    let text = `📖 *${isTamil ? 'இன்றைய இறைவார்த்தை / DAILY BIBLE VERSE' : 'DAILY BIBLE VERSE / இன்றைய இறைவார்த்தை'}*\n\n`;
+    if (isTamil) {
+      if (verse.ta) {
+        text += `"${verse.ta}"\n— *${refTa}*\n\n`;
+      }
+      if (verse.en && verse.en !== verse.ta) {
+        text += `"${verse.en}"\n— *${refEn}*\n\n`;
+      }
+    } else {
+      if (verse.en) {
+        text += `"${verse.en}"\n— *${refEn}*\n\n`;
+      }
+      if (verse.ta && verse.ta !== verse.en) {
+        text += `"${verse.ta}"\n— *${refTa}*\n\n`;
+      }
     }
-    if (verse.ta && verse.ta !== verse.en) {
-      text += `\n"${verse.ta}"\n`;
-    }
-    text += `\n— ${verse.ref}`;
+    text += `*St. John De Britto Church, Kalayarkoil*`;
     shareOnWhatsApp(text);
   };
 
   const downloadVerseImage = async () => {
-    if (!verseCardRef.current) return;
     try {
-      toast.loading('Generating image...', { id: 'img-gen' });
-      const dataUrl = await htmlToImage.toPng(verseCardRef.current, { quality: 0.95, cacheBust: true });
-      downloadjs(dataUrl, 'daily-verse.png');
-      toast.success('Image downloaded!', { id: 'img-gen' });
+      toast.loading('Downloading HD image...', { id: 'img-gen' });
+      try {
+        const response = await fetch('/api/settings/daily-verses/today/image');
+        if (response.ok) {
+          const blob = await response.blob();
+          downloadjs(blob, `daily-bible-verse-${localDateKey()}.png`, 'image/png');
+          toast.success('HD Image downloaded!', { id: 'img-gen' });
+          return;
+        }
+      } catch (e) {
+        // Fallback to client-side capture
+      }
+
+      if (verseCardRef.current) {
+        const dataUrl = await htmlToImage.toPng(verseCardRef.current, { quality: 1.0, pixelRatio: 2, cacheBust: true });
+        downloadjs(dataUrl, 'daily-verse.png');
+        toast.success('Image downloaded!', { id: 'img-gen' });
+      }
     } catch (err) {
       console.error(err);
       toast.error('Failed to generate image', { id: 'img-gen' });
@@ -636,33 +664,51 @@ export default function BibleVerse() {
                       </span>
                     )}
 
-                    {/* Tamil verse (shown when language is Tamil or if both exist) */}
-                    {isTamil && verse.ta ? (
-                      <p className="font-tamil text-xl md:text-2xl text-church-royal-blue font-bold leading-relaxed mb-4">
-                        "{verse.ta}"
-                      </p>
+                    {isTamil ? (
+                      /* Tamil mode: Tamil verse first with Tamil chapter name, English verse below with English chapter name */
+                      <div className="space-y-6 max-w-2xl mx-auto">
+                        <div>
+                          <p className="font-tamil text-xl md:text-2xl text-church-royal-blue font-bold leading-relaxed mb-3">
+                            "{verse.ta}"
+                          </p>
+                          <p className="text-church-gold font-bold text-base md:text-lg font-tamil tracking-wide">
+                            — {refTa}
+                          </p>
+                        </div>
+                        {verse.en && verse.en !== verse.ta && (
+                          <div className="pt-4 border-t border-gray-100">
+                            <p className="font-serif italic text-base md:text-lg text-gray-600 leading-relaxed mb-2">
+                              "{verse.en}"
+                            </p>
+                            <p className="text-church-gold/90 font-bold text-sm md:text-base tracking-wide">
+                              — {refEn}
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     ) : (
-                      /* English verse */
-                      <p className="font-serif italic text-2xl md:text-3xl text-church-royal-blue leading-relaxed mb-4">
-                        "{verse.en}"
-                      </p>
+                      /* English mode: English verse first with English chapter name, Tamil verse below with Tamil chapter name */
+                      <div className="space-y-6 max-w-2xl mx-auto">
+                        <div>
+                          <p className="font-serif italic text-2xl md:text-3xl text-church-royal-blue leading-relaxed mb-3">
+                            "{verse.en}"
+                          </p>
+                          <p className="text-church-gold font-bold text-base md:text-lg tracking-wide">
+                            — {refEn}
+                          </p>
+                        </div>
+                        {verse.ta && verse.ta !== verse.en && (
+                          <div className="pt-4 border-t border-gray-100">
+                            <p className="font-tamil text-lg md:text-xl text-gray-700 font-semibold leading-relaxed mb-2">
+                              "{verse.ta}"
+                            </p>
+                            <p className="text-church-gold font-bold text-base md:text-lg font-tamil tracking-wide">
+                              — {refTa}
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     )}
-
-                    {/* Show the other language as secondary text */}
-                    {isTamil && verse.en && verse.en !== verse.ta && (
-                      <p className="font-serif italic text-sm text-gray-500 mb-3 max-w-xl mx-auto">
-                        "{verse.en}"
-                      </p>
-                    )}
-                    {!isTamil && verse.ta && verse.ta !== verse.en && (
-                      <p className="font-tamil text-sm text-gray-500 mb-3 max-w-xl mx-auto">
-                        "{verse.ta}"
-                      </p>
-                    )}
-
-                    <p className="text-church-gold font-bold text-base md:text-lg tracking-wide">
-                      — {verse.ref}
-                    </p>
                   </>
                 ) : (
                   <p className="text-gray-400 italic">No verse set for today.</p>

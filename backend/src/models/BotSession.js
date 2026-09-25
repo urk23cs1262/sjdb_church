@@ -53,6 +53,7 @@ const botSessionSchema = new mongoose.Schema({
   lastSentResponseHash: { type: String, default: '' },
   lastSentAt: { type: Date },
   lastBotReplyType: { type: String, default: '' },
+  pendingSubmenu: { type: String, default: '' },
   invalidInputStreak: { type: Number, default: 0 },
   lastMenuSentAt: { type: Date, default: null },
   lastReplyText: { type: String, default: '' }

@@ -144,6 +144,9 @@ function generateDailyNotificationHtml({
   hasSaintImageAttachment = false
 }) {
   const { formattedDate, formattedDateTa, bible, massReadings, reflection, saint, readingsUrl } = dailyContent;
+  const { getTamilBibleReference, getEnglishBibleReference } = require('../utils/bibleRefHelper');
+  const refEn = getEnglishBibleReference(bible?.ref);
+  const refTa = getTamilBibleReference(bible?.ref);
 
   return `
 <!DOCTYPE html>
@@ -185,26 +188,30 @@ function generateDailyNotificationHtml({
           <tr>
             <td style="padding: 28px 24px;">
 
-              <!-- SECTION 1: BIBLE VERSES (BILINGUAL) -->
+              <!-- SECTION 1: BIBLE VERSES (IMAGE & BILINGUAL TEXT) -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 24px;">
                 <tr>
                   <td>
+                    ${hasBibleImageAttachment ? `
+                    <div style="margin-bottom: 16px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,0.08); border: 1px solid #E2E8F0; text-align: center;">
+                      <img src="cid:daily_bible_verse_img" alt="Daily Bible Verse" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />
+                    </div>
+                    ` : ''}
+
                     <div style="display: flex; align-items: center; margin-bottom: 12px;">
-                      <h2 style="margin: 0; font-size: 17px; font-weight: 700; color: #0F172A;">DAILY BIBLE VERSES / தினசரி வேத வசனம்</h2>
+                      <h2 style="margin: 0; font-size: 17px; font-weight: 700; color: #0F172A;">📖 இன்றைய இறைவார்த்தை / DAILY BIBLE VERSE</h2>
+                    </div>
+
+                    <!-- English Verse -->
+                    <div style="background-color: #F8FAFC; border-left: 4px solid #1E293B; padding: 14px 16px; border-radius: 0 8px 8px 0; margin-bottom: 12px;">
+                      <p style="margin: 0 0 4px 0; font-size: 15px; color: #1E293B; line-height: 1.6; font-style: italic;">"${escapeHtml(bible.english)}"</p>
+                      <div style="font-size: 13px; font-weight: 700; color: #475569; margin-top: 6px;">— ${escapeHtml(refEn)}</div>
                     </div>
 
                     <!-- Tamil Verse -->
                     <div style="background-color: #F8FAFC; border-left: 4px solid #C5A059; padding: 14px 16px; border-radius: 0 8px 8px 0; margin-bottom: 12px;">
-                      <div style="font-size: 12px; font-weight: 700; color: #C5A059; text-transform: uppercase; margin-bottom: 4px;">தமிழ் (Tamil)</div>
-                      <p style="margin: 0 0 6px 0; font-size: 15px; color: #1E293B; line-height: 1.6; font-style: italic;">"${escapeHtml(bible.tamil)}"</p>
-                      <div style="font-size: 13px; font-weight: 600; color: #64748B;">— ${escapeHtml(bible.ref)}</div>
-                    </div>
-
-                    <!-- English Verse -->
-                    <div style="background-color: #F8FAFC; border-left: 4px solid #1E293B; padding: 14px 16px; border-radius: 0 8px 8px 0; margin-bottom: 14px;">
-                      <div style="font-size: 12px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 4px;">English</div>
-                      <p style="margin: 0 0 6px 0; font-size: 15px; color: #1E293B; line-height: 1.6; font-style: italic;">"${escapeHtml(bible.english)}"</p>
-                      <div style="font-size: 13px; font-weight: 600; color: #64748B;">— ${escapeHtml(bible.ref)}</div>
+                      <p style="margin: 0 0 4px 0; font-size: 15px; color: #1E293B; line-height: 1.6; font-style: italic;">"${escapeHtml(bible.tamil)}"</p>
+                      <div style="font-size: 13px; font-weight: 700; color: #9A7B38; margin-top: 6px;">— ${escapeHtml(refTa)}</div>
                     </div>
 
                     <div style="margin-top: 10px; padding-top: 6px; font-size: 12px; color: #64748B; text-align: right;">
