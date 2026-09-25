@@ -27,7 +27,7 @@ function getStep1BotLanguageMessage() {
 ⛪ *St. John de Britto Church, Kalayarkoil*
 _Connecting Faith & Community_
 
-🌐 *1️⃣ Bot Language / போட் மொழி*
+🌐 *1️⃣ Bot Language / பாட் மொழி*
 
 Please select your preferred language for bot conversation:
 தயவுசெய்து போட் உரையாடலுக்கான மொழியைத் தேர்ந்தெடுக்கவும்:

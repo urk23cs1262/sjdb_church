@@ -525,25 +525,20 @@ export default function BibleVerse() {
   };
 
   const downloadVerseImage = async () => {
+    if (!verseCardRef.current) return;
     try {
-      toast.loading('Downloading HD image...', { id: 'img-gen' });
-      try {
-        const response = await fetch('/api/settings/daily-verses/today/image');
-        if (response.ok) {
-          const blob = await response.blob();
-          downloadjs(blob, `daily-bible-verse-${localDateKey()}.png`, 'image/png');
-          toast.success('HD Image downloaded!', { id: 'img-gen' });
-          return;
+      toast.loading('Generating HD image...', { id: 'img-gen' });
+      const dataUrl = await htmlToImage.toPng(verseCardRef.current, {
+        quality: 1.0,
+        pixelRatio: 3,
+        cacheBust: true,
+        filter: (node) => {
+          if (node.tagName === 'BUTTON' || node.classList?.contains('no-export')) return false;
+          return true;
         }
-      } catch (e) {
-        // Fallback to client-side capture
-      }
-
-      if (verseCardRef.current) {
-        const dataUrl = await htmlToImage.toPng(verseCardRef.current, { quality: 1.0, pixelRatio: 2, cacheBust: true });
-        downloadjs(dataUrl, 'daily-verse.png');
-        toast.success('Image downloaded!', { id: 'img-gen' });
-      }
+      });
+      downloadjs(dataUrl, `daily-verse-${localDateKey()}.png`, 'image/png');
+      toast.success('HD Image downloaded!', { id: 'img-gen' });
     } catch (err) {
       console.error(err);
       toast.error('Failed to generate image', { id: 'img-gen' });
@@ -714,27 +709,36 @@ export default function BibleVerse() {
                   <p className="text-gray-400 italic">No verse set for today.</p>
                 )}
 
-                {/* Verse action buttons */}
+                {/* Clean Church Footer Watermark inside card */}
                 {verse && !verseLoading && (
-                  <div className="flex items-center justify-center gap-3 sm:gap-4 mt-6 pt-5 border-t border-gray-100/80 flex-wrap">
-                    <button
-                      onClick={shareVerse}
-                      className="btn-gold text-sm sm:text-base font-bold py-2.5 sm:py-3 px-5 sm:px-7 flex items-center justify-center gap-2 shadow-md hover:shadow-lg rounded-xl sm:rounded-full transition-all duration-300 active:scale-95"
-                    >
-                      <FaWhatsapp className="text-lg sm:text-xl flex-shrink-0" />
-                      <span>Share on WhatsApp</span>
-                    </button>
-                    <button
-                      onClick={downloadVerseImage}
-                      className="btn-outline-gold text-sm sm:text-base font-bold py-2.5 sm:py-3 px-5 sm:px-7 flex items-center justify-center gap-2 shadow-sm hover:shadow-md rounded-xl sm:rounded-full transition-all duration-300 active:scale-95"
-                    >
-                      <FiDownload className="text-lg sm:text-xl flex-shrink-0" />
-                      <span>Download Image</span>
-                    </button>
+                  <div className="mt-8 pt-4 border-t border-gray-100 flex items-center justify-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-widest">
+                    <span>St. John de Britto Church</span>
+                    <span>•</span>
+                    <span>Kalayarkoil</span>
                   </div>
                 )}
               </div>
             </div>
+
+            {/* Verse action buttons (outside verseCardRef so they NEVER appear in downloaded image) */}
+            {verse && !verseLoading && (
+              <div className="flex items-center justify-center gap-3 sm:gap-4 mt-6 pt-2 flex-wrap no-export">
+                <button
+                  onClick={shareVerse}
+                  className="btn-gold text-sm sm:text-base font-bold py-2.5 sm:py-3 px-5 sm:px-7 flex items-center justify-center gap-2 shadow-md hover:shadow-lg rounded-xl sm:rounded-full transition-all duration-300 active:scale-95"
+                >
+                  <FaWhatsapp className="text-lg sm:text-xl flex-shrink-0" />
+                  <span>Share on WhatsApp</span>
+                </button>
+                <button
+                  onClick={downloadVerseImage}
+                  className="btn-outline-gold text-sm sm:text-base font-bold py-2.5 sm:py-3 px-5 sm:px-7 flex items-center justify-center gap-2 shadow-sm hover:shadow-md rounded-xl sm:rounded-full transition-all duration-300 active:scale-95"
+                >
+                  <FiDownload className="text-lg sm:text-xl flex-shrink-0" />
+                  <span>Download Image</span>
+                </button>
+              </div>
+            )}
           </motion.div>
 
           {/* ── Section header ────────────────────────────────────────── */}
