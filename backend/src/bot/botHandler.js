@@ -125,7 +125,7 @@ function getMainMenuMessage(userName, isTamil = false) {
 }
 
 /**
- * Dedicated 1-13 Services & Help Desk Message (English & Tamil)
+ * Dedicated 1-14 Services & Help Desk Message (English & Tamil)
  */
 function getServicesMenuMessage(isTamil = false) {
   if (isTamil) {
@@ -137,17 +137,18 @@ _புனித அருளானந்தர் ஆலயம், காளை
 3️⃣ 📖 *தினசரி விவிலிய வசனம்* (Daily Bible Verse)
 4️⃣ 📜 *திருப்பலி வாசகங்கள்* (Daily Mass Readings)
 5️⃣ 🌟 *இன்றைய புனிதர்* (Saint of the Day)
-6️⃣ 🙏 *கத்தோலிக்க செபங்கள்* (Catholic Prayers)
+6️⃣ 🙏 *கத்தோலிக்க செபங்கள் & ஜெபமாலை* (Catholic Prayers)
 7️⃣ 📅 *பங்கு நிகழ்வுகள்* (Church Events)
 8️⃣ 📢 *பங்கு அறிவிப்புகள்* (Parish Announcements)
 9️⃣ 📍 *ஆலய அமைவிடம் & வரைபடம்* (Church Location & Map)
-1️⃣0️⃣ 👥 *பங்கு அமைப்புகள் & அன்பியங்கள்* (Parish Ministries & Anbiyams)
+🔟 👥 *பங்கு அமைப்புகள் & அன்பியங்கள்* (Parish Ministries & Anbiyams)
 1️⃣1️⃣ 👑 *பங்குத்தந்தையர்கள்* (Parish Priest & Clergy)
 1️⃣2️⃣ 🏛️ *ஆலய வரலாறு* (Church History)
 1️⃣3️⃣ 📞 *தொடர்பு விபரம்* (Contact Church)
+1️⃣4️⃣ 📜 *திருப்பலி கருத்து & சான்றிதழ்கள்* (Mass Intentions & Certificates)
 
-👉 *1 முதல் 13 வரை உள்ள எண்ணை அழுத்தவும் அல்லது உங்கள் கேள்வியை நேரடியாகக் கேட்கவும்!*
-_(எ.கா: "திருப்பலி நேரம்", "ஒப்புரவு நேரம்", "இன்றைய வாசகங்கள்")_`;
+👉 *1 முதல் 14 வரை உள்ள எண்ணை அழுத்தவும் அல்லது உங்கள் கேள்வியை நேரடியாகக் கேட்கவும்!*
+➡️ *முதன்மை மெனுவிற்குத் திரும்ப "Menu" என அனுப்பவும்.*`;
   }
 
   return `⛪ *SJDB Connect – Services & Help Desk*
@@ -158,36 +159,149 @@ _St. John de Britto Church, Kalayarkoil_
 3️⃣ 📖 *Daily Bible Verse*
 4️⃣ 📜 *Daily Mass Readings*
 5️⃣ 🌟 *Saint of the Day*
-6️⃣ 🙏 *Catholic Prayers*
+6️⃣ 🙏 *Catholic Prayers & Rosary*
 7️⃣ 📅 *Church Events*
 8️⃣ 📢 *Parish Announcements*
 9️⃣ 📍 *Church Location & Map*
-1️⃣0️⃣ 👥 *Parish Ministries & Anbiyams*
+🔟 👥 *Parish Ministries & Anbiyams*
 1️⃣1️⃣ 👑 *Parish Priest & Clergy*
 1️⃣2️⃣ 🏛️ *Church History*
 1️⃣3️⃣ 📞 *Contact Church*
+1️⃣4️⃣ 📜 *Mass Intentions & Certificates*
 
-👉 *Reply with a number (1-13) or type your question naturally.*
-_(e.g., "What time is Mass?", "Where is the church?", "Confession timings")_`;
+👉 *Reply with a number (1-14) or type your question naturally.*
+➡️ *Type "Menu" anytime to return to the Main Menu.*`;
 }
 
 /**
- * Safely and deterministically extracts menu numbers 1 to 13 from raw user inputs.
+ * Comprehensive Church Information Message (Option 6 from Main Menu)
+ */
+function formatChurchInformationMessage(isTamil = false) {
+  if (isTamil) {
+    return `📜 *புனித அருளானந்தர் ஆலயம் — ஆலய விபரங்கள் (Church Information)*
+_காளையார்கோவில், சிவகங்கை மறைமாவட்டம்_
+
+🏛️ *ஆலய வரலாறு & பாரம்பரியம்:*
+போர்ச்சுகல் நாட்டிலிருந்து இயேசு சபைத் துறவியாக இந்தியா வந்து, மறவர் சீமையில் நற்செய்தி அறிவித்து, ஓரியூரில் விசுவாசத்திற்காக இரத்தசாட்சியாய் மரித்த புனித யோவான் தே பிரிட்டோ (அருளானந்தர்) அவர்களின் திருத்தலம். 300+ ஆண்டுகள் பழமையான வரலாற்றுச் சிறப்புமிக்க புனித ஆலயம்.
+
+👑 *பங்குப் பணியாளர்கள் (Clergy):*
+• பங்குத்தந்தை: அருட்தந்தை லூயிஸ்
+• உதவி பங்குத்தந்தை: அருட்தந்தை அந்தோணி
+
+📍 *ஆலய அமைவிடம்:*
+புனித அருளானந்தர் ஆலயம், காளையார்கோவில், சிவகங்கை மாவட்டம், தமிழ்நாடு – 630551.
+🗺️ *Google Maps:* https://maps.app.goo.gl/StJohnDeBrittoChurch
+
+🕒 *பங்கு அலுவலக நேரம்:*
+காலை 9:00 – 12:30 | மாலை 4:00 – 8:00
+📞 *தொலைபேசி:* +91 96556 39144
+📧 *மின்னஞ்சல்:* stjdbchurch@gmail.com
+🌐 *இணையதளம்:* ${getSiteUrl(SITE_ROUTES.ABOUT)}
+
+👉 *திருப்பலி நேரங்களுக்கு '2', நிகழ்வுகளுக்கு '4', அல்லது 14 சேவைகளைக் காண 'Services' என அனுப்பவும்.*`;
+  }
+
+  return `📜 *St. John de Britto Church — Church Information*
+_Kalayarkoil, Sivagangai Diocese_
+
+🏛️ *Church Heritage & History:*
+A sacred Catholic pilgrimage shrine with over 300 years of profound faith, honoring St. John de Britto (Arulanandar), Portuguese Jesuit missionary and martyr who proclaimed Christ across Marava country. Feast Day: February 4.
+
+👑 *Parish Clergy:*
+• Parish Priest: Rev. Fr. Louis
+• Assistant Parish Priest: Rev. Fr. Antony
+
+📍 *Location:*
+St. John de Britto Church, Kalayarkoil, Sivagangai District, Tamil Nadu – 630551.
+🗺️ *Google Maps:* https://maps.app.goo.gl/StJohnDeBrittoChurch
+
+🕒 *Parish Office Hours:*
+9:00 AM – 12:30 PM | 4:00 PM – 8:00 PM
+📞 *Phone:* +91 96556 39144
+📧 *Email:* stjdbchurch@gmail.com
+🌐 *Website Portal:* ${getSiteUrl(SITE_ROUTES.ABOUT)}
+
+👉 *Reply 2 for Mass Timings, 4 for Events, or type "Services" for the complete 14 Parish Help Desk services.*`;
+}
+
+/**
+ * Interactive Help & Guidance Guide (Option 8 from Main Menu)
+ */
+function formatHelpMessage(isTamil = false) {
+  if (isTamil) {
+    return `❓ *உதவி & வழிகாட்டி (SJDB Connect Help Desk)*
+_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
+
+எங்கள் வாட்ஸ்அப் போட்டை எவ்வாறு பயன்படுத்துவது?
+
+1️⃣ *முதன்மை மெனு:*
+• *Menu* என அனுப்பினால் முதன்மை மெனுவைக் காணலாம் (விருப்பங்கள் 1 முதல் 8).
+
+2️⃣ *14 பங்கு சேவைகள்:*
+• *Services* என தட்டச்சு செய்தால் அனைத்து 14 பங்கு சேவைகளின் பட்டியலைக் காணலாம்.
+
+3️⃣ *இயல்பான கேள்விகள் (Natural Chat):*
+நீங்கள் எந்த கேள்வியையும் நேரடியாகத் தட்டச்சு செய்யலாம்:
+• "திருப்பலி நேரம் என்ன?"
+• "இன்றைய விவிலிய வசனம்"
+• "இன்றைய புனிதர் யார்?"
+• "திருப்பலி கருத்து வைக்க வேண்டும்"
+• "ஆலய அமைவிடம் எங்கு உள்ளது?"
+
+4️⃣ *விருப்பங்கள் & மொழி மாற்றம்:*
+• *Preferences* — உங்கள் தினசரி செய்திகளைத் தேர்ந்தெடுக்க
+• *Language* — தமிழ் அல்லது ஆங்கில மொழியைத் தேர்ந்தெடுக்க
+
+📞 *நேரடி உதவிக்கு:*
+பங்கு அலுவலகம்: +91 96556 39144 (காலை 9:00 - 12:30 & மாலை 4:00 - 8:00)
+🌐 *இணையதளம்:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`;
+  }
+
+  return `❓ *Help & Guidance (SJDB Connect)*
+_St. John de Britto Church, Kalayarkoil_
+
+How to use the SJDB Connect WhatsApp Bot:
+
+1️⃣ *Main Menu:*
+• Type *Menu* anytime to access the 8-option Main Menu.
+
+2️⃣ *Parish Services & Help Desk:*
+• Type *Services* to view all 14 Parish Help Desk services.
+
+3️⃣ *Ask Naturally:*
+You can type any question in plain English or Tamil:
+• "What time is Sunday Mass?"
+• "Today's Bible Verse"
+• "Who is today's saint?"
+• "How to book a Mass intention?"
+• "Where is the church located?"
+
+4️⃣ *Settings & Subscriptions:*
+• Type *Preferences* to customize your daily subscriptions.
+• Type *Language* to switch Catholic content between Tamil and English.
+
+📞 *Need Direct Assistance?*
+Parish Office: +91 96556 39144 (9:00 AM – 12:30 PM & 4:00 PM – 8:00 PM)
+🌐 *Website Portal:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`;
+}
+
+/**
+ * Safely and deterministically extracts menu numbers 1 to 14 from raw user inputs.
  * Supports:
- * - Plain digits: "1" to "13", "01" to "09"
+ * - Plain digits: "1" to "14", "01" to "09"
  * - Punctuated/prefixed: "1.", "#1", "opt 1", "option 1", "(1)"
- * - WhatsApp Emoji numbers: "1️⃣" to "1️⃣3️⃣", "🔟", "1️⃣0️⃣"
- * - English word numbers: "one" to "thirteen"
- * - Tamil word numbers: "ஒன்று" to "பதின்மூன்று"
- * Strictly avoids matching 10-digit phone numbers, 6-digit OTPs, or numbers > 13.
+ * - WhatsApp Emoji numbers: "1️⃣" to "1️⃣4️⃣", "🔟", "1️⃣0️⃣"
+ * - English word numbers: "one" to "fourteen"
+ * - Tamil word numbers: "ஒன்று" to "பதினான்கு"
+ * Strictly avoids matching 10-digit phone numbers, 6-digit OTPs, or numbers > 14.
  */
 function extractMenuNumber(rawText) {
   if (!rawText) return null;
   const str = rawText.trim().toLowerCase();
 
-  // 1. Direct emoji mapping (sort descending by length so 1️⃣0️⃣-1️⃣3️⃣ match before 1️⃣)
+  // 1. Direct emoji mapping (sort descending by length so 1️⃣0️⃣-1️⃣4️⃣ match before 1️⃣)
   const emojiMap = {
-    '1️⃣0️⃣': 10, '1️⃣1️⃣': 11, '1️⃣2️⃣': 12, '1️⃣3️⃣': 13,
+    '1️⃣0️⃣': 10, '1️⃣1️⃣': 11, '1️⃣2️⃣': 12, '1️⃣3️⃣': 13, '1️⃣4️⃣': 14,
     '🔟': 10,
     '1️⃣': 1, '2️⃣': 2, '3️⃣': 3, '4️⃣': 4, '5️⃣': 5,
     '6️⃣': 6, '7️⃣': 7, '8️⃣': 8, '9️⃣': 9
@@ -201,11 +315,11 @@ function extractMenuNumber(rawText) {
   const wordMap = {
     'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
     'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
-    'eleven': 11, 'twelve': 12, 'thirteen': 13,
+    'eleven': 11, 'twelve': 12, 'thirteen': 13, 'fourteen': 14,
     'ஒன்று': 1, 'ஒன்னு': 1, 'இரண்டு': 2, 'ரெண்டு': 2, 'மூன்று': 3,
     'நான்கு': 4, 'நாலு': 4, 'ஐந்து': 5, 'அஞ்சு': 5, 'ஆறு': 6,
     'ஏழு': 7, 'எட்டு': 8, 'ஒன்பது': 9, 'பத்து': 10,
-    'பதினொன்று': 11, 'பன்னிரண்டு': 12, 'பதின்மூன்று': 13
+    'பதினொன்று': 11, 'பன்னிரண்டு': 12, 'பதின்மூன்று': 13, 'பதினான்கு': 14
   };
   if (wordMap[str]) return wordMap[str];
 
@@ -213,7 +327,7 @@ function extractMenuNumber(rawText) {
   const digitMatch = str.match(/^(?:option\s*|opt\s*|choice\s*|#)?\(?(\d{1,2})\)?\.?$/i);
   if (digitMatch) {
     const n = parseInt(digitMatch[1], 10);
-    if (n >= 1 && n <= 13) return n;
+    if (n >= 1 && n <= 14) return n;
   }
 
   return null;
@@ -1149,8 +1263,22 @@ _SJDB Connect_`;
       }
     }
 
-    // ── 1. SERVICES / HELP DESK MENU COMMAND (Exact Case-Insensitive or Natural Inquiry) ─────
-    const isServicesTrigger = /^(services|service|help desk|சேவைகள்|பங்கு சேவைகள்)$/i.test(normalizedText) ||
+    // ── Context Resolver: Services Menu context ONLY applies for one interaction ──
+    // After a user gets ANY response (not services menu), the services context resets.
+    // This prevents numbers like "7" from permanently routing to Events.
+    const isInServicesMenu = session.lastBotReplyType === 'SERVICES_MENU';
+
+    // Main Menu numbers 1-8 ALWAYS take priority, even inside Services Menu context.
+    // Only Services-exclusive options (9-14) use the Services menu context.
+    // This is the key fix: if the number is 1-8, it's ALWAYS treated as Main Menu.
+    const isMainMenuNumber = menuNum !== null && menuNum >= 1 && menuNum <= 8;
+    const isServicesOnlyNumber = menuNum !== null && menuNum >= 9 && menuNum <= 14;
+
+    // ── 1. SERVICES / HELP DESK MENU COMMAND (Option 3 from Main Menu or "Services") ─────
+    // Explicit "services" keyword always triggers Services menu.
+    // Main Menu option 3 triggers Services ONLY when the user is NOT already in Services context.
+    // When IN Services context, option 3 maps to Daily Bible Verse (Services option 3).
+    const isServicesKeyword = /^(services|service|help desk|சேவைகள்|பங்கு சேவைகள்|உதவி மையம்)$/i.test(normalizedText) ||
       normalizedText.includes('what services do you provide') ||
       normalizedText.includes('what services') ||
       normalizedText.includes('services list') ||
@@ -1159,12 +1287,14 @@ _SJDB Connect_`;
       normalizedText.includes('available services') ||
       normalizedText.includes('என்னென்ன சேவைகள்');
 
+    const isServicesTrigger = isServicesKeyword || (!isInServicesMenu && menuNum === 3);
+
     if (isServicesTrigger) {
       session.invalidInputStreak = 0;
-      session.lastBotReplyType = 'SERVICES';
+      session.lastBotReplyType = 'SERVICES_MENU';
       session.lastSentAt = new Date();
       await session.save();
-      const servicesMsg = getServicesMenuMessage();
+      const servicesMsg = getServicesMenuMessage(isTamilQuery);
       await wa.sendWhatsAppMessage(replyTarget, servicesMsg);
       return;
     }
@@ -1386,32 +1516,28 @@ Please bring parish family ID or relevant record dates when collecting certifica
       return;
     }
 
-    // ── 2B. MAIN MENU / QUICK COMMANDS (Menu, 0, Home, Start, Quick Commands) ──────────
-    const isMenuTrigger = /^(menu|0|home|start|quick commands|மெனு|முதன்மை மெனு)$/i.test(normalizedText) ||
-      normalizedText === 'main menu' ||
+    // ── 2B. MAIN MENU / QUICK COMMANDS (Menu, Bot Menu, 0, Home, Start) ──────────
+    const isMenuTrigger = /^(menu|bot menu|main menu|show menu|help menu|0|home|start|quick commands|மெனு|முதன்மை மெனு)$/i.test(normalizedText) ||
+      /\b(menu|bot menu|main menu)\b/i.test(normalizedText) ||
+      normalizedText === 'menu' ||
+      normalizedText === 'bot menu' ||
       normalizedText.includes('sjdb connect');
 
     if (isMenuTrigger) {
       let linkedUser = null;
       if (session.linkedUserId) {
-        linkedUser = await User.findById(session.linkedUserId);
+        linkedUser = await User.findById(session.linkedUserId).lean();
       } else if (session.providedPhone || phone) {
         const searchPhone = (session.providedPhone || phone).slice(-10);
-        linkedUser = await User.findOne({ phone: { $regex: searchPhone + '$' } });
+        linkedUser = await User.findOne({ phone: { $regex: searchPhone + '$' } }).lean();
       }
 
-      const userName = linkedUser ? linkedUser.name : (pushName || '');
+      if (linkedUser && linkedUser.name) {
+        session.userName = linkedUser.name;
+      }
+
+      const userName = (linkedUser && linkedUser.name) ? linkedUser.name : (session.userName || pushName || '');
       session.invalidInputStreak = 0;
-
-      // Deduplication: If menu was sent in the immediately preceding response within 2 mins, don't flood chat
-      if (session.lastBotReplyType === 'MENU' && session.lastMenuSentAt && (Date.now() - new Date(session.lastMenuSentAt).getTime()) < 120000) {
-        const menuReminder = isTamilQuery
-          ? `📌 முதன்மை மெனு மேலே காட்டப்பட்டுள்ளது. தயவுசெய்து ஒரு விருப்ப எண்ணை (1-13) தேர்ந்தெடுக்கவும் அல்லது உங்கள் கேள்வியைத் தட்டச்சு செய்யவும்.`
-          : `📌 The Main Menu is displayed right above. Please reply with an option number (1-13) or type your question.`;
-        await wa.sendWhatsAppMessage(replyTarget, menuReminder);
-        return;
-      }
-
       session.lastBotReplyType = 'MENU';
       session.lastMenuSentAt = new Date();
       session.lastSentAt = new Date();
@@ -1544,10 +1670,14 @@ Please bring parish family ID or relevant record dates when collecting certifica
       return;
     }
 
-    // 1️⃣ 📖 Bible Verse (இன்றைய இறைவார்த்தை)
-    const isSpecificVerseQuery = (menuNum === 3 && session.pendingSubmenu !== 'daily_catholic') ||
-      /^(today'?s bible verse|today bible verse|bible verse|today'?s verse|today verse|daily verse|daily bible verse|scripture|இன்றைய இறைவார்த்தை|வேத வசனம்|இறைவார்த்தை|வசனம்)$/i.test(normalizedText) ||
+    // 1️⃣ 📖 Bible Verse
+    // - Main Menu option 1 (always, regardless of Services context)
+    // - Services Menu option 3 (only when explicitly in Services context AND number > 8)
+    const isSpecificVerseQuery = (menuNum === 1) ||  // Main Menu option 1 ALWAYS wins
+      (isInServicesMenu && !isMainMenuNumber && menuNum === 3) ||  // Services option 3 only for non-main-menu context
+      /^(today'?s bible verse|today bible verse|bible verse|daily bible|today'?s verse|today verse|daily verse|daily bible verse|scripture|இன்றைய இறைவார்த்தை|வேத வசனம்|இறைவார்த்தை|வசனம்)$/i.test(normalizedText) ||
       normalizedText.includes("bible verse") ||
+      normalizedText.includes("daily bible") ||
       normalizedText.includes("today's verse") ||
       normalizedText.includes("today verse") ||
       /(இன்றைய இறைவார்த்தை|வேத வசனம்|இறைவார்த்தை)/.test(rawText);
@@ -1557,8 +1687,11 @@ Please bring parish family ID or relevant record dates when collecting certifica
       return;
     }
 
-    // 2️⃣ 📜 Daily Mass Readings (இன்றைய திருப்பலி வாசகங்கள்)
-    const isSpecificReadingsQuery = (menuNum === 4 && session.pendingSubmenu !== 'daily_catholic') ||
+    // 2️⃣ 📜 Daily Mass Readings
+    // - Services Menu option 4 (only when in Services context, since 4 = Events in Main Menu)
+    // Note: menuNum===4 in Main Menu = Events (handled above), so here it only reaches if
+    // isMassTimingsQuery and isEventsChoice both returned false, meaning it's safe.
+    const isSpecificReadingsQuery = (isInServicesMenu && menuNum === 4) ||  // Services option 4
       /^(today'?s mass readings?|today mass readings?|mass readings?|today'?s readings?|today readings?|daily readings?|daily mass readings?|readings?|gospel|இன்றைய திருப்பலி வாசகங்கள்|திருப்பலி வாசகங்கள்|வாசகங்கள்|வாசகம்|இன்றைய வாசகங்கள்)$/i.test(normalizedText) ||
       normalizedText.includes("mass readings") ||
       normalizedText.includes("today's readings") ||
@@ -1571,8 +1704,11 @@ Please bring parish family ID or relevant record dates when collecting certifica
       return;
     }
 
-    // 4️⃣ ✨ Saint of the Day (இன்றைய புனிதர்)
-    const isSaintChoice = (menuNum === 5 && session.pendingSubmenu !== 'daily_catholic') ||
+    // 7️⃣ 🌟 Saint of the Day
+    // - Main Menu option 7 ALWAYS wins (even if user is in Services context)
+    // - Services Menu option 5 only when strictly in Services context and not a main-menu-ambiguous number
+    const isSaintChoice = (menuNum === 7) ||  // Main Menu option 7 ALWAYS wins
+      (isInServicesMenu && menuNum === 5) ||  // Services option 5
       /^(today'?s saint|today saint|saint of the day|saint|saints|who is today saint|who is the saint today|இன்றைய புனிதர்|புனிதர் யார்|புனிதர்)$/i.test(normalizedText) ||
       normalizedText.includes("saint of the day") ||
       normalizedText.includes("today's saint") ||
@@ -1584,8 +1720,10 @@ Please bring parish family ID or relevant record dates when collecting certifica
       return;
     }
 
-    // 5️⃣ 🙏 Daily Prayer / Catholic Prayers (இன்றைய செபம்)
-    const isPrayersChoice = (menuNum === 6 && session.pendingSubmenu !== 'daily_catholic') ||
+    // 6️⃣ 🙏 Daily Prayer / Catholic Prayers & Rosary
+    // - Services Menu option 6 (only when in Services context)
+    // - Natural language prayer queries always match
+    const isPrayersChoice = (isInServicesMenu && menuNum === 6) ||
       /^(today'?s prayer|today prayer|daily prayer|prayer|prayers|catholic prayers?|common prayers?|our father|hail mary|holy rosary|rosary|litany|இன்றைய செபம்|செபம்|ஜெபம்|கத்தோலிக்க செபங்கள்)$/i.test(normalizedText) ||
       normalizedText.includes("today's prayer") ||
       normalizedText.includes("daily prayer") ||
@@ -1608,10 +1746,12 @@ Please bring parish family ID or relevant record dates when collecting certifica
       return;
     }
 
-    // ── 13-SERVICE UNIFIED PARISH MENU & NUMERIC ROUTING (Options 1 to 13) ────
+    // ── UNIFIED PARISH MENU & NUMERIC ROUTING (Main Menu 1-8 & Services 1-14) ────
 
-    // 1️⃣ ⛪ Option 1: Mass Timings
-    const isMassTimingsQuery = menuNum === 1 ||
+    // 2️⃣ ⛪ Option 2 in Main Menu, Option 1 in Services Menu: Mass Timings
+    // Main Menu option 2 ALWAYS wins. Services option 1 only when in Services context.
+    const isMassTimingsQuery = (menuNum === 2) ||  // Main Menu option 2 ALWAYS wins
+      (isInServicesMenu && menuNum === 1) ||
       /\b(mass timings?|mass times?|mass schedule|when is mass|what time is mass|morning mass|evening mass|sunday mass|today mass)\b/i.test(normalizedText) ||
       /(திருப்பலி நேரம்|பூசை நேரம்|திருப்பலி நேரங்கள்|ஞாயிறு திருப்பலி)/.test(rawText);
 
@@ -1667,8 +1807,8 @@ _Kalayarkoil, Sivagangai Diocese_
       return;
     }
 
-    // 2️⃣ 🕊️ Option 2: Confession Timings
-    const isConfessionQuery = menuNum === 2 ||
+    // 2️⃣ 🕊️ Option 2 in Services Menu: Confession Timings
+    const isConfessionQuery = (isInServicesMenu && menuNum === 2) ||
       /\b(confessions?|confession timings?|confession times?|reconciliation|sacrament of reconciliation|penance)\b/i.test(normalizedText) ||
       normalizedText.includes('confession') ||
       normalizedText.includes('reconciliation') ||
@@ -1723,32 +1863,15 @@ Call Parish Office: +91 96556 39144
       return;
     }
 
-    // 3️⃣ 📖 Option 3: Daily Bible Verse
-    if (menuNum === 3) {
-      await sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery);
-      return;
-    }
-
-    // 4️⃣ 📜 Option 4: Daily Mass Readings
-    if (menuNum === 4) {
-      await sendTodayMassReadings(replyTarget, session, wa, isTamilQuery);
-      return;
-    }
-
-    // 5️⃣ 🌟 Option 5: Saint of the Day
-    if (menuNum === 5) {
-      await sendTodaySaint(replyTarget, session, wa, isTamilQuery);
-      return;
-    }
-
-    // 6️⃣ 🙏 Option 6: Catholic Prayers
-    if (menuNum === 6) {
-      await sendTodayPrayer(replyTarget, session, wa, isTamilQuery);
-      return;
-    }
-
-    // 7️⃣ 📅 Option 7: Church Events
-    const isEventsChoice = menuNum === 7 ||
+    // 4️⃣ 📅 Option 4 in Main Menu, Option 7 in Services Menu: Church Events
+    // Main Menu option 4 ALWAYS wins (prevents "7" from ever accidentally triggering Events).
+    // Services menu option 7 ONLY applies when in Services context and number > 8 is impossible here,
+    // so we only fire Services option 7 when isInServicesMenu AND the number is explicitly 7 BUT
+    // since 7 is Main Menu Saint, we NEVER allow Services menu option 7 to fire for number 7.
+    // Services option 7 (Events) is accessible via natural language or explicit Services context with number 7
+    // AFTER the Saint check has already returned.
+    const isEventsChoice = (menuNum === 4) ||  // Main Menu option 4 ALWAYS wins
+      (isInServicesMenu && menuNum === 7) ||  // Services option 7 — but note: menuNum===7 is now caught above by isSaintChoice first
       /\b(events?|upcoming events?|church events?|parish events?|show events?|list events?|what are the events|any events|what events|events this week)\b/i.test(normalizedText) ||
       normalizedText.includes('what are the events') ||
       normalizedText.includes('upcoming events') ||
@@ -1799,8 +1922,10 @@ Call Parish Office: +91 96556 39144
       }
     }
 
-    // 8️⃣ 📢 Option 8: Parish Announcements
-    const isAnnouncementsChoice = menuNum === 8 ||
+    // 5️⃣ 📢 Option 5 in Main Menu, Option 8 in Services Menu: Parish Announcements
+    // Main Menu option 5 ALWAYS wins.
+    const isAnnouncementsChoice = (menuNum === 5) ||  // Main Menu option 5 ALWAYS wins
+      (isInServicesMenu && menuNum === 8) ||
       /\b(announcements?|notices?|parish announcements?|what is new|what\'?s new|latest announcements?|show announcements?|any announcements?)\b/i.test(normalizedText) ||
       normalizedText.includes('any announcements') ||
       normalizedText.includes('latest announcement') ||
@@ -1842,11 +1967,35 @@ Call Parish Office: +91 96556 39144
             : `📢 *Parish Announcements*\n\nThere are no new announcements at this moment. You can check our website for updates.\n\n🌐 *View Announcements:* ${annUrl}`;
         }
 
+        session.invalidInputStreak = 0;
+        session.lastBotReplyType = 'ANNOUNCEMENTS';
+        session.lastSentAt = new Date();
+        await session.save();
+
         await wa.sendWhatsAppMessage(replyTarget, annMsg);
         return;
       } catch (aErr) {
         console.error('[BotHandler] Announcements error:', aErr.message);
       }
+    }
+
+    // 6️⃣ 📜 Option 6 in Main Menu: Church Information
+    // Main Menu option 6 ALWAYS wins (regardless of Services context).
+    const isChurchInfoChoice = (menuNum === 6) ||  // Main Menu option 6 ALWAYS wins
+      /\b(church info|church information|about church|about parish|parish info|parish information)\b/i.test(normalizedText) ||
+      normalizedText === 'church information' ||
+      normalizedText === 'church info' ||
+      /(ஆலய விபரங்கள்|பங்கு விபரம்)/.test(rawText);
+
+    if (isChurchInfoChoice) {
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'CHURCH_INFO';
+      session.lastSentAt = new Date();
+      await session.save();
+
+      const churchInfoMsg = formatChurchInformationMessage(isTamilQuery);
+      await wa.sendWhatsAppMessage(replyTarget, churchInfoMsg);
+      return;
     }
 
     // ── Maintenance Query ("Is there any maintenance?", "Website maintenance", "Any downtime?", "When will maintenance finish?") ──
@@ -2170,40 +2319,64 @@ ${EXTERNAL_LINKS.GOOGLE_MAPS}
       return;
     }
 
-    // ── Help Command ──────────────────────────────────────────────────────────
-    const isHelpChoice =
+    // 1️⃣4️⃣ 📜 Option 14 in Services Menu: Mass Intentions & Parish Certificates
+    const isIntentionsCertChoice = menuNum === 14 ||
+      /\b(mass intention|mass intentions|mass booking|book mass|offer mass|certificate|certificates|baptism certificate|marriage certificate)\b/i.test(normalizedText) ||
+      /(திருப்பலி கருத்து|பூசை வைக்க|சான்றிதழ்|ஞானஸ்நான சான்றிதழ்)/.test(rawText);
+
+    if (isIntentionsCertChoice) {
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'INTENTIONS_CERTIFICATES';
+      session.lastSentAt = new Date();
+      await session.save();
+
+      const intentionsCertMsg = isTamilQuery
+        ? `📜 *திருப்பலி கருத்து & ஆலய சான்றிதழ்கள்*
+_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
+
+✝️ *1. திருப்பலி கருத்து & முன்பதிவு (Mass Intentions):*
+நன்றித் திருப்பலி, பிறந்தநாள், திருமண நாள், நலம் வேண்டி அல்லது ஆன்ம இளைப்பாற்றி திருப்பலி வைக்க:
+🌐 *முன்பதிவு செய்ய:* ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}
+📞 *பங்கு அலுவலகம்:* +91 96556 39144
+
+📜 *2. ஆலய சான்றிதழ்கள் (Church Certificates):*
+ஞானஸ்நானம், முதல் நற்கருணை, உறுதிப்பூசுதல், திருமண சான்றிதழ்களைப் பெற:
+🌐 *விண்ணப்பிக்க:* ${getSiteUrl(SITE_ROUTES.CERTIFICATES)}
+🕒 *அலுவலக நேரம்:* காலை 9:00 – 12:30 & மாலை 4:00 – 8:00
+
+அலுவலகத்தில் சான்றிதழ்களைப் பெற குடும்ப அட்டை / பழைய பதிவேடு விபரங்களை உடன் கொண்டுவரவும். 🙏`
+        : `📜 *Mass Intentions & Parish Certificates*
+_St. John de Britto Church, Kalayarkoil_
+
+✝️ *1. Holy Mass Intentions & Booking:*
+To offer Holy Mass for Thanksgiving, Birthdays, Wedding Anniversaries, Healing, or Souls of the Faithful Departed:
+🌐 *Book Online:* ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}
+📞 *Parish Office:* +91 96556 39144
+
+📜 *2. Parish Certificates & Sacramental Records:*
+To apply for Baptism, First Holy Communion, Confirmation, or Marriage Certificates:
+🌐 *Apply Online:* ${getSiteUrl(SITE_ROUTES.CERTIFICATES)}
+🕒 *Parish Office Hours:* 9:00 AM – 12:30 PM & 4:00 PM – 8:00 PM
+
+Please bring parish family ID or relevant record dates when collecting certificates in person. God bless! 🙏`;
+
+      await wa.sendWhatsAppMessage(replyTarget, intentionsCertMsg);
+      return;
+    }
+
+    // 8️⃣ ❓ Option 8 in Main Menu: Help Command
+    // Main Menu option 8 ALWAYS wins (regardless of Services context).
+    const isHelpChoice = (menuNum === 8) ||  // Main Menu option 8 ALWAYS wins
       /\b(help|commands|how to use|guide|options)\b/i.test(normalizedText) ||
       /(உதவி|வழிகாட்டி)/.test(rawText);
 
     if (isHelpChoice) {
-      const helpMsg = isTamilQuery
-        ? `❓ *SJDB Connect — உதவி & வழிகாட்டி*
-_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'HELP';
+      session.lastSentAt = new Date();
+      await session.save();
 
-📌 *பயன்படுத்தக்கூடிய முக்கிய கட்டளைகள்:*
-• *MENU* — முதன்மை மெனு
-• *SERVICES* — 13 பங்கு சேவைகளின் விபரம்
-• *PREFERENCES* — உங்கள் அறிவிப்பு விருப்பங்களை மாற்ற
-• *LANGUAGE* — தமிழ் அல்லது ஆங்கில மொழியைத் தேர்ந்தெடுக்க
-• *TAMIL* — தமிழ் மொழிக்கு மாற்ற
-• *ENGLISH* — ஆங்கில மொழிக்கு மாற்ற
-• *STOP* — தினசரி செய்திகளிலிருந்து விலக
-
-💡 நீங்கள் 1 முதல் 13 வரை உள்ள எண்களை அனுப்பலாம் அல்லது உங்கள் கேள்வியை நேரடியாக தமிழ் அல்லது ஆங்கிலத்தில் தட்டச்சு செய்யலாம்!`
-        : `❓ *SJDB Connect — Help & Guidance*
-_St. John de Britto Church, Kalayarkoil_
-
-📌 *Key Commands You Can Type Anytime:*
-• *MENU* — Main Navigation Menu
-• *SERVICES* — 13-Option Parish Services Directory
-• *PREFERENCES* — Update your subscribed services
-• *LANGUAGE* — Choose Tamil or English for Daily Catholic Devotions
-• *TAMIL* — Set Vatican News to Tamil
-• *ENGLISH* — Set Vatican News to English
-• *STOP* — Unsubscribe from daily broadcasts
-
-💡 You can reply with numbers 1 to 13 or type your questions naturally in English or Tamil!`;
-
+      const helpMsg = formatHelpMessage(isTamilQuery);
       await wa.sendWhatsAppMessage(replyTarget, helpMsg);
       return;
     }
@@ -2255,16 +2428,16 @@ _St. John de Britto Church, Kalayarkoil_
     let invalidReply = '';
     if (session.invalidInputStreak === 1) {
       invalidReply = isTamilQuery
-        ? `❓ மன்னிக்கவும், உங்கள் விருப்பத்தை அடையாளம் காண முடியவில்லை.\n\nதயவுசெய்து சரியான எண்ணை (1-13) உள்ளிடவும் அல்லது உங்கள் கேள்வியை நேரடியாகத் தட்டச்சு செய்யவும்.\n(முக்கிய கட்டளைகளுக்கு *Menu* அல்லது உதவி மையத்திற்கு *Services* என அனுப்பவும்)`
-        : `❓ I didn't quite recognize that option.\n\nPlease reply with a valid number (1-13) or ask your church question naturally.\n(Type *Menu* for quick commands or *Services* for help desk)`;
+        ? `❓ மன்னிக்கவும், உங்கள் விருப்பத்தை அடையாளம் காண முடியவில்லை.\n\nதயவுசெய்து முதன்மை மெனுவிற்கு *1 முதல் 8 வரை* உள்ள எண்ணைத் தேர்ந்தெடுக்கவும் அல்லது உங்கள் கேள்வியைத் தட்டச்சு செய்யவும்.\n(முக்கிய மெனுவிற்கு *Menu* அல்லது 14 சேவைகளுக்கு *Services* என அனுப்பவும்)`
+        : `❓ I didn't quite recognize that option.\n\nPlease reply with a number (1-8) for the Main Menu or ask your church question naturally.\n(Type *Menu* for Main Menu or *Services* for the 14 Parish Help Desk services)`;
     } else if (session.invalidInputStreak === 2) {
       invalidReply = isTamilQuery
-        ? `💡 வழிகாட்டல்: 1 முதல் 13 வரையிலான எண்ணைத் தேர்ந்தெடுக்கவும் (எ.கா: *1* திருப்பலி நேரம், *3* விவிலிய வசனம்), அல்லது முதன்மை மெனுவைக் காண *Menu* என தட்டச்சு செய்யவும்.`
-        : `💡 Guidance: Please reply with a number from 1 to 13 (e.g. *1* for Mass Timings, *3* for Bible Verse), or type *Menu* to see available options.`;
+        ? `💡 வழிகாட்டல்: 1 முதல் 8 வரையிலான எண்ணைத் தேர்ந்தெடுக்கவும் (எ.கா: *1* விவிலிய வசனம், *2* திருப்பலி நேரம், *3* பங்கு சேவைகள்), அல்லது முதன்மை மெனுவைக் காண *Menu* என தட்டச்சு செய்யவும்.`
+        : `💡 Guidance: Please reply with a number from 1 to 8 (e.g. *1* for Daily Bible, *2* for Mass Timings, *3* for Services), or type *Menu* to see the Main Menu.`;
     } else {
       invalidReply = isTamilQuery
-        ? `ℹ️ உதவி வேண்டுமா? அனைத்து கட்டளைகளையும் காண *Help* என அனுப்பவும், அல்லது எங்கள் பங்கு அலுவலகத்தை +91 96556 39144 இல் தொடர்பு கொள்ளவும்.`
-        : `ℹ️ Need assistance? Type *Help* for available commands, or contact our parish office at +91 96556 39144.`;
+        ? `ℹ️ உதவி வேண்டுமா? வழிகாட்டலைக் காண *Help* என அனுப்பவும், அல்லது எங்கள் பங்கு அலுவலகத்தை +91 96556 39144 இல் தொடர்பு கொள்ளவும்.`
+        : `ℹ️ Need assistance? Type *Help* for usage guidance, or contact our parish office at +91 96556 39144.`;
     }
 
     await wa.sendWhatsAppMessage(replyTarget, invalidReply);
@@ -2276,6 +2449,7 @@ _St. John de Britto Church, Kalayarkoil_
 module.exports = {
   handleIncomingMessage,
   extractMenuNumber,
+  getMainMenuMessage,
   getServicesMenuMessage,
   getDailyCatholicContentMenu,
   formatCatholicPrayersMessage,

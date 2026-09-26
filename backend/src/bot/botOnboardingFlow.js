@@ -235,45 +235,39 @@ _SJDB Connect_`;
 }
 
 function getStep8MainMenuMessage(userName, botLang = 'en') {
+  const greeting = userName ? `Welcome, *${userName}*! ` : 'Welcome! ';
   if (botLang === 'ta') {
-    return `⛪ *Main Menu (முதன்மை மெனு)*
-${userName ? `வணக்கம், *${userName}*! ` : ''}உங்களுக்கு எவ்வாறு உதவ முடியும்?
+    return `⛪ *Main Menu*
+${greeting}How can I help you today?
+_(வணக்கம்! உங்களுக்கு எவ்வாறு உதவ முடியும்?)_
 
-1️⃣ ⛪ *திருப்பலி நேரங்கள்* (Mass Timings)
-2️⃣ 🕊️ *ஒப்புரவு அருட்சாதனம்* (Confession Timings)
-3️⃣ 📖 *தினசரி விவிலிய வசனம்* (Daily Bible Verse)
-4️⃣ 📜 *திருப்பலி வாசகங்கள்* (Daily Mass Readings)
-5️⃣ 🌟 *இன்றைய புனிதர்* (Saint of the Day)
-6️⃣ 🙏 *கத்தோலிக்க செபங்கள்* (Catholic Prayers)
-7️⃣ 📅 *பங்கு நிகழ்வுகள்* (Church Events)
-8️⃣ 📢 *பங்கு அறிவிப்புகள்* (Parish Announcements)
-9️⃣ 📍 *ஆலய அமைவிடம் & வரைபடம்* (Church Location & Map)
-1️⃣0️⃣ 👥 *பங்கு அமைப்புகள் & அன்பியங்கள்* (Parish Ministries & Anbiyams)
-1️⃣1️⃣ 👑 *பங்குத்தந்தையர்கள்* (Parish Priest & Clergy)
-1️⃣2️⃣ 🏛️ *ஆலய வரலாறு* (Church History)
-1️⃣3️⃣ 📞 *தொடர்பு விபரம்* (Contact Church)
+1️⃣ 📖 *Daily Bible* (தினசரி விவிலியம்)
+2️⃣ ⛪ *Mass Timings* (திருப்பலி நேரங்கள்)
+3️⃣ 🕊️ *Services & Help Desk* (பங்கு சேவைகள்)
+4️⃣ 📅 *Events* (நிகழ்வுகள்)
+5️⃣ 📢 *Announcements* (அறிவிப்புகள்)
+6️⃣ 📜 *Church Information* (ஆலய விபரங்கள்)
+7️⃣ 🌟 *Saint of the Day* (இன்றைய புனிதர்)
+8️⃣ ❓ *Help* (உதவி)
 
-👉 *1 முதல் 13 வரை உள்ள எண்ணை அழுத்தவும் அல்லது உங்கள் கேள்வியை நேரடியாகக் கேட்கவும்!*`;
+👉 *You can reply with a number or ask your question naturally.*
+➡️ *Type "Services" for the complete 14 Parish Help Desk services.*`;
   }
 
   return `⛪ *Main Menu*
-${userName ? `Welcome, *${userName}*! ` : ''}How can I help you today?
+${greeting}How can I help you today?
 
-1️⃣ ⛪ *Mass Timings*
-2️⃣ 🕊️ *Confession Timings*
-3️⃣ 📖 *Daily Bible Verse*
-4️⃣ 📜 *Daily Mass Readings*
-5️⃣ 🌟 *Saint of the Day*
-6️⃣ 🙏 *Catholic Prayers*
-7️⃣ 📅 *Church Events*
-8️⃣ 📢 *Parish Announcements*
-9️⃣ 📍 *Church Location & Map*
-1️⃣0️⃣ 👥 *Parish Ministries & Anbiyams*
-1️⃣1️⃣ 👑 *Parish Priest & Clergy*
-1️⃣2️⃣ 🏛️ *Church History*
-1️⃣3️⃣ 📞 *Contact Church*
+1️⃣ 📖 *Daily Bible*
+2️⃣ ⛪ *Mass Timings*
+3️⃣ 🕊️ *Services & Help Desk*
+4️⃣ 📅 *Events*
+5️⃣ 📢 *Announcements*
+6️⃣ 📜 *Church Information*
+7️⃣ 🌟 *Saint of the Day*
+8️⃣ ❓ *Help*
 
-👉 *Reply with a number (1-13) or ask your question naturally.*`;
+👉 *You can reply with a number or ask your question naturally.*
+➡️ *Type "Services" for the complete 14 Parish Help Desk services.*`;
 }
 
 function parseBotLanguage(rawText) {

@@ -42,6 +42,7 @@ const botSessionSchema = new mongoose.Schema({
   firstInteractionEmailSent: { type: Boolean, default: false },
   firstInteractionAt: { type: Date },
   pushName: { type: String, default: '' },
+  userName: { type: String, default: '' },
   linkedUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   moderationFlags: [{
     detectedWords: [String],

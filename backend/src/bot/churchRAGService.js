@@ -819,7 +819,7 @@ function buildPriestsSection(dynamicContext, isTamil) {
   };
 }
 
-// Dedicated 1-13 Services Menu Section
+// Dedicated 1-14 Services Menu Section
 function buildServicesMenuSection(isTamil) {
   const body = isTamil
     ? `1️⃣ ⛪ *திருப்பலி நேரங்கள்* (Mass Timings)
@@ -827,7 +827,7 @@ function buildServicesMenuSection(isTamil) {
 3️⃣ 📖 *தினசரி விவிலிய வசனம்* (Daily Bible Verse)
 4️⃣ 📜 *திருப்பலி வாசகங்கள்* (Daily Mass Readings)
 5️⃣ 🌟 *இன்றைய புனிதர்* (Saint of the Day)
-6️⃣ 🙏 *கத்தோலிக்க செபங்கள்* (Catholic Prayers)
+6️⃣ 🙏 *கத்தோலிக்க செபங்கள் & ஜெபமாலை* (Catholic Prayers)
 7️⃣ 📅 *பங்கு நிகழ்வுகள்* (Church Events)
 8️⃣ 📢 *பங்கு அறிவிப்புகள்* (Parish Announcements)
 9️⃣ 📍 *ஆலய அமைவிடம் & வரைபடம்* (Church Location & Map)
@@ -835,15 +835,16 @@ function buildServicesMenuSection(isTamil) {
 1️⃣1️⃣ 👑 *பங்குத்தந்தையர்கள்* (Parish Priest & Clergy)
 1️⃣2️⃣ 🏛️ *ஆலய வரலாறு* (Church History)
 1️⃣3️⃣ 📞 *தொடர்பு விபரம்* (Contact Church)
+1️⃣4️⃣ 📜 *திருப்பலி கருத்து & சான்றிதழ்கள்* (Mass Intentions & Certificates)
 
-👉 *1 முதல் 13 வரை உள்ள எண்ணை அழுத்தவும் அல்லது உங்கள் கேள்வியை நேரடியாகக் கேட்கவும்!*
-_(எ.கா: "திருப்பலி நேரம்", "ஒப்புரவு நேரம்", "இன்றைய வாசகங்கள்")_\n`
+👉 *1 முதல் 14 வரை உள்ள எண்ணை அழுத்தவும் அல்லது உங்கள் கேள்வியை நேரடியாகக் கேட்கவும்!*
+_முதன்மை மெனுவிற்குத் திரும்ப "Menu" என அனுப்பவும்._\n`
     : `1️⃣ ⛪ *Mass Timings*
 2️⃣ 🕊️ *Confession Timings*
 3️⃣ 📖 *Daily Bible Verse*
 4️⃣ 📜 *Daily Mass Readings*
 5️⃣ 🌟 *Saint of the Day*
-6️⃣ 🙏 *Catholic Prayers*
+6️⃣ 🙏 *Catholic Prayers & Rosary*
 7️⃣ 📅 *Church Events*
 8️⃣ 📢 *Parish Announcements*
 9️⃣ 📍 *Church Location & Map*
@@ -851,9 +852,10 @@ _(எ.கா: "திருப்பலி நேரம்", "ஒப்புர
 1️⃣1️⃣ 👑 *Parish Priest & Clergy*
 1️⃣2️⃣ 🏛️ *Church History*
 1️⃣3️⃣ 📞 *Contact Church*
+1️⃣4️⃣ 📜 *Mass Intentions & Certificates*
 
-👉 *Reply with a number (1-13) or type your question naturally.*
-_(e.g., "What time is Mass?", "Where is the church?", "Confession timings")_\n`;
+👉 *Reply with a number (1-14) or type your question naturally.*
+_Type "Menu" anytime to return to the Main Menu._\n`;
 
   return {
     header: isTamil ? `⛪ *SJDB Connect – பங்கு சேவைகள் (Parish Services)*` : `⛪ *SJDB Connect – Services & Help Desk*`,
