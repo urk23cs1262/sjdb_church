@@ -604,7 +604,7 @@ async function sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery = fals
     }
 
     if (!sentImage) {
-      const userLang = session.language || (isTamilQuery ? 'ta' : 'en');
+      const userLang = session.botLanguage || session.language || (isTamilQuery ? 'ta' : 'en');
       const fallbackMsg = generateDailyVerseMessage({ dailyContent, language: userLang });
       await wa.sendWhatsAppMessage(replyTarget, fallbackMsg);
     }
@@ -619,7 +619,7 @@ async function sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery = fals
 async function sendTodayMassReadings(replyTarget, session, wa, isTamilQuery = false) {
   try {
     const dailyContent = await getCachedDailyContent();
-    const userLang = session.language || (isTamilQuery ? 'ta' : 'en');
+    const userLang = session.botLanguage || session.language || (isTamilQuery ? 'ta' : 'en');
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'READINGS';
     session.pendingSubmenu = '';
@@ -643,7 +643,7 @@ async function sendTodayMassReadings(replyTarget, session, wa, isTamilQuery = fa
 async function sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery = false) {
   try {
     const dailyContent = await getCachedDailyContent();
-    const userLang = session.language || (isTamilQuery ? 'ta' : 'en');
+    const userLang = session.botLanguage || session.language || (isTamilQuery ? 'ta' : 'en');
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'REFLECTION';
     session.pendingSubmenu = '';
@@ -666,7 +666,7 @@ async function sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery =
 async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false) {
   try {
     const dailyContent = await getCachedDailyContent();
-    const userLang = session.language || (isTamilQuery ? 'ta' : 'en');
+    const userLang = session.botLanguage || session.language || (isTamilQuery ? 'ta' : 'en');
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'SAINT';
     session.pendingSubmenu = '';
@@ -701,7 +701,7 @@ async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false) {
 async function sendTodayPrayer(replyTarget, session, wa, isTamilQuery = false) {
   try {
     const dailyContent = await getCachedDailyContent();
-    const userLang = session.language || (isTamilQuery ? 'ta' : 'en');
+    const userLang = session.botLanguage || session.language || (isTamilQuery ? 'ta' : 'en');
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'PRAYERS';
     session.pendingSubmenu = '';
@@ -1009,7 +1009,7 @@ _SJDB Connect_`;
     }
 
     const normalizedText = rawText.toLowerCase().replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
-    const isTamilQuery = /[\u0B80-\u0BFF]/.test(rawText) || session.language === 'ta' || session.botLanguage === 'ta';
+    const isTamilQuery = /[\u0B80-\u0BFF]/.test(rawText) || (session.botLanguage ? session.botLanguage === 'ta' : session.language === 'ta');
     const menuNum = extractMenuNumber(rawText);
 
     // ── Re-Verification Command ────────────────────────────────────────────────
@@ -1292,30 +1292,21 @@ Type *MENU* for Main Menu. 🙏`;
       return;
     }
 
-    // ── Universal 1-14 Parish Services Routing ─────────────────────────────
-    // Any reply with a number from 1 to 14 strictly and reliably maps to the 14 Parish Services:
-    // 1️⃣  Mass Timings (திருப்பலி நேரங்கள்)
-    // 2️⃣  Confession Timings (ஒப்புரவு அருட்சாதனம்)
-    // 3️⃣  Daily Bible Verse (தினசரி விவிலிய வசனம்)
-    // 4️⃣  Daily Mass Readings (திருப்பலி வாசகங்கள்)
-    // 5️⃣  Saint of the Day (இன்றைய புனிதர்)
-    // 6️⃣  Catholic Prayers & Rosary (கத்தோலிக்க செபங்கள் & ஜெபமாலை)
-    // 7️⃣  Church Events (பங்கு நிகழ்வுகள்)
-    // 8️⃣  Parish Announcements (பங்கு அறிவிப்புகள்)
-    // 9️⃣  Church Location & Map (ஆலய அமைவிடம் & வரைபடம்)
-    // 🔟  Parish Ministries & Anbiyams (பங்கு அமைப்புகள் & அன்பியங்கள்)
-    // 1️⃣1️⃣ Parish Priest & Clergy (பங்குத்தந்தையர்கள்)
-    // 1️⃣2️⃣ Church History (ஆலய வரலாறு)
-    // 1️⃣3️⃣ Contact Church (தொடர்பு விபரம்)
-    // 1️⃣4️⃣ Mass Intentions & Certificates (திருப்பலி கருத்து & சான்றிதழ்கள்)
-    const isMassTimingsNum    = (menuNum === 1);
-    const isConfessionNum     = (menuNum === 2);
-    const isVerseNum          = (menuNum === 3);
-    const isReadingsNum       = (menuNum === 4);
-    const isSaintNum          = (menuNum === 5);
-    const isPrayersNum        = (menuNum === 6);
-    const isEventsNum         = (menuNum === 7);
-    const isAnnouncementsNum  = (menuNum === 8);
+    // ── Universal Context-Aware Menu & Services Routing ─────────────────────
+    // If user previously received SERVICES_MENU, numbers 1-14 strictly map to Parish Services.
+    // If in Main Menu (or default), numbers 1-8 map to Main Menu items, and 9-14 map to extended services.
+    const isInServicesMenu = session.lastBotReplyType === 'SERVICES_MENU';
+
+    const isMassTimingsNum    = isInServicesMenu ? (menuNum === 1) : (menuNum === 2);
+    const isConfessionNum     = isInServicesMenu && (menuNum === 2);
+    const isVerseNum          = isInServicesMenu ? (menuNum === 3) : (menuNum === 1);
+    const isReadingsNum       = isInServicesMenu && (menuNum === 4);
+    const isSaintNum          = isInServicesMenu ? (menuNum === 5) : (menuNum === 7);
+    const isPrayersNum        = isInServicesMenu && (menuNum === 6);
+    const isEventsNum         = isInServicesMenu ? (menuNum === 7) : (menuNum === 4);
+    const isAnnouncementsNum  = isInServicesMenu ? (menuNum === 8) : (menuNum === 5);
+    const isChurchInfoNum     = !isInServicesMenu && (menuNum === 6);
+    const isHelpNum           = !isInServicesMenu && (menuNum === 8);
     const isLocationNum       = (menuNum === 9);
     const isMinistriesNum     = (menuNum === 10);
     const isPriestsNum        = (menuNum === 11);
@@ -1323,7 +1314,7 @@ Type *MENU* for Main Menu. 🙏`;
     const isContactNum        = (menuNum === 13);
     const isIntentionsCertNum = (menuNum === 14);
 
-    // ── 1. SERVICES / HELP DESK MENU COMMAND ("Services" or "Help Desk") ─────────
+    // ── 1. SERVICES / HELP DESK MENU COMMAND ("Services" or "Help Desk" or Main Menu Option 3) ──
     const isServicesKeyword = /^(services|service|help desk|சேவைகள்|பங்கு சேவைகள்|உதவி மையம்)$/i.test(normalizedText) ||
       normalizedText.includes('what services do you provide') ||
       normalizedText.includes('what services') ||
@@ -1333,7 +1324,7 @@ Type *MENU* for Main Menu. 🙏`;
       normalizedText.includes('available services') ||
       normalizedText.includes('என்னென்ன சேவைகள்');
 
-    const isServicesTrigger = isServicesKeyword;
+    const isServicesTrigger = isServicesKeyword || (!isInServicesMenu && menuNum === 3);
 
     if (isServicesTrigger) {
       session.invalidInputStreak = 0;
@@ -1345,45 +1336,38 @@ Type *MENU* for Main Menu. 🙏`;
       return;
     }
 
-    // ── 2A. CASUAL GREETINGS & PRAISES (Hi, Hello, Hey, வணக்கம், Praise the Lord) ─────
+    // ── 2A. MAIN MENU & GREETINGS (Menu, Bot Menu, Hi, Hello, Hey, வணக்கம், 0, Home, Start) ──
+    const isMenuTrigger = /^(menu|bot menu|main menu|show menu|help menu|0|home|start|quick commands|மெனு|முதன்மை மெனு)$/i.test(normalizedText) ||
+      /\b(menu|bot menu|main menu)\b/i.test(normalizedText) ||
+      normalizedText === 'menu' ||
+      normalizedText === 'bot menu' ||
+      normalizedText.includes('sjdb connect');
+
     const isGreeting = /^(hi|hello|hey|hai|hlo|வணக்கம்|vanakkam|good morning|good evening|good afternoon|praise the lord|praised be jesus|இயேசுவுக்கே புகழ்|கிறிஸ்துவுக்கே புகழ்|பிரைஸ் தி லார்ட்|ave maria|halleluiah|அல்லேலூயா)$/i.test(normalizedText) ||
       /\b(praise the lord|praised be jesus|இயேசுவுக்கே புகழ்|கிறிஸ்துவுக்கே புகழ்)\b/i.test(normalizedText);
 
-    if (isGreeting) {
+    if (isMenuTrigger || isGreeting) {
       let linkedUser = null;
       if (session.linkedUserId) {
-        linkedUser = await User.findById(session.linkedUserId);
+        linkedUser = await User.findById(session.linkedUserId).lean();
       } else if (session.providedPhone || phone) {
         const searchPhone = (session.providedPhone || phone).slice(-10);
-        linkedUser = await User.findOne({ phone: { $regex: searchPhone + '$' } });
+        linkedUser = await User.findOne({ phone: { $regex: searchPhone + '$' } }).lean();
       }
 
-      const userName = linkedUser ? linkedUser.name : (pushName || '');
+      if (linkedUser && linkedUser.name) {
+        session.userName = linkedUser.name;
+      }
+
+      const userName = (linkedUser && linkedUser.name) ? linkedUser.name : (session.userName || pushName || '');
       session.invalidInputStreak = 0;
-
-      // Check if user recently received a greeting reply (within 60s) to avoid repeating identical text
-      if (session.lastBotReplyType === 'GREETING' && session.lastSentAt && (Date.now() - new Date(session.lastSentAt).getTime()) < 60000) {
-        const conciseAck = isTamilQuery
-          ? `வணக்கம்! இன்று நான் உங்களுக்கு எவ்வாறு உதவ முடியும்? (கட்டளைகளுக்கு *Menu* என தட்டச்சு செய்யவும்)`
-          : `Hello! How can I assist you right now? (Type *Menu* for quick commands or ask your question.)`;
-        await wa.sendWhatsAppMessage(replyTarget, conciseAck);
-        return;
-      }
-
-      session.lastBotReplyType = 'GREETING';
+      session.lastBotReplyType = 'MENU';
+      session.lastMenuSentAt = new Date();
       session.lastSentAt = new Date();
       await session.save();
 
-      const isPraise = /\b(praise the lord|இயேசுவுக்கே புகழ்|கிறிஸ்துவுக்கே புகழ்|பிரைஸ் தி லார்ட்)\b/i.test(normalizedText);
-      const greetingHeader = isPraise
-        ? (isTamilQuery ? `✝️ *இயேசுவுக்கே புகழ்! (Praise the Lord!)*` : `✝️ *Praise the Lord!*`)
-        : (isTamilQuery ? `👋 *வணக்கம் ${userName ? `${userName}! ` : ''}*` : `👋 *Hello ${userName ? `${userName}! ` : ''}*`);
-
-      const greetingMsg = isTamilQuery
-        ? `${greetingHeader}\nபுனித அருளானந்தர் ஆலயம் உங்களை அன்புடன் வரவேற்கிறது. இன்று நான் உங்களுக்கு எவ்வாறு உதவ முடியும்? 🙏\n\n• முக்கிய கட்டளைகளைக் காண *Menu* என தட்டச்சு செய்யவும்\n• பங்கு சேவைகளைப் பார்க்க *Services* என தட்டச்சு செய்யவும்\n• அல்லது விவிலியம், திருப்பலி நேரங்கள் குறித்து நேரடியாகக் கேட்கவும்.`
-        : `${greetingHeader}\nWelcome to St. John de Britto Church, Kalayarkoil. How can I help you today? 🙏\n\n• Type *Menu* to view quick commands\n• Type *Services* for the 13-service help desk\n• Or ask any church question naturally.`;
-
-      await wa.sendWhatsAppMessage(replyTarget, greetingMsg);
+      const menuMsg = getMainMenuMessage(userName, isTamilQuery);
+      await wa.sendWhatsAppMessage(replyTarget, menuMsg);
       return;
     }
 
@@ -1559,38 +1543,6 @@ To apply for Baptism, First Holy Communion, Confirmation, or Marriage Certificat
 Please bring parish family ID or relevant record dates when collecting certificates in person. God bless! 🙏`;
 
       await wa.sendWhatsAppMessage(replyTarget, certMsg);
-      return;
-    }
-
-    // ── 2B. MAIN MENU / QUICK COMMANDS (Menu, Bot Menu, 0, Home, Start) ──────────
-    const isMenuTrigger = /^(menu|bot menu|main menu|show menu|help menu|0|home|start|quick commands|மெனு|முதன்மை மெனு)$/i.test(normalizedText) ||
-      /\b(menu|bot menu|main menu)\b/i.test(normalizedText) ||
-      normalizedText === 'menu' ||
-      normalizedText === 'bot menu' ||
-      normalizedText.includes('sjdb connect');
-
-    if (isMenuTrigger) {
-      let linkedUser = null;
-      if (session.linkedUserId) {
-        linkedUser = await User.findById(session.linkedUserId).lean();
-      } else if (session.providedPhone || phone) {
-        const searchPhone = (session.providedPhone || phone).slice(-10);
-        linkedUser = await User.findOne({ phone: { $regex: searchPhone + '$' } }).lean();
-      }
-
-      if (linkedUser && linkedUser.name) {
-        session.userName = linkedUser.name;
-      }
-
-      const userName = (linkedUser && linkedUser.name) ? linkedUser.name : (session.userName || pushName || '');
-      session.invalidInputStreak = 0;
-      session.lastBotReplyType = 'MENU';
-      session.lastMenuSentAt = new Date();
-      session.lastSentAt = new Date();
-      await session.save();
-
-      const menuMsg = getMainMenuMessage(userName, isTamilQuery);
-      await wa.sendWhatsAppMessage(replyTarget, menuMsg);
       return;
     }
 
@@ -1828,7 +1780,7 @@ _காளையார்கோவில், சிவகங்கை மறை�
 • மாலை 5:30 மணி — நித்திய சகாய மாதா நவநாள் & திருப்பலி
 
 🕊️ *ஒப்புரவு அருட்சாதனம் (பாவசங்கீர்த்தனம்):*
-• புதன் – சனி: மாலை 5:00 – 5:30 மணி (திருப்பலிக்கு முன்) & திருப்பலிக்கு பின்
+• புதன் – சனி: மாலை 5:00 – 5:30 மணி திருப்பலிக்கு பின்
 
 🌐 *முழு விபரம் & திருப்பலி கருத்துக்கள்:* ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}`
         : `⛪ *St. John de Britto Church — Holy Mass Timings*

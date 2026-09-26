@@ -478,11 +478,11 @@ function generateSaintContentMessage({ dailyContent, language = 'ta' }) {
 
 `;
     if (feastDay) {
-      msg += `📅 *திருவிழா / நாள்:* ${feastDay}\n\n`;
+      msg += `📅 *திருவிழா நாள்:* ${feastDay}\n\n`;
     }
-    if (feastTitleTa || feastTitleEn) {
-      msg += `🎉 *${feastTypeTa}:* ${feastTitleTa || feastTitleEn}\n\n`;
-    }
+    // if (feastTitleTa || feastTitleEn) {
+    //   msg += `🎉 *${feastTypeTa}:* ${feastTitleTa || feastTitleEn}\n\n`;
+    // }
     if (desc) {
       msg += `${desc}\n\n`;
     }
