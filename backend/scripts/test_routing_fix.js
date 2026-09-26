@@ -26,20 +26,18 @@ function simulateRouting(rawText, lastBotReplyType) {
 
   // Services keyword trigger
   const isServicesKeyword = /^(services|service|help desk)$/i.test(normalizedText);
-  const isServicesTrigger = isServicesKeyword || (!isInServicesMenu && menuNum === 3);
+  const isServicesTrigger = isServicesKeyword;
   if (isServicesTrigger) return 'SERVICES_MENU';
 
-  // Numeric routing flags matching botHandler.js
-  const isMassTimingsNum    = isInServicesMenu ? (menuNum === 1) : (menuNum === 2);
-  const isConfessionNum     = isInServicesMenu && (menuNum === 2);
-  const isVerseNum          = isInServicesMenu ? (menuNum === 3) : (menuNum === 1);
-  const isReadingsNum       = isInServicesMenu && (menuNum === 4);
-  const isSaintNum          = isInServicesMenu ? (menuNum === 5) : (menuNum === 7);
-  const isPrayersNum        = isInServicesMenu && (menuNum === 6);
-  const isEventsNum         = isInServicesMenu ? (menuNum === 7) : (menuNum === 4);
-  const isAnnouncementsNum  = isInServicesMenu ? (menuNum === 8) : (menuNum === 5);
-  const isChurchInfoNum     = !isInServicesMenu && (menuNum === 6);
-  const isHelpNum           = !isInServicesMenu && (menuNum === 8);
+  // Universal 1-14 Parish Services routing flags
+  const isMassTimingsNum    = (menuNum === 1);
+  const isConfessionNum     = (menuNum === 2);
+  const isVerseNum          = (menuNum === 3);
+  const isReadingsNum       = (menuNum === 4);
+  const isSaintNum          = (menuNum === 5);
+  const isPrayersNum        = (menuNum === 6);
+  const isEventsNum         = (menuNum === 7);
+  const isAnnouncementsNum  = (menuNum === 8);
   const isLocationNum       = (menuNum === 9);
   const isMinistriesNum     = (menuNum === 10);
   const isPriestsNum        = (menuNum === 11);
@@ -47,22 +45,20 @@ function simulateRouting(rawText, lastBotReplyType) {
   const isContactNum        = (menuNum === 13);
   const isIntentionsCertNum = (menuNum === 14);
 
+  if (isMassTimingsNum) return 'MASS_TIMINGS';
+  if (isConfessionNum) return 'CONFESSION';
   if (isVerseNum) return 'BIBLE_VERSE';
   if (isReadingsNum) return 'MASS_READINGS';
   if (isSaintNum) return 'SAINT';
   if (isPrayersNum) return 'PRAYERS';
-  if (isMassTimingsNum) return 'MASS_TIMINGS';
-  if (isConfessionNum) return 'CONFESSION';
   if (isEventsNum) return 'EVENTS';
   if (isAnnouncementsNum) return 'ANNOUNCEMENTS';
-  if (isChurchInfoNum) return 'CHURCH_INFO';
   if (isLocationNum) return 'LOCATION';
   if (isMinistriesNum) return 'MINISTRIES';
   if (isPriestsNum) return 'PRIESTS';
   if (isHistoryNum) return 'HISTORY';
   if (isContactNum) return 'CONTACT';
   if (isIntentionsCertNum) return 'INTENTIONS_CERTS';
-  if (isHelpNum) return 'HELP';
 
   return 'UNKNOWN/RAG';
 }
@@ -81,15 +77,15 @@ function check(label, input, context, expected) {
   }
 }
 
-console.log('\n=== MAIN MENU routing (no Services context) ===');
-check('Option 1 = Daily Bible', '1', null, 'BIBLE_VERSE');
-check('Option 2 = Mass Timings', '2', null, 'MASS_TIMINGS');
-check('Option 3 = Services Menu', '3', null, 'SERVICES_MENU');
-check('Option 4 = Events', '4', null, 'EVENTS');
-check('Option 5 = Announcements', '5', null, 'ANNOUNCEMENTS');
-check('Option 6 = Church Info', '6', null, 'CHURCH_INFO');
-check('Option 7 = Saint of the Day', '7', null, 'SAINT');
-check('Option 8 = Help', '8', null, 'HELP');
+console.log('\n=== UNIVERSAL 1-14 PARISH SERVICES ROUTING ===');
+check('Option 1 = Mass Timings', '1', null, 'MASS_TIMINGS');
+check('Option 2 = Confession', '2', null, 'CONFESSION');
+check('Option 3 = Daily Bible Verse', '3', null, 'BIBLE_VERSE');
+check('Option 4 = Daily Mass Readings', '4', null, 'MASS_READINGS');
+check('Option 5 = Saint of the Day', '5', null, 'SAINT');
+check('Option 6 = Prayers & Rosary', '6', null, 'PRAYERS');
+check('Option 7 = Events', '7', null, 'EVENTS');
+check('Option 8 = Announcements', '8', null, 'ANNOUNCEMENTS');
 check('Option 9 = Location', '9', null, 'LOCATION');
 check('Option 10 = Ministries', '10', null, 'MINISTRIES');
 check('Option 11 = Priests', '11', null, 'PRIESTS');
@@ -97,21 +93,15 @@ check('Option 12 = History', '12', null, 'HISTORY');
 check('Option 13 = Contact', '13', null, 'CONTACT');
 check('Option 14 = Intentions/Certs', '14', null, 'INTENTIONS_CERTS');
 
-console.log('\n=== SERVICES MENU context (1 to 14) ===');
-check('Services Option 1 = Mass Timings', '1', 'SERVICES_MENU', 'MASS_TIMINGS');
-check('Services Option 2 = Confession', '2', 'SERVICES_MENU', 'CONFESSION');
-check('Services Option 3 = Daily Bible Verse', '3', 'SERVICES_MENU', 'BIBLE_VERSE');
-check('Services Option 4 = Daily Mass Readings', '4', 'SERVICES_MENU', 'MASS_READINGS');
-check('Services Option 5 = Saint of the Day', '5', 'SERVICES_MENU', 'SAINT');
-check('Services Option 6 = Prayers & Rosary', '6', 'SERVICES_MENU', 'PRAYERS');
-check('Services Option 7 = Church Events', '7', 'SERVICES_MENU', 'EVENTS');
-check('Services Option 8 = Announcements', '8', 'SERVICES_MENU', 'ANNOUNCEMENTS');
-check('Services Option 9 = Location', '9', 'SERVICES_MENU', 'LOCATION');
-check('Services Option 10 = Ministries', '10', 'SERVICES_MENU', 'MINISTRIES');
-check('Services Option 11 = Priests', '11', 'SERVICES_MENU', 'PRIESTS');
-check('Services Option 12 = History', '12', 'SERVICES_MENU', 'HISTORY');
-check('Services Option 13 = Contact', '13', 'SERVICES_MENU', 'CONTACT');
-check('Services Option 14 = Intentions/Certs', '14', 'SERVICES_MENU', 'INTENTIONS_CERTS');
+console.log('\n=== CONTEXT INDEPENDENCE (Inside any context or after viewing a service) ===');
+check('Option 1 = Mass Timings (after seeing verse)', '1', 'VERSE', 'MASS_TIMINGS');
+check('Option 2 = Confession (after seeing mass timings)', '2', 'MASS_TIMINGS', 'CONFESSION');
+check('Option 3 = Bible Verse (after seeing confession)', '3', 'CONFESSION', 'BIBLE_VERSE');
+check('Option 4 = Daily Readings (after seeing events)', '4', 'EVENTS', 'MASS_READINGS');
+check('Option 5 = Saint of Day (after seeing announcements)', '5', 'ANNOUNCEMENTS', 'SAINT');
+check('Option 6 = Catholic Prayers (after seeing saint)', '6', 'SAINT', 'PRAYERS');
+check('Option 7 = Events (after seeing prayers)', '7', 'PRAYERS', 'EVENTS');
+check('Option 8 = Announcements (after seeing events)', '8', 'EVENTS', 'ANNOUNCEMENTS');
 
 console.log('\n=== SERVICES keyword always triggers Services menu ===');
 check('Keyword "services"', 'services', null, 'SERVICES_MENU');

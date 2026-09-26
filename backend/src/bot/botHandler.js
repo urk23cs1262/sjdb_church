@@ -1292,20 +1292,30 @@ Type *MENU* for Main Menu. 🙏`;
       return;
     }
 
-    // ── Context Resolver: Services Menu context applies for user selection ──
-    const isInServicesMenu = session.lastBotReplyType === 'SERVICES_MENU';
-
-    // Disambiguate numeric menu selections between Services Menu (1-14) and Main Menu (1-8):
-    const isMassTimingsNum    = isInServicesMenu ? (menuNum === 1) : (menuNum === 2);
-    const isConfessionNum     = isInServicesMenu && (menuNum === 2);
-    const isVerseNum          = isInServicesMenu ? (menuNum === 3) : (menuNum === 1);
-    const isReadingsNum       = isInServicesMenu && (menuNum === 4);
-    const isSaintNum          = isInServicesMenu ? (menuNum === 5) : (menuNum === 7);
-    const isPrayersNum        = isInServicesMenu && (menuNum === 6);
-    const isEventsNum         = isInServicesMenu ? (menuNum === 7) : (menuNum === 4);
-    const isAnnouncementsNum  = isInServicesMenu ? (menuNum === 8) : (menuNum === 5);
-    const isChurchInfoNum     = !isInServicesMenu && (menuNum === 6);
-    const isHelpNum           = !isInServicesMenu && (menuNum === 8);
+    // ── Universal 1-14 Parish Services Routing ─────────────────────────────
+    // Any reply with a number from 1 to 14 strictly and reliably maps to the 14 Parish Services:
+    // 1️⃣  Mass Timings (திருப்பலி நேரங்கள்)
+    // 2️⃣  Confession Timings (ஒப்புரவு அருட்சாதனம்)
+    // 3️⃣  Daily Bible Verse (தினசரி விவிலிய வசனம்)
+    // 4️⃣  Daily Mass Readings (திருப்பலி வாசகங்கள்)
+    // 5️⃣  Saint of the Day (இன்றைய புனிதர்)
+    // 6️⃣  Catholic Prayers & Rosary (கத்தோலிக்க செபங்கள் & ஜெபமாலை)
+    // 7️⃣  Church Events (பங்கு நிகழ்வுகள்)
+    // 8️⃣  Parish Announcements (பங்கு அறிவிப்புகள்)
+    // 9️⃣  Church Location & Map (ஆலய அமைவிடம் & வரைபடம்)
+    // 🔟  Parish Ministries & Anbiyams (பங்கு அமைப்புகள் & அன்பியங்கள்)
+    // 1️⃣1️⃣ Parish Priest & Clergy (பங்குத்தந்தையர்கள்)
+    // 1️⃣2️⃣ Church History (ஆலய வரலாறு)
+    // 1️⃣3️⃣ Contact Church (தொடர்பு விபரம்)
+    // 1️⃣4️⃣ Mass Intentions & Certificates (திருப்பலி கருத்து & சான்றிதழ்கள்)
+    const isMassTimingsNum    = (menuNum === 1);
+    const isConfessionNum     = (menuNum === 2);
+    const isVerseNum          = (menuNum === 3);
+    const isReadingsNum       = (menuNum === 4);
+    const isSaintNum          = (menuNum === 5);
+    const isPrayersNum        = (menuNum === 6);
+    const isEventsNum         = (menuNum === 7);
+    const isAnnouncementsNum  = (menuNum === 8);
     const isLocationNum       = (menuNum === 9);
     const isMinistriesNum     = (menuNum === 10);
     const isPriestsNum        = (menuNum === 11);
@@ -1313,10 +1323,7 @@ Type *MENU* for Main Menu. 🙏`;
     const isContactNum        = (menuNum === 13);
     const isIntentionsCertNum = (menuNum === 14);
 
-    // ── 1. SERVICES / HELP DESK MENU COMMAND (Option 3 from Main Menu or "Services") ─────
-    // Explicit "services" keyword always triggers Services menu.
-    // Main Menu option 3 triggers Services ONLY when the user is NOT already in Services context.
-    // When IN Services context, option 3 maps to Daily Bible Verse (Services option 3).
+    // ── 1. SERVICES / HELP DESK MENU COMMAND ("Services" or "Help Desk") ─────────
     const isServicesKeyword = /^(services|service|help desk|சேவைகள்|பங்கு சேவைகள்|உதவி மையம்)$/i.test(normalizedText) ||
       normalizedText.includes('what services do you provide') ||
       normalizedText.includes('what services') ||
@@ -1326,7 +1333,7 @@ Type *MENU* for Main Menu. 🙏`;
       normalizedText.includes('available services') ||
       normalizedText.includes('என்னென்ன சேவைகள்');
 
-    const isServicesTrigger = isServicesKeyword || (!isInServicesMenu && menuNum === 3);
+    const isServicesTrigger = isServicesKeyword;
 
     if (isServicesTrigger) {
       session.invalidInputStreak = 0;
