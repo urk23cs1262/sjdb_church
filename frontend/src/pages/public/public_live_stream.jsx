@@ -105,7 +105,7 @@ export default function LiveStream() {
                           <FiInstagram className="text-xl text-pink-400" />
                         </div>
                       </div>
-                      <span className="text-white font-bold text-sm tracking-wide">@stjdbchurch</span>
+                      <span className="text-white font-bold text-sm tracking-wide">@sjdbchurch</span>
                       <p className="text-pink-200/80 text-xs mt-1 max-w-[220px] line-clamp-2">
                         Live Feast Celebrations, Stories & Holy Mass Reels
                       </p>
