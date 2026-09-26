@@ -444,6 +444,19 @@ const CATHOLIC_SAINTS_CALENDAR = {
     image: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/87/Caravaggio_-_The_Inspiration_of_Saint_Matthew.jpg/500px-Caravaggio_-_The_Inspiration_of_Saint_Matthew.jpg",
     link: "https://www.catholic.org/saints/saint.php?saint_id=84"
   },
+  "09-26": {
+    name: "Sts. Cosmas and Damian, Martyrs",
+    nameTa: "புனிதர்கள் கோஸ்மாஸ் மற்றும் தமியானஸ், மறைசாட்சியர்",
+    description: "Saints Cosmas and Damian were twin brothers, physicians, and early Christian martyrs who practiced medicine in Syria without charging fees, earning them the title 'Anargyroi' (the silverless). They healed the sick through their medical skill and prayers, bringing many to Christ before dying as martyrs under Emperor Diocletian.",
+    descriptionTa: "புனிதர்கள் கோஸ்மாஸ் மற்றும் தமியானஸ் இரட்டைச் சகோதரர்கள், மருத்துவர்கள் மற்றும் தொடக்கக்கால கிறிஸ்தவ மறைசாட்சியர் ஆவர். சிரியாவில் எவ்வித ஊதியமும் பெறாமல் ஏழைகளுக்கு இலவசமாக மருத்துவம் செய்து பலரை கிறிஸ்துவின் விசுவாசத்திற்கு ஈர்த்தனர். உரோமைப் பேரரசன் தியோக்லீசியனின் அடக்குமுறையில் மறைசாட்சிகளாக உயிர்நீத்தனர்.",
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6c/Saint_C%C3%B4me_%26_Saint_Damien_Grandes_Heures_Anne_de_Bretagne_XVIe_%28cropped%29.jpg/500px-Saint_C%C3%B4me_%26_Saint_Damien_Grandes_Heures_Anne_de_Bretagne_XVIe_%28cropped%29.jpg",
+    link: "https://www.vaticannews.va/en/saints/09/26.html",
+    feastTitle: "Memorial of Saints Cosmas and Damian, Martyrs",
+    feastTitleTa: "புனிதர்கள் கோஸ்மாஸ் மற்றும் தமியானஸ் மறைசாட்சியர் நினைவு நாள்",
+    feastType: "Memorial",
+    feastTypeTa: "நினைவு நாள்",
+    hasFeastInfo: true
+  },
   "09-27": {
     name: "St. Vincent de Paul",
     nameTa: "புனித வின்சென்ட் தே பவுல்",

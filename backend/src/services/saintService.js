@@ -264,6 +264,10 @@ const FEAST_PATTERNS = [
 
 const MEMORIAL_PATTERNS = [
   /pius of pietrelcina|padre pio/i,
+  /cosmas and damian/i,
+  /martyr/i,
+  /vincent de paul/i,
+  /jerome/i,
   /guardian angels/i,
   /our lady of the rosary/i,
   /our lady of sorrows/i,
@@ -285,6 +289,9 @@ const KNOWN_FEAST_TRANSLATIONS = {
   "Parish Patron Feast of St. John de Britto": "புனித அருளானந்தர் ஆலயப் பாதுகாவலர் பெருவிழா",
   "Blessed Virgin Mary of the Mercy": "இரக்கத்தின் தூய கன்னி மரியா திருவிழா",
   "Memorial of Saint Pio of Pietrelcina": "பியட்ரல்சினாவின் புனித பியோ நினைவு நாள்",
+  "Memorial of Saints Cosmas and Damian, Martyrs": "புனிதர்கள் கோஸ்மாஸ் மற்றும் தமியானஸ் மறைசாட்சியர் நினைவு நாள்",
+  "Memorial of Saint Vincent de Paul": "புனித வின்சென்ட் தே பவுல் நினைவு நாள்",
+  "Memorial of Saint Jerome, Priest and Doctor of the Church": "புனித ஜெரோம் (மறைவல்லுநர்) நினைவு நாள்",
   "Feast of Saints Michael, Gabriel and Raphael, Archangels": "புனித மிக்கேல், கபிரியேல், ரபேல் அதிதூதர்கள் திருவிழா",
   "Feast of the Holy Archangels": "தூய அதிதூதர்கள் திருவிழா",
   "Solemnity of Mary, Mother of God": "மரியாவின் இறைத்தாய்மை பெருவிழா",
@@ -375,7 +382,16 @@ function extractFeastInfo($, saints = [], month, day, dateKey) {
     // Check for Memorial
     if (MEMORIAL_PATTERNS.some(p => p.test(rawName))) {
       const cName = cleanTitle(rawName);
-      const mName = cName.includes('Pietrelcina') ? 'Saint Pio of Pietrelcina' : cName;
+      let mName = cName;
+      if (cName.includes('Pietrelcina')) {
+        mName = 'Saint Pio of Pietrelcina';
+      } else if (/cosmas and damian/i.test(rawName)) {
+        mName = 'Saints Cosmas and Damian, Martyrs';
+      } else if (/vincent de paul/i.test(rawName)) {
+        mName = 'Saint Vincent de Paul';
+      } else if (/jerome/i.test(rawName)) {
+        mName = 'Saint Jerome, Priest and Doctor of the Church';
+      }
       detectedTitle = `Memorial of ${mName}`;
       feastSaintObj = s;
       feastSaintName = mName;
@@ -505,6 +521,13 @@ async function fetchFromVaticanNews(month, day) {
       const bio = paragraphs.join('\n\n').trim();
       const isEvidence = $(el).hasClass('section--evidence');
 
+      // In Vatican News CSS:
+      // .page .section__head h2 { color: #c00 } (Liturgical RED)
+      // .page .section--evidence .section__head h2 { color: #373737 } (Grey box)
+      // Any section without `section--evidence` has a RED title (#c00), representing
+      // the General Roman Calendar's feast/memorial/martyrs!
+      const isRed = !isEvidence;
+
       // Check if this section has an official Vatican saint image
       const vaticanImgObj = getVaticanSaintImage($, vaticanUrl, el);
       const imageUrl = vaticanImgObj ? vaticanImgObj.url : null;
@@ -514,6 +537,7 @@ async function fetchFromVaticanNews(month, day) {
         description: bio,
         imageUrl,
         isEvidence,
+        isRed,
         sectionEl: el
       });
     });
@@ -524,7 +548,7 @@ async function fetchFromVaticanNews(month, day) {
     }
 
     console.log(`[Saint Service] Found ${saints.length} saints on Vatican News (${month}/${day}):`, 
-      saints.map(s => `"${s.name}" (evidence=${s.isEvidence}, bioLen=${s.description.length}, hasImg=${!!s.imageUrl})`).join('; ')
+      saints.map(s => `"${s.name}" (isRed=${s.isRed}, evidence=${s.isEvidence}, bioLen=${s.description.length}, hasImg=${!!s.imageUrl})`).join('; ')
     );
 
     // Extract feast and liturgical celebration information from the page
@@ -533,20 +557,28 @@ async function fetchFromVaticanNews(month, day) {
 
     // Primary saint selection logic:
     // 1. If any feast saint or liturgical celebration is present on the page, prioritize that feast saint!
-    // 2. Otherwise, any saint marked with section--evidence AND having a biography
-    // 3. Otherwise, the first saint that has a non-empty biography
-    // 4. Otherwise, the first saint listed
+    // 2. If any saint has a RED title on Vatican News (isRed: true), prioritize that red-titled liturgical saint!
+    //    On Vatican News, the universal Roman Calendar celebration (e.g. Sts. Cosmas and Damian) is styled with red text.
+    // 3. Otherwise, any saint marked with section--evidence AND having a biography
+    // 4. Otherwise, the first saint that has a non-empty biography
+    // 5. Otherwise, the first saint listed
     let primarySaint = null;
     if (feastInfo && feastInfo.hasFeastInfo && feastInfo.feastSaintObj) {
       primarySaint = feastInfo.feastSaintObj;
       console.log(`[Saint Service] Feast Saint prioritized as primary: "${primarySaint.name}" (Feast: "${feastInfo.feastTitle}", Type: "${feastInfo.feastType}")`);
     } else {
-      primarySaint = saints.find(s => s.isEvidence && s.description.length > 0);
-      if (!primarySaint) {
-        primarySaint = saints.find(s => s.description.length > 0);
-      }
-      if (!primarySaint) {
-        primarySaint = saints[0];
+      const redSaint = saints.find(s => s.isRed);
+      if (redSaint) {
+        primarySaint = redSaint;
+        console.log(`[Saint Service] Red-titled Liturgical Saint prioritized as primary: "${primarySaint.name}"`);
+      } else {
+        primarySaint = saints.find(s => s.isEvidence && s.description.length > 0);
+        if (!primarySaint) {
+          primarySaint = saints.find(s => s.description.length > 0);
+        }
+        if (!primarySaint) {
+          primarySaint = saints[0];
+        }
       }
     }
 
@@ -664,23 +696,37 @@ async function fetchDailySaint(targetDate = new Date()) {
     if (prim.description && prim.description.length >= 40) {
       description = prim.description;
     } else {
-      // Biography missing or short on Vatican News — enhance via Wikipedia
-      console.log(`[Saint Service] Vatican News bio short (${prim.description ? prim.description.length : 0} chars) for "${saintName}". Fetching Wikipedia bio...`);
-      const wikiBio = await fetchWikipediaSummary(saintName);
-      if (wikiBio && wikiBio.length >= 30) {
-        description = wikiBio;
-        console.log(`[Saint Service] Wikipedia bio found for "${saintName}" (${wikiBio.length} chars).`);
-      } else {
-        // If matches local calendar saint, use calendar description
-        const cleanFetched = cleanSaintName(saintName).toLowerCase();
-        const cleanFallback = cleanSaintName(fallbackSaint.name).toLowerCase();
-        if (cleanFetched.includes(cleanFallback) || cleanFallback.includes(cleanFetched)) {
-          description = fallbackSaint.description;
-          tamilName = fallbackSaint.nameTa;
-          descriptionTa = fallbackSaint.descriptionTa;
-        } else {
-          description = prim.description || fallbackSaint.description;
+      console.log(`[Saint Service] Vatican News bio short (${prim.description ? prim.description.length : 0} chars) for "${saintName}". Enhancing bio...`);
+      
+      // 1. Check local Catholic Liturgical Calendar first (authoritative curated Catholic content)
+      const cleanFetched = cleanSaintName(saintName).toLowerCase();
+      const cleanFallback = cleanSaintName(fallbackSaint?.name || '').toLowerCase();
+      const isCalendarMatch = fallbackSaint && (
+        cleanFetched.includes(cleanFallback) || 
+        cleanFallback.includes(cleanFetched) || 
+        (cleanFetched.includes('cosmas') && cleanFallback.includes('cosmas')) ||
+        (cleanFetched.includes('vincent') && cleanFallback.includes('vincent')) ||
+        (cleanFetched.includes('jerome') && cleanFallback.includes('jerome'))
+      );
+
+      if (isCalendarMatch) {
+        description = fallbackSaint.description;
+        if (!tamilName && fallbackSaint.nameTa) tamilName = fallbackSaint.nameTa;
+        if (!descriptionTa && fallbackSaint.descriptionTa) descriptionTa = fallbackSaint.descriptionTa;
+        console.log(`[Saint Service] Curated Catholic calendar biography applied for "${saintName}".`);
+      }
+
+      // 2. Wikipedia summary as secondary enrichment
+      if (!description || description.length < 30) {
+        const wikiBio = await fetchWikipediaSummary(saintName);
+        if (wikiBio && wikiBio.length >= 30) {
+          description = wikiBio;
+          console.log(`[Saint Service] Wikipedia bio found for "${saintName}" (${wikiBio.length} chars).`);
         }
+      }
+
+      if (!description) {
+        description = prim.description || fallbackSaint?.description || '';
       }
     }
   } else {
@@ -700,6 +746,22 @@ async function fetchDailySaint(targetDate = new Date()) {
     feastInfo = extractFeastInfo(cheerioDoc, allSaintsList, month, day, dateKey);
   }
 
+  // If feastInfo was not found on page, check if calendar entry has feast info
+  if (!feastInfo?.hasFeastInfo && fallbackSaint?.hasFeastInfo) {
+    const cleanFetched = cleanSaintName(saintName).toLowerCase();
+    const cleanFallback = cleanSaintName(fallbackSaint.name).toLowerCase();
+    if (cleanFetched.includes(cleanFallback) || cleanFallback.includes(cleanFetched) || cleanFetched.includes('cosmas')) {
+      feastInfo = {
+        feastTitle: fallbackSaint.feastTitle,
+        feastTitleTa: fallbackSaint.feastTitleTa,
+        feastType: fallbackSaint.feastType,
+        feastTypeTa: fallbackSaint.feastTypeTa,
+        hasFeastInfo: true,
+        feastSaintName: saintName
+      };
+    }
+  }
+
   if (feastInfo && feastInfo.hasFeastInfo) {
     if (!feastInfo.feastTitleTa) {
       if (KNOWN_FEAST_TRANSLATIONS[feastInfo.feastTitle]) {
@@ -715,10 +777,22 @@ async function fetchDailySaint(targetDate = new Date()) {
   // Pipeline: 
   // 1. Vatican News official saint image
   // 2. Wikipedia exact canonical saint portrait (identity validated)
-  // 3. Online image search (Google / Web)
-  // 4. Liturgical calendar fallback
+  // 3. Liturgical calendar fallback
+  // 4. Online image search (Google / Web)
   // 5. Dignified sacred art (St. John de Britto)
   let imageResult = await resolveSaintImage(saintName, detailUrl, cheerioDoc, dt, primarySectionEl);
+  if ((!imageResult || imageResult.fallback) && fallbackSaint?.image) {
+    const cleanFetched = cleanSaintName(saintName).toLowerCase();
+    const cleanFallback = cleanSaintName(fallbackSaint.name).toLowerCase();
+    if (cleanFetched.includes(cleanFallback) || cleanFallback.includes(cleanFetched) || cleanFetched.includes('cosmas')) {
+      imageResult = {
+        url: fallbackSaint.image,
+        source: 'liturgical_calendar',
+        sourceUrl: fallbackSaint.link || detailUrl,
+        fallback: false
+      };
+    }
+  }
 
   // ── TAMIL TRANSLATION ────────────────────────────────────────────────────
   if (!tamilName) {
