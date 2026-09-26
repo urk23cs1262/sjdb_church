@@ -628,24 +628,8 @@ Select your preferred language for Daily Bible Verse, Mass Readings, Reflection 
         const saintInfo = generateSaintInfoMessage({ dailyContent, language: newLanguage });
         botReply = saintInfo;
       } else if (text === 'SERVICES' || text.toLowerCase().includes('service')) {
-        botReply = `⛪ *SJDB Connect – Services & Help Desk*
-_St. John de Britto Church, Kalayarkoil_
-
-1️⃣ ⛪ *Mass Timings*
-2️⃣ 🕊️ *Confession Timings*
-4️⃣ 📖 *Daily Bible Verse*
-5️⃣ 📜 *Daily Mass Readings*
-6️⃣ 🌟 *Saint of the Day*
-7️⃣ 🙏 *Catholic Prayers*
-8️⃣ 📅 *Church Events*
-9️⃣ 📢 *Parish Announcements*
-🔟 📍 *Church Location & Map*
-1️⃣1️⃣ 👥 *Parish Ministries & Anbiyams*
-1️⃣2️⃣ 👑 *Parish Priest & Clergy*
-1️⃣3️⃣ 🏛️ *Church History*
-1️⃣4️⃣ 📞 *Contact Church*
-
-👉 *Reply with a number (1-14) or type your question naturally.*`;
+        const { getServicesMenuMessage } = require('../bot/botHandler');
+        botReply = getServicesMenuMessage(session.botLanguage === 'ta');
       } else if (text === 'MENU' || text === 'HOME' || text === '0') {
         botReply = `👋 *Welcome to SJDB Connect!*
 ⛪ *St. John de Britto Church, Kalayarkoil*
