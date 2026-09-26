@@ -142,6 +142,14 @@ const CATHOLIC_SAINTS_CALENDAR = {
     image: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Saint_Valentine_icon.jpg/500px-Saint_Valentine_icon.jpg",
     link: "https://www.catholic.org/saints/saint.php?saint_id=159"
   },
+  "02-29": {
+    name: "St. Oswald of Worcester, Bishop",
+    nameTa: "புனித ஆஸ்வால்ட் (ஆயர்)",
+    description: "Benedictine monk, Archbishop of York, and Bishop of Worcester who revived monasticism in England and was deeply devoted to serving the poor.",
+    descriptionTa: "இங்கிலாந்தில் துறவற வாழ்வை மறுமலர்ச்சி செய்து, ஏழைகளுக்குப் பணிவிடை புரிவதில் தங்களை அர்ப்பணித்த யோர்க் பேராயர் மற்றும் வூஸ்டர் ஆயர்.",
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/St_Oswald_at_St_John_in_Bedwardine%2C_Worcester.jpg/500px-St_Oswald_at_St_John_in_Bedwardine%2C_Worcester.jpg",
+    link: "https://www.catholic.org/saints/saint.php?saint_id=4949"
+  },
 
   // MARCH
   "03-17": {

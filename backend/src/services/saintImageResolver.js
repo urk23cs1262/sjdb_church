@@ -71,6 +71,8 @@ function cleanSaintName(name) {
 async function verifyImageUrl(url) {
   if (!url || typeof url !== 'string' || !url.startsWith('http')) return false;
   if (url.endsWith('.svg') || url.endsWith('.gif')) return false;
+  const lowerUrl = url.toLowerCase();
+  if (lowerUrl.includes('_logo.') || lowerUrl.includes('-logo.') || lowerUrl.includes('guardian_angels_logo') || lowerUrl.includes('emblem')) return false;
   try {
     const res = await axios.head(url, {
       headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
@@ -203,6 +205,8 @@ async function searchWikipediaSaintImage(rawSaintName) {
     directSlugs.push('Our_Lady_of_Fatima');
   } else if (lower.includes('pius of pietrelcina') || lower.includes('padre pio')) {
     directSlugs.push('Padre_Pio');
+  } else if (lower.includes('guardian angel')) {
+    directSlugs.push('Guardian_angel', 'Feast_of_the_Guardian_Angels');
   } else if (lower.includes('archangel') || (lower.includes('michael') && lower.includes('gabriel'))) {
     directSlugs.push('Michael_(archangel)');
   }
@@ -252,6 +256,8 @@ async function searchWikipediaSaintImage(rawSaintName) {
     queries.push('Our Lady of Fatima');
   } else if (lower.includes('pius of pietrelcina') || lower.includes('padre pio')) {
     queries.push('Padre Pio', 'Saint Pio of Pietrelcina');
+  } else if (lower.includes('guardian angel')) {
+    queries.push('Guardian angel', 'Feast of the Guardian Angels');
   } else if (lower.includes('archangel') || (lower.includes('michael') && lower.includes('gabriel'))) {
     queries.push('Michael (archangel)', 'Saint Michael Archangel');
   }

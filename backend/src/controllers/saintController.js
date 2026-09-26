@@ -24,6 +24,7 @@ const getSaint = async (req, res) => {
         if (isToday) {
           saint = getDailySaint();
           const isStale = !saint ||
+            saint.date !== currentIST ||
             saint.source === 'Catholic Liturgical Calendar' ||
             saint.source?.includes('Catholic Readings') ||
             saint.sourceUrl?.includes('catholicreadings.org') ||
@@ -42,8 +43,10 @@ const getSaint = async (req, res) => {
     }
 
     if (!saint) {
+      const currentIST = getISTDateParts().dateKey;
       saint = getDailySaint();
       const isStale = !saint ||
+        saint.date !== currentIST ||
         saint.source === 'Catholic Liturgical Calendar' ||
         saint.source?.includes('Catholic Readings') ||
         saint.sourceUrl?.includes('catholicreadings.org') ||

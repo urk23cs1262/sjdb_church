@@ -329,7 +329,7 @@ function extractFeastInfo($, saints = [], month, day, dateKey) {
     return str
       .replace(/^B\.\s*V\.\s*/i, 'Blessed Virgin ')
       .replace(/,\s*(priest|bishop|pope|friar|martyr|abbess|doctor|virgin|religious|deacon|franciscan friar).*$/i, '')
-      .replace(/^Sts?\.\s*/i, 'Saint ')
+      .replace(/^Sts?[\s\.]+/i, 'Saint ')
       .trim();
   };
 
@@ -640,19 +640,41 @@ async function fetchDailySaint(targetDate = new Date()) {
   const month = parts.find(p => p.type === 'month')?.value || '01';
   const year = parts.find(p => p.type === 'year')?.value || String(dt.getFullYear());
   const dateKey = `${year}-${month}-${day}`;
+  const isCurrentToday = (dateKey === getISTDateParts().dateKey);
 
   // February 4 — Parish Patron Feast Day override
   if (month === '02' && day === '04') {
-    dailySaint = {
+    const patronSaintObj = {
       ...ST_JOHN_DE_BRITTO,
       date: dateKey,
       status: "Synced",
       lastSynced: new Date()
     };
-    await saveSaintToDatabase(dailySaint);
+    if (isCurrentToday) {
+      dailySaint = patronSaintObj;
+    }
+    await saveSaintToDatabase(patronSaintObj, isCurrentToday);
     console.log(' Saint of the Day forced to Patron Saint St. John de Britto (Feb 4th)');
-    return dailySaint;
+    return patronSaintObj;
   }
+
+  // Check database cache for arbitrary requested date to avoid redundant scraping
+  try {
+    const mongoose = require('mongoose');
+    if (mongoose.connection.readyState === 1) {
+      const SiteSettings = require('../models/SiteSettings');
+      const cached = await SiteSettings.findOne({ key: `daily_saint_cache_${dateKey}` }).lean();
+      if (cached && cached.value) {
+        const parsed = JSON.parse(cached.value);
+        if (parsed && parsed.date === dateKey && (parsed.saintName || parsed.name) && parsed.image && !parsed.imageFallback) {
+          if (isCurrentToday) {
+            dailySaint = parsed;
+          }
+          return parsed;
+        }
+      }
+    }
+  } catch (e) {}
 
   const fallbackSaint = getSaintForDate(dateKey);
   const formattedFeastDay = dt.toLocaleDateString('en-US', {
@@ -816,7 +838,7 @@ async function fetchDailySaint(targetDate = new Date()) {
   }
 
   // ── BUILD & SAVE SAINT OBJECT ────────────────────────────────────────────
-  dailySaint = {
+  const saintPayload = {
     date: dateKey,
     saintName,
     englishName: saintName,
@@ -847,20 +869,24 @@ async function fetchDailySaint(targetDate = new Date()) {
     lastSynced: new Date()
   };
 
-  await saveSaintToDatabase(dailySaint);
-  console.log(`✅ Saint of the Day synced (${dateKey}): ${saintName} [Source: ${dailySaint.source}] [Image: ${imageResult.source} -> ${imageResult.url}] [Feast: ${dailySaint.feastTitle || 'None'}]`);
+  if (isCurrentToday) {
+    dailySaint = saintPayload;
+  }
 
-  if (retryTimeout) {
+  await saveSaintToDatabase(saintPayload, isCurrentToday);
+  console.log(`✅ Saint of the Day synced (${dateKey}): ${saintName} [Source: ${saintPayload.source}] [Image: ${imageResult.source} -> ${imageResult.url}] [Feast: ${saintPayload.feastTitle || 'None'}]`);
+
+  if (retryTimeout && isCurrentToday) {
     clearTimeout(retryTimeout);
     retryTimeout = null;
   }
 
-  return dailySaint;
+  return saintPayload;
 }
 
 // ─── DATABASE CACHE ──────────────────────────────────────────────────────────
 
-async function saveSaintToDatabase(saintObj) {
+async function saveSaintToDatabase(saintObj, isToday = false) {
   try {
     if (!saintObj || !saintObj.date) return;
     const mongoose = require('mongoose');
@@ -872,16 +898,22 @@ async function saveSaintToDatabase(saintObj) {
       return;
     }
     const SiteSettings = require('../models/SiteSettings');
-    await SiteSettings.findOneAndUpdate(
-      { key: 'daily_saint_cache' },
-      { value: JSON.stringify(saintObj), label: 'Daily Saint Cache', type: 'text' },
-      { upsert: true, new: true }
-    );
+    
+    // Always persist in date-specific cache entry
     await SiteSettings.findOneAndUpdate(
       { key: `daily_saint_cache_${saintObj.date}` },
       { value: JSON.stringify(saintObj), label: `Daily Saint Cache for ${saintObj.date}`, type: 'text' },
       { upsert: true, new: true }
     );
+
+    // Only update global daily_saint_cache if this is current IST today
+    if (isToday) {
+      await SiteSettings.findOneAndUpdate(
+        { key: 'daily_saint_cache' },
+        { value: JSON.stringify(saintObj), label: 'Daily Saint Cache', type: 'text' },
+        { upsert: true, new: true }
+      );
+    }
   } catch (err) {
     console.error('Failed to save daily saint cache to database:', err.message);
   }
