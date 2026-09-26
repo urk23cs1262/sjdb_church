@@ -229,60 +229,52 @@ St. John de Britto Church, Kalayarkoil, Sivagangai District, Tamil Nadu – 6305
  */
 function formatHelpMessage(isTamil = false) {
   if (isTamil) {
-    return `❓ *உதவி & வழிகாட்டி (SJDB Connect Help Desk)*
+    return `❓ *SJDB Connect — உதவி & வழிகாட்டி*
 _புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
 
-எங்கள் வாட்ஸ்அப் போட்டை எவ்வாறு பயன்படுத்துவது?
+📌 *பயன்படுத்தக்கூடிய முக்கிய கட்டளைகள்:*
+• *MENU* — முதன்மை மெனு
+• *SERVICES* — 14 பங்கு சேவைகளின் விபரம்
+• *PREFERENCES* — உங்கள் அறிவிப்பு விருப்பங்களை மாற்ற
+• *LANGUAGE* — தமிழ் அல்லது ஆங்கில Bot மொழியைத் தேர்ந்தெடுக்க
+• *TAMIL* — தமிழ் மொழிக்கு மாற்ற
+• *ENGLISH* — ஆங்கில மொழிக்கு மாற்ற
+• *STOP* — தினசரி செய்திகளிலிருந்து விலக
 
-1️⃣ *முதன்மை மெனு:*
-• *Menu* என அனுப்பினால் முதன்மை மெனுவைக் காணலாம் (விருப்பங்கள் 1 முதல் 8).
-
-2️⃣ *14 பங்கு சேவைகள்:*
-• *Services* என தட்டச்சு செய்தால் அனைத்து 14 பங்கு சேவைகளின் பட்டியலைக் காணலாம்.
-
-3️⃣ *இயல்பான கேள்விகள் (Natural Chat):*
-நீங்கள் எந்த கேள்வியையும் நேரடியாகத் தட்டச்சு செய்யலாம்:
+💬 *உரையாடல் முறையில் கேட்கலாம்:*
 • "திருப்பலி நேரம் என்ன?"
 • "இன்றைய விவிலிய வசனம்"
 • "இன்றைய புனிதர் யார்?"
-• "திருப்பலி கருத்து வைக்க வேண்டும்"
 • "ஆலய அமைவிடம் எங்கு உள்ளது?"
 
-4️⃣ *விருப்பங்கள் & மொழி மாற்றம்:*
-• *Preferences* — உங்கள் தினசரி செய்திகளைத் தேர்ந்தெடுக்க
-• *Language* — தமிழ் அல்லது ஆங்கில மொழியைத் தேர்ந்தெடுக்க
-
 📞 *நேரடி உதவிக்கு:*
-பங்கு அலுவலகம்: +91 96556 39144 (காலை 9:00 - 12:30 & மாலை 4:00 - 8:00)
+பங்கு அலுவலகம்: +91 96556 39144
+🕰️ காலை 9:00 – 12:30 & மாலை 4:00 – 8:00
 🌐 *இணையதளம்:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`;
   }
 
-  return `❓ *Help & Guidance (SJDB Connect)*
+  return `❓ *SJDB Connect — Help & Quick Commands*
 _St. John de Britto Church, Kalayarkoil_
 
-How to use the SJDB Connect WhatsApp Bot:
+📌 *Key Commands:*
+• *MENU* — Open the Main Menu
+• *SERVICES* — View all 14 Parish Help Desk services
+• *PREFERENCES* — Change your notification preferences
+• *LANGUAGE* — Choose your Bot language (Tamil / English)
+• *TAMIL* — Switch content to Tamil
+• *ENGLISH* — Switch content to English
+• *STOP* — Unsubscribe from daily messages
 
-1️⃣ *Main Menu:*
-• Type *Menu* anytime to access the 8-option Main Menu.
-
-2️⃣ *Parish Services & Help Desk:*
-• Type *Services* to view all 14 Parish Help Desk services.
-
-3️⃣ *Ask Naturally:*
-You can type any question in plain English or Tamil:
+💬 *Or ask naturally:*
 • "What time is Sunday Mass?"
 • "Today's Bible Verse"
 • "Who is today's saint?"
-• "How to book a Mass intention?"
 • "Where is the church located?"
 
-4️⃣ *Settings & Subscriptions:*
-• Type *Preferences* to customize your daily subscriptions.
-• Type *Language* to switch Catholic content between Tamil and English.
-
 📞 *Need Direct Assistance?*
-Parish Office: +91 96556 39144 (9:00 AM – 12:30 PM & 4:00 PM – 8:00 PM)
-🌐 *Website Portal:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`;
+Parish Office: +91 96556 39144
+🕰️ 9:00 AM – 12:30 PM & 4:00 PM – 8:00 PM
+🌐 *Website:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`;
 }
 
 /**
@@ -2429,7 +2421,7 @@ Please bring parish family ID or relevant record dates when collecting certifica
     if (session.invalidInputStreak === 1) {
       invalidReply = isTamilQuery
         ? `❓ மன்னிக்கவும், உங்கள் விருப்பத்தை அடையாளம் காண முடியவில்லை.\n\nதயவுசெய்து முதன்மை மெனுவிற்கு *1 முதல் 8 வரை* உள்ள எண்ணைத் தேர்ந்தெடுக்கவும் அல்லது உங்கள் கேள்வியைத் தட்டச்சு செய்யவும்.\n(முக்கிய மெனுவிற்கு *Menu* அல்லது 14 சேவைகளுக்கு *Services* என அனுப்பவும்)`
-        : `❓ I didn't quite recognize that option.\n\nPlease reply with a number (1-8) for the Main Menu or ask your church question naturally.\n(Type *Menu* for Main Menu or *Services* for the 14 Parish Help Desk services)`;
+        : `❓ I didn't quite recognize that option.\n\nPlease reply with a number or ask your church question naturally.\n(Type *Menu* for Main Menu or *Services* for the 14 Parish Help Desk services)`;
     } else if (session.invalidInputStreak === 2) {
       invalidReply = isTamilQuery
         ? `💡 வழிகாட்டல்: 1 முதல் 8 வரையிலான எண்ணைத் தேர்ந்தெடுக்கவும் (எ.கா: *1* விவிலிய வசனம், *2* திருப்பலி நேரம், *3* பங்கு சேவைகள்), அல்லது முதன்மை மெனுவைக் காண *Menu* என தட்டச்சு செய்யவும்.`
