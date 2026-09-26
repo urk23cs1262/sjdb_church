@@ -945,17 +945,22 @@ async function loadCachedSaint() {
           parsed.image.includes('Superdome') ||
           parsed.image.includes('stadium')
         );
+        const isStaleNilusOnSep26 = todayStr.endsWith('-09-26') && (
+          (parsed.saintName && parsed.saintName.includes('Nilus')) ||
+          (parsed.name && parsed.name.includes('Nilus')) ||
+          (parsed.englishName && parsed.englishName.includes('Nilus'))
+        );
 
-        // Valid cache: matches today's date AND has a valid image AND is not from obsolete Catholic Readings source
-        if (parsed && parsed.date === todayStr && (parsed.saintName || parsed.name) && parsed.image && !isBrokenVirginMary && !isStaleCatholicReadings && !isGarbageImage) {
+        // Valid cache: matches today's date AND has a valid image AND is not from obsolete Catholic Readings source AND not obsolete secondary saint
+        if (parsed && parsed.date === todayStr && (parsed.saintName || parsed.name) && parsed.image && !isBrokenVirginMary && !isStaleCatholicReadings && !isGarbageImage && !isStaleNilusOnSep26) {
           dailySaint = parsed;
           if (dailySaint.lastSynced) {
             dailySaint.lastSynced = new Date(dailySaint.lastSynced);
           }
           console.log(" Loaded today's daily saint from database cache:", dailySaint.saintName || dailySaint.name);
           return;
-        } else if (isStaleCatholicReadings || isGarbageImage) {
-          console.warn("⚠️ Discarding obsolete/stale Catholic Readings cache from database. Fresh Vatican News fetch will run immediately.");
+        } else if (isStaleCatholicReadings || isGarbageImage || isStaleNilusOnSep26) {
+          console.warn("⚠️ Discarding obsolete/stale cache from database (Nilus/Catholic Readings/Invalid image). Fresh Vatican News fetch will run immediately.");
         }
       }
     }
@@ -1004,7 +1009,11 @@ try {
     try {
       console.log('🔄 [Saint Service] MongoDB connection established. Checking daily saint cache...');
       await loadCachedSaint();
-      if (!dailySaint || dailySaint.source === 'Catholic Liturgical Calendar' || dailySaint.imageFallback) {
+      if (!dailySaint || 
+          dailySaint.source === 'Catholic Liturgical Calendar' || 
+          dailySaint.imageFallback || 
+          (dailySaint.date?.endsWith('-09-26') && (dailySaint.saintName?.includes('Nilus') || dailySaint.name?.includes('Nilus')))
+      ) {
         await fetchDailySaint();
       }
     } catch (err) {

@@ -52,6 +52,17 @@ if (typeof window !== 'undefined') {
       event.stopPropagation();
     }
   }, true);
+
+  // Vite dynamic chunk load error handler (auto-reload on new deployment bundle)
+  window.addEventListener('vite:preloadError', (event) => {
+    console.warn('Vite preload chunk mismatch detected. Auto-reloading latest deployment...', event);
+    const key = 'sjdb_preload_reload_lock';
+    const last = sessionStorage.getItem(key);
+    if (!last || Date.now() - Number(last) > 8000) {
+      sessionStorage.setItem(key, String(Date.now()));
+      window.location.reload();
+    }
+  });
 }
 
 class ErrorBoundary extends Component {

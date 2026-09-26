@@ -67,17 +67,26 @@ export async function fetchSaintOfTheDay(dateStr) {
         (rawSourceUrl && rawSourceUrl.includes('catholicreadings.org')) ||
         rawSaintName.includes('Slomsek Our');
 
-      if (isStaleCatholicReadings) {
+      const isStaleNilus = (dateKey.endsWith('-09-26') && (rawSaintName.includes('Nilus') || rawEngName.includes('Nilus')));
+
+      if (isStaleCatholicReadings || isStaleNilus) {
         rawSource = "Vatican News";
         rawSourceUrl = `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`;
-        rawSaintName = 'Blessed Virgin Mary of the Mercy';
-        rawEngName = 'Blessed Virgin Mary of the Mercy';
-        if (rawDesc.includes('Twelve Apostles') || rawDesc.includes('Gospel of Matthew')) {
-          rawDesc = 'Our Lady of Mercy (Blessed Virgin Mary of the Mercy) is celebrated on September 24, commemorating the Marian apparition and the Order of the Mercedarians founded to free Christian captives.';
-          rawDescTa = 'புனித இரக்கத்தின் தூய கன்னி மரியா (அருளிரக்க அன்னை) திருவிழா செப்டம்பர் 24 அன்று கொண்டாடப்படுகிறது.';
-        }
-        if (rawImg && (rawImg.includes('imimg.com') || rawImg.includes('metroprin') || rawImg.includes('Superdome') || rawImg.includes('stadium'))) {
-          rawImg = 'https://upload.wikimedia.org/wikipedia/commons/0/0c/Sano_di_Pietro._Madonna_of_Mercy.1440s_Private_coll..jpg';
+        rawSaintName = fallbackSaint.name;
+        rawEngName = fallbackSaint.name;
+        rawDesc = fallbackSaint.description;
+        rawDescTa = fallbackSaint.descriptionTa;
+        rawImg = fallbackSaint.image;
+        if (isStaleCatholicReadings) {
+          rawSaintName = 'Blessed Virgin Mary of the Mercy';
+          rawEngName = 'Blessed Virgin Mary of the Mercy';
+          if (rawDesc.includes('Twelve Apostles') || rawDesc.includes('Gospel of Matthew')) {
+            rawDesc = 'Our Lady of Mercy (Blessed Virgin Mary of the Mercy) is celebrated on September 24, commemorating the Marian apparition and the Order of the Mercedarians founded to free Christian captives.';
+            rawDescTa = 'புனித இரக்கத்தின் தூய கன்னி மரியா (அருளிரக்க அன்னை) திருவிழா செப்டம்பர் 24 அன்று கொண்டாடப்படுகிறது.';
+          }
+          if (rawImg && (rawImg.includes('imimg.com') || rawImg.includes('metroprin') || rawImg.includes('Superdome') || rawImg.includes('stadium'))) {
+            rawImg = 'https://upload.wikimedia.org/wikipedia/commons/0/0c/Sano_di_Pietro._Madonna_of_Mercy.1440s_Private_coll..jpg';
+          }
         }
       }
 

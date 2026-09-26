@@ -31,6 +31,29 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>St. John De Britto Church</title>
+
+  <!-- Auto-recovery guard for stale bundle hashes after production deployment -->
+  <script>
+    window.addEventListener('error', function (e) {
+      var target = e.target || {};
+      var isScript = target.tagName === 'SCRIPT' && target.src;
+      var msg = (e.message || '') + (isScript ? target.src : '');
+      if (
+        msg.indexOf('Failed to load module script') !== -1 ||
+        msg.indexOf('text/html') !== -1 ||
+        msg.indexOf('dynamically imported module') !== -1 ||
+        (isScript && target.src.indexOf('/assets/') !== -1)
+      ) {
+        var key = 'sjdb_chunk_reload_lock';
+        var last = sessionStorage.getItem(key);
+        if (!last || Date.now() - Number(last) > 8000) {
+          sessionStorage.setItem(key, String(Date.now()));
+          console.warn('[Vite Deployment Guard] Stale bundle hash detected. Reloading latest build...');
+          window.location.reload();
+        }
+      }
+    }, true);
+  </script>
 </head>
 
 <style>

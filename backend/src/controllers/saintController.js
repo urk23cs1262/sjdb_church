@@ -21,10 +21,13 @@ const getSaint = async (req, res) => {
         const requestedDateKey = `${yearNum}-${monthNum}-${dayNum}`;
         const isToday = requestedDateKey === currentIST;
 
+        const forceRefresh = req.query.force === 'true' || req.query.refresh === 'true';
         if (isToday) {
           saint = getDailySaint();
-          const isStale = !saint ||
+          const isStale = forceRefresh ||
+            !saint ||
             saint.date !== currentIST ||
+            (currentIST.endsWith('-09-26') && (saint.saintName?.includes('Nilus') || saint.name?.includes('Nilus'))) ||
             saint.source === 'Catholic Liturgical Calendar' ||
             saint.source?.includes('Catholic Readings') ||
             saint.sourceUrl?.includes('catholicreadings.org') ||
@@ -32,6 +35,7 @@ const getSaint = async (req, res) => {
             saint.image?.includes('imimg.com') ||
             saint.image?.includes('metroprin') ||
             saint.image?.includes('Superdome') ||
+            saint.image?.includes('Rossano_NILO') ||
             saint.imageFallback;
           if (isStale) {
             saint = await fetchDailySaint();
@@ -44,9 +48,12 @@ const getSaint = async (req, res) => {
 
     if (!saint) {
       const currentIST = getISTDateParts().dateKey;
+      const forceRefresh = req.query.force === 'true' || req.query.refresh === 'true';
       saint = getDailySaint();
-      const isStale = !saint ||
+      const isStale = forceRefresh ||
+        !saint ||
         saint.date !== currentIST ||
+        (currentIST.endsWith('-09-26') && (saint.saintName?.includes('Nilus') || saint.name?.includes('Nilus'))) ||
         saint.source === 'Catholic Liturgical Calendar' ||
         saint.source?.includes('Catholic Readings') ||
         saint.sourceUrl?.includes('catholicreadings.org') ||
@@ -54,6 +61,7 @@ const getSaint = async (req, res) => {
         saint.image?.includes('imimg.com') ||
         saint.image?.includes('metroprin') ||
         saint.image?.includes('Superdome') ||
+        saint.image?.includes('Rossano_NILO') ||
         saint.imageFallback;
       if (isStale) {
         saint = await fetchDailySaint();
