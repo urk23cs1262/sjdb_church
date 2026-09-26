@@ -26,21 +26,35 @@ export default function LiveStream() {
                   <FiYoutube className="text-red-500 text-2xl shrink-0" />
                   <h2 className="font-display text-xl font-bold text-gray-800">YouTube Live</h2>
                 </div>
-                <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ paddingBottom: '56.25%' }}>
-                  <iframe
-                    className="absolute inset-0 w-full h-full rounded-xl"
-                    src="https://www.youtube.com/embed/live_stream?channel=YOUR_CHANNEL_ID"
-                    title="YouTube Live Stream"
-                    frameBorder="0"
-                    allowFullScreen
-                  />
+                <div className="relative w-full rounded-xl overflow-hidden" style={{ paddingBottom: '56.25%' }}>
+                  <div className="absolute inset-0 w-full h-full rounded-xl overflow-hidden bg-gradient-to-br from-slate-900 via-red-950 to-slate-900 border border-red-500/20 shadow-inner flex flex-col items-center justify-center p-4 text-center group">
+                    <img
+                      src={churchLogo}
+                      alt="St. John de Britto Church"
+                      className="absolute inset-0 w-full h-full object-cover opacity-20 group-hover:scale-105 transition-transform duration-500 pointer-events-none"
+                    />
+                    <div className="relative z-10 flex flex-col items-center justify-center">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-red-600 via-rose-500 to-amber-500 p-[2px] shadow-lg mb-2">
+                        <div className="w-full h-full rounded-[14px] bg-slate-950 flex items-center justify-center text-white">
+                          <FiYoutube className="text-xl text-red-500" />
+                        </div>
+                      </div>
+                      <span className="text-white font-bold text-sm tracking-wide">@sjdbchurch</span>
+                      <p className="text-red-200/80 text-xs mt-1 max-w-[220px] line-clamp-2">
+                        Sunday Holy Mass, Homilies & Special Feast Services
+                      </p>
+                    </div>
+                    <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-600/90 text-white text-[10px] font-bold tracking-wider uppercase shadow-xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span> Live
+                    </div>
+                  </div>
                 </div>
               </div>
               <a
                 href="https://www.youtube.com/@yourchannelhandle"
                 target="_blank"
                 rel="noreferrer"
-                className="btn-maroon w-full justify-center mt-5 text-sm"
+                className="w-full justify-center mt-5 text-sm flex items-center gap-2 py-2.5 px-4 rounded-xl font-medium text-white bg-gradient-to-r from-red-600 to-rose-700 hover:opacity-90 shadow-md transition-all"
               >
                 <FiYoutube className="text-base" /> Visit YouTube Channel
               </a>
@@ -59,21 +73,35 @@ export default function LiveStream() {
                   <FiFacebook className="text-blue-600 text-2xl shrink-0" />
                   <h2 className="font-display text-xl font-bold text-gray-800">Facebook Live</h2>
                 </div>
-                <div className="relative w-full rounded-xl overflow-hidden bg-black" style={{ paddingBottom: '56.25%' }}>
-                  <iframe
-                    className="absolute inset-0 w-full h-full rounded-xl"
-                    src="https://www.facebook.com/plugins/video.php?href=https://www.facebook.com/YourPageName/videos/live"
-                    title="Facebook Live Stream"
-                    frameBorder="0"
-                    allowFullScreen
-                  />
+                <div className="relative w-full rounded-xl overflow-hidden" style={{ paddingBottom: '56.25%' }}>
+                  <div className="absolute inset-0 w-full h-full rounded-xl overflow-hidden bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 border border-blue-500/20 shadow-inner flex flex-col items-center justify-center p-4 text-center group">
+                    <img
+                      src={churchLogo}
+                      alt="St. John de Britto Church"
+                      className="absolute inset-0 w-full h-full object-cover opacity-20 group-hover:scale-105 transition-transform duration-500 pointer-events-none"
+                    />
+                    <div className="relative z-10 flex flex-col items-center justify-center">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-sky-400 p-[2px] shadow-lg mb-2">
+                        <div className="w-full h-full rounded-[14px] bg-slate-950 flex items-center justify-center text-white">
+                          <FiFacebook className="text-xl text-blue-400" />
+                        </div>
+                      </div>
+                      <span className="text-white font-bold text-sm tracking-wide">@sjdbchurch</span>
+                      <p className="text-blue-200/80 text-xs mt-1 max-w-[220px] line-clamp-2">
+                        Live Mass Broadcasts, Parish Feasts & Community Updates
+                      </p>
+                    </div>
+                    <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-600/90 text-white text-[10px] font-bold tracking-wider uppercase shadow-xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span> Live
+                    </div>
+                  </div>
                 </div>
               </div>
               <a
                 href="https://www.facebook.com/YourPageName"
                 target="_blank"
                 rel="noreferrer"
-                className="btn-royal w-full justify-center mt-5 text-sm"
+                className="w-full justify-center mt-5 text-sm flex items-center gap-2 py-2.5 px-4 rounded-xl font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-700 hover:opacity-90 shadow-md transition-all"
               >
                 <FiFacebook className="text-base" /> Visit Facebook Page
               </a>
