@@ -1297,21 +1297,21 @@ Type *MENU* for Main Menu. 🙏`;
     // If in Main Menu (or default), numbers 1-8 map to Main Menu items, and 9-14 map to extended services.
     const isInServicesMenu = session.lastBotReplyType === 'SERVICES_MENU';
 
-    const isMassTimingsNum    = isInServicesMenu ? (menuNum === 1) : (menuNum === 2);
-    const isConfessionNum     = isInServicesMenu && (menuNum === 2);
-    const isVerseNum          = isInServicesMenu ? (menuNum === 3) : (menuNum === 1);
-    const isReadingsNum       = isInServicesMenu && (menuNum === 4);
-    const isSaintNum          = isInServicesMenu ? (menuNum === 5) : (menuNum === 7);
-    const isPrayersNum        = isInServicesMenu && (menuNum === 6);
-    const isEventsNum         = isInServicesMenu ? (menuNum === 7) : (menuNum === 4);
-    const isAnnouncementsNum  = isInServicesMenu ? (menuNum === 8) : (menuNum === 5);
-    const isChurchInfoNum     = !isInServicesMenu && (menuNum === 6);
-    const isHelpNum           = !isInServicesMenu && (menuNum === 8);
-    const isLocationNum       = (menuNum === 9);
-    const isMinistriesNum     = (menuNum === 10);
-    const isPriestsNum        = (menuNum === 11);
-    const isHistoryNum        = (menuNum === 12);
-    const isContactNum        = (menuNum === 13);
+    const isMassTimingsNum = isInServicesMenu ? (menuNum === 1) : (menuNum === 2);
+    const isConfessionNum = isInServicesMenu && (menuNum === 2);
+    const isVerseNum = isInServicesMenu ? (menuNum === 3) : (menuNum === 1);
+    const isReadingsNum = isInServicesMenu && (menuNum === 4);
+    const isSaintNum = isInServicesMenu ? (menuNum === 5) : (menuNum === 7);
+    const isPrayersNum = isInServicesMenu && (menuNum === 6);
+    const isEventsNum = isInServicesMenu ? (menuNum === 7) : (menuNum === 4);
+    const isAnnouncementsNum = isInServicesMenu ? (menuNum === 8) : (menuNum === 5);
+    const isChurchInfoNum = !isInServicesMenu && (menuNum === 6);
+    const isHelpNum = !isInServicesMenu && (menuNum === 8);
+    const isLocationNum = (menuNum === 9);
+    const isMinistriesNum = (menuNum === 10);
+    const isPriestsNum = (menuNum === 11);
+    const isHistoryNum = (menuNum === 12);
+    const isContactNum = (menuNum === 13);
     const isIntentionsCertNum = (menuNum === 14);
 
     // ── 1. SERVICES / HELP DESK MENU COMMAND ("Services" or "Help Desk" or Main Menu Option 3) ──
@@ -1559,7 +1559,7 @@ Please bring parish family ID or relevant record dates when collecting certifica
               botPreferences: selectedPrefs,
               whatsappOptIn: true
             });
-          } catch (_) {}
+          } catch (_) { }
         }
         const prefUpdateMsg = isTamilQuery
           ? `✅ *உங்கள் விருப்பங்கள் வெற்றிகரமாகப் புதுப்பிக்கப்பட்டன!*\n\nதேர்ந்தெடுக்கப்பட்ட சேவைகள்:\n${selectedPrefs.map(p => `• ${p}`).join('\n')}\n\n📌 முதன்மை மெனுவிற்கு *Menu* என தட்டச்சு செய்யவும்.`
