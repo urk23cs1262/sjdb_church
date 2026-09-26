@@ -38,10 +38,10 @@ const getSaint = async (req, res) => {
             saint.image?.includes('Rossano_NILO') ||
             saint.imageFallback;
           if (isStale) {
-            saint = await fetchDailySaint();
+            saint = await fetchDailySaint(undefined, true);
           }
         } else {
-          saint = await fetchDailySaint(requestedDateKey);
+          saint = await fetchDailySaint(requestedDateKey, forceRefresh);
         }
       }
     }
@@ -64,7 +64,7 @@ const getSaint = async (req, res) => {
         saint.image?.includes('Rossano_NILO') ||
         saint.imageFallback;
       if (isStale) {
-        saint = await fetchDailySaint();
+        saint = await fetchDailySaint(undefined, true);
       }
     }
 
@@ -121,7 +121,7 @@ const getSaint = async (req, res) => {
 const refreshSaint = async (req, res) => {
   try {
     console.log('🔄 Manually requested Daily Saint sync from Admin Panel...');
-    await fetchDailySaint();
+    await fetchDailySaint(undefined, true);
     const saint = getDailySaint();
     const d = new Date(saint.date || new Date());
     const day = String(d.getDate()).padStart(2, "0");

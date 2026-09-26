@@ -620,7 +620,7 @@ async function fetchFromVaticanNews(month, day, year = new Date().getFullYear())
  * February 4 always returns Parish Patron St. John de Britto.
  * Validates fetched content belongs to current date and never overwrites with empty data.
  */
-async function fetchDailySaint(targetDate = new Date()) {
+async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
   let dt;
   if (typeof targetDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
     const [y, m, d] = targetDate.split('-').map(Number);
@@ -658,15 +658,20 @@ async function fetchDailySaint(targetDate = new Date()) {
     return patronSaintObj;
   }
 
-  // Check database cache for arbitrary requested date to avoid redundant scraping
+  // Check database cache for arbitrary requested date to avoid redundant scraping (bypassed if forceRefresh or stale)
   try {
     const mongoose = require('mongoose');
-    if (mongoose.connection.readyState === 1) {
+    if (mongoose.connection.readyState === 1 && !forceRefresh) {
       const SiteSettings = require('../models/SiteSettings');
       const cached = await SiteSettings.findOne({ key: `daily_saint_cache_${dateKey}` }).lean();
       if (cached && cached.value) {
         const parsed = JSON.parse(cached.value);
-        if (parsed && parsed.date === dateKey && (parsed.saintName || parsed.name) && parsed.image && !parsed.imageFallback) {
+        const isStaleNilusOnSep26 = dateKey.endsWith('-09-26') && (
+          (parsed.saintName && parsed.saintName.includes('Nilus')) ||
+          (parsed.name && parsed.name.includes('Nilus')) ||
+          (parsed.englishName && parsed.englishName.includes('Nilus'))
+        );
+        if (!isStaleNilusOnSep26 && parsed && parsed.date === dateKey && (parsed.saintName || parsed.name) && parsed.image && !parsed.imageFallback) {
           if (isCurrentToday) {
             dailySaint = parsed;
           }
