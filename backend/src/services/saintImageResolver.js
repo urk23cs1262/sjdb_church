@@ -3,12 +3,12 @@ const { getSaintForDate } = require('../data/catholic_saints_calendar');
 
 /**
  * Universal Saint Image Resolver
- * Priority:
+ * 
+ * Strict Catholic Sacred Art Priority:
  * 1. Vatican News Official Saint Image ("Original Website")
- * 2. Wikipedia Official Search & Summary API (Identity-Validated Saint Portrait)
- * 3. Online Image Search (Google Custom Search / Web Search)
- * 4. Catholic Liturgical Calendar Fallback
- * 5. Guaranteed Authentic Catholic Sacred Art (St. John de Britto)
+ * 2. Wikipedia Official Canonical Saint Portrait (Fetched by Saint Name via Wikipedia API)
+ * 3. Catholic Liturgical Calendar Curated Preset
+ * 4. Guaranteed Authentic Catholic Sacred Art (St. John de Britto)
  */
 
 const HTTP_HEADERS = {
@@ -50,7 +50,7 @@ function cleanSaintName(name) {
     .replace(/^B\.\s*V\.\s*Mary/i, 'Virgin Mary')
     .replace(/^B\.\s*V\.\s*/i, 'Blessed Virgin ')
     .replace(/^B\.\s*/i, 'Blessed ')
-    .replace(/^Sts?\.\s*/i, '')
+    .replace(/^Sts?[\s\.]+/i, '')
     .replace(/^Saint\s*/i, '')
     .replace(/^Saints\s*/i, '')
     .replace(/^Blessed\s*/i, '')
@@ -66,40 +66,54 @@ function cleanSaintName(name) {
 }
 
 /**
- * Verify image URL is reachable and returns HTTP 200 with valid image
+ * Filter out non-sacred graphics, stock photos, generic collages, logos, and maps
  */
-async function verifyImageUrl(url) {
-  if (!url || typeof url !== 'string' || !url.startsWith('http')) return false;
-  if (url.endsWith('.svg') || url.endsWith('.gif')) return false;
-  const lowerUrl = url.toLowerCase();
-  if (lowerUrl.includes('_logo.') || lowerUrl.includes('-logo.') || lowerUrl.includes('guardian_angels_logo') || lowerUrl.includes('emblem')) return false;
-  try {
-    const res = await axios.head(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-      timeout: 4000
-    });
-    const cType = (res.headers['content-type'] || '').toLowerCase();
-    return res.status >= 200 && res.status < 300 && (!cType || cType.includes('image') || cType.includes('octet-stream'));
-  } catch (e) {
-    // If HEAD is blocked by CDN or CORS, try GET with Range header
-    try {
-      const getRes = await axios.get(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          'Range': 'bytes=0-100'
-        },
-        timeout: 4000
-      });
-      return getRes.status >= 200 && getRes.status < 300;
-    } catch (err2) {
-      return false;
-    }
+function isBlacklistedImage(url) {
+  if (!url || typeof url !== 'string') return true;
+  const l = url.toLowerCase();
+  return (
+    l.endsWith('.svg') ||
+    l.endsWith('.gif') ||
+    l.includes('logo') ||
+    l.includes('emblem') ||
+    l.includes('badge') ||
+    l.includes('flag') ||
+    l.includes('shutterstock') ||
+    l.includes('collage') ||
+    l.includes('icon_collection') ||
+    l.includes('map') ||
+    l.includes('symbol') ||
+    l.includes('signature') ||
+    l.includes('commons-logo') ||
+    l.includes('wikimedia-button') ||
+    l.includes('teachingcatholickids') ||
+    l.includes('istockphoto') ||
+    l.includes('imimg.com') ||
+    l.includes('metroprin') ||
+    l.includes('stadium')
+  );
+}
+
+/**
+ * Extract the best Wikipedia image URL, preferring scaled, fast CDN thumbnails
+ */
+function extractWikipediaImageUrl(data) {
+  if (!data) return null;
+  // If thumbnail exists, upgrade from low-res (e.g. 330px) to crisp 500px width
+  if (data.thumbnail?.source) {
+    const raw = data.thumbnail.source.split('?')[0];
+    const scaled = raw.replace(/\/\d+px-/i, '/500px-');
+    if (!isBlacklistedImage(scaled)) return scaled;
   }
+  if (data.originalimage?.source) {
+    const raw = data.originalimage.source.split('?')[0];
+    if (!isBlacklistedImage(raw)) return raw;
+  }
+  return null;
 }
 
 /**
  * Inspect Vatican News Cheerio DOM specifically for genuine saint portraits
- * and ignore site layout/template banners, logos, and 1x1 gif spacers.
  */
 function getVaticanSaintImage($, vaticanUrl, sectionEl = null) {
   if (!$) return null;
@@ -161,7 +175,6 @@ function getVaticanSaintImage($, vaticanUrl, sectionEl = null) {
       ? candidateUrl
       : `https://www.vaticannews.va${candidateUrl.startsWith('/') ? '' : '/'}${candidateUrl}`;
 
-    // Upgrade low-res thumbnail renditions (e.g. 250x141) to high-resolution (750x422)
     fullUrl = fullUrl.replace(/cq5dam\.thumbnail\.cropped\.\d+\.\d+\.jpeg/i, 'cq5dam.thumbnail.cropped.750.422.jpeg');
     fullUrl = fullUrl.split('#')[0];
 
@@ -177,9 +190,11 @@ function getVaticanSaintImage($, vaticanUrl, sectionEl = null) {
 }
 
 /**
- * Search Wikipedia for the exact canonical saint portrait with rigorous Catholic identity verification.
+ * Search Wikipedia for the exact canonical saint portrait by saint name.
+ * Reliable, fast, and completely free of secular collages.
  */
 async function searchWikipediaSaintImage(rawSaintName) {
+  if (!rawSaintName) return null;
   const cleanName = cleanSaintName(rawSaintName);
   if (!cleanName) return null;
 
@@ -188,10 +203,29 @@ async function searchWikipediaSaintImage(rawSaintName) {
     .replace(/^(Parish Patron Feast|Feast|Solemnity|Memorial)\s+of\s+/i, '')
     .trim();
 
-  // 1. Direct Wikipedia Page Summary Slugs by exact/canonical saint name
+  // 1. Direct Wikipedia Canonical Slugs for known saints
   const directSlugs = [];
   const lower = rawSaintName.toLowerCase();
-  if (lower.includes('mercy') && (lower.includes('mary') || lower.includes('lady'))) {
+
+  if (lower.includes('cosmas') && lower.includes('damian')) {
+    directSlugs.push('Cosmas_and_Damian');
+  } else if (lower.includes('vincent de paul')) {
+    directSlugs.push('Vincent_de_Paul');
+  } else if (lower.includes('wenceslaus')) {
+    directSlugs.push('Wenceslaus_I,_Duke_of_Bohemia');
+  } else if (lower.includes('jerome')) {
+    directSlugs.push('Jerome');
+  } else if (lower.includes('therese') || lower.includes('thérèse')) {
+    directSlugs.push('Thérèse_of_Lisieux', 'Saint_Thérèse_of_Lisieux');
+  } else if (lower.includes('guardian angel')) {
+    directSlugs.push('Guardian_angel', 'Memorial_of_the_Holy_Guardian_Angels');
+  } else if (lower.includes('archangel') || (lower.includes('michael') && lower.includes('gabriel'))) {
+    directSlugs.push('Michael_(archangel)');
+  } else if (lower.includes('francis of assisi')) {
+    directSlugs.push('Francis_of_Assisi');
+  } else if (lower.includes('pius of pietrelcina') || lower.includes('padre pio')) {
+    directSlugs.push('Padre_Pio');
+  } else if (lower.includes('mercy') && (lower.includes('mary') || lower.includes('lady'))) {
     directSlugs.push('Virgin_of_Mercy', 'Our_Lady_of_Mercy');
   } else if (lower.includes('sorrow')) {
     directSlugs.push('Our_Lady_of_Sorrows');
@@ -203,13 +237,8 @@ async function searchWikipediaSaintImage(rawSaintName) {
     directSlugs.push('Our_Lady_of_Lourdes');
   } else if (lower.includes('fatima')) {
     directSlugs.push('Our_Lady_of_Fatima');
-  } else if (lower.includes('pius of pietrelcina') || lower.includes('padre pio')) {
-    directSlugs.push('Padre_Pio');
-  } else if (lower.includes('guardian angel')) {
-    directSlugs.push('Guardian_angel', 'Feast_of_the_Guardian_Angels');
-  } else if (lower.includes('archangel') || (lower.includes('michael') && lower.includes('gabriel'))) {
-    directSlugs.push('Michael_(archangel)');
   }
+
   directSlugs.push(cleanName.replace(/\s+/g, '_'));
   directSlugs.push(`Saint_${cleanName.replace(/\s+/g, '_')}`);
   directSlugs.push(rawWithoutTitle.replace(/\s+/g, '_'));
@@ -220,19 +249,15 @@ async function searchWikipediaSaintImage(rawSaintName) {
       const sumRes = await axios.get(summaryUrl, { headers: HTTP_HEADERS, timeout: 5000 });
       const data = sumRes.data;
       if (data && data.type !== 'disambiguation') {
-        let imageUrl = data.originalimage?.source || data.thumbnail?.source;
-        if (imageUrl && !imageUrl.endsWith('.svg')) {
-          imageUrl = imageUrl.split('?')[0];
-          const isValid = await verifyImageUrl(imageUrl);
-          if (isValid) {
-            console.log(`[Saint Image Resolver] Found direct Wikipedia image for "${rawSaintName}" -> "${data.title}": ${imageUrl}`);
-            return {
-              url: imageUrl,
-              source: 'wikipedia',
-              sourceUrl: data.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(slug)}`,
-              fallback: false
-            };
-          }
+        const imageUrl = extractWikipediaImageUrl(data);
+        if (imageUrl) {
+          console.log(`[Saint Image Resolver] Found direct Wikipedia image for "${rawSaintName}" -> "${data.title}": ${imageUrl}`);
+          return {
+            url: imageUrl,
+            source: 'wikipedia',
+            sourceUrl: data.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(slug)}`,
+            fallback: false
+          };
         }
       }
     } catch (e) {
@@ -241,33 +266,11 @@ async function searchWikipediaSaintImage(rawSaintName) {
   }
 
   // 2. Full-text search on Wikipedia if direct slugs did not hit
-  const queries = [];
-  if (lower.includes('mercy') && (lower.includes('mary') || lower.includes('lady'))) {
-    queries.push('Virgin of Mercy', 'Our Lady of Mercy', 'Blessed Virgin Mary of Mercy');
-  } else if (lower.includes('sorrow')) {
-    queries.push('Our Lady of Sorrows');
-  } else if (lower.includes('rosary')) {
-    queries.push('Our Lady of the Rosary');
-  } else if (lower.includes('carmel')) {
-    queries.push('Our Lady of Mount Carmel');
-  } else if (lower.includes('lourdes')) {
-    queries.push('Our Lady of Lourdes');
-  } else if (lower.includes('fatima')) {
-    queries.push('Our Lady of Fatima');
-  } else if (lower.includes('pius of pietrelcina') || lower.includes('padre pio')) {
-    queries.push('Padre Pio', 'Saint Pio of Pietrelcina');
-  } else if (lower.includes('guardian angel')) {
-    queries.push('Guardian angel', 'Feast of the Guardian Angels');
-  } else if (lower.includes('archangel') || (lower.includes('michael') && lower.includes('gabriel'))) {
-    queries.push('Michael (archangel)', 'Saint Michael Archangel');
-  }
-
-  queries.push(
+  const queries = [
     `Saint ${cleanName}`,
     cleanName,
-    rawWithoutTitle,
-    `Blessed ${cleanName}`
-  );
+    rawWithoutTitle
+  ];
 
   const uniqueQueries = [...new Set(queries.filter(Boolean))];
 
@@ -301,24 +304,17 @@ async function searchWikipediaSaintImage(rawSaintName) {
         const isSaintContext = CHRISTIAN_SAINT_KEYWORDS.some(kw => combinedText.includes(kw));
         const isUnrelated = UNRELATED_KEYWORDS.some(kw => description.includes(kw));
 
-        if (!isSaintContext || isUnrelated) {
-          continue;
-        }
+        if (!isSaintContext || isUnrelated) continue;
 
-        // Prefer full-resolution original image, fallback to thumbnail
-        let imageUrl = data.originalimage?.source || data.thumbnail?.source;
-        if (imageUrl && !imageUrl.endsWith('.svg')) {
-          imageUrl = imageUrl.split('?')[0];
-          const isValid = await verifyImageUrl(imageUrl);
-          if (isValid) {
-            console.log(`[Saint Image Resolver] Found verified Wikipedia portrait for "${rawSaintName}" -> "${data.title}" (${data.description}): ${imageUrl}`);
-            return {
-              url: imageUrl,
-              source: 'wikipedia',
-              sourceUrl: data.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(hit.title)}`,
-              fallback: false
-            };
-          }
+        const imageUrl = extractWikipediaImageUrl(data);
+        if (imageUrl) {
+          console.log(`[Saint Image Resolver] Found verified Wikipedia portrait for "${rawSaintName}" -> "${data.title}" (${data.description}): ${imageUrl}`);
+          return {
+            url: imageUrl,
+            source: 'wikipedia',
+            sourceUrl: data.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(hit.title)}`,
+            fallback: false
+          };
         }
       }
     } catch (err) {
@@ -330,86 +326,24 @@ async function searchWikipediaSaintImage(rawSaintName) {
 }
 
 /**
- * Intelligent multi-query online search (Google Custom Search -> Web Image Search)
- */
-async function searchSaintFallback(saintName) {
-  const cleanName = cleanSaintName(saintName);
-  if (!cleanName) return null;
-
-  // 1. Google Custom Search API (if configured in environment)
-  const googleKey = process.env.GOOGLE_SEARCH_API_KEY;
-  const googleCx = process.env.GOOGLE_SEARCH_ENGINE_ID || process.env.GOOGLE_CSE_CX;
-  if (googleKey && googleCx) {
-    try {
-      const gUrl = `https://www.googleapis.com/customsearch/v1?q=${encodeURIComponent('Saint ' + cleanName + ' catholic portrait')}&searchType=image&key=${googleKey}&cx=${googleCx}&num=5`;
-      const gRes = await axios.get(gUrl, { timeout: 4000 });
-      const items = gRes.data?.items || [];
-      for (const item of items) {
-        if (item.link && await verifyImageUrl(item.link)) {
-          console.log(` Saint Image: Found via Google Custom Search API for "${cleanName}"`);
-          return {
-            url: item.link,
-            source: 'google_search',
-            sourceUrl: item.image?.contextLink || item.link,
-            fallback: false
-          };
-        }
-      }
-    } catch (e) {
-      console.warn(' Google CSE notice:', e.message);
-    }
-  }
-
-  // 2. Web Image Search
-  try {
-    const webRes = await axios.get(`https://www.bing.com/images/search?q=${encodeURIComponent('Saint ' + cleanName + ' portrait catholic')}&form=HDRSC2`, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-      timeout: 4500
-    });
-    const re = /murl&quot;:&quot;(http[^&]+)&quot;/g;
-    let m;
-    while ((m = re.exec(webRes.data)) !== null) {
-      const u = decodeURIComponent(m[1]);
-      if (await verifyImageUrl(u)) {
-        console.log(` Saint Image: Found verified portrait via Web Search for "${cleanName}"`);
-        return {
-          url: u,
-          source: 'google_web_search',
-          sourceUrl: u,
-          fallback: false
-        };
-      }
-    }
-  } catch (e) {
-    console.warn(' Web search fallback notice:', e.message);
-  }
-
-  return null;
-}
-
-/**
  * Master Saint Image Resolver
  * Executes strict priority pipeline:
  * 1. Vatican News Official Saint Image ("Original Website")
- * 2. Wikipedia exact saint article image (verified authentic portrait)
- * 3. Online Google / Web Search Fallback
- * 4. Liturgical Calendar Fallback
- * 5. Guaranteed Verified Dignified Sacred Art (St. John de Britto)
+ * 2. Wikipedia Official Canonical Saint Portrait (by Saint Name)
+ * 3. Catholic Liturgical Calendar Curated Preset
+ * 4. Guaranteed Authentic Catholic Sacred Art (St. John de Britto)
  */
 async function resolveSaintImage(saintName, vaticanUrl, $, todayDate = new Date(), sectionEl = null) {
   // 1. Try Vatican News ("Original Website") First
   if ($ && vaticanUrl) {
     const vaticanResult = getVaticanSaintImage($, vaticanUrl, sectionEl);
-    if (vaticanResult && vaticanResult.url) {
-      const isOk = await verifyImageUrl(vaticanResult.url);
-      if (isOk) {
-        console.log(` Saint Image Resolver: Using authentic Vatican News image for "${saintName}": ${vaticanResult.url}`);
-        return vaticanResult;
-      }
+    if (vaticanResult && vaticanResult.url && !isBlacklistedImage(vaticanResult.url)) {
+      console.log(` Saint Image Resolver: Using authentic Vatican News image for "${saintName}": ${vaticanResult.url}`);
+      return vaticanResult;
     }
   }
 
-  // 2. Try Wikipedia exact saint article portrait with Catholic identity verification
+  // 2. Try Wikipedia exact saint article portrait by saint name
   console.log(` Saint Image Resolver: Checking Wikipedia for verified portrait of "${saintName}"...`);
   try {
     const wikiResult = await searchWikipediaSaintImage(saintName);
@@ -421,37 +355,24 @@ async function resolveSaintImage(saintName, vaticanUrl, $, todayDate = new Date(
     console.warn(` Saint Image Resolver: Wikipedia search error for "${saintName}":`, err.message);
   }
 
-  // 3. Try Online Google / Web Image Search
-  console.log(` Saint Image Resolver: Fetching image from online search for "${saintName}"...`);
-  try {
-    const onlineResult = await searchSaintFallback(saintName);
-    if (onlineResult && onlineResult.url) {
-      console.log(` Saint Image Resolver: Successfully fetched image from online search for "${saintName}"`);
-      return onlineResult;
-    }
-  } catch (err) {
-    console.error(' Saint Image Resolver: Online search error:', err.message);
-  }
-
-  // 4. Liturgical Calendar Fallback (Only if names match)
+  // 3. Liturgical Calendar Fallback (curated Catholic portraits)
   const calendarSaint = getSaintForDate(todayDate);
   const cleanTarget = cleanSaintName(saintName).toLowerCase();
   const cleanCal = cleanSaintName(calendarSaint?.name || '').toLowerCase();
 
   if (calendarSaint && calendarSaint.image && (cleanTarget === cleanCal || cleanTarget.includes(cleanCal) || cleanCal.includes(cleanTarget))) {
-    const isCalOk = await verifyImageUrl(calendarSaint.image);
-    if (isCalOk) {
+    if (!isBlacklistedImage(calendarSaint.image)) {
       console.log(` Saint Image Resolver: Using Catholic Liturgical Calendar preset image for "${saintName}"`);
       return {
         url: calendarSaint.image,
         source: 'liturgical_calendar',
         sourceUrl: calendarSaint.link || vaticanUrl,
-        fallback: true
+        fallback: false
       };
     }
   }
 
-  // 5. Default Dignified Catholic Sacred Art (Guaranteed 200 OK)
+  // 4. Default Dignified Catholic Sacred Art (St. John de Britto)
   return {
     url: DIGNIFIED_FALLBACK_IMAGE,
     source: 'liturgical_fallback',
@@ -464,8 +385,6 @@ module.exports = {
   resolveSaintImage,
   getVaticanSaintImage,
   searchWikipediaSaintImage,
-  searchSaintFallback,
   cleanSaintName,
-  verifyImageUrl,
   DIGNIFIED_FALLBACK_IMAGE
 };

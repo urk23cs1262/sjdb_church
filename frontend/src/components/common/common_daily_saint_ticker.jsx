@@ -155,7 +155,7 @@ export default function DailySaintTicker() {
 
   const defaultSacredImage = "https://upload.wikimedia.org/wikipedia/commons/b/bf/St._John_De_Britto.jpg";
 
-  // Fallback image error handler: if the active image fails, fetch it from Google/online search
+  // Fallback image error handler: if the active image fails, fetch verified portrait from Wikipedia
   const handleImageError = async () => {
     if (imgError) return;
     setImgError(true);
@@ -163,17 +163,18 @@ export default function DailySaintTicker() {
     if (saintTarget) {
       try {
         const found = await searchSaintImage(saintTarget);
-        if (found && found.image) {
+        if (found && found.image && !found.image.includes('shutterstock')) {
           setSaintOfDay(prev => ({
             ...prev,
             image: found.image,
-            imageSource: found.imageSource || 'google_web_search',
+            imageSource: found.imageSource || 'wikipedia',
             imageFallback: false
           }));
           setImgError(false);
+          return;
         }
       } catch (e) {
-        console.warn('Failed to fetch online saint image on error:', e);
+        console.warn('Failed to fetch Wikipedia saint image on error:', e);
       }
     }
   };

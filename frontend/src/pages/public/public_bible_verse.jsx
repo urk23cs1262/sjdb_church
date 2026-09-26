@@ -352,7 +352,7 @@ export default function BibleVerse() {
       .finally(() => setSaintLoading(false));
   }, [date]);
 
-  // Fallback image error handler: if the saint image fails, fetch it from Google/online search
+  // Fallback image error handler: if the saint image fails, fetch verified portrait from Wikipedia
   const handleSaintImageError = async () => {
     if (saintImgError) return;
     setSaintImgError(true);
@@ -360,14 +360,15 @@ export default function BibleVerse() {
     if (targetName) {
       try {
         const found = await searchSaintImage(targetName);
-        if (found && found.image) {
+        if (found && found.image && !found.image.includes('shutterstock')) {
           setSaintData(prev => ({
             ...prev,
             image: found.image,
-            imageSource: found.imageSource || 'google_web_search',
+            imageSource: found.imageSource || 'wikipedia',
             imageFallback: false
           }));
           setSaintImgError(false);
+          return;
         }
       } catch (e) {
         console.warn('Fallback saint image search failed:', e);

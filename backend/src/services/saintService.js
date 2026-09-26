@@ -1045,26 +1045,19 @@ cron.schedule('0 12 * * *', async () => {
 
 console.log('✅ [Saint Service] 12:00 AM & 12:00 PM IST Cron Schedulers registered (Asia/Kolkata).');
 
-// ─── ADMIN: Search and apply a saint image manually ──────────────────────────
+// ─── Search and apply verified Wikipedia saint image ──────────────────────────
 async function searchAndApplySaintImage(saintName) {
   if (!saintName) return null;
-  const { searchWikipediaSaintImage, searchSaintFallback } = require('./saintImageResolver');
+  const { searchWikipediaSaintImage } = require('./saintImageResolver');
   
-  // 1. Wikipedia first
-  let found = await searchWikipediaSaintImage(saintName);
-  
-  // 2. Fallback to web search
-  if (!found || !found.url) {
-    found = await searchSaintFallback(saintName);
-  }
-
+  const found = await searchWikipediaSaintImage(saintName);
   if (found && found.url) {
     if (dailySaint) {
       dailySaint.image = found.url;
       dailySaint.imageSource = found.source || 'wikipedia';
       dailySaint.imageSourceUrl = found.sourceUrl;
       dailySaint.imageFallback = false;
-      await saveSaintToDatabase(dailySaint);
+      await saveSaintToDatabase(dailySaint, true);
     }
     return found;
   }
