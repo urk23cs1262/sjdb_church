@@ -22,7 +22,7 @@ const Gallery = lazy(() => import('./pages/public/public_gallery'));
 const LiveStream = lazy(() => import('./pages/public/public_live_stream'));
 const Contact = lazy(() => import('./pages/public/public_contact'));
 const Donate = lazy(() => import('./pages/public/public_donate'));
-const BibleVerse = lazy(() => import('./pages/public/public_bible_verse'));
+const DailyCatholicContent = lazy(() => import('./pages/public/public_daily_catholic_content'));
 const PrayerRequests = lazy(() => import('./pages/user/user_prayer_requests'));
 const Announcements = lazy(() => import('./pages/public/public_announcements'));
 const Rosary = lazy(() => import('./pages/public/public_rosary'));
@@ -127,12 +127,12 @@ function AppRoutes() {
               <Route path="/live" element={<LiveStream />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/donate" element={<Donate />} />
-              <Route path="/bible-verse" element={<BibleVerse />} />
-              <Route path="/daily-mass-readings" element={<BibleVerse />} />
-              <Route path="/daily-readings" element={<BibleVerse />} />
-              <Route path="/readings" element={<BibleVerse />} />
-              <Route path="/reflection" element={<BibleVerse />} />
-              <Route path="/saint-of-the-day" element={<BibleVerse />} />
+              <Route path="/bible-verse" element={<DailyCatholicContent />} />
+              <Route path="/daily-mass-readings" element={<DailyCatholicContent />} />
+              <Route path="/daily-readings" element={<DailyCatholicContent />} />
+              <Route path="/readings" element={<DailyCatholicContent />} />
+              <Route path="/reflection" element={<DailyCatholicContent />} />
+              <Route path="/saint-of-the-day" element={<DailyCatholicContent />} />
               <Route path="/prayers" element={<PrayerRequests />} />
               <Route path="/prayer-requests" element={<PrayerRequests />} />
               <Route path="/announcements" element={<Announcements />} />

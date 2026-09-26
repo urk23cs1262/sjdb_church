@@ -288,7 +288,7 @@ const sectionColor = (heading = '') => {
 };
 
 // ── Main component ─────────────────────────────────────────────────────────
-export default function BibleVerse() {
+export default function DailyCatholicContent() {
   const { i18n } = useTranslation();
   const location = useLocation();
   const isTamil = i18n.language === 'ta';
