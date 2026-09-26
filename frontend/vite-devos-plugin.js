@@ -32,25 +32,32 @@ export function devosSongsPlugin() {
   const frontendJson = path.resolve(rootDir, 'src/data/defaultDevotionalSongs.json');
   const backendJson = path.resolve(rootDir, '../backend/src/data/defaultDevotionalSongs.json');
 
-  const syncDevos = () => {
+  const syncDevos = (isBuild = false) => {
     if (!fs.existsSync(devosDir)) return;
     try {
       const files = fs.readdirSync(devosDir)
         .filter(f => AUDIO_EXTS.has(path.extname(f).toLowerCase()))
         .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
-      if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
+      // Only sync physical files to publicDir in dev mode if needed
+      if (!isBuild) {
+        if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
+        for (const fileName of files) {
+          const fullPath = path.join(devosDir, fileName);
+          let fileSize = 0;
+          try { fileSize = fs.statSync(fullPath).size; } catch (_) {}
+          const dstPath = path.join(publicDir, fileName);
+          if (!fs.existsSync(dstPath) || fs.statSync(dstPath).size !== fileSize) {
+            fs.copyFileSync(fullPath, dstPath);
+          }
+        }
+      }
 
       const catalog = files.map((fileName, idx) => {
         const fullPath = path.join(devosDir, fileName);
         let fileSize = 0;
         try { fileSize = fs.statSync(fullPath).size; } catch (_) {}
         const ext = path.extname(fileName).toLowerCase();
-
-        const dstPath = path.join(publicDir, fileName);
-        if (!fs.existsSync(dstPath) || fs.statSync(dstPath).size !== fileSize) {
-          fs.copyFileSync(fullPath, dstPath);
-        }
 
         return {
           _id: `default_devos_${idx + 1}`,
@@ -71,7 +78,7 @@ export function devosSongsPlugin() {
       if (fs.existsSync(path.dirname(backendJson))) {
         fs.writeFileSync(backendJson, jsonStr, 'utf8');
       }
-      console.log(`[DevosPlugin] Auto-synchronized ${catalog.length} devotional songs.`);
+      console.log(`[DevosPlugin] Auto-synchronized ${catalog.length} devotional songs catalog.`);
     } catch (err) {
       console.error('[DevosPlugin] Error synchronizing devotional songs:', err.message);
     }
@@ -80,10 +87,22 @@ export function devosSongsPlugin() {
   return {
     name: 'vite-plugin-devos-songs',
     buildStart() {
-      syncDevos();
+      syncDevos(true);
+    },
+    closeBundle() {
+      // Ensure dist/ does not contain the 322MB devotional audio for a lean production build
+      const distDevos = path.resolve(rootDir, 'dist/devotional-songs');
+      if (fs.existsSync(distDevos)) {
+        try {
+          fs.rmSync(distDevos, { recursive: true, force: true });
+          console.log('[DevosPlugin] Cleaned dist/devotional-songs for lean production build.');
+        } catch (err) {
+          console.warn('[DevosPlugin] Notice cleaning dist/devotional-songs:', err.message);
+        }
+      }
     },
     configureServer(server) {
-      syncDevos();
+      syncDevos(false);
 
       // Serve /devotional-songs directly with range request support
       server.middlewares.use((req, res, next) => {
@@ -94,7 +113,8 @@ export function devosSongsPlugin() {
           const cleanName = path.basename(decoded);
           const candidatePaths = [
             path.join(devosDir, cleanName),
-            path.join(publicDir, cleanName)
+            path.join(publicDir, cleanName),
+            path.join(rootDir, 'src/assets', cleanName)
           ];
 
           for (const target of candidatePaths) {

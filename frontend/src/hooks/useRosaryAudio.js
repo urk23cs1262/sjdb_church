@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import api, { getMediaUrl } from '../services/api';
-import defaultRosaryAudio from '../assets/rosary.mp3';
+
+const DEFAULT_ROSARY_AUDIO_PATH = '/devotional-songs/rosary.mp3';
 
 export default function useRosaryAudio() {
-  const [audioUrl, setAudioUrl] = useState(defaultRosaryAudio);
+  const defaultAudio = useMemo(() => getMediaUrl(DEFAULT_ROSARY_AUDIO_PATH), []);
+  const [audioUrl, setAudioUrl] = useState(defaultAudio);
   const [isCustom, setIsCustom] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -16,21 +18,21 @@ export default function useRosaryAudio() {
           setAudioUrl(fullUrl);
           setIsCustom(true);
         } else {
-          setAudioUrl(defaultRosaryAudio);
+          setAudioUrl(defaultAudio);
           setIsCustom(false);
         }
       } else {
-        setAudioUrl(defaultRosaryAudio);
+        setAudioUrl(defaultAudio);
         setIsCustom(false);
       }
     } catch {
-      // If error or network offline, cleanly fall back to default Rosary audio asset
-      setAudioUrl(defaultRosaryAudio);
+      // If error or network offline, cleanly fall back to default Rosary audio
+      setAudioUrl(defaultAudio);
       setIsCustom(false);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [defaultAudio]);
 
   useEffect(() => {
     fetchAudio();
@@ -49,5 +51,5 @@ export default function useRosaryAudio() {
     };
   }, [fetchAudio]);
 
-  return { audioUrl, isCustom, loading, refreshAudio: fetchAudio, defaultAudio: defaultRosaryAudio };
+  return { audioUrl, isCustom, loading, refreshAudio: fetchAudio, defaultAudio };
 }
