@@ -237,8 +237,8 @@ _புனித அருளானந்தர் ஆலயம், காளை
 • *SERVICES* — 14 பங்கு சேவைகளின் விபரம்
 • *PREFERENCES* — உங்கள் அறிவிப்பு விருப்பங்களை மாற்ற
 • *LANGUAGE* — தமிழ் அல்லது ஆங்கில Bot மொழியைத் தேர்ந்தெடுக்க
-• *TAMIL* — தமிழ் மொழிக்கு மாற்ற
-• *ENGLISH* — ஆங்கில மொழிக்கு மாற்ற
+• *TAMIL* — தினசரி கத்தோலிக்க செய்திகளை தமிழ் மொழிக்கு மாற்ற
+• *ENGLISH* — தினசரி கத்தோலிக்க செய்திகளை ஆங்கில மொழிக்கு மாற்ற
 • *STOP* — தினசரி செய்திகளிலிருந்து விலக
 
 💬 *உரையாடல் முறையில் கேட்கலாம்:*
@@ -261,8 +261,8 @@ _St. John de Britto Church, Kalayarkoil_
 • *SERVICES* — View all 14 Parish Help Desk services
 • *PREFERENCES* — Change your notification preferences
 • *LANGUAGE* — Choose your Bot language (Tamil / English)
-• *TAMIL* — Switch content to Tamil
-• *ENGLISH* — Switch content to English
+• *TAMIL* — Switch Daily Catholic Content language to Tamil
+• *ENGLISH* — Switch Daily Catholic Content to English
 • *STOP* — Unsubscribe from daily messages
 
 💬 *Or ask naturally:*
@@ -1255,6 +1255,43 @@ _SJDB Connect_`;
       }
     }
 
+    // ── Bot Language Change Reply Handler (after user sees BOT_LANGUAGE_CHANGE prompt) ──
+    // Catches reply "1" or "2" immediately after user sends "language" command.
+    if (session.lastBotReplyType === 'BOT_LANGUAGE_CHANGE') {
+      const chosenBotLang = (menuNum === 1) ? 'en' : (menuNum === 2) ? 'ta' : null;
+      if (chosenBotLang) {
+        session.botLanguage = chosenBotLang;
+        session.invalidInputStreak = 0;
+        session.lastBotReplyType = 'BOT_LANGUAGE_CHANGED';
+        session.lastSentAt = new Date();
+        await session.save();
+
+        const ackMsg = chosenBotLang === 'ta'
+          ? `✅ *Bot Language set to Tamil (தமிழ்) successfully!*
+வாட்ஸ்அப் போட் உரையாடல் இனி தமிழில் நடகும்.
+
+📌 தினசரி கத்தோலிக்க செய்திகள் மொழியை மாற்ற *TAMIL* அல்லது *ENGLISH* என அனுப்பவும்.
+முதன்மை மெனுவிற்கு *MENU* என தட்டச்சு செய்யவும். 🙏`
+          : `✅ *Bot Language set to English successfully!*
+The WhatsApp bot will now respond in English.
+
+📌 To change Daily Catholic Content language, type *TAMIL* or *ENGLISH*.
+Type *MENU* for Main Menu. 🙏`;
+
+        await wa.sendWhatsAppMessage(replyTarget, ackMsg);
+        return;
+      }
+      // Invalid reply — re-prompt
+      const retryMsg = `⚠️ Please reply with *1* for English or *2* for தமிழ் (Tamil).
+
+1️⃣ English
+2️⃣ தமிழ் (Tamil)
+
+👉 Reply with *1* or *2*`;
+      await wa.sendWhatsAppMessage(replyTarget, retryMsg);
+      return;
+    }
+
     // ── Context Resolver: Services Menu context ONLY applies for one interaction ──
     // After a user gets ANY response (not services menu), the services context resets.
     // This prevents numbers like "7" from permanently routing to Events.
@@ -1572,12 +1609,23 @@ Please bring parish family ID or relevant record dates when collecting certifica
       return;
     }
 
-    // ── Language Command (Trigger Catholic content language update anytime) ─────
+    // ── Language Command — Bot Language Selection (Tamil / English) ─────────────
     if (/^(language|lang|மொழி)$/i.test(normalizedText)) {
       session.invalidInputStreak = 0;
-      session.step = 'language';
+      session.lastBotReplyType = 'BOT_LANGUAGE_CHANGE';
+      session.lastSentAt = new Date();
       await session.save();
-      await wa.sendWhatsAppMessage(replyTarget, getDailyContentLanguagePrompt());
+
+      const botLangPrompt = `🌐 *Bot Language / பாட் மொழி*
+
+Please select your preferred language for bot conversation:
+தயவுசெய்து போட் உரையாடலுக்கான மொழியைத் தேர்ந்தெடுக்கவும்:
+
+1️⃣ English
+2️⃣ தமிழ் (Tamil)
+
+👉 Reply with *1* or *2*`;
+      await wa.sendWhatsAppMessage(replyTarget, botLangPrompt);
       return;
     }
 
