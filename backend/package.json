@@ -15,6 +15,9 @@
   ],
   "author": "St. John de Britto Church",
   "license": "ISC",
+  "engines": {
+    "node": "22.x"
+  },
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc13",
     "adm-zip": "^0.6.0",
@@ -40,6 +43,7 @@
     "qrcode-terminal": "^0.12.0",
     "razorpay": "^2.9.8",
     "resend": "^6.12.3",
+    "sharp": "^0.35.4",
     "twilio": "^6.0.1",
     "web-push": "^3.6.7"
   },

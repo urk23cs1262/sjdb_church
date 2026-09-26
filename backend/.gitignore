@@ -9,6 +9,7 @@ node_modules/
 
 # Scratch & temporary test files
 scratch/
+uploads/
 
 # Logs
 logs/
