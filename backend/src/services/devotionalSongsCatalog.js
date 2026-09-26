@@ -19,10 +19,12 @@ const devosAssetDir = path.resolve(__dirname, '../../../frontend/src/assets/Devo
 const devosZipFile = path.resolve(__dirname, '../../../frontend/src/assets/Devos.zip');
 const devosPublicDir = path.resolve(__dirname, '../../../frontend/public/devotional-songs');
 const devosBackendUploads = path.resolve(__dirname, '../../uploads/Devos');
+const frontendAssetsDir = path.resolve(__dirname, '../../../frontend/src/assets');
 
 const devosDirs = [
   devosAssetDir,
   devosPublicDir,
+  frontendAssetsDir,
   devosBackendUploads,
   path.resolve(__dirname, '../../Devos'),
   path.resolve(__dirname, '../../../Devos'),

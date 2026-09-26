@@ -38,13 +38,19 @@ api.interceptors.response.use(
 );
 
 
+const MEDIA_BASE_URL = import.meta.env.VITE_MEDIA_BASE_URL ||
+  (import.meta.env.PROD
+    ? (import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/?$/, '') : 'https://st-jb-church.onrender.com')
+    : '');
+
 export const getMediaUrl = (path) => {
   if (!path) return null;
   if (path.startsWith('data:') || path.startsWith('http://') || path.startsWith('https://')) return path;
   
-  // Directly stream static devotional songs from host public assets
+  // Stream static devotional songs & Rosary audio from persistent media host in production
   if (path.startsWith('/devotional-songs/') || path.startsWith('devotional-songs/')) {
-    return path.startsWith('/') ? path : `/${path}`;
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    return MEDIA_BASE_URL ? `${MEDIA_BASE_URL.replace(/\/+$/, '')}${cleanPath}` : cleanPath;
   }
 
   const baseUrl = UPLOADS_URL.replace(/\/uploads\/?$/, '');
@@ -63,6 +69,6 @@ export const getMediaUrl = (path) => {
   return `${baseUrl}${cleanPath}`;
 };
 
-export { API_URL, UPLOADS_URL };
+export { API_URL, UPLOADS_URL, MEDIA_BASE_URL };
 export default api;
 
