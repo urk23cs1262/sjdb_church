@@ -1292,16 +1292,26 @@ Type *MENU* for Main Menu. 🙏`;
       return;
     }
 
-    // ── Context Resolver: Services Menu context ONLY applies for one interaction ──
-    // After a user gets ANY response (not services menu), the services context resets.
-    // This prevents numbers like "7" from permanently routing to Events.
+    // ── Context Resolver: Services Menu context applies for user selection ──
     const isInServicesMenu = session.lastBotReplyType === 'SERVICES_MENU';
 
-    // Main Menu numbers 1-8 ALWAYS take priority, even inside Services Menu context.
-    // Only Services-exclusive options (9-14) use the Services menu context.
-    // This is the key fix: if the number is 1-8, it's ALWAYS treated as Main Menu.
-    const isMainMenuNumber = menuNum !== null && menuNum >= 1 && menuNum <= 8;
-    const isServicesOnlyNumber = menuNum !== null && menuNum >= 9 && menuNum <= 14;
+    // Disambiguate numeric menu selections between Services Menu (1-14) and Main Menu (1-8):
+    const isMassTimingsNum    = isInServicesMenu ? (menuNum === 1) : (menuNum === 2);
+    const isConfessionNum     = isInServicesMenu && (menuNum === 2);
+    const isVerseNum          = isInServicesMenu ? (menuNum === 3) : (menuNum === 1);
+    const isReadingsNum       = isInServicesMenu && (menuNum === 4);
+    const isSaintNum          = isInServicesMenu ? (menuNum === 5) : (menuNum === 7);
+    const isPrayersNum        = isInServicesMenu && (menuNum === 6);
+    const isEventsNum         = isInServicesMenu ? (menuNum === 7) : (menuNum === 4);
+    const isAnnouncementsNum  = isInServicesMenu ? (menuNum === 8) : (menuNum === 5);
+    const isChurchInfoNum     = !isInServicesMenu && (menuNum === 6);
+    const isHelpNum           = !isInServicesMenu && (menuNum === 8);
+    const isLocationNum       = (menuNum === 9);
+    const isMinistriesNum     = (menuNum === 10);
+    const isPriestsNum        = (menuNum === 11);
+    const isHistoryNum        = (menuNum === 12);
+    const isContactNum        = (menuNum === 13);
+    const isIntentionsCertNum = (menuNum === 14);
 
     // ── 1. SERVICES / HELP DESK MENU COMMAND (Option 3 from Main Menu or "Services") ─────
     // Explicit "services" keyword always triggers Services menu.
@@ -1711,10 +1721,8 @@ Please select your preferred language for bot conversation:
     }
 
     // 1️⃣ 📖 Bible Verse
-    // - Main Menu option 1 (always, regardless of Services context)
-    // - Services Menu option 3 (only when explicitly in Services context AND number > 8)
-    const isSpecificVerseQuery = (menuNum === 1) ||  // Main Menu option 1 ALWAYS wins
-      (isInServicesMenu && !isMainMenuNumber && menuNum === 3) ||  // Services option 3 only for non-main-menu context
+    // - Services Menu: Option 3 | Main Menu: Option 1
+    const isSpecificVerseQuery = isVerseNum ||
       /^(today'?s bible verse|today bible verse|bible verse|daily bible|today'?s verse|today verse|daily verse|daily bible verse|scripture|இன்றைய இறைவார்த்தை|வேத வசனம்|இறைவார்த்தை|வசனம்)$/i.test(normalizedText) ||
       normalizedText.includes("bible verse") ||
       normalizedText.includes("daily bible") ||
@@ -1728,10 +1736,8 @@ Please select your preferred language for bot conversation:
     }
 
     // 2️⃣ 📜 Daily Mass Readings
-    // - Services Menu option 4 (only when in Services context, since 4 = Events in Main Menu)
-    // Note: menuNum===4 in Main Menu = Events (handled above), so here it only reaches if
-    // isMassTimingsQuery and isEventsChoice both returned false, meaning it's safe.
-    const isSpecificReadingsQuery = (isInServicesMenu && menuNum === 4) ||  // Services option 4
+    // - Services Menu: Option 4
+    const isSpecificReadingsQuery = isReadingsNum ||
       /^(today'?s mass readings?|today mass readings?|mass readings?|today'?s readings?|today readings?|daily readings?|daily mass readings?|readings?|gospel|இன்றைய திருப்பலி வாசகங்கள்|திருப்பலி வாசகங்கள்|வாசகங்கள்|வாசகம்|இன்றைய வாசகங்கள்)$/i.test(normalizedText) ||
       normalizedText.includes("mass readings") ||
       normalizedText.includes("today's readings") ||
@@ -1745,10 +1751,8 @@ Please select your preferred language for bot conversation:
     }
 
     // 7️⃣ 🌟 Saint of the Day
-    // - Main Menu option 7 ALWAYS wins (even if user is in Services context)
-    // - Services Menu option 5 only when strictly in Services context and not a main-menu-ambiguous number
-    const isSaintChoice = (menuNum === 7) ||  // Main Menu option 7 ALWAYS wins
-      (isInServicesMenu && menuNum === 5) ||  // Services option 5
+    // - Services Menu: Option 5 | Main Menu: Option 7
+    const isSaintChoice = isSaintNum ||
       /^(today'?s saint|today saint|saint of the day|saint|saints|who is today saint|who is the saint today|இன்றைய புனிதர்|புனிதர் யார்|புனிதர்)$/i.test(normalizedText) ||
       normalizedText.includes("saint of the day") ||
       normalizedText.includes("today's saint") ||
@@ -1761,9 +1765,8 @@ Please select your preferred language for bot conversation:
     }
 
     // 6️⃣ 🙏 Daily Prayer / Catholic Prayers & Rosary
-    // - Services Menu option 6 (only when in Services context)
-    // - Natural language prayer queries always match
-    const isPrayersChoice = (isInServicesMenu && menuNum === 6) ||
+    // - Services Menu: Option 6
+    const isPrayersChoice = isPrayersNum ||
       /^(today'?s prayer|today prayer|daily prayer|prayer|prayers|catholic prayers?|common prayers?|our father|hail mary|holy rosary|rosary|litany|இன்றைய செபம்|செபம்|ஜெபம்|கத்தோலிக்க செபங்கள்)$/i.test(normalizedText) ||
       normalizedText.includes("today's prayer") ||
       normalizedText.includes("daily prayer") ||
@@ -1788,10 +1791,9 @@ Please select your preferred language for bot conversation:
 
     // ── UNIFIED PARISH MENU & NUMERIC ROUTING (Main Menu 1-8 & Services 1-14) ────
 
-    // 2️⃣ ⛪ Option 2 in Main Menu, Option 1 in Services Menu: Mass Timings
-    // Main Menu option 2 ALWAYS wins. Services option 1 only when in Services context.
-    const isMassTimingsQuery = (menuNum === 2) ||  // Main Menu option 2 ALWAYS wins
-      (isInServicesMenu && menuNum === 1) ||
+    // ⛪ Mass Timings
+    // - Services Menu: Option 1 | Main Menu: Option 2
+    const isMassTimingsQuery = isMassTimingsNum ||
       /\b(mass timings?|mass times?|mass schedule|when is mass|what time is mass|morning mass|evening mass|sunday mass|today mass)\b/i.test(normalizedText) ||
       /(திருப்பலி நேரம்|பூசை நேரம்|திருப்பலி நேரங்கள்|ஞாயிறு திருப்பலி)/.test(rawText);
 
@@ -1848,7 +1850,7 @@ _Kalayarkoil, Sivagangai Diocese_
     }
 
     // 2️⃣ 🕊️ Option 2 in Services Menu: Confession Timings
-    const isConfessionQuery = (isInServicesMenu && menuNum === 2) ||
+    const isConfessionQuery = isConfessionNum ||
       /\b(confessions?|confession timings?|confession times?|reconciliation|sacrament of reconciliation|penance)\b/i.test(normalizedText) ||
       normalizedText.includes('confession') ||
       normalizedText.includes('reconciliation') ||
@@ -1904,14 +1906,7 @@ Call Parish Office: +91 96556 39144
     }
 
     // 4️⃣ 📅 Option 4 in Main Menu, Option 7 in Services Menu: Church Events
-    // Main Menu option 4 ALWAYS wins (prevents "7" from ever accidentally triggering Events).
-    // Services menu option 7 ONLY applies when in Services context and number > 8 is impossible here,
-    // so we only fire Services option 7 when isInServicesMenu AND the number is explicitly 7 BUT
-    // since 7 is Main Menu Saint, we NEVER allow Services menu option 7 to fire for number 7.
-    // Services option 7 (Events) is accessible via natural language or explicit Services context with number 7
-    // AFTER the Saint check has already returned.
-    const isEventsChoice = (menuNum === 4) ||  // Main Menu option 4 ALWAYS wins
-      (isInServicesMenu && menuNum === 7) ||  // Services option 7 — but note: menuNum===7 is now caught above by isSaintChoice first
+    const isEventsChoice = isEventsNum ||
       /\b(events?|upcoming events?|church events?|parish events?|show events?|list events?|what are the events|any events|what events|events this week)\b/i.test(normalizedText) ||
       normalizedText.includes('what are the events') ||
       normalizedText.includes('upcoming events') ||
@@ -1963,9 +1958,7 @@ Call Parish Office: +91 96556 39144
     }
 
     // 5️⃣ 📢 Option 5 in Main Menu, Option 8 in Services Menu: Parish Announcements
-    // Main Menu option 5 ALWAYS wins.
-    const isAnnouncementsChoice = (menuNum === 5) ||  // Main Menu option 5 ALWAYS wins
-      (isInServicesMenu && menuNum === 8) ||
+    const isAnnouncementsChoice = isAnnouncementsNum ||
       /\b(announcements?|notices?|parish announcements?|what is new|what\'?s new|latest announcements?|show announcements?|any announcements?)\b/i.test(normalizedText) ||
       normalizedText.includes('any announcements') ||
       normalizedText.includes('latest announcement') ||
@@ -2020,8 +2013,7 @@ Call Parish Office: +91 96556 39144
     }
 
     // 6️⃣ 📜 Option 6 in Main Menu: Church Information
-    // Main Menu option 6 ALWAYS wins (regardless of Services context).
-    const isChurchInfoChoice = (menuNum === 6) ||  // Main Menu option 6 ALWAYS wins
+    const isChurchInfoChoice = isChurchInfoNum ||
       /\b(church info|church information|about church|about parish|parish info|parish information)\b/i.test(normalizedText) ||
       normalizedText === 'church information' ||
       normalizedText === 'church info' ||
@@ -2131,7 +2123,7 @@ ${siteUrl}
     }
 
     // 9️⃣ 📍 Option 9: Church Location & Map
-    const isLocationChoice = menuNum === 9 ||
+    const isLocationChoice = isLocationNum ||
       /\b(where is the church|where is church|church location|location|church map|maps?|how to reach|directions?)\b/i.test(normalizedText) ||
       normalizedText.includes('church location') ||
       normalizedText.includes('where is the church') ||
@@ -2176,7 +2168,7 @@ ${EXTERNAL_LINKS.GOOGLE_MAPS}
     }
 
     // 1️⃣0️⃣ 👥 Option 10: Parish Ministries & Anbiyams
-    const isMinistriesChoice = menuNum === 10 ||
+    const isMinistriesChoice = isMinistriesNum ||
       /\b(ministr(y|ies)|anbiyams?|parish ministries|ward|council|choir|youth group|catechism|altar servers?)\b/i.test(normalizedText) ||
       normalizedText.includes('ministries') ||
       normalizedText.includes('anbiyam') ||
@@ -2219,7 +2211,7 @@ _St. John de Britto Church, Kalayarkoil_
     }
 
     // 1️⃣1️⃣ 👑 Option 11: Parish Priest & Clergy
-    const isPriestsChoice = menuNum === 11 ||
+    const isPriestsChoice = isPriestsNum ||
       /\b(priests?|parish priest|clergy|pastor|fathers?)\b/i.test(normalizedText) ||
       normalizedText.includes('parish priest') ||
       normalizedText.includes('clergy') ||
@@ -2268,7 +2260,7 @@ ${pList}
     }
 
     // 1️⃣2️⃣ 🏛️ Option 12: Church History & Patron Saint
-    const isHistoryChoice = menuNum === 12 ||
+    const isHistoryChoice = isHistoryNum ||
       /\b(church history|saint history|about church|history|patron saint|britto history)\b/i.test(normalizedText) ||
       normalizedText.includes('church history') ||
       normalizedText.includes('history') ||
@@ -2309,7 +2301,7 @@ Our parish in Kalayarkoil stands as a historic sanctuary of deep faith, active A
     }
 
     // 1️⃣3️⃣ 📞 Option 13: Contact Church & Office Hours
-    const isContactChoice = menuNum === 13 ||
+    const isContactChoice = isContactNum ||
       /\b(contact|contact church|office hours|phone number|email|phone|office)\b/i.test(normalizedText) ||
       normalizedText.includes('contact church') ||
       normalizedText.includes('contact') ||
@@ -2360,7 +2352,7 @@ ${EXTERNAL_LINKS.GOOGLE_MAPS}
     }
 
     // 1️⃣4️⃣ 📜 Option 14 in Services Menu: Mass Intentions & Parish Certificates
-    const isIntentionsCertChoice = menuNum === 14 ||
+    const isIntentionsCertChoice = isIntentionsCertNum ||
       /\b(mass intention|mass intentions|mass booking|book mass|offer mass|certificate|certificates|baptism certificate|marriage certificate)\b/i.test(normalizedText) ||
       /(திருப்பலி கருத்து|பூசை வைக்க|சான்றிதழ்|ஞானஸ்நான சான்றிதழ்)/.test(rawText);
 
@@ -2405,8 +2397,7 @@ Please bring parish family ID or relevant record dates when collecting certifica
     }
 
     // 8️⃣ ❓ Option 8 in Main Menu: Help Command
-    // Main Menu option 8 ALWAYS wins (regardless of Services context).
-    const isHelpChoice = (menuNum === 8) ||  // Main Menu option 8 ALWAYS wins
+    const isHelpChoice = isHelpNum ||
       /\b(help|commands|how to use|guide|options)\b/i.test(normalizedText) ||
       /(உதவி|வழிகாட்டி)/.test(rawText);
 

@@ -259,30 +259,9 @@ async function sendWhatsAppMessage(phone, text) {
   }
 
   try {
-    const hasUrl = text.includes('http://') || text.includes('https://');
-    const options = { text };
-
-    if (hasUrl && linkPreviewModule?.getUrlInfo) {
-      try {
-        const match = text.match(/https?:\/\/[^\s]+/);
-        if (match && !match[0].includes('localhost')) {
-          const urlInfo = await Promise.race([
-            linkPreviewModule.getUrlInfo(match[0], { timeout: 2000 }),
-            new Promise((_, rej) => setTimeout(() => rej(new Error('Preview timeout')), 2000))
-          ]).catch(() => null);
-
-          if (urlInfo && urlInfo.title && !urlInfo.title.includes('404') && !urlInfo.title.includes('Not Found')) {
-            options.linkPreview = urlInfo;
-          }
-        }
-      } catch (e) {
-        // Fallback to pure text
-      }
-    }
-
-    // 15-second timeout safety wrapper
+    // Send message directly without blocking on external link preview scrapers for lightning-fast replies
     await Promise.race([
-      sock.sendMessage(jid, options),
+      sock.sendMessage(jid, { text }),
       new Promise((_, reject) => setTimeout(() => reject(new Error('WhatsApp send timeout (15s)')), 15000))
     ]);
     console.log(`✉️ WhatsApp sent to ${jid}`);

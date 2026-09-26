@@ -7,6 +7,15 @@
  * - Services Menu options 9-14 only apply when in Services context
  * - "services" keyword always opens Services Menu
  * - "7" always = Saint of the Day (never Events)
+/**
+ * Routing test for the corrected menu logic.
+ * Run: node scripts/test_routing_fix.js
+ * 
+ * Design principle:
+ * - When in Services Menu: numbers 1-14 map to the 14 Parish Help Desk services
+ * - When in Main Menu / General context: numbers 1-8 map to Main Menu, 9-14 map to Services
+ * - "services" keyword always opens Services Menu
+ * - "menu" keyword always opens Main Menu
  */
 const { extractMenuNumber } = require('../src/bot/botHandler');
 
@@ -20,28 +29,40 @@ function simulateRouting(rawText, lastBotReplyType) {
   const isServicesTrigger = isServicesKeyword || (!isInServicesMenu && menuNum === 3);
   if (isServicesTrigger) return 'SERVICES_MENU';
 
-  // Main Menu 1-8 ALWAYS wins
-  if (menuNum === 1) return 'BIBLE_VERSE';         // Main Menu 1
-  if (menuNum === 2) return 'MASS_TIMINGS';        // Main Menu 2
-  // 3 is handled by Services trigger above (only when not in Services)
-  if (menuNum === 4) return 'EVENTS';              // Main Menu 4
-  if (menuNum === 5) return 'ANNOUNCEMENTS';       // Main Menu 5
-  if (menuNum === 6) return 'CHURCH_INFO';         // Main Menu 6
-  if (menuNum === 7) return 'SAINT';               // Main Menu 7 (THE CRITICAL FIX)
-  if (menuNum === 8) return 'HELP';                // Main Menu 8
+  // Numeric routing flags matching botHandler.js
+  const isMassTimingsNum    = isInServicesMenu ? (menuNum === 1) : (menuNum === 2);
+  const isConfessionNum     = isInServicesMenu && (menuNum === 2);
+  const isVerseNum          = isInServicesMenu ? (menuNum === 3) : (menuNum === 1);
+  const isReadingsNum       = isInServicesMenu && (menuNum === 4);
+  const isSaintNum          = isInServicesMenu ? (menuNum === 5) : (menuNum === 7);
+  const isPrayersNum        = isInServicesMenu && (menuNum === 6);
+  const isEventsNum         = isInServicesMenu ? (menuNum === 7) : (menuNum === 4);
+  const isAnnouncementsNum  = isInServicesMenu ? (menuNum === 8) : (menuNum === 5);
+  const isChurchInfoNum     = !isInServicesMenu && (menuNum === 6);
+  const isHelpNum           = !isInServicesMenu && (menuNum === 8);
+  const isLocationNum       = (menuNum === 9);
+  const isMinistriesNum     = (menuNum === 10);
+  const isPriestsNum        = (menuNum === 11);
+  const isHistoryNum        = (menuNum === 12);
+  const isContactNum        = (menuNum === 13);
+  const isIntentionsCertNum = (menuNum === 14);
 
-  // Services Menu context for options 1, 3, 5, 6 (Services-mapped options)
-  if (isInServicesMenu && menuNum === 1) return 'MASS_TIMINGS';  // Services 1 - but 2 wins first for mass timings
-  if (isInServicesMenu && menuNum === 5) return 'SAINT';         // Services 5 - already caught above
-  if (isInServicesMenu && menuNum === 6) return 'PRAYERS';       // Services 6
-
-  // Services-exclusive: 9-14
-  if (menuNum === 9) return 'LOCATION';
-  if (menuNum === 10) return 'MINISTRIES';
-  if (menuNum === 11) return 'PRIESTS';
-  if (menuNum === 12) return 'HISTORY';
-  if (menuNum === 13) return 'CONTACT';
-  if (menuNum === 14) return 'INTENTIONS_CERTS';
+  if (isVerseNum) return 'BIBLE_VERSE';
+  if (isReadingsNum) return 'MASS_READINGS';
+  if (isSaintNum) return 'SAINT';
+  if (isPrayersNum) return 'PRAYERS';
+  if (isMassTimingsNum) return 'MASS_TIMINGS';
+  if (isConfessionNum) return 'CONFESSION';
+  if (isEventsNum) return 'EVENTS';
+  if (isAnnouncementsNum) return 'ANNOUNCEMENTS';
+  if (isChurchInfoNum) return 'CHURCH_INFO';
+  if (isLocationNum) return 'LOCATION';
+  if (isMinistriesNum) return 'MINISTRIES';
+  if (isPriestsNum) return 'PRIESTS';
+  if (isHistoryNum) return 'HISTORY';
+  if (isContactNum) return 'CONTACT';
+  if (isIntentionsCertNum) return 'INTENTIONS_CERTS';
+  if (isHelpNum) return 'HELP';
 
   return 'UNKNOWN/RAG';
 }
@@ -63,28 +84,34 @@ function check(label, input, context, expected) {
 console.log('\n=== MAIN MENU routing (no Services context) ===');
 check('Option 1 = Daily Bible', '1', null, 'BIBLE_VERSE');
 check('Option 2 = Mass Timings', '2', null, 'MASS_TIMINGS');
-check('Option 3 = Services', '3', null, 'SERVICES_MENU');
+check('Option 3 = Services Menu', '3', null, 'SERVICES_MENU');
 check('Option 4 = Events', '4', null, 'EVENTS');
 check('Option 5 = Announcements', '5', null, 'ANNOUNCEMENTS');
 check('Option 6 = Church Info', '6', null, 'CHURCH_INFO');
-check('Option 7 = Saint (THE CRITICAL FIX)', '7', null, 'SAINT');
+check('Option 7 = Saint of the Day', '7', null, 'SAINT');
 check('Option 8 = Help', '8', null, 'HELP');
+check('Option 9 = Location', '9', null, 'LOCATION');
+check('Option 10 = Ministries', '10', null, 'MINISTRIES');
+check('Option 11 = Priests', '11', null, 'PRIESTS');
+check('Option 12 = History', '12', null, 'HISTORY');
+check('Option 13 = Contact', '13', null, 'CONTACT');
+check('Option 14 = Intentions/Certs', '14', null, 'INTENTIONS_CERTS');
 
-console.log('\n=== SERVICES MENU context - Main Menu numbers still work correctly ===');
-check('1 in Services ctx = Bible Verse (Main Menu 1 wins)', '1', 'SERVICES_MENU', 'BIBLE_VERSE');
-check('2 in Services ctx = Mass Timings (Main Menu 2 wins)', '2', 'SERVICES_MENU', 'MASS_TIMINGS');
-check('3 in Services ctx = UNKNOWN/RAG (no match, falls to RAG)', '3', 'SERVICES_MENU', 'UNKNOWN/RAG');
-check('4 in Services ctx = Events (Main Menu 4 wins)', '4', 'SERVICES_MENU', 'EVENTS');
-check('5 in Services ctx = Announcements (Main Menu 5 wins)', '5', 'SERVICES_MENU', 'ANNOUNCEMENTS');
-check('6 in Services ctx = Church Info (Main Menu 6 wins)', '6', 'SERVICES_MENU', 'CHURCH_INFO');
-check('7 in Services ctx = SAINT NOT EVENTS [THE FIX]', '7', 'SERVICES_MENU', 'SAINT');
-check('8 in Services ctx = HELP NOT ANNOUNCEMENTS [THE FIX]', '8', 'SERVICES_MENU', 'HELP');
-check('9 = Location', '9', 'SERVICES_MENU', 'LOCATION');
-check('10 = Ministries', '10', 'SERVICES_MENU', 'MINISTRIES');
-check('11 = Priests', '11', 'SERVICES_MENU', 'PRIESTS');
-check('12 = History', '12', 'SERVICES_MENU', 'HISTORY');
-check('13 = Contact', '13', 'SERVICES_MENU', 'CONTACT');
-check('14 = Intentions/Certs', '14', 'SERVICES_MENU', 'INTENTIONS_CERTS');
+console.log('\n=== SERVICES MENU context (1 to 14) ===');
+check('Services Option 1 = Mass Timings', '1', 'SERVICES_MENU', 'MASS_TIMINGS');
+check('Services Option 2 = Confession', '2', 'SERVICES_MENU', 'CONFESSION');
+check('Services Option 3 = Daily Bible Verse', '3', 'SERVICES_MENU', 'BIBLE_VERSE');
+check('Services Option 4 = Daily Mass Readings', '4', 'SERVICES_MENU', 'MASS_READINGS');
+check('Services Option 5 = Saint of the Day', '5', 'SERVICES_MENU', 'SAINT');
+check('Services Option 6 = Prayers & Rosary', '6', 'SERVICES_MENU', 'PRAYERS');
+check('Services Option 7 = Church Events', '7', 'SERVICES_MENU', 'EVENTS');
+check('Services Option 8 = Announcements', '8', 'SERVICES_MENU', 'ANNOUNCEMENTS');
+check('Services Option 9 = Location', '9', 'SERVICES_MENU', 'LOCATION');
+check('Services Option 10 = Ministries', '10', 'SERVICES_MENU', 'MINISTRIES');
+check('Services Option 11 = Priests', '11', 'SERVICES_MENU', 'PRIESTS');
+check('Services Option 12 = History', '12', 'SERVICES_MENU', 'HISTORY');
+check('Services Option 13 = Contact', '13', 'SERVICES_MENU', 'CONTACT');
+check('Services Option 14 = Intentions/Certs', '14', 'SERVICES_MENU', 'INTENTIONS_CERTS');
 
 console.log('\n=== SERVICES keyword always triggers Services menu ===');
 check('Keyword "services"', 'services', null, 'SERVICES_MENU');
@@ -96,9 +123,5 @@ console.log('  extractMenuNumber("7")   =', extractMenuNumber('7'));
 console.log('  extractMenuNumber("1")   =', extractMenuNumber('1'));
 console.log('  extractMenuNumber("3")   =', extractMenuNumber('3'));
 console.log('  extractMenuNumber("7️⃣")  =', extractMenuNumber('7️⃣'));
-
 console.log(`\n=== RESULTS: ${pass} passed, ${fail} failed ===`);
-if (fail > 0) {
-  console.log('\nNOTE: Some failures may be expected in test-script simulation vs actual bot routing.');
-  process.exit(0);  // Don't fail CI — test is informational
-}
+process.exit(fail === 0 ? 0 : 1);
