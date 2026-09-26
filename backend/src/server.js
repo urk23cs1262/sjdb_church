@@ -1,3 +1,4 @@
+require('./utils/fontSetup'); // Initialize bundled Tamil fonts & Fontconfig before any native libraries load
 require('dotenv').config();
 
 // Prevent transient background network/promise crashes from terminating the HTTP server

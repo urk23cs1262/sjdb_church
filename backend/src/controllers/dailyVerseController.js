@@ -493,13 +493,23 @@ const changeTodayVerse = async (req, res) => {
 // GET /api/settings/daily-verses/today/image
 const getTodayVerseImage = async (req, res) => {
   try {
-    const { getDailyVerseImage } = require('../services/bibleVerseImageService');
-    const verseImg = await getDailyVerseImage();
+    const { getDailyVerseImage, invalidateVerseImageCache } = require('../services/bibleVerseImageService');
+    const force = req.query.force === 'true' || req.query.refresh === 'true';
+    if (force) {
+      invalidateVerseImageCache();
+    }
+    const verseImg = await getDailyVerseImage({ force });
     if (!verseImg || !verseImg.buffer) {
       return res.status(404).json({ success: false, message: 'Verse image not found' });
     }
     res.setHeader('Content-Type', verseImg.mimetype || 'image/png');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
+    if (force) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+    }
     return res.send(verseImg.buffer);
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });

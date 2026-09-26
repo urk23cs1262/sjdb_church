@@ -1,3 +1,4 @@
+require('../utils/fontSetup'); // Ensure Fontconfig and bundled fonts are registered before sharp
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
@@ -15,24 +16,29 @@ if (!fs.existsSync(CACHE_DIR)) {
   }
 }
 
-// Pre-load Tamil font for embedded SVG rendering (prevents tofu boxes across OS environments)
-let tamilFontBase64 = '';
+// Pre-load Unicode Tamil fonts (Noto Sans Tamil) for embedded SVG rendering
+let notoSansTamilBoldBase64 = '';
+let notoSansTamilRegularBase64 = '';
 try {
-  const fontPaths = [
-    path.join(__dirname, '../../assets/fonts/NotoSansTamil-Bold.ttf'),
-    path.join(__dirname, '../../assets/fonts/TamilBold.ttf'),
-    path.join(__dirname, '../../assets/fonts/NotoSansTamil-Regular.ttf'),
-    path.join(__dirname, '../../assets/fonts/TamilRegular.ttf'),
-    'C:\\Windows\\Fonts\\lathab.ttf',
-    'C:\\Windows\\Fonts\\latha.ttf'
-  ];
-  for (const fp of fontPaths) {
-    if (fs.existsSync(fp)) {
-      tamilFontBase64 = fs.readFileSync(fp).toString('base64');
-      console.log(`[BibleVerseImageService] Embedded Tamil font loaded from ${path.basename(fp)} (${Math.round(tamilFontBase64.length / 1024)} KB base64)`);
-      break;
-    }
+  const fontDir = path.resolve(__dirname, '../../assets/fonts');
+  const boldPath = path.join(fontDir, 'NotoSansTamil-Bold.ttf');
+  const regPath = path.join(fontDir, 'NotoSansTamil-Regular.ttf');
+  const fallbackBold = path.join(fontDir, 'TamilBold.ttf');
+  const fallbackReg = path.join(fontDir, 'TamilRegular.ttf');
+
+  if (fs.existsSync(boldPath)) {
+    notoSansTamilBoldBase64 = fs.readFileSync(boldPath).toString('base64');
+  } else if (fs.existsSync(fallbackBold)) {
+    notoSansTamilBoldBase64 = fs.readFileSync(fallbackBold).toString('base64');
   }
+
+  if (fs.existsSync(regPath)) {
+    notoSansTamilRegularBase64 = fs.readFileSync(regPath).toString('base64');
+  } else if (fs.existsSync(fallbackReg)) {
+    notoSansTamilRegularBase64 = fs.readFileSync(fallbackReg).toString('base64');
+  }
+
+  console.log(`[BibleVerseImageService] ✅ Embedded Tamil fonts loaded (Bold: ${Math.round(notoSansTamilBoldBase64.length / 1024)} KB, Regular: ${Math.round(notoSansTamilRegularBase64.length / 1024)} KB base64)`);
 } catch (e) {
   console.warn('[BibleVerseImageService] Could not preload Tamil font:', e.message);
 }
@@ -184,16 +190,54 @@ async function renderBibleVerseCard({ verseEn, verseTa, ref, dateKey, dateStr, c
   const svg = `
   <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg" text-rendering="geometricPrecision" shape-rendering="geometricPrecision">
     <defs>
-      ${tamilFontBase64 ? `
       <style type="text/css">
+        ${notoSansTamilRegularBase64 ? `
         @font-face {
-          font-family: 'SJDBTamil';
-          src: url(data:font/truetype;charset=utf-8;base64,${tamilFontBase64}) format('truetype');
+          font-family: 'Noto Sans Tamil';
+          src: url(data:font/truetype;charset=utf-8;base64,${notoSansTamilRegularBase64}) format('truetype');
           font-weight: normal;
           font-style: normal;
         }
+        @font-face {
+          font-family: 'Noto Sans Tamil';
+          src: url(data:font/truetype;charset=utf-8;base64,${notoSansTamilRegularBase64}) format('truetype');
+          font-weight: 400;
+          font-style: normal;
+        }
+        ` : ''}
+        ${notoSansTamilBoldBase64 ? `
+        @font-face {
+          font-family: 'Noto Sans Tamil';
+          src: url(data:font/truetype;charset=utf-8;base64,${notoSansTamilBoldBase64}) format('truetype');
+          font-weight: bold;
+          font-style: normal;
+        }
+        @font-face {
+          font-family: 'Noto Sans Tamil';
+          src: url(data:font/truetype;charset=utf-8;base64,${notoSansTamilBoldBase64}) format('truetype');
+          font-weight: 700;
+          font-style: normal;
+        }
+        @font-face {
+          font-family: 'SJDBTamil';
+          src: url(data:font/truetype;charset=utf-8;base64,${notoSansTamilBoldBase64}) format('truetype');
+          font-weight: bold;
+          font-style: normal;
+        }
+        ` : ''}
+        .tamil-header {
+          font-family: 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', 'Mukta Malar', sans-serif;
+          font-weight: 700;
+        }
+        .tamil-verse {
+          font-family: 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', 'Mukta Malar', sans-serif;
+          font-weight: 700;
+        }
+        .tamil-ref {
+          font-family: 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', 'Mukta Malar', sans-serif;
+          font-weight: 700;
+        }
       </style>
-      ` : ''}
       <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stop-color="#051329" />
         <stop offset="50%" stop-color="#0b1f48" />
@@ -255,7 +299,7 @@ async function renderBibleVerseCard({ verseEn, verseTa, ref, dateKey, dateStr, c
     </g>
 
     <!-- Church Header -->
-    <text x="600" y="132" font-family="'SJDBTamil', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', 'Mukta Malar', 'Arial Unicode MS', sans-serif" font-size="30" font-weight="bold" fill="url(#goldGrad)" text-anchor="middle" letter-spacing="1">
+    <text x="600" y="132" class="tamil-header" font-family="Noto Sans Tamil, Latha, Tamil Sangam MN, Mukta Malar, Arial Unicode MS, sans-serif" font-size="30" font-weight="bold" fill="url(#goldGrad)" text-anchor="middle" letter-spacing="1">
       ${escapeXml(churchTitleTa)}
     </text>
     <text x="600" y="164" font-family="'Cinzel', 'Trajan Pro', 'Georgia', serif" font-size="17" font-weight="600" fill="#cbd5e1" text-anchor="middle" letter-spacing="3.5">
@@ -274,12 +318,12 @@ async function renderBibleVerseCard({ verseEn, verseTa, ref, dateKey, dateStr, c
     <rect x="75" y="${cardTop}" width="${width - 150}" height="${cardHeight}" rx="20" fill="#ffffff" fill-opacity="0.04" stroke="#ffffff" stroke-opacity="0.1" stroke-width="1.2" filter="url(#shadow)"/>
 
     <!-- 1. Tamil Bible Verse -->
-    <text x="600" y="${taStartY}" font-family="'SJDBTamil', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', 'Mukta Malar', 'Arial Unicode MS', sans-serif" font-size="${taFontSize}" font-weight="bold" fill="#ffffff" text-anchor="middle">
+    <text x="600" y="${taStartY}" class="tamil-verse" font-family="Noto Sans Tamil, Latha, Tamil Sangam MN, Mukta Malar, Arial Unicode MS, sans-serif" font-size="${taFontSize}" font-weight="bold" fill="#ffffff" text-anchor="middle">
       ${taTspans}
     </text>
 
     <!-- Tamil Chapter / Verse Reference (Under Tamil Bible Verses) -->
-    <text x="600" y="${taRefY}" font-family="'SJDBTamil', 'Noto Sans Tamil', 'Latha', 'Tamil Sangam MN', sans-serif" font-size="22" font-weight="bold" fill="url(#goldGrad)" text-anchor="middle" letter-spacing="1">
+    <text x="600" y="${taRefY}" class="tamil-ref" font-family="Noto Sans Tamil, Latha, Tamil Sangam MN, Mukta Malar, sans-serif" font-size="22" font-weight="bold" fill="url(#goldGrad)" text-anchor="middle" letter-spacing="1">
       — ${escapeXml(refTa)} —
     </text>
 
@@ -359,7 +403,7 @@ function invalidateVerseImageCache(dateKey = null) {
 /**
  * Retrieve cached or newly generated Bible Verse Image Buffer according to the day's Bible verse
  */
-async function getDailyVerseImage({ dailyContent = null, dateKey = null } = {}) {
+async function getDailyVerseImage({ dailyContent = null, dateKey = null, force = false } = {}) {
   // Format IST dateKey e.g. "2026-09-25"
   const istFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' });
   const dKey = dateKey || dailyContent?.dateKey || istFormatter.format(new Date());
@@ -420,17 +464,17 @@ async function getDailyVerseImage({ dailyContent = null, dateKey = null } = {}) 
   const verseHash = crypto.createHash('md5').update(`${dKey}|${ref}|${verseEn}|${verseTa}`).digest('hex').slice(0, 8);
   const cacheKey = `${dKey}_${verseHash}`;
 
-  // 5. Check in-memory cache
-  if (verseImageMemoryCache.has(cacheKey)) {
+  // 5. Check in-memory cache (bypassed if force is true)
+  if (!force && verseImageMemoryCache.has(cacheKey)) {
     return {
       buffer: verseImageMemoryCache.get(cacheKey),
       mimetype: 'image/png'
     };
   }
 
-  // 6. Check disk cache
+  // 6. Check disk cache (bypassed if force is true)
   const cacheFilePath = path.join(CACHE_DIR, `verse_${cacheKey}.png`);
-  if (fs.existsSync(cacheFilePath)) {
+  if (!force && fs.existsSync(cacheFilePath)) {
     try {
       const diskBuf = fs.readFileSync(cacheFilePath);
       if (diskBuf && diskBuf.length > 5000) {
