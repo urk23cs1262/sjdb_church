@@ -40,7 +40,7 @@ function getISTDateParts(targetDate = new Date()) {
 
   const day = parts.find(p => p.type === 'day')?.value || '01';
   const month = parts.find(p => p.type === 'month')?.value || '01';
-  const year = parts.find(p => p.type === 'year')?.value || '2026';
+  const year = parts.find(p => p.type === 'year')?.value || String(dt.getFullYear());
   const dateKey = `${year}-${month}-${day}`;
 
   return { dt, day, month, year, dateKey };
@@ -478,7 +478,7 @@ const FETCH_HEADERS = {
  *   sourceUrl
  * } or null
  */
-async function fetchFromVaticanNews(month, day) {
+async function fetchFromVaticanNews(month, day, year = new Date().getFullYear()) {
   const vaticanUrl = buildVaticanNewsUrl(month, day);
   console.log(`[Saint Service] Fetching Vatican News Saint of the Day: ${vaticanUrl}`);
 
@@ -552,7 +552,7 @@ async function fetchFromVaticanNews(month, day) {
     );
 
     // Extract feast and liturgical celebration information from the page
-    const dateKey = `${new Date().getFullYear()}-${month}-${day}`;
+    const dateKey = `${year}-${month}-${day}`;
     const feastInfo = extractFeastInfo($, saints, month, day, dateKey);
 
     // Primary saint selection logic:
@@ -638,7 +638,7 @@ async function fetchDailySaint(targetDate = new Date()) {
 
   const day = parts.find(p => p.type === 'day')?.value || '01';
   const month = parts.find(p => p.type === 'month')?.value || '01';
-  const year = parts.find(p => p.type === 'year')?.value || '2026';
+  const year = parts.find(p => p.type === 'year')?.value || String(dt.getFullYear());
   const dateKey = `${year}-${month}-${day}`;
 
   // February 4 — Parish Patron Feast Day override
@@ -676,7 +676,7 @@ async function fetchDailySaint(targetDate = new Date()) {
 
   // ── PRIMARY FETCH: Vatican News ──────────────────────────────────────────
   console.log(`[Saint Service] Fetching Saint of the Day for ${dateKey} (IST) from Vatican News...`);
-  const vaticanResult = await fetchFromVaticanNews(month, day);
+  const vaticanResult = await fetchFromVaticanNews(month, day, year);
 
   if (vaticanResult && vaticanResult.primarySaint) {
     usedVatican = true;
