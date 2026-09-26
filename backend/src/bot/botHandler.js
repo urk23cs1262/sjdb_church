@@ -717,30 +717,32 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
       session.lastProcessedMessageId = messageId;
     }
 
-    // 4. AUTO-LINK REGISTERED PARISHIONER: Never force active website users into onboarding!
+    // 4. AUTO-LINK REGISTERED PARISHIONER
+    // Link user ID for database context, but NEVER hijack an active onboarding step (bot_language, phone_verification, otp_verification, preferences, language)
     const phone10 = (session.providedPhone || phone || sessionKey || '').replace(/\D/g, '').slice(-10);
-    if (!session.isOnboarded && phone10) {
+    if (!session.linkedUserId && phone10 && phone10.length >= 10) {
       const registeredUser = await User.findOne({
         phone: { $regex: phone10 + '$' },
         isActive: { $ne: false }
       }).lean();
 
       if (registeredUser) {
-        console.log(`[BotHandler] Auto-linking registered parishioner ${registeredUser.name} (${phone10}) to WhatsApp session.`);
+        console.log(`[BotHandler] Linking registered parishioner ${registeredUser.name} (${phone10}) to WhatsApp session.`);
         session.linkedUserId = registeredUser._id;
-        session.isVerified = true;
-        session.isOnboarded = true;
-        session.step = 'done';
-        session.providedPhone = registeredUser.phone || phone10;
-        session.language = registeredUser.mass_reflection_language || registeredUser.preferredLanguage || 'ta';
-        session.botLanguage = session.language === 'en' ? 'en' : 'ta';
-        session.preferences = registeredUser.botPreferences?.length
-          ? registeredUser.botPreferences
-          : ['verse', 'saint', 'mass', 'events', 'announcements', 'birthday'];
-        session.readingPreference = registeredUser.readingPreference || 'full';
-        session.sendLinks = registeredUser.sendLinks !== false;
+        if (!session.providedPhone) session.providedPhone = registeredUser.phone || phone10;
         await session.save();
       }
+    }
+
+    // 5. SELF-HEALING / STATE REPAIR:
+    // If user's session was prematurely marked 'done' without completing preferences or Catholic content language,
+    // restore them back to 'preferences' so their reply (e.g. '7' for all preferences) is correctly processed.
+    const hasPreferences = Array.isArray(session.preferences) && session.preferences.length > 0;
+    if (session.step === 'done' && !hasPreferences && session.isVerified) {
+      console.log(`[BotHandler] 🔄 Self-healing corrupted session for ${session.phoneNumber} back to 'preferences' step.`);
+      session.step = 'preferences';
+      session.isOnboarded = false;
+      await session.save();
     }
 
     session.lastMessage = new Date();
@@ -1167,8 +1169,10 @@ _SJDB Connect_`;
       return;
     }
 
-    // ── 2A. CASUAL GREETINGS (Hi, Hello, Hey, வணக்கம்) — Polite Contextual Reply (NO MENU DUMP) ─────
-    const isGreeting = /^(hi|hello|hey|வணக்கம்|good morning|good evening|good afternoon)$/i.test(normalizedText);
+    // ── 2A. CASUAL GREETINGS & PRAISES (Hi, Hello, Hey, வணக்கம், Praise the Lord) ─────
+    const isGreeting = /^(hi|hello|hey|hai|hlo|வணக்கம்|vanakkam|good morning|good evening|good afternoon|praise the lord|praised be jesus|இயேசுவுக்கே புகழ்|கிறிஸ்துவுக்கே புகழ்|பிரைஸ் தி லார்ட்|ave maria|halleluiah|அல்லேலூயா)$/i.test(normalizedText) ||
+      /\b(praise the lord|praised be jesus|இயேசுவுக்கே புகழ்|கிறிஸ்துவுக்கே புகழ்)\b/i.test(normalizedText);
+
     if (isGreeting) {
       let linkedUser = null;
       if (session.linkedUserId) {
@@ -1194,11 +1198,191 @@ _SJDB Connect_`;
       session.lastSentAt = new Date();
       await session.save();
 
+      const isPraise = /\b(praise the lord|இயேசுவுக்கே புகழ்|கிறிஸ்துவுக்கே புகழ்|பிரைஸ் தி லார்ட்)\b/i.test(normalizedText);
+      const greetingHeader = isPraise
+        ? (isTamilQuery ? `✝️ *இயேசுவுக்கே புகழ்! (Praise the Lord!)*` : `✝️ *Praise the Lord!*`)
+        : (isTamilQuery ? `👋 *வணக்கம் ${userName ? `${userName}! ` : ''}*` : `👋 *Hello ${userName ? `${userName}! ` : ''}*`);
+
       const greetingMsg = isTamilQuery
-        ? `👋 *வணக்கம் ${userName ? `${userName}! ` : ''}*\nபுனித அருளானந்தர் ஆலயம் உங்களை அன்புடன் வரவேற்கிறது. இன்று நான் உங்களுக்கு எவ்வாறு உதவ முடியும்? 🙏\n\n• முக்கிய கட்டளைகளைக் காண *Menu* என தட்டச்சு செய்யவும்\n• பங்கு சேவைகளைப் பார்க்க *Services* என தட்டச்சு செய்யவும்\n• அல்லது விவிலியம், திருப்பலி நேரங்கள் குறித்து நேரடியாகக் கேட்கவும்.`
-        : `👋 *Hello ${userName ? `${userName}! ` : ''}*\nWelcome to St. John de Britto Church, Kalayarkoil. How can I help you today? 🙏\n\n• Type *Menu* to view quick commands\n• Type *Services* for the 14-service help desk\n• Or ask any church question naturally.`;
+        ? `${greetingHeader}\nபுனித அருளானந்தர் ஆலயம் உங்களை அன்புடன் வரவேற்கிறது. இன்று நான் உங்களுக்கு எவ்வாறு உதவ முடியும்? 🙏\n\n• முக்கிய கட்டளைகளைக் காண *Menu* என தட்டச்சு செய்யவும்\n• பங்கு சேவைகளைப் பார்க்க *Services* என தட்டச்சு செய்யவும்\n• அல்லது விவிலியம், திருப்பலி நேரங்கள் குறித்து நேரடியாகக் கேட்கவும்.`
+        : `${greetingHeader}\nWelcome to St. John de Britto Church, Kalayarkoil. How can I help you today? 🙏\n\n• Type *Menu* to view quick commands\n• Type *Services* for the 13-service help desk\n• Or ask any church question naturally.`;
 
       await wa.sendWhatsAppMessage(replyTarget, greetingMsg);
+      return;
+    }
+
+    // ── 2A-1. GRATITUDE & THANKS (Thank you, Thanks, நன்றி, God bless) ───────────────────────
+    const isThanks = /^(thanks?|thank you|thank u|thx|நன்றி|மிக்க நன்றி|ரொம்ப நன்றி|god bless|god bless you|ஆண்டவர் ஆசீர்வதிப்பாராக|ஆசீர்வாதம்)$/i.test(normalizedText) ||
+      /\b(thank you|thanks a lot|மிக்க நன்றி)\b/i.test(normalizedText);
+
+    if (isThanks) {
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'THANKS';
+      session.lastSentAt = new Date();
+      await session.save();
+
+      const thanksMsg = isTamilQuery
+        ? `🙏 *மகிழ்ச்சி! (You're welcome!)*\n\nஎல்லாம் வல்ல இறைவன் உங்களுக்கும் உங்கள் குடும்பத்திற்கும் நிறைவான அமைதியையும் ஆசீர்மையும் தந்தருள்வாராக! ❤️\n\n📌 எப்போது வேண்டுமானாலும் *Menu* என தட்டச்சு செய்து பங்கு சேவைகளைப் பெறலாம்.`
+        : `🙏 *You are most welcome! (மகிழ்ச்சி!)*\n\nMay Almighty God bless you and your family with peace and grace! ❤️\n\n📌 Feel free to ask anytime or type *Menu* for parish options.`;
+
+      await wa.sendWhatsAppMessage(replyTarget, thanksMsg);
+      return;
+    }
+
+    // ── 2A-2. MASS INTENTIONS & BOOKING (திருப்பலி கருத்து & முன்பதிவு) ─────────────────────────
+    const isMassBooking = /\b(mass booking|book mass|mass intention|mass intentions|offer mass|request mass)\b/i.test(normalizedText) ||
+      normalizedText.includes('mass booking') ||
+      normalizedText.includes('book mass') ||
+      /(திருப்பலி கருத்து|பூசை கருத்து|திருப்பலி வைக்க|பூசை வைக்க|திருப்பலி முன்பதிவு)/.test(rawText);
+
+    if (isMassBooking) {
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'MASS_BOOKING';
+      session.lastSentAt = new Date();
+      await session.save();
+
+      const massBookingMsg = isTamilQuery
+        ? `⛪ *திருப்பலி கருத்து & முன்பதிவு (Holy Mass Intentions)*
+_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
+
+உங்கள் குடும்பத்தினரின் பிறந்தநாள், திருமண நாள், நன்றியறிதல் அல்லது மரித்தோர் ஆன்ம இளைப்பாற்றிக்காக திருப்பலி நிறைவேற்ற விரும்பினால்:
+
+🌐 *இணையதளத்தில் முன்பதிவு செய்ய:*
+${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}
+
+📞 *பங்கு அலுவலகத்தை அழைக்க:* +91 96556 39144
+🕒 *அலுவலக நேரம்:* காலை 9:00 – 12:30 & மாலை 4:00 – 8:00
+
+நேரிலும் பங்கு அலுவலகத்திற்கு வந்து திருப்பலி கருத்துக்களைப் பதிவு செய்யலாம். இறை ஆசீர்! 🙏`
+        : `⛪ *Holy Mass Intentions & Booking*
+_St. John de Britto Church, Kalayarkoil_
+
+To offer Holy Mass for birthdays, wedding anniversaries, thanksgiving, or the repose of departed souls:
+
+🌐 *Book Online via Website:*
+${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}
+
+📞 *Parish Office Contact:* +91 96556 39144
+🕒 *Office Hours:* 9:00 AM – 12:30 PM & 4:00 PM – 8:00 PM
+
+You are also welcome to visit the parish office directly during office hours. God bless! 🙏`;
+
+      await wa.sendWhatsAppMessage(replyTarget, massBookingMsg);
+      return;
+    }
+
+    // ── 2A-3. PRAYER PETITIONS & REQUESTS (செப விண்ணப்பம்) ───────────────────────────
+    const isPrayerRequest = /\b(prayer request|prayer petition|pray for me|pray for my|need prayer|family prayer)\b/i.test(normalizedText) ||
+      normalizedText.includes('prayer request') ||
+      normalizedText.includes('pray for me') ||
+      /(செப விண்ணப்பம்|பிரார்த்தனை விண்ணப்பம்|செபியுங்கள்|பிரார்த்தியுங்கள்|குடும்பத்திற்காக செபியுங்கள்)/.test(rawText);
+
+    if (isPrayerRequest) {
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'PRAYER_PETITION';
+      session.lastSentAt = new Date();
+      await session.save();
+
+      const petitionMsg = isTamilQuery
+        ? `🙏 *செப விண்ணப்பம் (Prayer Petitions)*
+_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
+
+"கேளுங்கள், உங்களுக்குக் கொடுக்கப்படும்; தேடுங்கள், நீங்கள் கண்டடைவீர்கள்; தட்டுங்கள், உங்களுக்குத் திறக்கப்படும்." — மத்தேயு 7:7
+
+எமது பங்கு சமூகம் மற்றும் குருக்கள் உங்கள் தேவைகளுக்காக நாள்தோறும் திருப்பலியில் விசேஷமாக செபிக்கின்றனர்.
+
+🌐 *உங்கள் செப விண்ணப்பத்தை சமர்ப்பிக்க:*
+${getSiteUrl(SITE_ROUTES.PETITIONS)}
+
+எல்லாம் வல்ல இறைவன் உங்கள் செபங்களைக் கேட்டு உங்களுக்கு மன அமைதியையும் உடல் நலத்தையும் தந்தருள்வாராக! ஆமென். 🙏`
+        : `🙏 *Prayer Petitions & Intercessions*
+_St. John de Britto Church, Kalayarkoil_
+
+"Ask, and it will be given to you; seek, and you will find; knock, and it will be opened to you." — Matthew 7:7
+
+Our parish community and priests intercede daily during Holy Mass for all parishioners and their special intentions.
+
+🌐 *Submit Your Prayer Request Online:*
+${getSiteUrl(SITE_ROUTES.PETITIONS)}
+
+May the Lord Jesus hear your prayers and grant you peace, comfort, and divine healing! Amen. 🙏`;
+
+      await wa.sendWhatsAppMessage(replyTarget, petitionMsg);
+      return;
+    }
+
+    // ── 2A-4. DONATIONS & OFFERINGS (நன்கொடை & காணிக்கை) ──────────────────────────
+    const isDonationQuery = /\b(donation|donate|offertory|tithe|offerings|contribute)\b/i.test(normalizedText) ||
+      normalizedText.includes('how to donate') ||
+      normalizedText.includes('online donation') ||
+      /(நன்கொடை|காணிக்கை|பங்கு நிதி|ஆலய நன்கொடை)/.test(rawText);
+
+    if (isDonationQuery) {
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'DONATION';
+      session.lastSentAt = new Date();
+      await session.save();
+
+      const donateMsg = isTamilQuery
+        ? `❤️ *ஆலய காணிக்கை & நன்கொடை (Online Donation & Offertory)*
+_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
+
+"மகிழ்ச்சியோடு கொடுப்பவரையே கடவுள் அன்பு செய்கிறார்." — 2 கொரிந்தியர் 9:7
+
+ஆலய திருப்பணி, நற்பணிகள் மற்றும் ஏழை எளியோர் உதவிக்காக உங்கள் காணிக்கைகளை இணையவழியாகப் பாதுகாப்பாகச் செலுத்தலாம்:
+
+🌐 *நன்கொடை செலுத்த:* ${getSiteUrl(SITE_ROUTES.DONATE)}
+
+UPI, Debit/Credit Card, Net Banking மூலமாகப் பாதுகாப்பாகச் செலுத்தலாம். அதிகாரப்பூர்வ ரசீதும் உடனடியாகப் பெற்றுக்கொள்ளலாம். உங்கள் தாராள மனத்திற்கு நன்றி! இறை ஆசீர்! 🙏`
+        : `❤️ *Online Donation & Offertory*
+_St. John de Britto Church, Kalayarkoil_
+
+"Each of you should give what you have decided in your heart to give, not reluctantly or under compulsion, for God loves a cheerful giver." — 2 Corinthians 9:7
+
+You can securely offer your tithes, festival contributions, and donations online for parish development and charitable outreach:
+
+🌐 *Donate Online:* ${getSiteUrl(SITE_ROUTES.DONATE)}
+
+Instant receipts are issued via UPI, Net Banking, and Cards. Thank you for your generous support of our church! God bless! 🙏`;
+
+      await wa.sendWhatsAppMessage(replyTarget, donateMsg);
+      return;
+    }
+
+    // ── 2A-5. CERTIFICATES & RECORDS (சான்றிதழ்கள்) ──────────────────────────────
+    const isCertQuery = /\b(certificate|certificates|baptism certificate|marriage certificate|communion certificate)\b/i.test(normalizedText) ||
+      normalizedText.includes('certificate') ||
+      /(சான்றிதழ்|ஞானஸ்நான சான்றிதழ்|திருமண சான்றிதழ்)/.test(rawText);
+
+    if (isCertQuery) {
+      session.invalidInputStreak = 0;
+      session.lastBotReplyType = 'CERTIFICATES';
+      session.lastSentAt = new Date();
+      await session.save();
+
+      const certMsg = isTamilQuery
+        ? `📜 *ஆலய சான்றிதழ்கள் (Church Certificates)*
+_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
+
+ஞானஸ்நானம், முதல் நற்கருணை மற்றும் திருமண சான்றிதழ்களைப் பெற:
+
+🌐 *இணையதளத்தில் விண்ணப்பிக்க:* ${getSiteUrl(SITE_ROUTES.CERTIFICATES)}
+📞 *பங்கு அலுவலகம்:* +91 96556 39144
+🕒 *அலுவலக நேரம்:* காலை 9:00 – 12:30 & மாலை 4:00 – 8:00
+
+அலுவலகத்தில் சான்றிதழ்களைப் பெற குடும்ப அட்டை / பழைய பதிவேடு விபரங்களை உடன் கொண்டுவரவும். 🙏`
+        : `📜 *Parish Certificates & Records*
+_St. John de Britto Church, Kalayarkoil_
+
+To apply for Baptism, First Holy Communion, Confirmation, or Marriage Certificates:
+
+🌐 *Apply Online via Website:* ${getSiteUrl(SITE_ROUTES.CERTIFICATES)}
+📞 *Parish Office:* +91 96556 39144
+🕒 *Office Hours:* 9:00 AM – 12:30 PM & 4:00 PM – 8:00 PM
+
+Please bring parish family ID or relevant record dates when collecting certificates in person. God bless! 🙏`;
+
+      await wa.sendWhatsAppMessage(replyTarget, certMsg);
       return;
     }
 
@@ -1236,6 +1420,29 @@ _SJDB Connect_`;
       const menuMsg = getMainMenuMessage(userName, isTamilQuery);
       await wa.sendWhatsAppMessage(replyTarget, menuMsg);
       return;
+    }
+
+    // ── Direct Comma-Separated Preferences Update (e.g. 1,2,3 or 1,2,3,4,5,6) ───
+    const isPreferenceList = /^[1-7](\s*,\s*[1-7])+$/.test(normalizedText);
+    if (isPreferenceList) {
+      const selectedPrefs = parsePreferences(rawText);
+      if (selectedPrefs) {
+        session.preferences = selectedPrefs;
+        await session.save();
+        if (session.linkedUserId) {
+          try {
+            await User.findByIdAndUpdate(session.linkedUserId, {
+              botPreferences: selectedPrefs,
+              whatsappOptIn: true
+            });
+          } catch (_) {}
+        }
+        const prefUpdateMsg = isTamilQuery
+          ? `✅ *உங்கள் விருப்பங்கள் வெற்றிகரமாகப் புதுப்பிக்கப்பட்டன!*\n\nதேர்ந்தெடுக்கப்பட்ட சேவைகள்:\n${selectedPrefs.map(p => `• ${p}`).join('\n')}\n\n📌 முதன்மை மெனுவிற்கு *Menu* என தட்டச்சு செய்யவும்.`
+          : `✅ *Your SJDB Connect preferences have been updated!*\n\nSubscribed Services:\n${selectedPrefs.map(p => `• ${p}`).join('\n')}\n\n📌 Type *Menu* for Main Menu or *Services* for Help Desk.`;
+        await wa.sendWhatsAppMessage(replyTarget, prefUpdateMsg);
+        return;
+      }
     }
 
     // ── Preferences Command (Trigger preferences update anytime) ───────────────
@@ -2012,7 +2219,8 @@ _St. John de Britto Church, Kalayarkoil_
       }
 
       const userAuthContext = { user: linkedUser, session };
-      const ragResult = await answerChurchQuestion(rawText, 'en', userAuthContext);
+      const userLang = isTamilQuery ? 'ta' : (session.botLanguage || session.language || 'en');
+      const ragResult = await answerChurchQuestion(rawText, userLang, userAuthContext);
 
       if (ragResult && ragResult.isChurchRelated && ragResult.reply) {
         session.invalidInputStreak = 0;
@@ -2047,12 +2255,12 @@ _St. John de Britto Church, Kalayarkoil_
     let invalidReply = '';
     if (session.invalidInputStreak === 1) {
       invalidReply = isTamilQuery
-        ? `❓ மன்னிக்கவும், உங்கள் விருப்பத்தை அடையாளம் காண முடியவில்லை.\n\nதயவுசெய்து சரியான எண்ணை (1-14) உள்ளிடவும் அல்லது உங்கள் கேள்வியைத் தட்டச்சு செய்யவும்.\n(முக்கிய கட்டளைகளுக்கு *Menu* அல்லது உதவி மையத்திற்கு *Services* என அனுப்பவும்)`
-        : `❓ I didn't recognize that option.\n\nPlease reply with a valid number (1-14) or type your church question.\n(Type *Menu* for quick commands or *Services* for help desk)`;
+        ? `❓ மன்னிக்கவும், உங்கள் விருப்பத்தை அடையாளம் காண முடியவில்லை.\n\nதயவுசெய்து சரியான எண்ணை (1-13) உள்ளிடவும் அல்லது உங்கள் கேள்வியை நேரடியாகத் தட்டச்சு செய்யவும்.\n(முக்கிய கட்டளைகளுக்கு *Menu* அல்லது உதவி மையத்திற்கு *Services* என அனுப்பவும்)`
+        : `❓ I didn't quite recognize that option.\n\nPlease reply with a valid number (1-13) or ask your church question naturally.\n(Type *Menu* for quick commands or *Services* for help desk)`;
     } else if (session.invalidInputStreak === 2) {
       invalidReply = isTamilQuery
-        ? `💡 வழிகாட்டல்: 1 முதல் 14 வரையிலான எண்ணைத் தேர்ந்தெடுக்கவும், அல்லது முதன்மை மெனுவைக் காண *Menu* என தட்டச்சு செய்யவும்.`
-        : `💡 Guidance: Please reply with a number from 1 to 14, or type *Menu* to see available options.`;
+        ? `💡 வழிகாட்டல்: 1 முதல் 13 வரையிலான எண்ணைத் தேர்ந்தெடுக்கவும் (எ.கா: *1* திருப்பலி நேரம், *3* விவிலிய வசனம்), அல்லது முதன்மை மெனுவைக் காண *Menu* என தட்டச்சு செய்யவும்.`
+        : `💡 Guidance: Please reply with a number from 1 to 13 (e.g. *1* for Mass Timings, *3* for Bible Verse), or type *Menu* to see available options.`;
     } else {
       invalidReply = isTamilQuery
         ? `ℹ️ உதவி வேண்டுமா? அனைத்து கட்டளைகளையும் காண *Help* என அனுப்பவும், அல்லது எங்கள் பங்கு அலுவலகத்தை +91 96556 39144 இல் தொடர்பு கொள்ளவும்.`
