@@ -309,7 +309,7 @@ const getTodayPreview = async (req, res) => {
       saintNameTa: dailyContent?.saintNameTa || dailyContent?.saint?.nameTamil || dailyContent?.saintOfTheDay?.tamil?.name || '',
       saintImage: dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl || dailyContent?.saintOfTheDay?.imageUrl || null,
       saintFeastDay: dailyContent?.saintFeastDay || dailyContent?.saint?.feastDay || dailyContent?.saintOfTheDay?.english?.feastDay || 'Today',
-      saintDescription: dailyContent?.saintDescription || dailyContent?.saint?.description || dailyContent?.saintOfTheDay?.english?.description || '',
+      saintDescription: dailyContent?.saintDescription || dailyContent?.saint?.description || dailyContent?.saint?.descriptionEnglish || dailyContent?.saintOfTheDay?.english?.description || '',
       bibleRef: dailyContent?.bible?.ref || dailyContent?.dailyVerse?.reference || dailyContent?.readings?.gospel?.reference || 'Holy Bible',
       previewTa,
       previewEn,

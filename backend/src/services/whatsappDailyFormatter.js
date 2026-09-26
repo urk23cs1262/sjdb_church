@@ -401,11 +401,26 @@ function generateSaintContentMessage({ dailyContent, language = 'ta' }) {
   else if (rawLang === 'ml' || rawLang.startsWith('ml')) lang = 'ml';
   else if (rawLang === 'both' || (rawLang.includes('ta') && rawLang.includes('en'))) lang = 'both';
 
-  const saintNameEn = dailyContent?.saint?.nameEnglish || dailyContent?.saintOfTheDay?.english?.name || dailyContent?.saintName || 'Saint of the Day';
-  const saintNameTa = dailyContent?.saint?.nameTamil || dailyContent?.saintOfTheDay?.tamil?.name || dailyContent?.saintNameTa || saintNameEn;
+  const saintNameEn = dailyContent?.saint?.nameEnglish || dailyContent?.saint?.name || dailyContent?.saintOfTheDay?.english?.name || dailyContent?.saintName || 'Saint of the Day';
+  const saintNameTa = dailyContent?.saint?.nameTamil || dailyContent?.saint?.nameTa || dailyContent?.saintOfTheDay?.tamil?.name || dailyContent?.saintNameTa || saintNameEn;
   const feastDay = dailyContent?.saint?.feastDay || dailyContent?.saintOfTheDay?.english?.feastDay || dailyContent?.formattedDate || '';
-  const descEn = (dailyContent?.saint?.description || dailyContent?.saintOfTheDay?.english?.description || dailyContent?.saintDescription || '').trim();
-  const descTa = (dailyContent?.saint?.descriptionTamil || dailyContent?.saintOfTheDay?.tamil?.description || descEn).trim();
+  const descEn = (
+    dailyContent?.saint?.description ||
+    dailyContent?.saint?.descriptionEnglish ||
+    dailyContent?.saint?.englishDescription ||
+    dailyContent?.saintOfTheDay?.english?.description ||
+    dailyContent?.saintDescription ||
+    dailyContent?.saintDescriptionEn ||
+    ''
+  ).trim();
+  const descTa = (
+    dailyContent?.saint?.descriptionTamil ||
+    dailyContent?.saint?.descriptionTa ||
+    dailyContent?.saint?.tamilDescription ||
+    dailyContent?.saintOfTheDay?.tamil?.description ||
+    dailyContent?.saintDescriptionTa ||
+    descEn
+  ).trim();
 
   const feastTitleEn = dailyContent?.saint?.feastTitle;
   const feastTitleTa = dailyContent?.saint?.feastTitleTa || feastTitleEn;
@@ -426,8 +441,9 @@ function generateSaintContentMessage({ dailyContent, language = 'ta' }) {
     if (feastTitleEn) {
       msg += `🎉 *${feastTypeEn}:* ${feastTitleEn}\n\n`;
     }
-    if (descEn) {
-      msg += `${descEn}\n\n`;
+    const finalDescEn = descEn || descTa;
+    if (finalDescEn) {
+      msg += `${finalDescEn}\n\n`;
     }
     msg += `— *St. John de Britto Church, Kalayarkoil*\n_SJDB Connect_`;
 
@@ -538,8 +554,8 @@ function generateDailyCatholicMessage({ dailyContent, language = 'ta', readingPr
 
   const saintNameEn = dailyContent.saint?.nameEnglish || dailyContent.saintOfTheDay?.english?.name || 'Holy Saint';
   const saintNameTa = dailyContent.saint?.nameTamil || dailyContent.saintOfTheDay?.tamil?.name || saintNameEn;
-  const saintDescEn = dailyContent.saint?.description || dailyContent.saintOfTheDay?.english?.description || '';
-  const saintDescTa = dailyContent.saint?.descriptionTamil || dailyContent.saintOfTheDay?.tamil?.description || saintDescEn;
+  const saintDescEn = dailyContent.saint?.description || dailyContent.saint?.descriptionEnglish || dailyContent.saintOfTheDay?.english?.description || dailyContent.saintDescription || '';
+  const saintDescTa = dailyContent.saint?.descriptionTamil || dailyContent.saint?.descriptionTa || dailyContent.saintOfTheDay?.tamil?.description || saintDescEn;
 
   let message = '';
 
@@ -826,8 +842,8 @@ function generateSaintInfoMessage({ dailyContent, language = 'ta' }) {
   const saintNameEn = dailyContent?.saint?.nameEnglish || dailyContent?.saintOfTheDay?.english?.name || dailyContent?.saintName || 'Saint of the Day';
   const saintNameTa = dailyContent?.saint?.nameTamil || dailyContent?.saintOfTheDay?.tamil?.name || dailyContent?.saintNameTa || saintNameEn;
   const feastDay = dailyContent?.saint?.feastDay || dailyContent?.saintOfTheDay?.english?.feastDay || dailyContent?.formattedDate || '';
-  const descEn = dailyContent?.saint?.description || dailyContent?.saintOfTheDay?.english?.description || dailyContent?.saintDescription || '';
-  const descTa = dailyContent?.saint?.descriptionTamil || dailyContent?.saintOfTheDay?.tamil?.description || descEn;
+  const descEn = dailyContent?.saint?.description || dailyContent?.saint?.descriptionEnglish || dailyContent?.saintOfTheDay?.english?.description || dailyContent?.saintDescription || '';
+  const descTa = dailyContent?.saint?.descriptionTamil || dailyContent?.saint?.descriptionTa || dailyContent?.saintOfTheDay?.tamil?.description || descEn;
 
   const name = isTamil ? saintNameTa : saintNameEn;
   const desc = isTamil ? (descTa || descEn) : (descEn || descTa);
@@ -869,8 +885,8 @@ function generateSaintCaption({ dailyContent }) {
     ? `🎉 *${feastTypeEn} / ${feastTypeTa}:* ${feastTitleEn}${feastTitleTa && feastTitleTa !== feastTitleEn ? ` (${feastTitleTa})` : ''}\n` 
     : '';
 
-  const descEn = dailyContent?.saint?.description || dailyContent?.saintOfTheDay?.english?.description || dailyContent?.saintDescription || '';
-  const descTa = dailyContent?.saint?.descriptionTamil || dailyContent?.saintOfTheDay?.tamil?.description || descEn;
+  const descEn = dailyContent?.saint?.description || dailyContent?.saint?.descriptionEnglish || dailyContent?.saintOfTheDay?.english?.description || dailyContent?.saintDescription || '';
+  const descTa = dailyContent?.saint?.descriptionTamil || dailyContent?.saint?.descriptionTa || dailyContent?.saintOfTheDay?.tamil?.description || descEn;
 
   return `🕊️ *Saint of the Day / இன்றைய புனிதர்*
 👑 *${saintNameEn}* ${saintNameTa && saintNameTa !== saintNameEn ? `(${saintNameTa})` : ''}

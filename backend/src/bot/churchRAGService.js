@@ -315,8 +315,8 @@ function extractQueryIntents(rawText) {
 function buildSaintSection(dailyContent, isTamil) {
   const saintNameEn = dailyContent?.saint?.nameEnglish || dailyContent?.saintOfTheDay?.english?.name || dailyContent?.saintName || 'Saint of the Day';
   const saintNameTa = dailyContent?.saint?.nameTamil || dailyContent?.saintOfTheDay?.tamil?.name || dailyContent?.saintNameTa || saintNameEn;
-  const descEn = dailyContent?.saint?.description || dailyContent?.saintOfTheDay?.english?.description || dailyContent?.saintDescription || '';
-  const descTa = dailyContent?.saint?.descriptionTamil || dailyContent?.saintOfTheDay?.tamil?.description || descEn;
+  const descEn = dailyContent?.saint?.description || dailyContent?.saint?.descriptionEnglish || dailyContent?.saintOfTheDay?.english?.description || dailyContent?.saintDescription || '';
+  const descTa = dailyContent?.saint?.descriptionTamil || dailyContent?.saint?.descriptionTa || dailyContent?.saintOfTheDay?.tamil?.description || descEn;
   const feastDay = dailyContent?.saint?.feastDay || dailyContent?.saintOfTheDay?.english?.feastDay || dailyContent?.formattedDate || '';
   const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
 
