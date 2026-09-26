@@ -1084,14 +1084,6 @@ export default function BibleVerse() {
                     <h3 className="text-xl sm:text-2xl font-bold text-church-gold font-display mt-0.5">
                       {saintData?.feastDay || formatDisplay(date)}
                     </h3>
-                    {saintData?.hasFeastInfo && (saintData?.feastTitle || saintData?.feastTitleTa) && (
-                      <p className="text-sm font-semibold text-amber-700 mt-1 flex items-center gap-1.5 flex-wrap">
-                        <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                          {isTamil && saintData?.feastTypeTa ? saintData.feastTypeTa : (saintData?.feastType || 'Feast')}
-                        </span>
-                        <span>{isTamil && saintData?.feastTitleTa ? saintData.feastTitleTa : saintData.feastTitle}</span>
-                      </p>
-                    )}
                   </div>
 
                   <div className="text-gray-700 leading-relaxed text-sm sm:text-base font-normal">

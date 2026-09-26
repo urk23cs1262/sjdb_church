@@ -142,15 +142,6 @@ export default function DailySaintTicker() {
     return (lastSpace > 40 ? truncated.slice(0, lastSpace) : truncated) + '...';
   }, [displayDescription]);
 
-  // Extract feast information cleanly for ticker display
-  const displayFeastTitle = (isTamil && saintOfDay.feastTitleTa)
-    ? saintOfDay.feastTitleTa
-    : (saintOfDay.feastTitle || null);
-
-  const displayFeastType = (isTamil && saintOfDay.feastTypeTa)
-    ? saintOfDay.feastTypeTa
-    : (saintOfDay.feastType || (isTamil ? 'திருவிழா' : 'Feast'));
-
   // Dynamic formatted feast date (e.g., "Friday, August 28, 2026")
   const formattedFeastDate = useMemo(() => {
     const feastDate = new Date();
@@ -391,14 +382,6 @@ export default function DailySaintTicker() {
                             <h2 className="text-xl sm:text-2xl font-bold text-church-gold font-display">
                               {formattedFeastDate}
                             </h2>
-                            {saintOfDay.hasFeastInfo && displayFeastTitle && (
-                              <p className="text-sm sm:text-base font-semibold text-amber-700 mt-1 flex items-center gap-1.5 flex-wrap">
-                                <span className="bg-amber-100 text-amber-800 text-[11px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                                  {displayFeastType}
-                                </span>
-                                <span>{displayFeastTitle}</span>
-                              </p>
-                            )}
                           </div>
 
                           {/* Biography text — strictly 5 lines of content */}
