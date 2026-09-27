@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
@@ -12,12 +12,11 @@ import { FiCalendar, FiClock, FiMapPin, FiArrowRight, FiVolume2, FiLayout } from
 import { MdNotifications } from 'react-icons/md';
 import { FaCalendarAlt } from "react-icons/fa";
 import { GiPrayerBeads, GiHolyGrail, GiAngelWings } from "react-icons/gi";
-import api, { UPLOADS_URL } from '../../services/api';
+import api, { UPLOADS_URL, getMediaUrl } from '../../services/api';
 import { useAuth } from '../../context/context_auth_context';
 import { getTamilBibleReference, getEnglishBibleReference } from '../../utils/bibleRefHelper';
 import heroBgImage from '../../assets/church_extirior.png';
 import stJohnImage from '../../assets/sjdb_image.png';
-import priestImage from '../../assets/NIVESH R 1.jpg';
 import CelebrationFloatingWishes from '../../components/common/common_celebration_floating_wishes';
 import { getActiveCelebration } from '../../services/celebrationService';
 
@@ -95,6 +94,8 @@ export default function Home() {
   const isTamil = i18n.language === 'ta';
   const [dynamicImages, setDynamicImages] = useState({});
   const [hasCelebration, setHasCelebration] = useState(() => Boolean(getActiveCelebration(user)));
+  const [priests, setPriests] = useState([]);
+  const [priestImgError, setPriestImgError] = useState(false);
 
   const resolveUrl = (val) => {
     if (!val) return null;
@@ -103,7 +104,33 @@ export default function Home() {
 
   const heroSrc = resolveUrl(dynamicImages.heroImage) || heroBgImage;
   const stJohnSrc = resolveUrl(dynamicImages.stJohnImage) || stJohnImage;
-  const priestSrc = resolveUrl(dynamicImages.priestImage) || priestImage;
+
+  const parishPriest = useMemo(() => {
+    if (!priests || priests.length === 0) return null;
+    return (
+      priests.find(p => p.isCurrent && (p.designation === 'Parish Priest' || p.role === 'Parish Priest')) ||
+      priests.find(p => p.isCurrent) ||
+      priests.find(p => p.designation === 'Parish Priest') ||
+      priests[0]
+    );
+  }, [priests]);
+
+  const priestPhoto = useMemo(() => {
+    if (parishPriest?.photo) {
+      return getMediaUrl(parishPriest.photo);
+    }
+    if (dynamicImages.priestImage) {
+      return getMediaUrl(dynamicImages.priestImage) || resolveUrl(dynamicImages.priestImage);
+    }
+    return null;
+  }, [parishPriest, dynamicImages.priestImage]);
+
+  useEffect(() => {
+    setPriestImgError(false);
+  }, [priestPhoto]);
+
+  const priestName = parishPriest?.name || dynamicImages.priestName || 'Rev. Fr. Parish Priest';
+  const priestDesignation = parishPriest?.designation || 'Parish Priest';
 
   useEffect(() => {
     let isMounted = true;
@@ -155,6 +182,15 @@ export default function Home() {
       .then(r => setAnnouncements(r.data.announcements || []))
       .catch(() => { })
       .finally(() => setAnnouncementsLoading(false));
+
+    // Fetch priests
+    api.get(`/priests?_t=${Date.now()}`)
+      .then(r => {
+        if (r.data?.priests?.length) {
+          setPriests(r.data.priests);
+        }
+      })
+      .catch(() => { });
 
     // Fetch dynamic images from settings
     api.get('/settings').then(r => setDynamicImages(r.data.settings || {})).catch(() => { });
@@ -561,7 +597,18 @@ export default function Home() {
           >
             <div className="flex-shrink-0">
               <div className="w-40 h-40 rounded-full bg-white/10 backdrop-blur-sm border-4 border-gold-300/50 flex items-center justify-center shadow-gold-lg overflow-hidden p-1">
-                <img src={priestSrc} alt="Logo" className="w-full h-full object-cover object-[center_5%] rounded-full" />
+                {priestPhoto && !priestImgError ? (
+                  <img
+                    src={priestPhoto}
+                    alt={priestName}
+                    className="w-full h-full object-cover object-[center_5%] rounded-full"
+                    onError={() => setPriestImgError(true)}
+                  />
+                ) : (
+                  <div className="w-full h-full rounded-full flex items-center justify-center bg-church-gradient text-white shadow-inner">
+                    <GiChurch className="text-5xl text-white drop-shadow-md" />
+                  </div>
+                )}
               </div>
             </div>
             <div className="text-center md:text-left flex flex-col items-center md:items-start">
@@ -570,8 +617,10 @@ export default function Home() {
                 "Welcome to St. John de Britto Church, Kalayarkoil. We are a vibrant community united in faith, love, and service to God and our neighbors. May this digital space be a source of spiritual nourishment and connection for every member of our parish family."
               </p>
               <div className="text-center md:text-left">
-                <p className="font-semibold text-church-royal-blue">Rev. Fr. Parish Priest</p>
-                <p className="text-gray-500 text-sm">Parish Priest, St. John de Britto Church</p>
+                <p className="font-semibold text-church-royal-blue text-lg">{priestName}</p>
+                <p className="text-gray-500 text-sm">
+                  {priestDesignation ? `${priestDesignation}, ` : 'Parish Priest, '}{t('home.churchName', 'St. John de Britto Church')}
+                </p>
               </div>
             </div>
           </motion.div>

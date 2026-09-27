@@ -7,6 +7,22 @@ import { GiChurch } from 'react-icons/gi';
 import api, { getMediaUrl } from '../../services/api';
 import { SectionLoader } from '../../components/common/common_loader';
 
+function PriestAvatarItem({ photo, name }) {
+  const [imgErr, setImgErr] = useState(false);
+  const url = photo ? getMediaUrl(photo) : null;
+  if (url && !imgErr) {
+    return (
+      <img
+        src={url}
+        alt={name}
+        className="w-full h-full object-cover"
+        onError={() => setImgErr(true)}
+      />
+    );
+  }
+  return <GiChurch className="text-white text-2xl" />;
+}
+
 export default function AdminPriests() {
   const [priests, setPriests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -17,7 +33,7 @@ export default function AdminPriests() {
   const { register, handleSubmit, reset, setValue, formState: { isSubmitting } } = useForm();
 
   useEffect(() => {
-    api.get('/priests')
+    api.get(`/priests?_t=${Date.now()}`)
       .then(r => setPriests(r.data.priests || []))
       .finally(() => setLoading(false));
   }, []);
@@ -119,11 +135,7 @@ export default function AdminPriests() {
               <motion.div key={p._id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="church-card">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-14 h-14 rounded-full bg-church-gradient flex items-center justify-center overflow-hidden flex-shrink-0 border border-gold-400/40">
-                    {p.photo ? (
-                      <img src={getMediaUrl(p.photo)} alt={p.name} className="w-full h-full object-cover" />
-                    ) : (
-                      <GiChurch className="text-white text-2xl" />
-                    )}
+                    <PriestAvatarItem photo={p.photo} name={p.name} />
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-800 text-sm">{p.name}</h3>

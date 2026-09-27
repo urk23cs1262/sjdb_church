@@ -4,7 +4,7 @@ import { devosSongsPlugin } from './vite-devos-plugin.js'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const apiUrl = env.VITE_API_BASE_URL || 'http://localhost:5000';
+  const apiUrl = (env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/api\/?$/, '');
 
   return {
     base: '/',

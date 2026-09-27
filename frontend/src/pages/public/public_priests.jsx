@@ -18,6 +18,9 @@ const PLACEHOLDER_PRIESTS = [
 
 function PriestCard({ priest, index }) {
   const { t } = useTranslation();
+  const [imgError, setImgError] = useState(false);
+  const photoUrl = priest.photo ? getMediaUrl(priest.photo) : null;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 30 }}
@@ -29,11 +32,12 @@ function PriestCard({ priest, index }) {
       {/* Photo */}
       <div className="relative mb-5">
         <div className="w-32 h-32 mx-auto rounded-full overflow-hidden border-4 border-gold-200 shadow-gold group-hover:border-church-gold transition-all duration-300">
-          {priest.photo ? (
+          {photoUrl && !imgError ? (
             <img 
-              src={getMediaUrl(priest.photo)} 
+              src={photoUrl} 
               alt={priest.name} 
-              className="w-full h-full object-cover" 
+              className="w-full h-full object-cover"
+              onError={() => setImgError(true)} 
             />
           ) : (
             <div className="w-full h-full mx-auto flex items-center justify-center bg-church-gradient text-white">
@@ -91,7 +95,7 @@ export default function Priests() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/priests').then(r => setPriests(r.data.priests?.length ? r.data.priests : PLACEHOLDER_PRIESTS)).catch(() => setPriests(PLACEHOLDER_PRIESTS)).finally(() => setLoading(false));
+    api.get(`/priests?_t=${Date.now()}`).then(r => setPriests(r.data.priests?.length ? r.data.priests : PLACEHOLDER_PRIESTS)).catch(() => setPriests(PLACEHOLDER_PRIESTS)).finally(() => setLoading(false));
   }, []);
 
   const current = priests.filter(p => p.isCurrent);

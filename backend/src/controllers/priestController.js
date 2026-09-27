@@ -5,7 +5,9 @@ const { createNotification } = require('../services/notificationService');
 const getAll = async (req, res) => {
   try {
     const priests = await Priest.find().sort({ order: 1, createdAt: -1 }).lean();
-    res.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=600');
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
     res.json({ success: true, priests });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
