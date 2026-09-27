@@ -44,12 +44,17 @@ import api from '../../services/api';
  *    - Pauses on hover, touch, or keyboard focus.
  *    - Clicking card or arrow re-opens the existing celebration modal.
  */
-export default function CelebrationFloatingWishes() {
+export default function CelebrationFloatingWishes({ onStatusChange }) {
   const { user } = useAuth();
   const { i18n } = useTranslation();
 
   const [activeCelebration, setActiveCelebration] = useState(null);
   const [serverCelebration, setServerCelebration] = useState(null);
+
+  // Notify parent of celebration status
+  useEffect(() => {
+    onStatusChange?.(Boolean(activeCelebration));
+  }, [activeCelebration, onStatusChange]);
 
   // Rotation indices
   const [leftIndex, setLeftIndex] = useState(0);

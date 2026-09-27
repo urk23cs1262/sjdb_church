@@ -85,7 +85,7 @@ class ErrorBoundary extends Component {
         <div className="fixed inset-0 z-[99999] min-h-screen w-full flex items-center justify-center bg-slate-50/90 backdrop-blur-sm p-4 text-center overflow-y-auto">
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-2xl border border-gray-200 w-full max-w-sm sm:max-w-md space-y-4 my-auto mx-auto flex flex-col items-center justify-center text-center">
             <h2 className="text-xl font-bold text-church-royal-blue">Page View Restored</h2>
-            <p className="text-xs text-gray-600 leading-relaxed">The translation view updated. Tap below to reload the page view cleanly.</p>
+            <p className="text-xs text-gray-600 leading-relaxed">The view is updated. Tap below to reload the page view cleanly.</p>
             <button
               onClick={() => {
                 this.setState({ hasError: false });

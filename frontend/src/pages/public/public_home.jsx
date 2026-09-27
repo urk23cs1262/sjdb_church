@@ -19,6 +19,7 @@ import heroBgImage from '../../assets/church_extirior.png';
 import stJohnImage from '../../assets/sjdb_image.png';
 import priestImage from '../../assets/NIVESH R 1.jpg';
 import CelebrationFloatingWishes from '../../components/common/common_celebration_floating_wishes';
+import { getActiveCelebration } from '../../services/celebrationService';
 
 const BIBLE_VERSES = [
   { ref: 'John 3:16', en: 'For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.', ta: 'தேவன் உலகத்தையே இவ்வளவாக நேசித்தார், அதினால் தம்முடைய ஒரேபேறான குமாரனை அனுப்பினார்; அவரை விசுவாசிக்கிறவன் எவனோ அவன் கெட்டுப்போகாமல் நித்தியஜீவனை அடையும்படிக்கே அவரை அனுப்பினார்.' },
@@ -93,6 +94,7 @@ export default function Home() {
   const [announcementsLoading, setAnnouncementsLoading] = useState(true);
   const isTamil = i18n.language === 'ta';
   const [dynamicImages, setDynamicImages] = useState({});
+  const [hasCelebration, setHasCelebration] = useState(() => Boolean(getActiveCelebration(user)));
 
   const resolveUrl = (val) => {
     if (!val) return null;
@@ -102,6 +104,32 @@ export default function Home() {
   const heroSrc = resolveUrl(dynamicImages.heroImage) || heroBgImage;
   const stJohnSrc = resolveUrl(dynamicImages.stJohnImage) || stJohnImage;
   const priestSrc = resolveUrl(dynamicImages.priestImage) || priestImage;
+
+  useEffect(() => {
+    let isMounted = true;
+    const checkCelebration = async () => {
+      const local = getActiveCelebration(user);
+      if (local) {
+        if (isMounted) setHasCelebration(true);
+        return;
+      }
+      try {
+        const res = await api.get('/notifications/active-celebrations');
+        if (isMounted) {
+          setHasCelebration(Boolean(res.data?.success && res.data.active));
+        }
+      } catch (err) {
+        if (isMounted) setHasCelebration(false);
+      }
+    };
+
+    checkCelebration();
+    const interval = setInterval(checkCelebration, 20000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [user]);
 
   useEffect(() => {
     // Rotate fallback verse index
@@ -182,7 +210,11 @@ export default function Home() {
           ))}
         </motion.div>
 
-        <div className="relative z-10 text-center px-4 max-w-5xl mx-auto pt-48 sm:pt-52 md:pt-56">
+        <div
+          className={`relative z-10 text-center px-4 max-w-5xl mx-auto transition-all duration-500 ${
+            hasCelebration ? 'pt-48 sm:pt-52 md:pt-56' : 'pt-36 sm:pt-40 md:pt-44'
+          }`}
+        >
           {/* Church icon & Celebration Floating Wishes */}
           <div className="relative mb-6 inline-flex justify-center items-center">
             <motion.div
@@ -191,13 +223,19 @@ export default function Home() {
               transition={{ type: 'spring', duration: 0.8 }}
               className="relative z-10"
             >
-              <div className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 rounded-full bg-white/10 backdrop-blur-sm border-2 border-gold-400/50 flex items-center justify-center animate-float shadow-gold-lg overflow-hidden p-1">
+              <div
+                className={`rounded-full bg-white/10 backdrop-blur-sm border-2 border-gold-400/50 flex items-center justify-center animate-float shadow-gold-lg overflow-hidden p-1 transition-all duration-500 ${
+                  hasCelebration
+                    ? 'w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60'
+                    : 'w-56 h-56 sm:w-64 sm:h-64 md:w-72 md:h-72'
+                }`}
+              >
                 <img src={stJohnSrc} alt="Logo" className="w-full h-full object-cover object-[center_10%] rounded-full" />
               </div>
             </motion.div>
 
             {/* Subtle Animated Floating Celebration Wishes (active strictly on celebration days) */}
-            <CelebrationFloatingWishes />
+            <CelebrationFloatingWishes onStatusChange={setHasCelebration} />
           </div>
 
           {/* Church name */}
