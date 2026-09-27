@@ -34,3 +34,4 @@ Thumbs.db
 *.njsproj
 *.sln
 *.sw?
+.pwa-icons-cache.json
