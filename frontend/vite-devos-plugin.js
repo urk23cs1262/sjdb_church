@@ -39,19 +39,7 @@ export function devosSongsPlugin() {
         .filter(f => AUDIO_EXTS.has(path.extname(f).toLowerCase()))
         .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 
-      // Only sync physical files to publicDir in dev mode if needed
-      if (!isBuild) {
-        if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
-        for (const fileName of files) {
-          const fullPath = path.join(devosDir, fileName);
-          let fileSize = 0;
-          try { fileSize = fs.statSync(fullPath).size; } catch (_) {}
-          const dstPath = path.join(publicDir, fileName);
-          if (!fs.existsSync(dstPath) || fs.statSync(dstPath).size !== fileSize) {
-            fs.copyFileSync(fullPath, dstPath);
-          }
-        }
-      }
+
 
       const catalog = files.map((fileName, idx) => {
         const fullPath = path.join(devosDir, fileName);

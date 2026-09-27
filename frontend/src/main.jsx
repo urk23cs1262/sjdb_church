@@ -63,6 +63,21 @@ if (typeof window !== 'undefined') {
       window.location.reload();
     }
   });
+
+  // Automatically register Service Worker for full PWA application installability on all devices
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then((reg) => {
+          if (reg.waiting) {
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+          }
+        })
+        .catch((err) => {
+          console.warn('[PWA] Service Worker registration notice:', err);
+        });
+    });
+  }
 }
 
 class ErrorBoundary extends Component {

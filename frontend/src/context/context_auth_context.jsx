@@ -63,6 +63,10 @@ export const AuthProvider = ({ children }) => {
     }
     setToken(authToken);
     setUser(userData);
+    try {
+      sessionStorage.setItem('pwa_prompt_after_login', 'true');
+      sessionStorage.removeItem('pwa_install_dismissed_session');
+    } catch {}
   };
 
   const logout = () => {
@@ -70,6 +74,10 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('user');
     setToken(null);
     setUser(null);
+    try {
+      sessionStorage.removeItem('pwa_prompt_after_login');
+      sessionStorage.removeItem('pwa_install_dismissed_session');
+    } catch {}
   };
 
   const userRole = (user?.role || '').toLowerCase();

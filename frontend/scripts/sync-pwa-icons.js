@@ -185,15 +185,52 @@ function updateManifest(versionHash) {
         purpose: "any"
       }
     ],
-    start_url: "/",
+    start_url: "/?utm_source=pwa",
     scope: "/",
     display: "standalone",
-    orientation: "portrait",
+    display_override: [
+      "window-controls-overlay",
+      "standalone",
+      "minimal-ui"
+    ],
+    orientation: "any",
     theme_color: "#001f3f",
     background_color: "#001f3f",
     categories: [
       "lifestyle",
-      "social"
+      "social",
+      "utilities"
+    ],
+    prefer_related_applications: false,
+    shortcuts: [
+      {
+        name: "Mass Timings",
+        short_name: "Mass",
+        description: "View parish Holy Mass timings and schedules",
+        url: "/mass-timings",
+        icons: [{ src: `/icon-192.png?v=${v}`, sizes: "192x192" }]
+      },
+      {
+        name: "Holy Rosary & Prayers",
+        short_name: "Prayers",
+        description: "Recite the Holy Rosary and Catholic prayers",
+        url: "/rosary",
+        icons: [{ src: `/icon-192.png?v=${v}`, sizes: "192x192" }]
+      },
+      {
+        name: "Parish Announcements",
+        short_name: "News",
+        description: "Check the latest feast updates and notices",
+        url: "/announcements",
+        icons: [{ src: `/icon-192.png?v=${v}`, sizes: "192x192" }]
+      },
+      {
+        name: "Live Stream",
+        short_name: "Live",
+        description: "Watch live streaming of Holy Mass and liturgical events",
+        url: "/live-stream",
+        icons: [{ src: `/icon-192.png?v=${v}`, sizes: "192x192" }]
+      }
     ],
     lang: "en",
     version: v

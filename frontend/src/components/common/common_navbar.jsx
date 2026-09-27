@@ -570,22 +570,6 @@ export default function Navbar() {
 
                 <div className="h-px bg-white/10 my-2" />
 
-                {/* Hey Connect mic button — mobile menu */}
-                <button
-                  onClick={() => {
-                    window.dispatchEvent(new CustomEvent('hey-connect-activate', { detail: { userName: user?.name || user?.fullName || '' } }));
-                    setMobileOpen(false);
-                  }}
-                  className="connect-mic-btn w-full justify-center"
-                  id="hey-connect-mobile-btn"
-                  aria-label="Activate Hey Connect voice assistant"
-                >
-                  <FiMic />
-                  <span className="notranslate" translate="no">Hey Connect</span>
-                </button>
-
-                <div className="h-px bg-white/10 my-2" />
-
                 {/* Google Translate Mobile Hidden */}
                 <div id="google_translate_element_mobile" style={{ display: 'none' }}></div>
 

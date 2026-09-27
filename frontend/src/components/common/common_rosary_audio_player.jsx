@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
-import { 
-  FiPlay, FiPause, FiRotateCcw, FiRotateCw, 
-  FiLoader 
+import {
+  FiPlay, FiPause, FiRotateCcw, FiRotateCw,
+  FiLoader
 } from 'react-icons/fi';
 
 function formatTime(seconds) {
@@ -29,9 +29,9 @@ function isSameAudioSource(src1, src2) {
   }
 }
 
-const RosaryAudioPlayer = forwardRef(function RosaryAudioPlayer({ 
-  src, 
-  autoPlay = false, 
+const RosaryAudioPlayer = forwardRef(function RosaryAudioPlayer({
+  src,
+  autoPlay = false,
   isOpen = true,
   title = "Rosary Audio",
   onEnded,
@@ -128,7 +128,7 @@ const RosaryAudioPlayer = forwardRef(function RosaryAudioPlayer({
           playPromise
             .then(() => {
               if (wasPlaying && currentPos > 0) {
-                try { audio.currentTime = currentPos; } catch (_) {}
+                try { audio.currentTime = currentPos; } catch (_) { }
               }
               setIsPlaying(true);
               setIsBuffering(false);
@@ -139,7 +139,7 @@ const RosaryAudioPlayer = forwardRef(function RosaryAudioPlayer({
               const onCanPlay = () => {
                 audio.play().then(() => {
                   if (wasPlaying && currentPos > 0) {
-                    try { audio.currentTime = currentPos; } catch (_) {}
+                    try { audio.currentTime = currentPos; } catch (_) { }
                   }
                   setIsPlaying(true);
                   setIsBuffering(false);
@@ -292,8 +292,8 @@ const RosaryAudioPlayer = forwardRef(function RosaryAudioPlayer({
   return (
     <div className="w-full bg-white/95 backdrop-blur-md rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-gray-200 shadow-2xs flex flex-col gap-2.5 select-none">
       {/* Hidden Native Audio Element (managed via ref to avoid JSX reconciliation resetting the browser load algorithm) */}
-      <audio 
-        ref={audioRef} 
+      <audio
+        ref={audioRef}
         preload="auto"
         autoPlay={autoPlay && isOpen}
         onLoadedMetadata={(e) => {

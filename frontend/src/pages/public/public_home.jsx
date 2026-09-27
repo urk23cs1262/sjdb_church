@@ -587,41 +587,85 @@ export default function Home() {
       </section>
 
       {/* ─── PRIEST MESSAGE ─── */}
-      <section className="py-20 bg-church-beige ">
-        <div className="max-w-5xl mx-auto px-4">
+      <section className="py-20 bg-church-beige relative overflow-hidden">
+        {/* Subtle background decoration */}
+        <div className="absolute inset-0 opacity-[0.03] pointer-events-none flex items-center justify-center">
+          <GiChurch className="text-[600px] text-church-royal-blue" />
+        </div>
+        <div className="max-w-5xl mx-auto px-4 relative z-10">
+          <div className="text-center mb-10">
+            <p className="section-subtitle">{t('home.parishPriest', 'Our Parish Priest')}</p>
+            <h2 className="section-title mt-1">{t('home.messageFromPriest', "Parish Priest's Message")}</h2>
+          </div>
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="glass-card p-8 md:p-12 flex flex-col md:flex-row items-center gap-8"
+            className="glass-card p-8 md:p-12 flex flex-col md:flex-row items-center gap-10"
           >
-            <div className="flex-shrink-0">
-              <div className="w-40 h-40 rounded-full bg-white/10 backdrop-blur-sm border-4 border-gold-300/50 flex items-center justify-center shadow-gold-lg overflow-hidden p-1">
-                {priestPhoto && !priestImgError ? (
-                  <img
-                    src={priestPhoto}
-                    alt={priestName}
-                    className="w-full h-full object-cover object-[center_5%] rounded-full"
-                    onError={() => setPriestImgError(true)}
-                  />
-                ) : (
-                  <div className="w-full h-full rounded-full flex items-center justify-center bg-church-gradient text-white shadow-inner">
-                    <GiChurch className="text-5xl text-white drop-shadow-md" />
-                  </div>
-                )}
+            {/* Priest photo with decorative ring */}
+            <div className="flex-shrink-0 flex flex-col items-center gap-3">
+              <div className="relative">
+                {/* Outer glow ring */}
+                <div
+                  className="absolute inset-0 rounded-full"
+                  style={{
+                    margin: -4,
+                    background: 'conic-gradient(from 0deg, #d4a017, #f5c842, #8b6914, #d4a017)',
+                    borderRadius: '50%',
+                    opacity: 0.8,
+                  }}
+                />
+                {/* Image or fallback */}
+                <div
+                  className="relative overflow-hidden rounded-full"
+                  style={{
+                    width: 168,
+                    height: 168,
+                    border: '3px solid rgba(212,160,23,0.6)',
+                    boxShadow: '0 8px 32px rgba(212,160,23,0.25), 0 0 0 6px rgba(212,160,23,0.08)',
+                  }}
+                >
+                  {priestPhoto && !priestImgError ? (
+                    <img
+                      src={priestPhoto}
+                      alt={priestName}
+                      className="w-full h-full object-cover"
+                      style={{ objectPosition: 'center 5%' }}
+                      onError={() => setPriestImgError(true)}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-church-gradient">
+                      <GiChurch className="text-5xl text-white drop-shadow-md" />
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-            <div className="text-center md:text-left flex flex-col items-center md:items-start">
-              <GiDove className="text-church-gold text-3xl mb-3" />
-              <p className="text-gray-600 text-base md:text-lg italic leading-relaxed mb-4 text-justify md:text-left">
-                "Welcome to St. John de Britto Church, Kalayarkoil. We are a vibrant community united in faith, love, and service to God and our neighbors. May this digital space be a source of spiritual nourishment and connection for every member of our parish family."
-              </p>
-              <div className="text-center md:text-left">
-                <p className="font-semibold text-church-royal-blue text-lg">{priestName}</p>
-                <p className="text-gray-500 text-sm">
-                  {priestDesignation ? `${priestDesignation}, ` : 'Parish Priest, '}{t('home.churchName', 'St. John de Britto Church')}
+              {/* Name badge below photo */}
+              <div className="text-center mt-1">
+                <p className="font-bold text-church-royal-blue text-base leading-snug">{priestName}</p>
+                <p className="text-church-gold text-xs font-semibold uppercase tracking-wider mt-0.5">
+                  {priestDesignation || 'Parish Priest'}
                 </p>
               </div>
+            </div>
+
+            {/* Message content */}
+            <div className="flex flex-col items-center md:items-start text-center md:text-left flex-1">
+              <GiDove className="text-church-gold text-3xl mb-3" />
+              {/* Decorative opening quote */}
+              <p className="text-5xl text-church-gold/30 font-display leading-none mb-1 self-start">"</p>
+              <p className="text-gray-600 text-base md:text-lg italic leading-relaxed mb-4 text-justify md:text-left -mt-4">
+                Welcome to St. John de Britto Church, Kalayarkoil. We are a vibrant community united in faith, love, and service to God and our neighbors. May this digital space be a source of spiritual nourishment and connection for every member of our parish family.
+              </p>
+              {/* Decorative divider */}
+              <div className="flex items-center gap-3 mb-3 self-start">
+                <div className="h-px w-12 bg-gradient-to-r from-transparent to-church-gold" />
+                <span className="text-church-gold text-xs">✦</span>
+              </div>
+              <p className="text-gray-500 text-sm">
+                {t('home.churchName', 'St. John de Britto Church')}, Kalayarkoil
+              </p>
             </div>
           </motion.div>
         </div>
