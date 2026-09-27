@@ -149,7 +149,7 @@ export default function Home() {
   const refTa = verse.refTa || getTamilBibleReference(verse.ref);
 
   return (
-    <div className="min-h-screen bg-church-cream ">
+    <div className="min-h-screen bg-church-cream overflow-x-hidden">
       {/* ─── HERO ─── */}
       <section ref={heroRef} className="relative min-h-screen flex items-center justify-center overflow-hidden">
         {/* Parallax background */}
@@ -182,16 +182,16 @@ export default function Home() {
           ))}
         </motion.div>
 
-        <div className="relative z-10 text-center px-4 max-w-5xl mx-auto pt-32">
+        <div className="relative z-10 text-center px-4 max-w-5xl mx-auto pt-48 sm:pt-52 md:pt-56">
           {/* Church icon & Celebration Floating Wishes */}
-          <div className="relative mb-6 flex justify-center items-center">
+          <div className="relative mb-6 inline-flex justify-center items-center">
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: 'spring', duration: 0.8 }}
               className="relative z-10"
             >
-              <div className="w-60 h-60 rounded-full bg-white/10 backdrop-blur-sm border-2 border-gold-400/50 flex items-center justify-center animate-float shadow-gold-lg overflow-hidden p-1">
+              <div className="w-40 h-40 sm:w-52 sm:h-52 md:w-60 md:h-60 rounded-full bg-white/10 backdrop-blur-sm border-2 border-gold-400/50 flex items-center justify-center animate-float shadow-gold-lg overflow-hidden p-1">
                 <img src={stJohnSrc} alt="Logo" className="w-full h-full object-cover object-[center_10%] rounded-full" />
               </div>
             </motion.div>
