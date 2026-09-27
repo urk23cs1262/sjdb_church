@@ -40,6 +40,8 @@ export default function BirthdayCelebration() {
   const [currentCelebration, setCurrentCelebration] = useState(null);
 
   const confettiIntervalRef = useRef(null);
+  // Session-level dismissal set: keeps popup closed during current view, but re-triggers on every page refresh
+  const sessionDismissedRef = useRef(new Set());
 
   // Current language preference
   const currentLang = user?.preferredLanguage || user?.settings?.language || i18n.language || 'en';
@@ -102,6 +104,9 @@ export default function BirthdayCelebration() {
       const data = e.detail;
       if (!data || !data.type) return;
 
+      // Allow reopening manually anytime from floating wishes
+      sessionDismissedRef.current.delete(data.type);
+
       const details = getCelebrationDetails({
         type: data.type,
         userName: data.userName || user?.name || 'Parishioner',
@@ -125,7 +130,7 @@ export default function BirthdayCelebration() {
     return unsubscribe;
   }, [user, currentLang, triggerConfetti]);
 
-  // ─── CHECK ACTIVE CELEBRATIONS & AUTO-POPUP (12:00 AM IST or First Visit) ───
+  // ─── CHECK ACTIVE CELEBRATIONS & AUTO-POPUP (Appears on Every Page Refresh) ───
   useEffect(() => {
     let isMounted = true;
 
@@ -135,9 +140,9 @@ export default function BirthdayCelebration() {
       // 1. Local calculation in Asia/Kolkata (IST)
       const localActive = getActiveCelebration(user);
       if (localActive) {
-        const isAck = isCelebrationPopupAcknowledged(localActive.type, localActive.year, user);
-        // Only automatically open if NOT yet acknowledged in browser localStorage
-        if (!isAck) {
+        const isDismissed = sessionDismissedRef.current.has(localActive.type);
+        // Automatically open on every page load/refresh if not dismissed in current view
+        if (!isDismissed) {
           const details = getCelebrationDetails({
             type: localActive.type,
             userName: localActive.userName || user?.name || 'Parishioner',
@@ -168,8 +173,8 @@ export default function BirthdayCelebration() {
               if (!birthdayMatchesToday) continue;
             }
 
-            const isAck = isCelebrationPopupAcknowledged(serverCel.celebrationType, serverCel.year, user);
-            if (!isAck && !detected.some(d => d.type === serverCel.celebrationType)) {
+            const isDismissed = sessionDismissedRef.current.has(serverCel.celebrationType);
+            if (!isDismissed && !detected.some(d => d.type === serverCel.celebrationType)) {
               detected.push({
                 type: serverCel.celebrationType,
                 year: serverCel.year,
@@ -218,11 +223,12 @@ export default function BirthdayCelebration() {
 
     const { type, year, notificationId } = currentCelebration;
 
-    // 1. Record browser acknowledgment in localStorage
-    // (Prevents auto-popup from appearing on page refresh, but keeps Celebration Mode ON on homepage)
+    // Dismiss for the current page view so user can browse without repeated pops,
+    // but on every page refresh, sessionDismissedRef will be fresh and it WILL pop up again!
+    sessionDismissedRef.current.add(type);
     acknowledgeCelebrationPopup(type, year, user);
 
-    // 2. Notify backend of acknowledgment and mark notifications read if user is logged in
+    // Notify backend of acknowledgment and mark notifications read if user is logged in
     try {
       await api.post('/notifications/acknowledge-celebration', {
         celebrationType: type,
@@ -232,7 +238,7 @@ export default function BirthdayCelebration() {
       });
     } catch (e) {}
 
-    // 3. Advance queue and close popup
+    // Advance queue and close popup
     setCurrentCelebration(null);
     setCelebrationQueue(prev => prev.filter(item => item.type !== type));
   };

@@ -192,7 +192,17 @@ export function getActiveCelebration(user = null, customDate = null) {
 /**
  * Returns complete celebration text: Modal heading/message/button + 4 floating cards
  */
-export function getCelebrationDetails({ type, userName = 'Parishioner', language = 'en' }) {
+export function getCelebrationDetails(arg, arg2, arg3) {
+  let type, userName, language;
+  if (typeof arg === 'object' && arg !== null) {
+    type = arg.type;
+    userName = arg.userName;
+    language = arg.language;
+  } else {
+    type = arg;
+    userName = arg2;
+    language = arg3;
+  }
   const lang = String(language || 'en').toLowerCase();
   const isTa = lang === 'ta';
   const isBoth = lang === 'both';
@@ -450,18 +460,16 @@ export function getCelebrationAckKey(type, year, user = null) {
 }
 
 export function isCelebrationPopupAcknowledged(type, year, user = null) {
-  if (typeof window === 'undefined') return false;
-  // If URL has ?resetAck=true, bypass acknowledgement for testing
-  if (window.location?.search?.includes('resetAck=true')) return false;
-
-  const key = getCelebrationAckKey(type, year, user);
-  return localStorage.getItem(key) === 'true';
+  // Return false so the celebration popup note appears whenever the user refreshes the page
+  return false;
 }
 
 export function acknowledgeCelebrationPopup(type, year, user = null) {
   if (typeof window === 'undefined') return;
-  const key = getCelebrationAckKey(type, year, user);
-  localStorage.setItem(key, 'true');
+  try {
+    const key = getCelebrationAckKey(type, year, user);
+    localStorage.removeItem(key);
+  } catch (e) {}
 }
 
 /**
