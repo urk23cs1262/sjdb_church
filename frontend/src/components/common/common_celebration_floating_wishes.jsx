@@ -5,7 +5,9 @@ import { useAuth } from '../../context/context_auth_context';
 import { useTranslation } from 'react-i18next';
 import {
   getActiveCelebration,
-  openCelebrationPopup
+  openCelebrationPopup,
+  isUserBirthdayToday,
+  getTodayISTParts
 } from '../../services/celebrationService';
 import api from '../../services/api';
 
@@ -78,12 +80,25 @@ export default function CelebrationFloatingWishes() {
           const first = res.data.celebrations[0];
           setServerCelebration(first);
           if (!localActive) {
-            setActiveCelebration({
-              type: first.celebrationType,
-              year: first.year,
-              userName: first.userName,
-              isPublic: first.isPublic
-            });
+            // Safety: if the server returned a birthday celebration, verify user's DOB matches today!
+            const isBirthday = first.celebrationType === 'birthday';
+            const ist = getTodayISTParts();
+            const birthdayMatchesToday = isUserBirthdayToday(user?.dob, ist.month, ist.day);
+            if (!isBirthday || birthdayMatchesToday) {
+              setActiveCelebration({
+                type: first.celebrationType,
+                year: first.year,
+                userName: first.userName,
+                isPublic: first.isPublic
+              });
+            } else {
+              setActiveCelebration(null);
+            }
+          }
+        } else if (isMounted) {
+          setServerCelebration(null);
+          if (!localActive) {
+            setActiveCelebration(null);
           }
         }
       } catch (err) {

@@ -318,7 +318,7 @@ export default function AdminUsers() {
       }
 
       // If the current logged-in admin updated their own account, refresh auth context immediately
-      if (currentAuthUser && editingUser._id === currentAuthUser._id) {
+      if (currentAuthUser && String(editingUser._id) === String(currentAuthUser._id)) {
         await fetchMe();
       }
 

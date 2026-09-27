@@ -9,6 +9,7 @@ import {
   getActiveCelebration,
   getCelebrationDetails,
   getTodayISTParts,
+  isUserBirthdayToday,
   isCelebrationPopupAcknowledged,
   acknowledgeCelebrationPopup,
   onCelebrationPopupOpen
@@ -160,6 +161,13 @@ export default function BirthdayCelebration() {
         const res = await api.get('/notifications/active-celebrations');
         if (res.data?.success && res.data.active && Array.isArray(res.data.celebrations)) {
           for (const serverCel of res.data.celebrations) {
+            // Safety: verify birthday matches today's IST date
+            if (serverCel.celebrationType === 'birthday') {
+              const ist = getTodayISTParts();
+              const birthdayMatchesToday = isUserBirthdayToday(user?.dob, ist.month, ist.day);
+              if (!birthdayMatchesToday) continue;
+            }
+
             const isAck = isCelebrationPopupAcknowledged(serverCel.celebrationType, serverCel.year, user);
             if (!isAck && !detected.some(d => d.type === serverCel.celebrationType)) {
               detected.push({

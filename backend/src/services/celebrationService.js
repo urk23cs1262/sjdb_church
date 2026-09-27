@@ -232,18 +232,8 @@ async function getPendingCelebrationsForUser(userId, forceDate = null, ignoreAck
   const user = await User.findById(userId);
   if (!user || user.isActive === false || user.isSuspended === true) return [];
 
+  // Active occasions strictly for today (Asia/Kolkata date)
   const activeOccasions = getCelebrationTypesForDate(istParts, user);
-
-  // Also check if user has a birthday notification created in the last 48 hours
-  const recentBirthdayNotif = await Notification.findOne({
-    userId,
-    category: 'birthday',
-    createdAt: { $gte: new Date(Date.now() - 48 * 60 * 60 * 1000) }
-  }).sort({ createdAt: -1 });
-
-  if (recentBirthdayNotif && !activeOccasions.some(o => o.type === 'birthday')) {
-    activeOccasions.push({ type: 'birthday', year: istParts.year, notificationId: recentBirthdayNotif._id });
-  }
 
   if (!activeOccasions.length) return [];
 

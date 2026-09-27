@@ -76,6 +76,27 @@ const updateProfile = async (req, res) => {
       familyMembers: Array.isArray(familyMembers) ? familyMembers : []
     };
 
+    if (dob !== undefined) {
+      try {
+        const existingUser = await User.findById(req.user._id).select('dob');
+        const oldDobStr = existingUser?.dob ? new Date(existingUser.dob).toISOString().slice(0, 10) : '';
+        const newDobStr = dob ? new Date(dob).toISOString().slice(0, 10) : '';
+        if (oldDobStr !== newDobStr) {
+          const currentYear = new Date().getFullYear();
+          const BirthdayLog = require('../models/BirthdayLog');
+          const CelebrationLog = require('../models/CelebrationLog');
+          const Notification = require('../models/Notification');
+          await Promise.all([
+            BirthdayLog.deleteMany({ userId: req.user._id, year: currentYear }),
+            CelebrationLog.deleteMany({ userId: req.user._id, celebrationType: 'birthday', year: currentYear }),
+            Notification.deleteMany({ userId: req.user._id, category: 'birthday' })
+          ]);
+        }
+      } catch (dobSyncErr) {
+        console.warn('[updateProfile] Could not reset birthday logs on DOB change:', dobSyncErr.message);
+      }
+    }
+
     if (parishMemberId !== undefined && parishMemberId !== '') updateData.parishMemberId = parishMemberId;
     if (sacraments !== undefined) updateData.sacraments = sacraments;
 
@@ -145,7 +166,27 @@ const updateUser = async (req, res) => {
     if (phone !== undefined) updateData.phone = phone;
     if (parishMemberId !== undefined) updateData.parishMemberId = parishMemberId;
     if (gender !== undefined) updateData.gender = (gender === "" || gender === null) ? undefined : gender;
-    if (dob !== undefined) updateData.dob = dob;
+    if (dob !== undefined) {
+      updateData.dob = dob;
+      try {
+        const existingUser = await User.findById(req.params.id).select('dob');
+        const oldDobStr = existingUser?.dob ? new Date(existingUser.dob).toISOString().slice(0, 10) : '';
+        const newDobStr = dob ? new Date(dob).toISOString().slice(0, 10) : '';
+        if (oldDobStr !== newDobStr) {
+          const currentYear = new Date().getFullYear();
+          const BirthdayLog = require('../models/BirthdayLog');
+          const CelebrationLog = require('../models/CelebrationLog');
+          const Notification = require('../models/Notification');
+          await Promise.all([
+            BirthdayLog.deleteMany({ userId: req.params.id, year: currentYear }),
+            CelebrationLog.deleteMany({ userId: req.params.id, celebrationType: 'birthday', year: currentYear }),
+            Notification.deleteMany({ userId: req.params.id, category: 'birthday' })
+          ]);
+        }
+      } catch (dobSyncErr) {
+        console.warn('[updateUser] Could not reset birthday logs on DOB change:', dobSyncErr.message);
+      }
+    }
     if (address !== undefined) updateData.address = address;
     if (subStation !== undefined) updateData.subStation = subStation;
 
