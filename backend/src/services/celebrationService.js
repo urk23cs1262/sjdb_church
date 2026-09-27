@@ -199,13 +199,39 @@ function getCelebrationContent({ type, userName = 'Parishioner', language = 'en'
  * When ignoreAcknowledged is true (default for active celebrations), celebrations for today
  * are always returned so that refreshing the page displays the celebratory wishes note popup.
  */
-async function getPendingCelebrationsForUser(userId, forceDate = null, ignoreAcknowledged = true) {
-  if (!userId) return [];
+async function getPendingCelebrationsForUser(userId, forceDate = null, ignoreAcknowledged = true, lang = 'en') {
+  const istParts = getTodayISTParts(forceDate ? new Date(forceDate) : new Date());
+
+  if (!userId) {
+    // Unauthenticated public visitor: only return public celebrations (Christmas, Feast, Easter, New Year)
+    const activeOccasions = getCelebrationTypesForDate(istParts, null);
+    if (!activeOccasions.length) return [];
+
+    return activeOccasions.map(occ => {
+      const content = getCelebrationContent({
+        type: occ.type,
+        userName: 'Parishioner',
+        language: lang
+      });
+      return {
+        celebrationType: occ.type,
+        celebrationKey: `${occ.type.toUpperCase()}_${istParts.year}_PUBLIC`,
+        year: istParts.year,
+        userName: 'Parishioner',
+        notificationId: null,
+        language: lang,
+        heading: content.heading,
+        message: content.message,
+        buttonText: content.buttonText,
+        themeColor: content.themeColor,
+        isPublic: true
+      };
+    });
+  }
 
   const user = await User.findById(userId);
   if (!user || user.isActive === false || user.isSuspended === true) return [];
 
-  const istParts = getTodayISTParts(forceDate ? new Date(forceDate) : new Date());
   const activeOccasions = getCelebrationTypesForDate(istParts, user);
 
   // Also check if user has a birthday notification created in the last 48 hours
@@ -353,5 +379,6 @@ module.exports = {
   getCelebrationContent,
   getPendingCelebrationsForUser,
   acknowledgeCelebration,
-  runAnnualCelebrationMidnightCron
+  runAnnualCelebrationMidnightCron,
+  getTodayISTParts
 };

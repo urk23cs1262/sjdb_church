@@ -1,8 +1,8 @@
 {
-  "cleanUrls": true,
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "source": "/((?!assets/|devotional-songs/|uploads/|favicon.*|icon-.*|apple-touch-.*|manifest.json|sw.js|.*\\..*).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ],

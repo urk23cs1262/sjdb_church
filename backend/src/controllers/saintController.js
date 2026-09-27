@@ -24,11 +24,11 @@ const getSaint = async (req, res) => {
         const forceRefresh = req.query.force === 'true' || req.query.refresh === 'true';
         if (isToday) {
           saint = getDailySaint();
+          const hasShortBio = !saint || !saint.description || saint.description.length < 250;
           const isStale = forceRefresh ||
             !saint ||
             saint.date !== currentIST ||
             (currentIST.endsWith('-09-26') && (saint.saintName?.includes('Nilus') || saint.name?.includes('Nilus'))) ||
-            saint.source === 'Catholic Liturgical Calendar' ||
             saint.source?.includes('Catholic Readings') ||
             saint.sourceUrl?.includes('catholicreadings.org') ||
             saint.saintName?.includes('Slomsek Our') ||
@@ -36,7 +36,8 @@ const getSaint = async (req, res) => {
             saint.image?.includes('metroprin') ||
             saint.image?.includes('Superdome') ||
             saint.image?.includes('Rossano_NILO') ||
-            saint.imageFallback;
+            saint.imageFallback ||
+            hasShortBio;
           if (isStale) {
             saint = await fetchDailySaint(undefined, true);
           }
@@ -50,11 +51,11 @@ const getSaint = async (req, res) => {
       const currentIST = getISTDateParts().dateKey;
       const forceRefresh = req.query.force === 'true' || req.query.refresh === 'true';
       saint = getDailySaint();
+      const hasShortBio = !saint || !saint.description || saint.description.length < 250;
       const isStale = forceRefresh ||
         !saint ||
         saint.date !== currentIST ||
         (currentIST.endsWith('-09-26') && (saint.saintName?.includes('Nilus') || saint.name?.includes('Nilus'))) ||
-        saint.source === 'Catholic Liturgical Calendar' ||
         saint.source?.includes('Catholic Readings') ||
         saint.sourceUrl?.includes('catholicreadings.org') ||
         saint.saintName?.includes('Slomsek Our') ||
@@ -62,7 +63,8 @@ const getSaint = async (req, res) => {
         saint.image?.includes('metroprin') ||
         saint.image?.includes('Superdome') ||
         saint.image?.includes('Rossano_NILO') ||
-        saint.imageFallback;
+        saint.imageFallback ||
+        hasShortBio;
       if (isStale) {
         saint = await fetchDailySaint(undefined, true);
       }

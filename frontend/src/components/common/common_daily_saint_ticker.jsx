@@ -373,7 +373,7 @@ export default function DailySaintTicker() {
                       </div>
 
                       {/* CONTENT DETAILS (RIGHT SIDE: FEAST DAY, DYNAMIC DATE, DESCRIPTION, ACTIONS) */}
-                      <div className="flex-1 p-5 sm:p-7 md:p-8 overflow-y-auto flex flex-col justify-between notranslate" translate="no">
+                      <div className="flex-1 p-5 sm:p-7 md:p-8 overflow-y-visible md:overflow-y-auto flex flex-col justify-between notranslate custom-scrollbar" translate="no">
                         <div className="space-y-4">
                           {/* Feast Day Section */}
                           <div className="border-b border-gray-100 pb-3">
@@ -385,27 +385,27 @@ export default function DailySaintTicker() {
                             </h2>
                           </div>
 
-                          {/* Biography text — strictly 5 lines of content */}
+                          {/* Biography text - Single unified scroll, no inner nested scrollbar */}
                           <div className="text-gray-700 leading-relaxed text-sm sm:text-base font-normal">
-                            <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400 mb-1">
+                            <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400 mb-1.5">
                               {isTamil ? 'புனிதரைப் பற்றி' : 'ABOUT THE SAINT'}
                             </p>
-                            <p
-                              className="line-clamp-5"
-                              style={{
-                                display: '-webkit-box',
-                                WebkitLineClamp: 5,
-                                WebkitBoxOrient: 'vertical',
-                                overflow: 'hidden'
-                              }}
-                            >
-                              {formatFiveLines(displayDescription)}
-                            </p>
+                            <div className="space-y-3 text-gray-800 leading-relaxed text-justify">
+                              {(() => {
+                                const paras = (displayDescription || '').split(/\n+/).map(p => p.trim()).filter(Boolean);
+                                if (paras.length === 0) return <p>{displayDescription || 'Daily Saint details.'}</p>;
+                                return paras.map((p, idx) => (
+                                  <p key={idx} className="leading-relaxed">
+                                    {p}
+                                  </p>
+                                ));
+                              })()}
+                            </div>
                           </div>
                         </div>
 
                         {/* Link to Original Website Page */}
-                        <div className="pt-4 mt-3 border-t border-gray-100">
+                        <div className="pt-4 mt-4 border-t border-gray-100 flex-shrink-0">
                           {saintOfDay.sourceUrl && (
                             <a
                               href={

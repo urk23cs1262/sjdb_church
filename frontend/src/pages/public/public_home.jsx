@@ -18,6 +18,7 @@ import { getTamilBibleReference, getEnglishBibleReference } from '../../utils/bi
 import heroBgImage from '../../assets/church_extirior.png';
 import stJohnImage from '../../assets/sjdb_image.png';
 import priestImage from '../../assets/NIVESH R 1.jpg';
+import CelebrationFloatingWishes from '../../components/common/common_celebration_floating_wishes';
 
 const BIBLE_VERSES = [
   { ref: 'John 3:16', en: 'For God so loved the world that he gave his one and only Son, that whoever believes in him shall not perish but have eternal life.', ta: 'தேவன் உலகத்தையே இவ்வளவாக நேசித்தார், அதினால் தம்முடைய ஒரேபேறான குமாரனை அனுப்பினார்; அவரை விசுவாசிக்கிறவன் எவனோ அவன் கெட்டுப்போகாமல் நித்தியஜீவனை அடையும்படிக்கே அவரை அனுப்பினார்.' },
@@ -182,17 +183,22 @@ export default function Home() {
         </motion.div>
 
         <div className="relative z-10 text-center px-4 max-w-5xl mx-auto pt-32">
-          {/* Church icon */}
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', duration: 0.8 }}
-            className="mb-6 flex justify-center"
-          >
-            <div className="w-60 h-60 rounded-full bg-white/10 backdrop-blur-sm border-2 border-gold-400/50 flex items-center justify-center animate-float shadow-gold-lg overflow-hidden p-1">
-              <img src={stJohnSrc} alt="Logo" className="w-full h-full object-cover object-[center_10%] rounded-full" />
-            </div>
-          </motion.div>
+          {/* Church icon & Celebration Floating Wishes */}
+          <div className="relative mb-6 flex justify-center items-center">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', duration: 0.8 }}
+              className="relative z-10"
+            >
+              <div className="w-60 h-60 rounded-full bg-white/10 backdrop-blur-sm border-2 border-gold-400/50 flex items-center justify-center animate-float shadow-gold-lg overflow-hidden p-1">
+                <img src={stJohnSrc} alt="Logo" className="w-full h-full object-cover object-[center_10%] rounded-full" />
+              </div>
+            </motion.div>
+
+            {/* Subtle Animated Floating Celebration Wishes (active strictly on celebration days) */}
+            <CelebrationFloatingWishes />
+          </div>
 
           {/* Church name */}
           <motion.div initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.2 }}>

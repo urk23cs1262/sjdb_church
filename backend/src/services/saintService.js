@@ -146,21 +146,96 @@ async function translateText(text, targetLang = 'ta') {
 }
 
 /**
- * Fetch a brief verified biography extract from Wikipedia summary API
+ * Cleans a saint name for Wikipedia querying.
+ * Strips ecclesiastical titles, qualifiers, prefixes, and suffixes.
  */
-async function fetchWikipediaSummary(saintName) {
-  if (!saintName) return '';
-  const cleanName = cleanSaintName(saintName);
+function cleanSaintNameForWiki(rawName) {
+  if (!rawName) return '';
+  let name = rawName
+    // Strip everything after first comma or dash (e.g. ", priest...", ", Apostle...", " - Martyr")
+    .replace(/,.*$/, '')
+    .replace(/\s*[-–—]\s*.*$/, '')
+    // Strip parenthetical text like (Patron Saint)
+    .replace(/\s*\([^)]*\)/g, '')
+    // Replace St. / Sts. / Saint / Saints / Blessed / Pope / s.
+    .replace(/^Sts?[\s\.]+/i, '')
+    .replace(/^Saint[\s\.]+/i, '')
+    .replace(/^Blessed[\s\.]+/i, '')
+    .replace(/^Pope[\s\.]+/i, '')
+    .replace(/^s\.[\s]+/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Common spelling corrections on Vatican News (e.g., Mattew -> Matthew)
+  if (/^mattew$/i.test(name)) name = 'Matthew';
+  return name;
+}
+
+/**
+ * Validates that the fetched Wikipedia article corresponds to the displayed saint
+ * to avoid duplicate or mismatched saint biographies.
+ */
+function validateWikiMatch(displayedSaintName, wikiTitle) {
+  if (!displayedSaintName || !wikiTitle) return false;
+  const cleanDisplay = cleanSaintNameForWiki(displayedSaintName).toLowerCase();
+  const cleanWiki = cleanSaintNameForWiki(wikiTitle).toLowerCase();
+
+  if (cleanDisplay.includes(cleanWiki) || cleanWiki.includes(cleanDisplay)) return true;
+  if (cleanDisplay.includes('vincent') && cleanWiki.includes('vincent')) return true;
+  if (cleanDisplay.includes('jerome') && cleanWiki.includes('jerome')) return true;
+  if (cleanDisplay.includes('pietrelcina') || cleanDisplay.includes('pio') || cleanWiki.includes('pio')) return true;
+  if (cleanDisplay.includes('cosmas') && cleanWiki.includes('cosmas')) return true;
+  if (cleanDisplay.includes('matthew') && cleanWiki.includes('matthew')) return true;
+  if (cleanDisplay.includes('therese') && cleanWiki.includes('lisieux')) return true;
+  if (cleanDisplay.includes('francis') && cleanWiki.includes('francis')) return true;
+
+  const displayTokens = cleanDisplay.split(/\s+/).filter(w => w.length > 3 && !['saint', 'blessed', 'pope', 'martyr'].includes(w));
+  const wikiTokens = cleanWiki.split(/\s+/).filter(w => w.length > 3 && !['saint', 'blessed', 'pope', 'martyr'].includes(w));
+  return displayTokens.some(t => wikiTokens.includes(t));
+}
+
+/**
+ * Checks if a biography has sufficient detail (at least 5-6 readable lines, ~300+ chars, 3+ sentences).
+ */
+function isSufficientBio(text) {
+  if (!text || typeof text !== 'string') return false;
+  const trimmed = text.trim();
+  if (trimmed.length < 300) return false;
+  const sentences = splitIntoSentences(trimmed);
+  if (sentences.length >= 3) return true;
+  const paras = trimmed.split(/\n\s*\n/).filter(p => p.trim().length > 30);
+  return paras.length >= 2;
+}
+
+/**
+ * Dynamically fetches a comprehensive multi-paragraph biography for any Saint from Wikipedia.
+ * Uses MediaWiki extract API with intro paragraphs, falling back to search if needed.
+ */
+async function fetchWikipediaBio(saintName) {
+  if (!saintName) return null;
+  const cleanName = cleanSaintNameForWiki(saintName);
+  if (!cleanName || cleanName.length < 2) return null;
 
   const slugs = [
-    saintName.replace(/\s+/g, '_'),
     cleanName.replace(/\s+/g, '_'),
     `Saint_${cleanName.replace(/\s+/g, '_')}`,
     `Pope_${cleanName.replace(/\s+/g, '_')}`
   ];
 
-  const lower = saintName.toLowerCase();
-  if (lower.includes('mercy') && (lower.includes('mary') || lower.includes('lady'))) {
+  const lower = cleanName.toLowerCase();
+  if (lower.includes('vincent de paul')) {
+    slugs.unshift('Vincent_de_Paul');
+  } else if (lower.includes('pius of pietrelcina') || lower.includes('padre pio')) {
+    slugs.unshift('Padre_Pio');
+  } else if (lower.includes('cosmas and damian')) {
+    slugs.unshift('Cosmas_and_Damian', 'Saints_Cosmas_and_Damian');
+  } else if (lower === 'matthew') {
+    slugs.unshift('Matthew_the_Apostle', 'Saint_Matthew');
+  } else if (lower.includes('therese')) {
+    slugs.unshift('Thérèse_of_Lisieux', 'Therese_of_Lisieux');
+  } else if (lower.includes('francis of assisi')) {
+    slugs.unshift('Francis_of_Assisi');
+  } else if (lower.includes('mercy') && (lower.includes('mary') || lower.includes('lady'))) {
     slugs.unshift('Virgin_of_Mercy', 'Our_Lady_of_Mercy');
   } else if (lower.includes('sorrow')) {
     slugs.unshift('Our_Lady_of_Sorrows');
@@ -177,50 +252,83 @@ async function fetchWikipediaSummary(saintName) {
   } else if (lower.includes('mother of god')) {
     slugs.unshift('Mary,_Mother_of_God', 'Theotokos');
   } else if (lower.includes('archangel') || (lower.includes('michael') && lower.includes('gabriel'))) {
-    slugs.unshift('Michael_(archangel)', 'Archangel');
-  } else if (lower.includes('pius of pietrelcina') || lower.includes('padre pio')) {
-    slugs.unshift('Padre_Pio');
+    slugs.unshift('Michael_(archangel)');
   }
 
+  // 1. Direct candidate slugs via MediaWiki extracts API
   for (const slug of slugs) {
     try {
-      const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(slug)}`;
-      const res = await axios.get(summaryUrl, {
+      const url = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=true&explaintext=true&titles=${encodeURIComponent(slug)}&format=json`;
+      const res = await axios.get(url, {
         headers: { 'User-Agent': 'SJDBChurchApp/1.0 (Catholic Parish Management; contact: stjdbchurch@gmail.com)' },
-        timeout: 5000
+        timeout: 6000
       });
-      if (res.data && res.data.extract && res.data.extract.length > 30) {
-        const sentences = splitIntoSentences(res.data.extract);
-        return sentences.slice(0, 4).join(' ').trim();
+      const pages = res.data?.query?.pages || {};
+      for (const pageId in pages) {
+        if (pageId !== '-1' && pages[pageId].extract && pages[pageId].extract.length >= 250) {
+          const text = pages[pageId].extract.trim().replace(/\n+/g, '\n\n');
+          if (validateWikiMatch(saintName, pages[pageId].title)) {
+            return {
+              title: pages[pageId].title,
+              text,
+              url: `https://en.wikipedia.org/wiki/${encodeURIComponent(pages[pageId].title.replace(/\s+/g, '_'))}`
+            };
+          }
+        }
       }
-    } catch (e) {
-      // Try next slug
-    }
+    } catch (e) {}
   }
 
-  // Fallback: search Wikipedia API if direct slugs didn't hit
+  // 2. Search fallback via Wikipedia search API
   try {
-    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(cleanName || saintName)}&format=json&origin=*`;
+    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent('Saint ' + cleanName)}&format=json&origin=*`;
     const searchRes = await axios.get(searchUrl, {
       headers: { 'User-Agent': 'SJDBChurchApp/1.0 (Catholic Parish Management; contact: stjdbchurch@gmail.com)' },
-      timeout: 5000
+      timeout: 6000
     });
     const hits = searchRes.data?.query?.search || [];
-    for (const h of hits.slice(0, 3)) {
-      if (/disambiguation|list of/i.test(h.title)) continue;
-      const sumUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(h.title)}`;
-      const sumRes = await axios.get(sumUrl, {
+    for (const h of hits.slice(0, 4)) {
+      if (/disambiguation|list of|church|basilica|cathedral|parish|shrine|order of|congregation of/i.test(h.title)) continue;
+      const extractUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=true&explaintext=true&titles=${encodeURIComponent(h.title)}&format=json`;
+      const exRes = await axios.get(extractUrl, {
         headers: { 'User-Agent': 'SJDBChurchApp/1.0 (Catholic Parish Management; contact: stjdbchurch@gmail.com)' },
-        timeout: 5000
+        timeout: 6000
       });
-      if (sumRes.data?.extract && sumRes.data.extract.length > 40) {
-        const sentences = splitIntoSentences(sumRes.data.extract);
-        return sentences.slice(0, 4).join(' ').trim();
+      const pages = exRes.data?.query?.pages || {};
+      for (const pageId in pages) {
+        if (pageId !== '-1' && pages[pageId].extract && pages[pageId].extract.length >= 250) {
+          const text = pages[pageId].extract.trim().replace(/\n+/g, '\n\n');
+          if (validateWikiMatch(saintName, pages[pageId].title)) {
+            return {
+              title: pages[pageId].title,
+              text,
+              url: `https://en.wikipedia.org/wiki/${encodeURIComponent(pages[pageId].title.replace(/\s+/g, '_'))}`
+            };
+          }
+        }
       }
     }
   } catch (e) {}
 
-  return '';
+  return null;
+}
+
+/**
+ * Translates multi-paragraph biography into Tamil, preserving paragraph breaks
+ * and cleaning post-nominals that confuse machine translation.
+ */
+async function translateBiography(text, targetLang = 'ta') {
+  if (!text || text.trim() === '') return '';
+  const paragraphs = text.split(/\n+/).map(p => p.trim()).filter(Boolean);
+  if (paragraphs.length === 0) return '';
+
+  const translatedParas = [];
+  for (const para of paragraphs) {
+    const cleanPara = para.replace(/,\s*[A-Z]{2,5}(?=\s*[\(,])/g, '');
+    const trans = await translateText(cleanPara, targetLang);
+    translatedParas.push(trans || cleanPara);
+  }
+  return translatedParas.join('\n\n');
 }
 
 // ─── FEAST & LITURGICAL CELEBRATION EXTRACTION ──────────────────────────────
@@ -582,6 +690,34 @@ async function fetchFromVaticanNews(month, day, year = new Date().getFullYear())
       }
     }
 
+    // If primary saint has short bio, check if section has a deep "Read all..." detail link on Vatican News
+    if (primarySaint && primarySaint.sectionEl && (!primarySaint.description || primarySaint.description.length < 300)) {
+      const detailLink = $(primarySaint.sectionEl).find('a[href^="/en/saints/"]').first().attr('href');
+      if (detailLink && detailLink.endsWith('.html') && detailLink !== vaticanUrl) {
+        const fullDetailUrl = detailLink.startsWith('http') ? detailLink : `https://www.vaticannews.va${detailLink}`;
+        try {
+          const detailRes = await axios.get(fullDetailUrl, { headers: FETCH_HEADERS, timeout: 7000 });
+          if (detailRes.status === 200 && detailRes.data) {
+            const $$ = cheerio.load(detailRes.data);
+            const deepParas = [];
+            $$('article p, .section__content p').each((dpi, dpel) => {
+              const dt = $$(dpel).text().replace(/\s+/g, ' ').trim();
+              if (dt && !dt.includes('The Saint of the day presents a daily calendar') && dt.length > 20) {
+                deepParas.push(dt);
+              }
+            });
+            if (deepParas.length > 0) {
+              primarySaint.description = deepParas.join('\n\n').trim();
+              primarySaint.detailUrl = fullDetailUrl;
+              console.log(`[Saint Service] Fetched full Vatican News deep article for "${primarySaint.name}" (${primarySaint.description.length} chars)`);
+            }
+          }
+        } catch (de) {
+          console.warn(`[Saint Service] Deep article fetch notice: ${de.message}`);
+        }
+      }
+    }
+
     return {
       primarySaint,
       allSaints: saints,
@@ -671,7 +807,8 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
           (parsed.name && parsed.name.includes('Nilus')) ||
           (parsed.englishName && parsed.englishName.includes('Nilus'))
         );
-        if (!isStaleNilusOnSep26 && parsed && parsed.date === dateKey && (parsed.saintName || parsed.name) && parsed.image && !parsed.imageFallback) {
+        const hasShortBio = !parsed.description || parsed.description.length < 250;
+        if (!isStaleNilusOnSep26 && !hasShortBio && parsed && parsed.date === dateKey && (parsed.saintName || parsed.name) && parsed.image && !parsed.imageFallback) {
           if (isCurrentToday) {
             dailySaint = parsed;
           }
@@ -696,6 +833,8 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
   let descriptionTa = '';
   let detailUrl = buildVaticanNewsUrl(month, day);
   let usedVatican = false;
+  let usedSource = "Vatican News";
+  let usedSourceUrl = detailUrl;
   let allSaintsList = [];
   let primarySectionEl = null;
   let cheerioDoc = null;
@@ -715,56 +854,55 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
       ? feastInfo.feastSaintName
       : prim.name;
 
-    detailUrl = vaticanResult.sourceUrl;
+    detailUrl = prim.detailUrl || vaticanResult.sourceUrl;
+    usedSourceUrl = detailUrl;
     allSaintsList = vaticanResult.allSaints;
     primarySectionEl = prim.sectionEl;
     cheerioDoc = vaticanResult.$;
 
-    if (prim.description && prim.description.length >= 40) {
+    // Priority 1: Vatican News — check if sufficient biography is present
+    if (isSufficientBio(prim.description)) {
       description = prim.description;
+      usedSource = "Vatican News";
+      usedSourceUrl = detailUrl;
+      console.log(`[SaintOfDay] Source: Vatican News`);
     } else {
-      console.log(`[Saint Service] Vatican News bio short (${prim.description ? prim.description.length : 0} chars) for "${saintName}". Enhancing bio...`);
-      
-      // 1. Check local Catholic Liturgical Calendar first (authoritative curated Catholic content)
-      const cleanFetched = cleanSaintName(saintName).toLowerCase();
-      const cleanFallback = cleanSaintName(fallbackSaint?.name || '').toLowerCase();
-      const isCalendarMatch = fallbackSaint && (
-        cleanFetched.includes(cleanFallback) || 
-        cleanFallback.includes(cleanFetched) || 
-        (cleanFetched.includes('cosmas') && cleanFallback.includes('cosmas')) ||
-        (cleanFetched.includes('vincent') && cleanFallback.includes('vincent')) ||
-        (cleanFetched.includes('jerome') && cleanFallback.includes('jerome'))
-      );
-
-      if (isCalendarMatch) {
-        description = fallbackSaint.description;
-        if (!tamilName && fallbackSaint.nameTa) tamilName = fallbackSaint.nameTa;
-        if (!descriptionTa && fallbackSaint.descriptionTa) descriptionTa = fallbackSaint.descriptionTa;
-        console.log(`[Saint Service] Curated Catholic calendar biography applied for "${saintName}".`);
-      }
-
-      // 2. Wikipedia summary as secondary enrichment
-      if (!description || description.length < 30) {
-        const wikiBio = await fetchWikipediaSummary(saintName);
-        if (wikiBio && wikiBio.length >= 30) {
-          description = wikiBio;
-          console.log(`[Saint Service] Wikipedia bio found for "${saintName}" (${wikiBio.length} chars).`);
-        }
-      }
-
-      if (!description) {
-        description = prim.description || fallbackSaint?.description || '';
+      console.log(`[SaintOfDay] Vatican News insufficient → Source: Wikipedia`);
+      // Priority 2: Wikipedia Fallback dynamically based on saint name
+      const wikiBio = await fetchWikipediaBio(saintName);
+      if (wikiBio && isSufficientBio(wikiBio.text)) {
+        description = wikiBio.text;
+        usedSource = "Wikipedia";
+        usedSourceUrl = wikiBio.url;
+        console.log(`[SaintOfDay] Wikipedia biography successfully applied for "${saintName}" (${description.length} chars)`);
+      } else {
+        // Priority 3: Curated Catholic Liturgical Calendar Fallback
+        console.log(`[SaintOfDay] Vatican News and Wikipedia insufficient → Source: Catholic Liturgical Calendar`);
+        description = fallbackSaint?.description || prim.description || '';
+        usedSource = "Catholic Liturgical Calendar";
+        usedSourceUrl = fallbackSaint?.link || detailUrl;
       }
     }
   } else {
-    // ── FALLBACK: Catholic Liturgical Calendar ─────────────────────────────
-    console.log(`[Saint Service] Vatican News unavailable for ${dateKey}. Using Catholic Liturgical Calendar fallback.`);
+    // ── FALLBACK: Vatican News unavailable ─────────────────────────────────
+    console.log(`[Saint Service] Vatican News unavailable for ${dateKey} → trying Wikipedia`);
     saintName = fallbackSaint.name;
-    description = fallbackSaint.description;
+    const wikiBio = await fetchWikipediaBio(saintName);
+    if (wikiBio && isSufficientBio(wikiBio.text)) {
+      description = wikiBio.text;
+      usedSource = "Wikipedia";
+      usedSourceUrl = wikiBio.url;
+      console.log(`[SaintOfDay] Source: Wikipedia (${description.length} chars)`);
+    } else {
+      console.log(`[SaintOfDay] Vatican News and Wikipedia unavailable → Source: Catholic Liturgical Calendar`);
+      description = fallbackSaint.description;
+      usedSource = "Catholic Liturgical Calendar";
+      usedSourceUrl = fallbackSaint.link || VATICAN_SAINTS_BASE_URL;
+    }
     tamilName = fallbackSaint.nameTa;
     descriptionTa = fallbackSaint.descriptionTa;
-    detailUrl = fallbackSaint.link || VATICAN_SAINTS_BASE_URL;
-    allSaintsList = [{ name: fallbackSaint.name, description: fallbackSaint.description, imageUrl: fallbackSaint.image }];
+    detailUrl = usedSourceUrl;
+    allSaintsList = [{ name: fallbackSaint.name, description, imageUrl: fallbackSaint.image }];
     feastInfo = extractFeastInfo(null, allSaintsList, month, day, dateKey);
   }
 
@@ -832,14 +970,19 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
         tamilName = cleanTa;
       }
     }
+    if (!tamilName && fallbackSaint && (cleanSaintName(saintName).toLowerCase().includes(cleanSaintName(fallbackSaint.name).toLowerCase()) || cleanSaintName(fallbackSaint.name).toLowerCase().includes(cleanSaintName(saintName).toLowerCase()))) {
+      tamilName = fallbackSaint.nameTa;
+    }
     if (!tamilName) {
       const translated = await translateText(saintName);
       tamilName = translated || saintName;
     }
   }
-  if (!descriptionTa) {
-    const translatedBio = await translateText(description);
-    descriptionTa = translatedBio || description;
+  if (!descriptionTa || descriptionTa.length < 200 || descriptionTa === fallbackSaint?.descriptionTa) {
+    if (description) {
+      const translatedBio = await translateBiography(description, 'ta');
+      descriptionTa = translatedBio || description;
+    }
   }
 
   // ── BUILD & SAVE SAINT OBJECT ────────────────────────────────────────────
@@ -862,9 +1005,9 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
     feastType: feastInfo?.feastType || null,
     feastTypeTa: feastInfo?.feastTypeTa || null,
     hasFeastInfo: Boolean(feastInfo?.hasFeastInfo),
-    source: usedVatican ? "Vatican News" : "Catholic Liturgical Calendar",
-    sourceUrl: detailUrl,
-    link: detailUrl,
+    source: usedSource,
+    sourceUrl: usedSourceUrl,
+    link: usedSourceUrl,
     allSaints: allSaintsList.map(s => ({
       name: s.name,
       description: s.description,
@@ -956,8 +1099,10 @@ async function loadCachedSaint() {
           (parsed.englishName && parsed.englishName.includes('Nilus'))
         );
 
-        // Valid cache: matches today's date AND has a valid image AND is not from obsolete Catholic Readings source AND not obsolete secondary saint
-        if (parsed && parsed.date === todayStr && (parsed.saintName || parsed.name) && parsed.image && !isBrokenVirginMary && !isStaleCatholicReadings && !isGarbageImage && !isStaleNilusOnSep26) {
+        const hasShortBio = !parsed.description || parsed.description.length < 250;
+
+        // Valid cache: matches today's date AND has a valid image AND is not from obsolete Catholic Readings source AND not obsolete secondary saint AND has substantial bio
+        if (parsed && parsed.date === todayStr && (parsed.saintName || parsed.name) && parsed.image && !isBrokenVirginMary && !isStaleCatholicReadings && !isGarbageImage && !isStaleNilusOnSep26 && !hasShortBio) {
           dailySaint = parsed;
           if (dailySaint.lastSynced) {
             dailySaint.lastSynced = new Date(dailySaint.lastSynced);
@@ -1122,5 +1267,6 @@ module.exports = {
   getISTDateParts, 
   saveSaintToDatabase,
   buildVaticanNewsUrl,
-  fetchWikipediaSummary
+  fetchWikipediaBio,
+  fetchWikipediaSummary: fetchWikipediaBio
 };

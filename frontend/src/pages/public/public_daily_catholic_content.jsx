@@ -1049,9 +1049,9 @@ export default function DailyCatholicContent() {
             className="mt-14 scroll-mt-28"
           >
             <div className="glass-card p-6 sm:p-8 md:p-10 bg-white shadow-xl rounded-3xl border border-amber-100 overflow-hidden relative">
-              <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8">
+              <div className="flex flex-col md:flex-row items-stretch gap-6 md:gap-8">
                 {/* Image portrait */}
-                <div className="w-full md:w-5/12 h-[260px] sm:h-[300px] rounded-2xl overflow-hidden bg-slate-950 shadow-md relative flex-shrink-0 flex items-center justify-center">
+                <div className="w-full md:w-5/12 min-h-[280px] sm:min-h-[320px] md:min-h-[360px] h-[280px] sm:h-[320px] md:h-auto rounded-2xl overflow-hidden bg-slate-950 shadow-md relative flex-shrink-0 flex items-center justify-center">
                   {(!saintImgError && saintData?.image) ? (
                     <img
                       src={saintData.image}
@@ -1077,31 +1077,36 @@ export default function DailyCatholicContent() {
                 </div>
 
                 {/* Details & Biography */}
-                <div className="flex-1 space-y-4 text-left">
+                <div className="flex-1 space-y-4 text-left flex flex-col justify-between">
                   <div>
-                    <span className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400">
-                      {isTamil ? 'திருவிழா நாள்' : 'FEAST DAY'}
-                    </span>
-                    <h3 className="text-xl sm:text-2xl font-bold text-church-gold font-display mt-0.5">
-                      {saintData?.feastDay || formatDisplay(date)}
-                    </h3>
-                  </div>
+                    <div>
+                      <span className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400">
+                        {isTamil ? 'திருவிழா நாள்' : 'FEAST DAY'}
+                      </span>
+                      <h3 className="text-xl sm:text-2xl font-bold text-church-gold font-display mt-0.5">
+                        {saintData?.feastDay || formatDisplay(date)}
+                      </h3>
+                    </div>
 
-                  <div className="text-gray-700 leading-relaxed text-sm sm:text-base font-normal">
-                    <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400 mb-1">
-                      {isTamil ? 'புனிதரைப் பற்றி' : 'ABOUT THE SAINT'}
-                    </p>
-                    <p
-                      className="line-clamp-5"
-                      style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 5,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden'
-                      }}
-                    >
-                      {formatFiveLines(isTamil && saintData?.descriptionTa ? saintData.descriptionTa : (saintData?.description || 'Daily Saint details.'))}
-                    </p>
+                    <div className="text-gray-700 leading-relaxed text-sm sm:text-base font-normal mt-3">
+                      <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400 mb-1.5">
+                        {isTamil ? 'புனிதரைப் பற்றி' : 'ABOUT THE SAINT'}
+                      </p>
+                      <div className="max-h-[260px] sm:max-h-[300px] md:max-h-[340px] overflow-y-auto pr-2 space-y-2.5 text-gray-800 leading-relaxed text-justify">
+                        {(() => {
+                          const rawText = isTamil && saintData?.descriptionTa
+                            ? saintData.descriptionTa
+                            : (saintData?.description || 'Daily Saint details.');
+                          const paras = rawText.split(/\n+/).map(p => p.trim()).filter(Boolean);
+                          if (paras.length === 0) return <p>{rawText}</p>;
+                          return paras.map((p, idx) => (
+                            <p key={idx} className="leading-relaxed">
+                              {p}
+                            </p>
+                          ));
+                        })()}
+                      </div>
+                    </div>
                   </div>
 
                   <div className="pt-4 border-t border-gray-100 flex items-center gap-3 flex-wrap">

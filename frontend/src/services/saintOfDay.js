@@ -21,11 +21,11 @@ export function cleanSaintName(name) {
 
 export function formatFiveLines(text) {
   if (!text) return '';
-  return text
-    .split(/\n+/)
+  const paras = text
+    .split(/\n\s*\n/)
     .map(t => t.trim())
-    .filter(Boolean)
-    .join(' ');
+    .filter(Boolean);
+  return paras.length > 0 ? paras.join('\n\n') : text.trim();
 }
 
 export async function fetchSaintOfTheDay(dateStr) {

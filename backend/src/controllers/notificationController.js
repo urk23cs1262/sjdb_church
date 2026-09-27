@@ -314,9 +314,23 @@ const subscribePush = async (req, res) => {
 // GET /api/notifications/active-celebrations
 const getActiveCelebrations = async (req, res) => {
   try {
-    const { getPendingCelebrationsForUser } = require('../services/celebrationService');
-    const celebrations = await getPendingCelebrationsForUser(req.user?._id);
-    res.json({ success: true, celebrations });
+    const { getPendingCelebrationsForUser, getTodayISTParts } = require('../services/celebrationService');
+    const lang = req.query.lang || (req.user?.preferredLanguage || req.user?.settings?.language || 'en');
+    const celebrations = await getPendingCelebrationsForUser(
+      req.user?._id,
+      req.query.date || null,
+      req.query.ignoreAck !== 'false',
+      lang
+    );
+    const istParts = getTodayISTParts(req.query.date ? new Date(req.query.date) : new Date());
+
+    res.json({
+      success: true,
+      active: celebrations.length > 0,
+      celebrations,
+      timezone: 'Asia/Kolkata',
+      date: `${istParts.year}-${String(istParts.month).padStart(2, '0')}-${String(istParts.day).padStart(2, '0')}`
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -326,15 +340,18 @@ const getActiveCelebrations = async (req, res) => {
 const acknowledgeCelebrationModal = async (req, res) => {
   try {
     const { celebrationType, year, celebrationKey, notificationId } = req.body;
-    const { acknowledgeCelebration } = require('../services/celebrationService');
-    const log = await acknowledgeCelebration({
-      userId: req.user?._id,
-      celebrationType,
-      year: parseInt(year, 10),
-      celebrationKey,
-      notificationId
-    });
-    res.json({ success: true, message: 'Celebration acknowledged', log });
+    if (req.user?._id) {
+      const { acknowledgeCelebration } = require('../services/celebrationService');
+      const log = await acknowledgeCelebration({
+        userId: req.user._id,
+        celebrationType,
+        year: parseInt(year, 10),
+        celebrationKey,
+        notificationId
+      });
+      return res.json({ success: true, message: 'Celebration acknowledged', log });
+    }
+    return res.json({ success: true, message: 'Public celebration acknowledged' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
