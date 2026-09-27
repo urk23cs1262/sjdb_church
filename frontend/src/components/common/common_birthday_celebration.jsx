@@ -12,24 +12,23 @@ import {
   isUserBirthdayToday,
   isCelebrationPopupAcknowledged,
   acknowledgeCelebrationPopup,
-  onCelebrationPopupOpen
+  onCelebrationPopupOpen,
+  normalizeCelebrationType
 } from '../../services/celebrationService';
 
 /**
  * Reusable Celebration Wish Popup Component
- * Displays full-screen celebratory modal for:
- * 1. Birthday (personal, logged-in user only)
- * 2. St. John de Britto Feast (Feb 4 — PUBLIC)
- * 3. Christmas (Dec 25 — PUBLIC)
- * 4. Easter Sunday (Computus — PUBLIC)
- * 5. New Year (Jan 1 — PUBLIC)
+ * Displays full-screen celebratory modal for all 5 Catholic celebrations:
+ * 1. Birthday (personal, registered user on DOB)
+ * 2. St. John de Britto Feast (Feb 4 — PUBLIC for all visitors)
+ * 3. Christmas (Dec 25 — PUBLIC for all visitors)
+ * 4. Easter Sunday (Computus algorithm — PUBLIC for all visitors)
+ * 5. New Year (Jan 1 — PUBLIC for all visitors)
  *
  * Automatic Popup Rule:
- * - Pops up at 12:00:00 AM IST or on first visit of the celebration day if not acknowledged.
- * - Closing the popup records popupAcknowledged = true in localStorage.
- * - Refreshing the page does NOT repeatedly open the popup.
- * - Floating wishes on the homepage STAY ON all day.
- * - Clicking any floating wish or celebration badge RE-OPENS this exact popup immediately!
+ * - Pops up on celebration day for all visitors / registered users.
+ * - On every page refresh during the celebration day, it re-appears with confetti!
+ * - Closing dismisses it for the current page view, while clicking floating wishes re-opens it instantly.
  */
 export default function BirthdayCelebration() {
   const { user, isAuthenticated } = useAuth();
@@ -104,17 +103,19 @@ export default function BirthdayCelebration() {
       const data = e.detail;
       if (!data || !data.type) return;
 
+      const normType = normalizeCelebrationType(data.type);
+
       // Allow reopening manually anytime from floating wishes
-      sessionDismissedRef.current.delete(data.type);
+      sessionDismissedRef.current.delete(normType);
 
       const details = getCelebrationDetails({
-        type: data.type,
+        type: normType,
         userName: data.userName || user?.name || 'Parishioner',
         language: currentLang
       });
 
       setCurrentCelebration({
-        type: data.type,
+        type: normType,
         year: data.year || getTodayISTParts().year,
         userName: data.userName || user?.name || 'Parishioner',
         notificationId: data.notificationId || null,
@@ -140,17 +141,18 @@ export default function BirthdayCelebration() {
       // 1. Local calculation in Asia/Kolkata (IST)
       const localActive = getActiveCelebration(user);
       if (localActive) {
-        const isDismissed = sessionDismissedRef.current.has(localActive.type);
+        const normType = normalizeCelebrationType(localActive.type);
+        const isDismissed = sessionDismissedRef.current.has(normType);
         // Automatically open on every page load/refresh if not dismissed in current view
         if (!isDismissed) {
           const details = getCelebrationDetails({
-            type: localActive.type,
+            type: normType,
             userName: localActive.userName || user?.name || 'Parishioner',
             language: currentLang
           });
 
           detected.push({
-            type: localActive.type,
+            type: normType,
             year: localActive.year,
             userName: localActive.userName || user?.name || 'Parishioner',
             notificationId: null,
@@ -163,27 +165,45 @@ export default function BirthdayCelebration() {
 
       // 2. Query backend for active celebrations
       try {
-        const res = await api.get('/notifications/active-celebrations');
+        const queryParams = localActive?.isTestOverride
+          ? { celebration: localActive.type, lang: currentLang }
+          : { lang: currentLang };
+        const res = await api.get('/notifications/active-celebrations', { params: queryParams });
         if (res.data?.success && res.data.active && Array.isArray(res.data.celebrations)) {
           for (const serverCel of res.data.celebrations) {
+            const serverType = normalizeCelebrationType(serverCel.celebrationType);
+
             // Safety: verify birthday matches today's IST date
-            if (serverCel.celebrationType === 'birthday') {
+            if (serverType === 'birthday') {
               const ist = getTodayISTParts();
               const birthdayMatchesToday = isUserBirthdayToday(user?.dob, ist.month, ist.day);
               if (!birthdayMatchesToday) continue;
             }
 
-            const isDismissed = sessionDismissedRef.current.has(serverCel.celebrationType);
-            if (!isDismissed && !detected.some(d => d.type === serverCel.celebrationType)) {
-              detected.push({
-                type: serverCel.celebrationType,
-                year: serverCel.year,
-                userName: serverCel.userName || user?.name || 'Parishioner',
-                notificationId: serverCel.notificationId || null,
-                serverHeading: serverCel.heading,
-                serverMessage: serverCel.message,
-                serverButtonText: serverCel.buttonText
-              });
+            // If user has a test override, do not mix with other celebration types
+            if (localActive?.isTestOverride && serverType !== localActive.type) {
+              continue;
+            }
+
+            const existingIndex = detected.findIndex(d => d.type === serverType);
+            if (existingIndex !== -1) {
+              if (serverCel.notificationId) detected[existingIndex].notificationId = serverCel.notificationId;
+              if (serverCel.heading) detected[existingIndex].serverHeading = serverCel.heading;
+              if (serverCel.message) detected[existingIndex].serverMessage = serverCel.message;
+              if (serverCel.buttonText) detected[existingIndex].serverButtonText = serverCel.buttonText;
+            } else {
+              const isDismissed = sessionDismissedRef.current.has(serverType);
+              if (!isDismissed) {
+                detected.push({
+                  type: serverType,
+                  year: serverCel.year,
+                  userName: serverCel.userName || user?.name || 'Parishioner',
+                  notificationId: serverCel.notificationId || null,
+                  serverHeading: serverCel.heading,
+                  serverMessage: serverCel.message,
+                  serverButtonText: serverCel.buttonText
+                });
+              }
             }
           }
         }
@@ -222,25 +242,26 @@ export default function BirthdayCelebration() {
     if (!currentCelebration) return;
 
     const { type, year, notificationId } = currentCelebration;
+    const normType = normalizeCelebrationType(type);
 
     // Dismiss for the current page view so user can browse without repeated pops,
     // but on every page refresh, sessionDismissedRef will be fresh and it WILL pop up again!
-    sessionDismissedRef.current.add(type);
-    acknowledgeCelebrationPopup(type, year, user);
+    sessionDismissedRef.current.add(normType);
+    acknowledgeCelebrationPopup(normType, year, user);
 
     // Notify backend of acknowledgment and mark notifications read if user is logged in
     try {
       await api.post('/notifications/acknowledge-celebration', {
-        celebrationType: type,
+        celebrationType: normType,
         year,
-        celebrationKey: `${type.toUpperCase()}_${year}_${user?._id || 'PUBLIC'}`,
+        celebrationKey: `${normType.toUpperCase()}_${year}_${user?._id || 'PUBLIC'}`,
         notificationId
       });
     } catch (e) {}
 
     // Advance queue and close popup
     setCurrentCelebration(null);
-    setCelebrationQueue(prev => prev.filter(item => item.type !== type));
+    setCelebrationQueue(prev => prev.filter(item => normalizeCelebrationType(item.type) !== normType));
   };
 
   // Called when user clicks action button (Thank You!, Amen, Alleluia!): triggers extra confetti & closes

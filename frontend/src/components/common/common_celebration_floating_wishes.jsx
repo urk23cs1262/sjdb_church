@@ -7,7 +7,8 @@ import {
   getActiveCelebration,
   openCelebrationPopup,
   isUserBirthdayToday,
-  getTodayISTParts
+  getTodayISTParts,
+  normalizeCelebrationType
 } from '../../services/celebrationService';
 import api from '../../services/api';
 
@@ -69,7 +70,10 @@ export default function CelebrationFloatingWishes() {
       }
 
       try {
-        const res = await api.get('/notifications/active-celebrations');
+        const queryParams = localActive?.isTestOverride
+          ? { celebration: localActive.type, lang: currentLang }
+          : { lang: currentLang };
+        const res = await api.get('/notifications/active-celebrations', { params: queryParams });
         if (
           isMounted &&
           res.data?.success &&
@@ -77,19 +81,25 @@ export default function CelebrationFloatingWishes() {
           Array.isArray(res.data.celebrations) &&
           res.data.celebrations.length > 0
         ) {
-          const first = res.data.celebrations[0];
-          setServerCelebration(first);
+          const currentType = localActive?.type || res.data.celebrations[0].celebrationType;
+          const matching =
+            res.data.celebrations.find(
+              c => normalizeCelebrationType(c.celebrationType) === normalizeCelebrationType(currentType)
+            ) || res.data.celebrations[0];
+
+          setServerCelebration(matching);
+
           if (!localActive) {
-            // Safety: if the server returned a birthday celebration, verify user's DOB matches today!
-            const isBirthday = first.celebrationType === 'birthday';
+            const matchingType = normalizeCelebrationType(matching.celebrationType);
+            const isBirthday = matchingType === 'birthday';
             const ist = getTodayISTParts();
             const birthdayMatchesToday = isUserBirthdayToday(user?.dob, ist.month, ist.day);
             if (!isBirthday || birthdayMatchesToday) {
               setActiveCelebration({
-                type: first.celebrationType,
-                year: first.year,
-                userName: first.userName,
-                isPublic: first.isPublic
+                type: matchingType,
+                year: matching.year,
+                userName: matching.userName,
+                isPublic: matching.isPublic
               });
             } else {
               setActiveCelebration(null);
@@ -113,7 +123,7 @@ export default function CelebrationFloatingWishes() {
       isMounted = false;
       clearInterval(interval);
     };
-  }, [user]);
+  }, [user, currentLang]);
 
   // Reduced motion preference
   const prefersReducedMotion = useMemo(() => {
@@ -396,13 +406,23 @@ export default function CelebrationFloatingWishes() {
       e.preventDefault();
       e.stopPropagation();
     }
+    if (!activeCelebration) return;
+
+    const isMatchingServer =
+      serverCelebration &&
+      normalizeCelebrationType(serverCelebration.celebrationType) === normalizeCelebrationType(activeCelebration.type);
+
     openCelebrationPopup({
       type: activeCelebration.type,
       year: activeCelebration.year,
-      userName: activeCelebration.userName || serverCelebration?.userName || user?.name || 'Parishioner',
-      serverHeading: serverCelebration?.heading,
-      serverMessage: serverCelebration?.message,
-      serverButtonText: serverCelebration?.buttonText
+      userName:
+        activeCelebration.userName ||
+        (isMatchingServer ? serverCelebration?.userName : null) ||
+        user?.name ||
+        'Parishioner',
+      serverHeading: isMatchingServer ? serverCelebration?.heading : undefined,
+      serverMessage: isMatchingServer ? serverCelebration?.message : undefined,
+      serverButtonText: isMatchingServer ? serverCelebration?.buttonText : undefined
     });
   };
 

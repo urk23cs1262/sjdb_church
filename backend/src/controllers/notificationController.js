@@ -314,15 +314,46 @@ const subscribePush = async (req, res) => {
 // GET /api/notifications/active-celebrations
 const getActiveCelebrations = async (req, res) => {
   try {
-    const { getPendingCelebrationsForUser, getTodayISTParts } = require('../services/celebrationService');
+    const {
+      getPendingCelebrationsForUser,
+      getTodayISTParts,
+      getCelebrationContent,
+      normalizeCelebrationType
+    } = require('../services/celebrationService');
     const lang = req.query.lang || (req.user?.preferredLanguage || req.user?.settings?.language || 'en');
-    const celebrations = await getPendingCelebrationsForUser(
-      req.user?._id,
-      req.query.date || null,
-      req.query.ignoreAck !== 'false',
-      lang
-    );
     const istParts = getTodayISTParts(req.query.date ? new Date(req.query.date) : new Date());
+
+    const testCelebration = req.query.celebration || req.query.type;
+    let celebrations = [];
+
+    if (testCelebration) {
+      const normType = normalizeCelebrationType ? normalizeCelebrationType(testCelebration) : String(testCelebration).toLowerCase().trim();
+      const content = getCelebrationContent({
+        type: normType,
+        userName: req.user?.name || (req.user?.role === 'admin' ? 'Parish Admin' : 'Parishioner'),
+        language: lang
+      });
+      celebrations = [{
+        celebrationType: normType,
+        celebrationKey: `${normType.toUpperCase()}_${istParts.year}_${req.user?._id || 'PUBLIC'}`,
+        year: istParts.year,
+        userName: req.user?.name || (req.user?.role === 'admin' ? 'Parish Admin' : 'Parishioner'),
+        notificationId: null,
+        language: lang,
+        heading: content.heading,
+        message: content.message,
+        buttonText: content.buttonText,
+        themeColor: content.themeColor,
+        isPublic: normType !== 'birthday'
+      }];
+    } else {
+      celebrations = await getPendingCelebrationsForUser(
+        req.user?._id,
+        req.query.date || null,
+        req.query.ignoreAck !== 'false',
+        lang
+      );
+    }
 
     res.json({
       success: true,
@@ -340,11 +371,14 @@ const getActiveCelebrations = async (req, res) => {
 const acknowledgeCelebrationModal = async (req, res) => {
   try {
     const { celebrationType, year, celebrationKey, notificationId } = req.body;
+    const { normalizeCelebrationType } = require('../services/celebrationService');
+    const normType = normalizeCelebrationType ? normalizeCelebrationType(celebrationType) : celebrationType;
+
     if (req.user?._id) {
       const { acknowledgeCelebration } = require('../services/celebrationService');
       const log = await acknowledgeCelebration({
         userId: req.user._id,
-        celebrationType,
+        celebrationType: normType,
         year: parseInt(year, 10),
         celebrationKey,
         notificationId

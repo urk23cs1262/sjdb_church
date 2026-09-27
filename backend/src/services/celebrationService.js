@@ -89,15 +89,39 @@ function getCelebrationTypesForDate(istParts, user = null) {
 }
 
 /**
+ * Normalizes celebration type keys to canonical format
+ */
+function normalizeCelebrationType(rawType) {
+  if (!rawType) return null;
+  const t = String(rawType).toLowerCase().trim().replace(/[-\s]+/g, '_');
+  if (t === 'birthday' || t === 'bday') return 'birthday';
+  if (
+    t === 'st_john_britto_feast' ||
+    t === 'st_john_britto' ||
+    t === 'st_john_feast' ||
+    t === 'feast' ||
+    t === 'britto' ||
+    t === 'st_john_de_britto_feast'
+  ) {
+    return 'st_john_britto_feast';
+  }
+  if (t === 'christmas' || t === 'xmas') return 'christmas';
+  if (t === 'easter' || t === 'easter_sunday' || t === 'pascha') return 'easter';
+  if (t === 'new_year' || t === 'newyear') return 'new_year';
+  return t;
+}
+
+/**
  * Returns formatted content (heading, message, buttonText) for an occasion and language
  */
 function getCelebrationContent({ type, userName = 'Parishioner', language = 'en' }) {
+  const normType = normalizeCelebrationType(type) || type;
   const lang = String(language || 'en').toLowerCase();
   const isTa = lang === 'ta';
   const isBoth = lang === 'both';
   const formattedName = userName.trim();
 
-  switch (type) {
+  switch (normType) {
     case 'birthday':
       return {
         type: 'birthday',
@@ -370,5 +394,6 @@ module.exports = {
   getPendingCelebrationsForUser,
   acknowledgeCelebration,
   runAnnualCelebrationMidnightCron,
-  getTodayISTParts
+  getTodayISTParts,
+  normalizeCelebrationType
 };

@@ -101,6 +101,29 @@ export function isUserBirthdayToday(dob, istMonth, istDay) {
 }
 
 /**
+ * Normalizes celebration type keys to canonical format
+ */
+export function normalizeCelebrationType(rawType) {
+  if (!rawType) return null;
+  const t = String(rawType).toLowerCase().trim().replace(/[-\s]+/g, '_');
+  if (t === 'birthday' || t === 'bday') return 'birthday';
+  if (
+    t === 'st_john_britto_feast' ||
+    t === 'st_john_britto' ||
+    t === 'st_john_feast' ||
+    t === 'feast' ||
+    t === 'britto' ||
+    t === 'st_john_de_britto_feast'
+  ) {
+    return 'st_john_britto_feast';
+  }
+  if (t === 'christmas' || t === 'xmas') return 'christmas';
+  if (t === 'easter' || t === 'easter_sunday' || t === 'pascha') return 'easter';
+  if (t === 'new_year' || t === 'newyear') return 'new_year';
+  return t;
+}
+
+/**
  * Detects the currently active celebration for a visitor / logged-in user.
  * Supports URL override ?celebration=... or ?testCelebration=... for testing.
  * Priority: Birthday > St. John Feast > Christmas > Easter > New Year
@@ -114,8 +137,8 @@ export function getActiveCelebration(user = null, customDate = null) {
     const params = new URLSearchParams(window.location.search);
     const override = params.get('celebration') || params.get('testCelebration');
     if (override) {
+      const normalized = normalizeCelebrationType(override);
       const validTypes = ['st_john_britto_feast', 'christmas', 'easter', 'new_year', 'birthday'];
-      const normalized = override.toLowerCase().trim();
       if (validTypes.includes(normalized)) {
         return {
           type: normalized,
@@ -203,13 +226,14 @@ export function getCelebrationDetails(arg, arg2, arg3) {
     userName = arg2;
     language = arg3;
   }
+  const normalizedType = normalizeCelebrationType(type) || type;
   const lang = String(language || 'en').toLowerCase();
   const isTa = lang === 'ta';
   const isBoth = lang === 'both';
   const rawName = String(userName || 'Parishioner').trim();
   const upperName = rawName.toUpperCase();
 
-  switch (type) {
+  switch (normalizedType) {
     case 'birthday':
       return {
         type: 'birthday',
