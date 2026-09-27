@@ -495,16 +495,75 @@ function generateSaintContentMessage({ dailyContent, language = 'ta' }) {
 /**
  * MESSAGE 5 — READ MORE LINK (Sent as final separate message)
  *
- * Dedicated Read More message with website URL to produce WhatsApp link preview.
+ * Dedicated Read More message with website deep-links for:
+ * - Daily Bible Verse (#verse)
+ * - Daily Mass Readings (#readings)
+ * - Daily Reflection (#reflection)
+ * - Saint of the Day (#saint-of-the-day)
  */
 function generateReadMoreMessage({ dailyContent, language = 'ta' }) {
-  const churchUrl = getBaseClientUrl();
+  const verseUrl = getSiteUrl(SITE_ROUTES.DAILY_VERSE);
+  const readingsUrl = getSiteUrl(SITE_ROUTES.DAILY_READINGS);
+  const reflectionUrl = getSiteUrl(SITE_ROUTES.DAILY_REFLECTION);
+  const saintUrl = getSiteUrl(SITE_ROUTES.SAINT_OF_THE_DAY);
   const rawLang = String(language || 'ta').toLowerCase();
 
   if (rawLang === 'en' || rawLang.startsWith('en')) {
-    return `🌐 *Read More*\n${churchUrl}`;
+    return `🌐 *Read More*
+
+📖 *Today's Daily Verse:*
+${verseUrl}
+
+📜 *Today's Mass Readings:*
+${readingsUrl}
+
+🕊️ *Today's Reflection:*
+${reflectionUrl}
+
+✨ *Saint of the Day:*
+${saintUrl}
+
+— *St. John de Britto Church, Kalayarkoil*
+_SJDB Connect_`;
   }
-  return `🌐 *மேலும் வாசிக்க (Read More)*\n${churchUrl}`;
+
+  if (rawLang === 'both' || (rawLang.includes('ta') && rawLang.includes('en')) || rawLang === 'all') {
+    return `🌐 *மேலும் வாசிக்க / Read More*
+
+📖 *இன்றைய இறைவார்த்தை / Daily Verse:*
+${verseUrl}
+
+📜 *இன்றைய திருப்பலி வாசகங்கள் / Mass Readings:*
+${readingsUrl}
+
+🕊️ *இன்றைய சிந்தனை / Daily Reflection:*
+${reflectionUrl}
+
+✨ *இன்றைய புனிதர் / Saint of the Day:*
+${saintUrl}
+
+— *புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்*
+— *St. John de Britto Church, Kalayarkoil*
+_SJDB Connect_`;
+  }
+
+  // Tamil (default)
+  return `🌐 *மேலும் வாசிக்க (Read More)*
+
+📖 *இன்றைய இறைவார்த்தை:*
+${verseUrl}
+
+📜 *இன்றைய திருப்பலி வாசகங்கள்:*
+${readingsUrl}
+
+🕊️ *இன்றைய சிந்தனை:*
+${reflectionUrl}
+
+✨ *இன்றைய புனிதர்:*
+${saintUrl}
+
+— *புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்*
+_SJDB Connect_`;
 }
 
 /**

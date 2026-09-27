@@ -11,6 +11,7 @@ import Layout from './components/common/common_layout';
 import ScrollToTop from './components/common/common_scroll_to_top';
 import WhatsAppWidget from './components/common/common_whatsapp_widget';
 import PWAInstallModal from './components/common/common_pwa_install_modal';
+import BirthdayCelebration from './components/common/common_birthday_celebration';
 
 // Lazy-loaded pages
 const Home = lazy(() => import('./pages/public/public_home'));
@@ -111,6 +112,7 @@ function AppRoutes() {
       <ScrollToTop />
       <WhatsAppWidget />
       <PWAInstallModal />
+      <BirthdayCelebration />
       <MaintenanceGuard>
         <Suspense fallback={<PageLoader />}>
           <Routes>

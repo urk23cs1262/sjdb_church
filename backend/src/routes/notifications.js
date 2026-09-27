@@ -13,13 +13,19 @@ const {
   markAllAdminRead,
   broadcast,
   getVapidKey,
-  subscribePush
+  subscribePush,
+  getActiveCelebrations,
+  acknowledgeCelebrationModal
 } = require('../controllers/notificationController');
 const { protect, adminOnly } = require('../middleware/auth');
 
 // ── Web Push endpoints ───────────────────────────────────────────────────────
 router.get('/vapid-key', getVapidKey);
 router.post('/subscribe-push', protect, subscribePush);
+
+// ── Celebration Popup endpoints ──────────────────────────────────────────────
+router.get('/active-celebrations', protect, getActiveCelebrations);
+router.post('/acknowledge-celebration', protect, acknowledgeCelebrationModal);
 
 // ── User routes ──────────────────────────────────────────────────────────────
 router.get('/', protect, getMyNotifications);

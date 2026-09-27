@@ -3,7 +3,6 @@ import { Outlet } from 'react-router-dom';
 import Navbar from './common_navbar';
 import Footer from './common_footer';
 import VideoAdWidget from './common_video_ad_widget';
-import BirthdayCelebration from './common_birthday_celebration';
 import VoiceOrb from './common_voice_orb';
 import useVoiceAssistant from '../../hooks/useVoiceAssistant';
 
@@ -17,7 +16,6 @@ export default function Layout() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <BirthdayCelebration />
       <main className="flex-1">
         <Outlet />
       </main>

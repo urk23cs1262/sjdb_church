@@ -38,55 +38,11 @@ async function runDailyBroadcast() {
   return sendDailyChurchNotifications();
 }
 
-// ─── Birthday Wishes via WhatsApp ────────────────────────────────────────────
-
-async function runWhatsAppBirthdayWishes() {
-  try {
-    const today = new Date();
-    const month = today.getMonth() + 1;
-    const day = today.getDate();
-
-    const { isPhoneBlocked } = require('./userModerationService');
-
-    const birthdayUsers = await User.find({
-      whatsappOptIn: { $ne: false },
-      isActive: { $ne: false },
-      phone: { $exists: true, $ne: '' },
-      $expr: {
-        $and: [
-          { $eq: [{ $month: '$dob' }, month] },
-          { $eq: [{ $dayOfMonth: '$dob' }, day] }
-        ]
-      }
-    });
-
-    for (const user of birthdayUsers) {
-      const phone = user.phone?.replace(/\D/g, '');
-      if (!phone) continue;
-
-      // Strictly exclude restricted users
-      const blocked = await isPhoneBlocked(phone);
-      if (blocked) {
-        console.log(`[Birthday Service] Skipping restricted user ${user.name} (${phone})`);
-        continue;
-      }
-
-      try {
-        await sendWA(phone, formatBirthdayMessage(user));
-        console.log(`🎂 Birthday WhatsApp sent to ${user.name}`);
-      } catch (err) {
-        console.error(`❌ Birthday WhatsApp failed for ${user.name}:`, err.message);
-      }
-    }
-  } catch (err) {
-    console.error('❌ WhatsApp Birthday Service Error:', err.message);
-  }
+// ─── Birthday Wishes Delegation ─────────────────────────────────────────────
+// Delegated to unified, multi-channel Birthday Service (scheduled at 12:00 AM IST in birthdayService.js)
+async function runWhatsAppBirthdayWishes(options = {}) {
+  const { sendBirthdayWishes } = require('./birthdayService');
+  return sendBirthdayWishes(options);
 }
-
-// ─── Midnight Birthday Wishes Cron Job ────────────────────────────────────────
-cron.schedule('0 0 * * *', () => {
-  console.log('🎂 [CRON Midnight IST] Running WhatsApp birthday wishes...');
-  runWhatsAppBirthdayWishes();
-}, { timezone: 'Asia/Kolkata' });
 
 module.exports = { runDailyBroadcast, triggerBroadcastNow, runWhatsAppBirthdayWishes };

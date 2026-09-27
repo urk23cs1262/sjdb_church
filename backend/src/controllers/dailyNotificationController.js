@@ -85,9 +85,38 @@ const getMyHistory = async (req, res) => {
   }
 };
 
+/**
+ * Get Birthday Wishes monitoring status, statistics and logs (Admin)
+ */
+const getBirthdayMonitoringStatus = async (req, res) => {
+  try {
+    const { getBirthdayStatus } = require('../services/birthdayService');
+    const status = await getBirthdayStatus();
+    res.json(status);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+/**
+ * Manually trigger birthday wishes check (Admin)
+ */
+const triggerBirthdayCheckNow = async (req, res) => {
+  try {
+    const { sendBirthdayWishes } = require('../services/birthdayService');
+    const { isManualTest = false, targetUserId, forceDate } = req.body || {};
+    const result = await sendBirthdayWishes({ isManualTest, targetUserId, forceDate });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   getStatus,
   sendTestEmail,
   triggerBroadcast,
-  getMyHistory
+  getMyHistory,
+  getBirthdayMonitoringStatus,
+  triggerBirthdayCheckNow
 };

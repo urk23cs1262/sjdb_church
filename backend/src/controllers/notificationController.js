@@ -311,6 +311,35 @@ const subscribePush = async (req, res) => {
   }
 };
 
+// GET /api/notifications/active-celebrations
+const getActiveCelebrations = async (req, res) => {
+  try {
+    const { getPendingCelebrationsForUser } = require('../services/celebrationService');
+    const celebrations = await getPendingCelebrationsForUser(req.user?._id);
+    res.json({ success: true, celebrations });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/notifications/acknowledge-celebration
+const acknowledgeCelebrationModal = async (req, res) => {
+  try {
+    const { celebrationType, year, celebrationKey, notificationId } = req.body;
+    const { acknowledgeCelebration } = require('../services/celebrationService');
+    const log = await acknowledgeCelebration({
+      userId: req.user?._id,
+      celebrationType,
+      year: parseInt(year, 10),
+      celebrationKey,
+      notificationId
+    });
+    res.json({ success: true, message: 'Celebration acknowledged', log });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   getMyNotifications,
   getUnreadCount,
@@ -325,5 +354,7 @@ module.exports = {
   markAllAdminRead,
   broadcast,
   getVapidKey,
-  subscribePush
+  subscribePush,
+  getActiveCelebrations,
+  acknowledgeCelebrationModal
 };

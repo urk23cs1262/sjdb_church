@@ -222,13 +222,34 @@ setInterval(() => {
 // Health check (used by UptimeRobot / cron-job.org / Docker healthcheck to monitor 24/7 reliability)
 const { warmUpCache, getCacheDiagnostics } = require('./bot/churchDataCache');
 
-app.get(['/health', '/api/health', '/api/bot/health'], (req, res) => {
+app.get(['/health', '/api/health', '/api/bot/health'], async (req, res) => {
   const mongooseState = ['disconnected', 'connected', 'connecting', 'disconnecting'][require('mongoose').connection.readyState] || 'unknown';
   let waConnected = false;
   try {
     const wa = require('./bot/whatsapp');
     waConnected = wa.getConnectionStatus?.()?.isConnected || false;
   } catch (e) { }
+
+  let birthdayTelemetry = null;
+  try {
+    const { getBirthdayStatus } = require('./services/birthdayService');
+    const bStatus = await getBirthdayStatus();
+    birthdayTelemetry = {
+      schedule: 'Active (0 0 * * * Asia/Kolkata)',
+      lastExecution: bStatus.lastExecution,
+      birthdaysDetected: bStatus.birthdaysDetected,
+      notificationsSent: bStatus.notificationsSent,
+      successful: bStatus.successful,
+      failed: bStatus.failed,
+      lastStatus: bStatus.lastStatus,
+      nextScheduled: bStatus.scheduler?.nextScheduledExecution
+    };
+  } catch (bErr) {
+    birthdayTelemetry = {
+      schedule: 'Active (0 0 * * * Asia/Kolkata)',
+      error: bErr.message
+    };
+  }
 
   res.json({
     success: true,
@@ -247,6 +268,7 @@ app.get(['/health', '/api/health', '/api/bot/health'], (req, res) => {
       dailyBibleVerseRotation: 'Active (0 0 * * * Asia/Kolkata)',
       birthdayWishes: 'Active (0 0 * * * Asia/Kolkata)'
     },
+    birthdayMonitoring: birthdayTelemetry,
     cache: getCacheDiagnostics(),
     memory: {
       heapUsedMB: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),

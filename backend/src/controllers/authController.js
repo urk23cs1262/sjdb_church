@@ -264,19 +264,17 @@ const verifyOtp = async (req, res) => {
         channels: ['email']
       }).catch(e => console.warn('Welcome notification error:', e.message));
 
-      // Check if it's their birthday TODAY and send birthday wish if so
+      // Check if it's their birthday TODAY and ensure birthday wish has been processed with duplicate protection
       if (user.dob) {
-        const today = new Date();
-        const dob = new Date(user.dob);
-        if (today.getDate() === dob.getDate() && today.getMonth() === dob.getMonth()) {
-          createNotification({
-            userId: user._id,
-            isBroadcast: false,
-            title: "Birthday Blessings",
-            message: `Dear ${user.name}, St. John de Britto Church wishes you a very Happy Birthday! May God bless you with abundant joy, health, and peace on your special day. `,
-            type: 'general',
-            channels: ['email']
-          }).catch(e => console.warn('Birthday notification error:', e.message));
+        try {
+          const { isUserBirthdayToday, getTodayISTParts, processUserBirthday } = require('../services/birthdayService');
+          const istInfo = getTodayISTParts();
+          if (isUserBirthdayToday(user.dob, istInfo.month, istInfo.day)) {
+            processUserBirthday({ user, istInfo })
+              .catch(e => console.warn('[Auth] Birthday notification error:', e.message));
+          }
+        } catch (bErr) {
+          console.warn('[Auth] Birthday processing error:', bErr.message);
         }
       }
     }
