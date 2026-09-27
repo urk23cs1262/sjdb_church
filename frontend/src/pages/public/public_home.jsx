@@ -69,7 +69,7 @@ function CountdownTimer({ targetDate }) {
 }
 
 export default function Home() {
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { user, isAuthenticated, isAdmin } = useAuth();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const { ref: statsRef, inView: statsInView } = useInView({ triggerOnce: true });
