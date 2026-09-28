@@ -295,7 +295,7 @@ async function sendLoginAlertEmail({ user, req, loginMethod = 'Password', extra 
           Did not recognize this login or device?
         </p>
         <a href="${reportUrl}" style="display:inline-block; background-color:#dc2626; color:#ffffff; font-weight:800; font-size:14px; text-decoration:none; padding:13px 30px; border-radius:10px; box-shadow:0 4px 14px rgba(220,38,38,0.35); text-transform:uppercase; letter-spacing:0.5px;">
-          Wasn't You? Report Unauthorized Access &rarr;
+          Wasn't You? &rarr;
         </a>
         <p style="margin:10px 0 0; color:#b91c1c; font-size:11px;">
           Clicking this will instantly revoke all active sessions and start password recovery.

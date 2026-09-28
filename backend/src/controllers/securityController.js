@@ -57,6 +57,29 @@ const confirmUnauthorized = async (req, res) => {
     user.otpExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 mins
     await user.save();
 
+    // Also register active session in OTPVerification collection so otpService verifies it seamlessly
+    try {
+      const OTPVerification = require('../models/OTPVerification');
+      await OTPVerification.updateMany(
+        { userId: user._id, status: 'pending', purpose: 'password_reset' },
+        { status: 'replaced' }
+      );
+      await OTPVerification.create({
+        userId: user._id,
+        phone: user.phone || '0000000000',
+        email: user.email,
+        otp: resetOtp,
+        otpExpiresAt: new Date(Date.now() + 30 * 60 * 1000), // 30 mins
+        purpose: 'password_reset',
+        status: 'pending',
+        attempts: 0,
+        verified: false,
+        ipAddress: decoded.ip || '127.0.0.1'
+      });
+    } catch (otpErr) {
+      console.warn('Emergency OTPVerification creation warning:', otpErr.message);
+    }
+
     // 4. Create Security Incident Record in Database with full telemetry and server timeline
     const incidentTimeStr = new Date(decoded.createdAt || Date.now()).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     const incident = await SecurityIncident.create({

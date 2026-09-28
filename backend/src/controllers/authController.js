@@ -794,13 +794,41 @@ const resetPassword = async (req, res) => {
       });
     }
 
-    // Now verify and consume the OTP after password validation passes
-    const result = await verifyOTP(userId, otp, 'password_reset', req);
-    if (!result.valid) return res.status(400).json({ success: false, message: result.message });
+    // Verify OTP either from direct user.otp fallback (emergency security recovery) OR active OTPVerification session
+    let isOtpValid = false;
+    let otpErrorMessage = 'Invalid or expired OTP code';
+
+    // 1. Direct emergency recovery check on user document (set by security report unauthorized)
+    if (user.otp && String(user.otp).trim() === String(otp).trim()) {
+      if (user.otpExpires && new Date() <= user.otpExpires) {
+        isOtpValid = true;
+        user.otp = undefined;
+        user.otpExpires = undefined;
+        await user.save();
+      } else {
+        return res.status(400).json({ success: false, message: 'This OTP has expired. Please request a fresh OTP.' });
+      }
+    }
+
+    // 2. Standard OTPVerification table check
+    if (!isOtpValid) {
+      const result = await verifyOTP(userId, otp, 'password_reset', req);
+      if (result.valid) {
+        isOtpValid = true;
+      } else {
+        otpErrorMessage = result.message || 'Invalid or expired OTP code';
+      }
+    }
+
+    if (!isOtpValid) {
+      return res.status(400).json({ success: false, message: otpErrorMessage });
+    }
 
     const passwordHash = await bcrypt.hash(newPassword, 12);
     await User.findByIdAndUpdate(userId, {
       passwordHash,
+      otp: undefined,
+      otpExpires: undefined,
       $inc: { tokenVersion: 1 }
     });
 

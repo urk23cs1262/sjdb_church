@@ -286,6 +286,30 @@ const verifyOTPSession = async (argsOrUserId, maybeOtp, maybePurpose, maybeReq) 
   const session = await OTPVerification.findOne(query).sort({ createdAt: -1 });
 
   if (!session) {
+    // Check if user has an active emergency recovery OTP directly on their User document
+    if (userId) {
+      try {
+        const directUser = await User.findById(userId);
+        if (directUser && directUser.otp && String(directUser.otp).trim() === String(inputOtp).trim()) {
+          const now = new Date();
+          if (!directUser.otpExpires || now <= directUser.otpExpires) {
+            return {
+              valid: true,
+              message: 'OTP verified successfully (Emergency Security Recovery)',
+              session: { userId: directUser._id, phone: directUser.phone, email: directUser.email }
+            };
+          } else {
+            return {
+              valid: false,
+              message: 'This OTP has expired. A fresh OTP is required.'
+            };
+          }
+        }
+      } catch (directErr) {
+        console.warn('Direct user OTP verification fallback error:', directErr.message);
+      }
+    }
+
     return {
       valid: false,
       message: 'No active verification session found. Please request a fresh OTP or log in again.'
