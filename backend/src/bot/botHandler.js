@@ -61,6 +61,10 @@ const {
   parsePreferences,
   parseContentLanguage
 } = require('./botOnboardingFlow');
+const {
+  getUserDailyContentLanguage,
+  normalizeContentLanguage
+} = require('../utils/userLanguageHelper');
 
 function getWA() {
   return require('./whatsapp');
@@ -582,6 +586,7 @@ Glory be to the Father, and to the Son, and to the Holy Spirit. As it was in the
 async function sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery = false) {
   try {
     const dailyContent = await getCachedDailyContent();
+    const contentLang = isTamilQuery ? 'ta' : getUserDailyContentLanguage(session);
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'VERSE';
     session.pendingSubmenu = '';
@@ -592,7 +597,7 @@ async function sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery = fals
     try {
       const verseImg = await getDailyVerseImage({ dailyContent, dateKey: dailyContent?.dateKey });
       if (verseImg?.buffer && typeof wa.sendWhatsAppMedia === 'function') {
-        const verseCaption = generateDailyVerseCaption({ dailyContent });
+        const verseCaption = generateDailyVerseCaption({ dailyContent, language: contentLang });
         sentImage = await wa.sendWhatsAppMedia(replyTarget, {
           buffer: verseImg.buffer,
           mimetype: 'image/png',
@@ -604,8 +609,7 @@ async function sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery = fals
     }
 
     if (!sentImage) {
-      const userLang = session.botLanguage || session.language || (isTamilQuery ? 'ta' : 'en');
-      const fallbackMsg = generateDailyVerseMessage({ dailyContent, language: userLang });
+      const fallbackMsg = generateDailyVerseMessage({ dailyContent, language: contentLang });
       await wa.sendWhatsAppMessage(replyTarget, fallbackMsg);
     }
   } catch (err) {
@@ -619,7 +623,7 @@ async function sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery = fals
 async function sendTodayMassReadings(replyTarget, session, wa, isTamilQuery = false) {
   try {
     const dailyContent = await getCachedDailyContent();
-    const userLang = session.botLanguage || session.language || (isTamilQuery ? 'ta' : 'en');
+    const contentLang = isTamilQuery ? 'ta' : getUserDailyContentLanguage(session);
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'READINGS';
     session.pendingSubmenu = '';
@@ -628,7 +632,7 @@ async function sendTodayMassReadings(replyTarget, session, wa, isTamilQuery = fa
 
     const readingsMsg = generateDailyMassReadingsMessage({
       dailyContent,
-      language: userLang,
+      language: contentLang,
       readingPreference: session.readingPreference || 'full'
     });
     await wa.sendWhatsAppMessage(replyTarget, readingsMsg);
@@ -643,7 +647,7 @@ async function sendTodayMassReadings(replyTarget, session, wa, isTamilQuery = fa
 async function sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery = false) {
   try {
     const dailyContent = await getCachedDailyContent();
-    const userLang = session.botLanguage || session.language || (isTamilQuery ? 'ta' : 'en');
+    const contentLang = isTamilQuery ? 'ta' : getUserDailyContentLanguage(session);
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'REFLECTION';
     session.pendingSubmenu = '';
@@ -652,7 +656,7 @@ async function sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery =
 
     const reflMsg = generateDailyReflectionMessage({
       dailyContent,
-      language: userLang
+      language: contentLang
     });
     await wa.sendWhatsAppMessage(replyTarget, reflMsg);
   } catch (err) {
@@ -666,12 +670,20 @@ async function sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery =
 async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false) {
   try {
     const dailyContent = await getCachedDailyContent();
-    const userLang = session.botLanguage || session.language || (isTamilQuery ? 'ta' : 'en');
+    const contentLang = isTamilQuery ? 'ta' : getUserDailyContentLanguage(session);
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'SAINT';
     session.pendingSubmenu = '';
     session.lastSentAt = new Date();
     await session.save();
+
+    const dateKey = dailyContent.dateKey || new Date().toISOString().slice(0, 10);
+    const hasTa = Boolean(dailyContent.saint?.descriptionTa && /[\u0B80-\u0BFF]/.test(dailyContent.saint.descriptionTa));
+    console.log(`[SaintOfDay] Date: ${dateKey}`);
+    console.log(`[SaintOfDay] Source: ${dailyContent.saint?.imageSource || 'Vatican News'}`);
+    console.log(`[SaintOfDay] User language: ${contentLang}`);
+    console.log(`[SaintOfDay] Tamil translation: ${hasTa ? 'available' : 'unavailable'}`);
+    console.log(`[SaintOfDay] Sending ${contentLang === 'ta' ? 'Tamil' : contentLang === 'both' ? 'Bilingual' : 'English'} Saint content`);
 
     // 1. Saint of the Day Image (separate message)
     const saintImagePayload = getDailySaintImagePayload({ dailyContent });
@@ -687,7 +699,7 @@ async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false) {
     // 2. Saint of the Day Content (separate message)
     const saintContentMsg = generateSaintContentMessage({
       dailyContent,
-      language: userLang
+      language: contentLang
     });
     await wa.sendWhatsAppMessage(replyTarget, saintContentMsg);
   } catch (err) {
@@ -701,14 +713,14 @@ async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false) {
 async function sendTodayPrayer(replyTarget, session, wa, isTamilQuery = false) {
   try {
     const dailyContent = await getCachedDailyContent();
-    const userLang = session.botLanguage || session.language || (isTamilQuery ? 'ta' : 'en');
+    const contentLang = isTamilQuery ? 'ta' : getUserDailyContentLanguage(session);
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'PRAYERS';
     session.pendingSubmenu = '';
     session.lastSentAt = new Date();
     await session.save();
 
-    const isTa = userLang === 'ta' || isTamilQuery;
+    const isTa = contentLang === 'ta' || isTamilQuery;
     const prayerMsg = formatDailyPrayerMessage(dailyContent, isTa);
     await wa.sendWhatsAppMessage(replyTarget, prayerMsg);
   } catch (err) {
@@ -740,7 +752,7 @@ async function sendChurchWebsite(replyTarget, session, wa, isTamilQuery = false)
 async function sendTodayDevotionsToUser(replyTarget, session, wa) {
   try {
     const dailyContent = await getCachedDailyContent();
-    const userLang = session.language || 'en';
+    const userLang = getUserDailyContentLanguage(session);
 
     const msg1 = generateDailyCatholicMessage({
       dailyContent,
@@ -1771,7 +1783,7 @@ _காளையார்கோவில், சிவகங்கை மறை�
 
 🌟 *ஞாயிறு திருப்பலிகள்:*
 • காலை 6:30 மணி — அதிகாலைத் திருப்பலி
-• காலை 8:30 மணி — பங்குப் பெருவிழாத் திருப்பலி
+• காலை 8:30 மணி — பங்குப் திருப்பலி
 
 🕯️ *புதன்கிழமை நவநாள்:*
 • மாலை 5:30 மணி — புனித அருளானந்தர் நவநாள் & திருப்பலி
@@ -1780,7 +1792,7 @@ _காளையார்கோவில், சிவகங்கை மறை�
 • மாலை 5:30 மணி — நித்திய சகாய மாதா நவநாள் & திருப்பலி
 
 🕊️ *ஒப்புரவு அருட்சாதனம் (பாவசங்கீர்த்தனம்):*
-• புதன் – சனி: மாலை 5:00 – 5:30 மணி திருப்பலிக்கு பின்
+• புதன் – சனி: திருப்பலிக்கு பின்
 
 🌐 *முழு விபரம் & திருப்பலி கருத்துக்கள்:* ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}`
         : `⛪ *St. John de Britto Church — Holy Mass Timings*
@@ -1791,7 +1803,7 @@ _Kalayarkoil, Sivagangai Diocese_
 
 🌟 *Sunday Holy Masses:*
 • 6:30 AM — Early Morning Mass
-• 8:30 AM — Parish High Mass
+• 8:30 AM — Parish Mass
 
 🕯️ *Wednesday Novena:*
 • 5:30 PM — Novena to St. John de Britto & Holy Mass
@@ -1800,7 +1812,7 @@ _Kalayarkoil, Sivagangai Diocese_
 • 5:30 PM — Novena to Our Lady of Perpetual Succour (Sahaya Madha) & Holy Mass
 
 🕊️ *Confessions (Reconciliation):*
-• Wed – Sat: 5:00 PM – 5:30 PM (before Evening Mass) & after Mass
+• Wed – Sat: after evening Mass
 
 🌐 *Full Schedule & Intentions:* ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}`;
 
@@ -2382,7 +2394,7 @@ Please bring parish family ID or relevant record dates when collecting certifica
       }
 
       const userAuthContext = { user: linkedUser, session };
-      const userLang = isTamilQuery ? 'ta' : (session.botLanguage || session.language || 'en');
+      const userLang = isTamilQuery ? 'ta' : getUserDailyContentLanguage(session);
       const ragResult = await answerChurchQuestion(rawText, userLang, userAuthContext);
 
       if (ragResult && ragResult.isChurchRelated && ragResult.reply) {

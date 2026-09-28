@@ -53,6 +53,7 @@ export default function DailySaintTicker() {
   });
 
   const [showModal, setShowModal] = useState(false);
+  const [selectedModalIdx, setSelectedModalIdx] = useState(0);
   const [imgError, setImgError] = useState(false);
 
   // Fetch Saint of the Day from backend API & setup midnight auto-rotation
@@ -218,6 +219,7 @@ export default function DailySaintTicker() {
 
   // Open modal and ensure full saint details are refreshed if needed
   const handleOpenModal = () => {
+    setSelectedModalIdx(0);
     setShowModal(true);
     if (!saintOfDay.description || saintOfDay.description.length < 180) {
       fetchSaintOfTheDay().then(data => {
@@ -340,120 +342,171 @@ export default function DailySaintTicker() {
                       <FiX className="text-xl" />
                     </button>
 
-                    <div className="flex flex-col md:flex-row flex-1 h-full md:h-full overflow-y-auto md:overflow-hidden">
-                      {/* SAINT IMAGE BANNER (LEFT SIDE: ONLY SAINT NAME UNDER SAINT OF THE DAY) */}
-                      <div className="w-full md:w-5/12 relative min-h-[280px] h-[280px] sm:h-[320px] md:min-h-full md:h-full flex-shrink-0 bg-slate-950 overflow-hidden flex items-center justify-center">
-                        {activeImage ? (
-                          <img
-                            src={activeImage}
-                            alt={displayName}
-                            referrerPolicy="no-referrer"
-                            onError={handleImageError}
-                            className="w-full h-full object-contain object-center transition-transform duration-700 hover:scale-105"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center bg-gradient-to-br from-church-royal-blue to-indigo-950 text-church-gold text-6xl w-full h-full">
-                            ✝
-                          </div>
-                        )}
+                    {(() => {
+                      const saintsList = saintOfDay?.saints || saintOfDay?.allSaints || [];
+                      const activeModalSaint = (saintsList.length > selectedModalIdx && saintsList[selectedModalIdx])
+                        ? saintsList[selectedModalIdx]
+                        : saintOfDay;
 
-                        {/* Dark Gradient Overlay for Title Legibility - only on bottom where text sits */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 via-40% to-transparent pointer-events-none" />
+                      const mDisplayName = cleanDisplayName(
+                        isTamil && activeModalSaint.tamilName
+                          ? activeModalSaint.tamilName
+                          : (activeModalSaint.englishName || activeModalSaint.saintName || activeModalSaint.name || displayName)
+                      );
+                      const mDescription = isTamil && activeModalSaint.descriptionTa
+                        ? activeModalSaint.descriptionTa
+                        : (activeModalSaint.description || displayDescription || "");
+                      const mImage = activeModalSaint.image || activeImage;
+                      const mSourceUrl = activeModalSaint.sourceUrl || saintOfDay.sourceUrl;
 
-                        {/* Name & Title on Image: Only saint name under Saint of the Day */}
-                        <div className="absolute bottom-3 left-4 right-4 sm:bottom-5 sm:left-6 sm:right-6 text-white select-none">
-                          <span className="inline-block bg-church-gold/95 text-amber-950 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md mb-1.5 shadow-xs">
-                            {isTamil ? 'இன்றைய புனிதர்' : 'Saint of the Day'}
-                          </span>
+                      return (
+                        <div className="flex flex-col md:flex-row flex-1 h-full md:h-full overflow-y-auto md:overflow-hidden">
+                          {/* SAINT IMAGE BANNER (LEFT SIDE) */}
+                          <div className="w-full md:w-5/12 relative min-h-[280px] h-[280px] sm:h-[320px] md:min-h-full md:h-full flex-shrink-0 bg-slate-950 overflow-hidden flex items-center justify-center">
+                            {mImage ? (
+                              <img
+                                src={mImage}
+                                alt={mDisplayName}
+                                referrerPolicy="no-referrer"
+                                onError={handleImageError}
+                                className="w-full h-full object-contain object-center transition-transform duration-700 hover:scale-105"
+                              />
+                            ) : (
+                              <div className="flex items-center justify-center bg-gradient-to-br from-church-royal-blue to-indigo-950 text-church-gold text-6xl w-full h-full">
+                                ✝
+                              </div>
+                            )}
 
-                          <h2 className="text-lg sm:text-xl md:text-2xl font-bold font-display leading-tight drop-shadow-md text-white">
-                            {displayName}
-                          </h2>
-                        </div>
-                      </div>
+                            {/* Dark Gradient Overlay for Title Legibility */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 via-40% to-transparent pointer-events-none" />
 
-                      {/* CONTENT DETAILS (RIGHT SIDE: FEAST DAY, DYNAMIC DATE, DESCRIPTION, ACTIONS) */}
-                      <div className="flex-1 p-5 sm:p-7 md:p-8 overflow-y-visible md:overflow-y-auto flex flex-col justify-between notranslate custom-scrollbar" translate="no">
-                        <div className="space-y-4">
-                          {/* Feast Day Section */}
-                          <div className="border-b border-gray-100 pb-3">
-                            <p className="text-[11px] uppercase tracking-[0.25em] text-gray-500 font-bold mb-1">
-                              {isTamil ? 'திருவிழா நாள்' : 'FEAST DAY'}
-                            </p>
-                            <h2 className="text-xl sm:text-2xl font-bold text-church-gold font-display">
-                              {formattedFeastDate}
-                            </h2>
-                          </div>
+                            {/* Name & Title on Image */}
+                            <div className="absolute bottom-3 left-4 right-4 sm:bottom-5 sm:left-6 sm:right-6 text-white select-none">
+                              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                                <span className="inline-block bg-church-gold/95 text-amber-950 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md shadow-xs">
+                                  {isTamil ? 'இன்றைய புனிதர்' : 'Saint of the Day'}
+                                </span>
+                                {mImage && mImage.includes('vaticannews.va') && (
+                                  <span className="inline-block bg-white/20 backdrop-blur-xs text-white text-[9px] font-bold px-2 py-0.5 rounded-md">
+                                    Vatican News
+                                  </span>
+                                )}
+                              </div>
 
-                          {/* Biography text - Single unified scroll, no inner nested scrollbar */}
-                          <div className="text-gray-700 leading-relaxed text-sm sm:text-base font-normal">
-                            <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400 mb-1.5">
-                              {isTamil ? 'புனிதரைப் பற்றி' : 'ABOUT THE SAINT'}
-                            </p>
-                            <div className="space-y-3 text-gray-800 leading-relaxed text-justify">
-                              {(() => {
-                                const paras = (displayDescription || '').split(/\n+/).map(p => p.trim()).filter(Boolean);
-                                if (paras.length === 0) return <p>{displayDescription || 'Daily Saint details.'}</p>;
-                                return paras.map((p, idx) => (
-                                  <p key={idx} className="leading-relaxed">
-                                    {p}
-                                  </p>
-                                ));
-                              })()}
+                              <h2 className="text-lg sm:text-xl md:text-2xl font-bold font-display leading-tight drop-shadow-md text-white">
+                                {mDisplayName}
+                              </h2>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Link to Original Website Page */}
-                        <div className="pt-4 mt-4 border-t border-gray-100 flex-shrink-0">
-                          {saintOfDay.sourceUrl && (
-                            <a
-                              href={
-                                saintOfDay.sourceUrl && !saintOfDay.sourceUrl.includes('catholicreadings.org')
-                                  ? saintOfDay.sourceUrl
-                                  : 'https://www.vaticannews.va/en/saints.html'
-                              }
-                              target="_blank"
-                              rel="noreferrer"
-                              className="
-                                flex
-                                items-center
-                                justify-center
-                                gap-2.5
-                                py-3
-                                px-6
-                                rounded-xl
-                                bg-gradient-to-r
-                                from-church-royal-blue
-                                to-indigo-900
-                                hover:from-blue-900
-                                hover:to-indigo-950
-                                text-white
-                                font-bold
-                                text-sm
-                                shadow-md
-                                hover:shadow-lg
-                                transition-all
-                                cursor-pointer
-                                active:scale-98
-                              "
-                            >
-                              <FiExternalLink className="text-base" />
-                              <span>
-                                {(() => {
-                                  const rawSite = saintOfDay.source || '';
-                                  const siteName = (!rawSite || rawSite.includes('Catholic Readings'))
-                                    ? 'Vatican News'
-                                    : rawSite.split('/')[0].trim();
-                                  return isTamil ? `${siteName}-ல் வாசிக்க` : `Read on ${siteName}`;
-                                })()}
-                              </span>
-                            </a>
-                          )}
-                        </div>
+                          {/* CONTENT DETAILS (RIGHT SIDE) */}
+                          <div className="flex-1 p-5 sm:p-7 md:p-8 overflow-y-visible md:overflow-y-auto flex flex-col justify-between notranslate custom-scrollbar" translate="no">
+                            <div className="space-y-4">
+                              {/* Saints Selector Pills if multiple saints exist for this date */}
+                              {saintsList.length > 1 && (
+                                <div className="flex items-center gap-1.5 flex-wrap pb-2 border-b border-gray-100">
+                                  <span className="text-[10px] uppercase font-bold text-gray-400">
+                                    {isTamil ? 'புனிதர்கள்:' : 'Saints:'}
+                                  </span>
+                                  {saintsList.map((s, idx) => (
+                                    <button
+                                      key={idx}
+                                      type="button"
+                                      onClick={() => setSelectedModalIdx(idx)}
+                                      className={`px-2.5 py-0.5 rounded-full text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+                                        selectedModalIdx === idx
+                                          ? 'bg-church-gold text-amber-950 shadow-xs scale-105'
+                                          : 'bg-amber-50 hover:bg-amber-100 text-gray-700'
+                                      }`}
+                                    >
+                                      <span>{isTamil && s.tamilName ? s.tamilName : cleanDisplayName(s.englishName || s.name)}</span>
+                                      {s.image && <span className="text-[9px]">🖼️</span>}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
 
-                      </div>
-                    </div>
+                              {/* Feast Day Section */}
+                              <div className="border-b border-gray-100 pb-3">
+                                <p className="text-[11px] uppercase tracking-[0.25em] text-gray-500 font-bold mb-1">
+                                  {isTamil ? 'திருவிழா நாள்' : 'FEAST DAY'}
+                                </p>
+                                <h2 className="text-xl sm:text-2xl font-bold text-church-gold font-display">
+                                  {formattedFeastDate}
+                                </h2>
+                              </div>
+
+                              {/* Biography text */}
+                              <div className="text-gray-700 leading-relaxed text-sm sm:text-base font-normal">
+                                <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400 mb-1.5">
+                                  {isTamil ? 'புனிதரைப் பற்றி' : 'ABOUT THE SAINT'}
+                                </p>
+                                <div className="space-y-3 text-gray-800 leading-relaxed text-justify">
+                                  {(() => {
+                                    const paras = (mDescription || '').split(/\n+/).map(p => p.trim()).filter(Boolean);
+                                    if (paras.length === 0) return <p>{mDescription || 'Daily Saint details.'}</p>;
+                                    return paras.map((p, idx) => (
+                                      <p key={idx} className="leading-relaxed">
+                                        {p}
+                                      </p>
+                                    ));
+                                  })()}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Link to Original Website Page */}
+                            <div className="pt-4 mt-4 border-t border-gray-100 flex-shrink-0">
+                              {mSourceUrl && (
+                                <a
+                                  href={
+                                    mSourceUrl && !mSourceUrl.includes('catholicreadings.org')
+                                      ? mSourceUrl
+                                      : 'https://www.vaticannews.va/en/saints.html'
+                                  }
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="
+                                    flex
+                                    items-center
+                                    justify-center
+                                    gap-2.5
+                                    py-3
+                                    px-6
+                                    rounded-xl
+                                    bg-gradient-to-r
+                                    from-church-royal-blue
+                                    to-indigo-900
+                                    hover:from-blue-900
+                                    hover:to-indigo-950
+                                    text-white
+                                    font-bold
+                                    text-sm
+                                    shadow-md
+                                    hover:shadow-lg
+                                    transition-all
+                                    cursor-pointer
+                                    active:scale-98
+                                  "
+                                >
+                                  <FiExternalLink className="text-base" />
+                                  <span>
+                                    {(() => {
+                                      const rawSite = saintOfDay.source || '';
+                                      const siteName = (!rawSite || rawSite.includes('Catholic Readings'))
+                                        ? 'Vatican News'
+                                        : rawSite.split('/')[0].trim();
+                                      return isTamil ? `${siteName}-ல் வாசிக்க` : `Read on ${siteName}`;
+                                    })()}
+                                  </span>
+                                </a>
+                              )}
+                            </div>
+
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </motion.div>
                 </div>
               </div>

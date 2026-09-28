@@ -25,6 +25,7 @@ const {
   getCachedEvents,
   getCachedAnnouncements
 } = require('./churchDataCache');
+const { normalizeContentLanguage } = require('../utils/userLanguageHelper');
 
 /**
  * Text Normalization:
@@ -312,29 +313,72 @@ function extractQueryIntents(rawText) {
  */
 
 // Saint of the Day Section
-function buildSaintSection(dailyContent, isTamil) {
-  const saintNameEn = dailyContent?.saint?.nameEnglish || dailyContent?.saintOfTheDay?.english?.name || dailyContent?.saintName || 'Saint of the Day';
-  const saintNameTa = dailyContent?.saint?.nameTamil || dailyContent?.saintOfTheDay?.tamil?.name || dailyContent?.saintNameTa || saintNameEn;
-  const descEn = dailyContent?.saint?.description || dailyContent?.saint?.descriptionEnglish || dailyContent?.saintOfTheDay?.english?.description || dailyContent?.saintDescription || '';
-  const descTa = dailyContent?.saint?.descriptionTamil || dailyContent?.saint?.descriptionTa || dailyContent?.saintOfTheDay?.tamil?.description || descEn;
-  const feastDay = dailyContent?.saint?.feastDay || dailyContent?.saintOfTheDay?.english?.feastDay || dailyContent?.formattedDate || '';
+function buildSaintSection(dailyContent, isTamil, contentLang = null) {
+  const lang = contentLang ? normalizeContentLanguage(contentLang) : (isTamil ? 'ta' : 'en');
+  const saintNameEn = dailyContent?.saint?.nameEn || dailyContent?.saint?.nameEnglish || dailyContent?.saintOfTheDay?.english?.name || dailyContent?.saintName || 'Saint of the Day';
+  const saintNameTa = dailyContent?.saint?.nameTa || dailyContent?.saint?.nameTamil || dailyContent?.saintOfTheDay?.tamil?.name || dailyContent?.saintNameTa || saintNameEn;
+  const descEn = (dailyContent?.saint?.descriptionEn || dailyContent?.saint?.description || dailyContent?.saint?.descriptionEnglish || dailyContent?.saintOfTheDay?.english?.description || dailyContent?.saintDescription || '').trim();
+  const descTaRaw = (dailyContent?.saint?.descriptionTa || dailyContent?.saint?.descriptionTamil || dailyContent?.saintOfTheDay?.tamil?.description || dailyContent?.saintDescriptionTa || '').trim();
+  const hasTamil = Boolean(descTaRaw && /[\u0B80-\u0BFF]/.test(descTaRaw));
+  const descTa = hasTamil ? descTaRaw : '';
+  const feastDayEn = dailyContent?.saint?.feastDayEn || dailyContent?.saint?.feastDay || dailyContent?.saintOfTheDay?.english?.feastDay || dailyContent?.formattedDate || '';
+  const feastDayTa = dailyContent?.saint?.feastDayTa || dailyContent?.formattedDateTa || feastDayEn;
   const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
 
-  const name = isTamil ? saintNameTa : saintNameEn;
-  const desc = isTamil ? (descTa || descEn) : (descEn || descTa);
+  const titleEn = dailyContent?.saint?.titleEn || dailyContent?.saint?.feastTitle;
+  const titleTa = dailyContent?.saint?.titleTa || dailyContent?.saint?.feastTitleTa;
 
-  let body = `👑 *${name}*\n\n`;
-  if (feastDay) {
-    body += `📅 *${isTamil ? 'திருவிழா / நாள்' : 'Feast Day'}:* ${feastDay}\n\n`;
+  if (lang === 'en') {
+    let body = `👑 *${saintNameEn}*\n\n`;
+    if (feastDayEn) body += `📅 *Feast Day:* ${feastDayEn}\n\n`;
+    if (titleEn && titleEn !== saintNameEn) body += `🎉 *Memorial / Feast:* ${titleEn}\n\n`;
+    if (descEn) body += `${descEn}\n`;
+    return {
+      header: `✝️ *Saint of the Day*`,
+      body,
+      linkTitle: 'Saint of the Day',
+      url: getSiteUrl(SITE_ROUTES.SAINT_OF_THE_DAY),
+      isSaintOfDayFlow: true,
+      imageUrl: saintImageUrl
+    };
   }
-  if (desc) {
-    body += `${desc}\n`;
+
+  if (lang === 'both') {
+    let body = `🇮🇳 *தமிழ் (Tamil)*\n👑 *${saintNameTa || saintNameEn}*\n\n`;
+    if (feastDayTa) body += `📅 *திருவிழா நாள்:* ${feastDayTa}\n\n`;
+    if (titleTa && titleTa !== saintNameTa) body += `🎉 *நினைவுநாள்:* ${titleTa}\n\n`;
+    if (descTa) body += `${descTa}\n\n`;
+    else body += `இன்றைய புனிதரின் வாழ்க்கை வரலாறு மற்றும் அருளுரைகள் எமது ஆலய இணையதளத்தில் வாசிக்கலாம்.\n\n`;
+
+    body += `🇬🇧 *English*\n👑 *${saintNameEn}*\n\n`;
+    if (feastDayEn) body += `📅 *Feast Day:* ${feastDayEn}\n\n`;
+    if (titleEn && titleEn !== saintNameEn) body += `🎉 *Feast / Memorial:* ${titleEn}\n\n`;
+    if (descEn) body += `${descEn}\n`;
+
+    return {
+      header: `✝️ *இன்றைய புனிதர் / Saint of the Day*`,
+      body,
+      linkTitle: 'இன்றைய புனிதர்',
+      url: getSiteUrl(SITE_ROUTES.SAINT_OF_THE_DAY),
+      isSaintOfDayFlow: true,
+      imageUrl: saintImageUrl
+    };
+  }
+
+  // lang === 'ta'
+  let body = `👑 *${saintNameTa || saintNameEn}*\n\n`;
+  if (feastDayTa) body += `📅 *திருவிழா நாள்:* ${feastDayTa}\n\n`;
+  if (titleTa && titleTa !== (saintNameTa || saintNameEn)) body += `🎉 *நினைவுநாள்:* ${titleTa}\n\n`;
+  if (descTa) {
+    body += `${descTa}\n`;
+  } else {
+    body += `இன்றைய புனிதரின் வாழ்க்கை வரலாறு மற்றும் அருளுரைகள் எமது ஆலய இணையதளத்தில் வாசிக்கலாம்.\n`;
   }
 
   return {
-    header: isTamil ? `✝️ *இன்றைய புனிதர் (Saint of the Day)*` : `✝️ *Saint of the Day*`,
+    header: `✝️ *இன்றைய புனிதர்*`,
     body,
-    linkTitle: isTamil ? 'இன்றைய புனிதர்' : 'Saint of the Day',
+    linkTitle: 'இன்றைய புனிதர்',
     url: getSiteUrl(SITE_ROUTES.SAINT_OF_THE_DAY),
     isSaintOfDayFlow: true,
     imageUrl: saintImageUrl
@@ -444,14 +488,37 @@ function buildReflectionSection(dailyContent, isTamil) {
 // Mass Timings Section
 function buildMassTimingsSection(isTamil) {
   const body = isTamil
-    ? `📅 *தினசரி திருப்பலி (திங்கள் – சனி):* காலை 6:00 மணி
-🌟 *ஞாயிறு திருப்பலிகள்:* காலை 6:00 மணி & காலை 8:00 மணி
-🕯️ *செவ்வாய் நவநாள் திருப்பலி:* மாலை 6:00 மணி (புனித அந்தோனியார்)
-🕊️ *மாதத்தின் முதல் வெள்ளி:* மாலை 6:00 மணி (நற்கருணை ஆராதனை & சிறப்பு திருப்பலி)\n`
-    : `📅 *Daily Mass (Mon – Sat):* 6:00 AM
-🌟 *Sunday Holy Masses:* 6:00 AM & 8:00 AM
-🕯️ *Tuesday Novena to St. Antony:* 6:00 PM
-🕊️ *First Friday Eucharistic Adoration & Mass:* 6:00 PM\n`;
+    ? `📅 *வார நாட்கள் (புதன் – சனி):*
+• மாலை 5:30 மணி — மாலைத் திருப்பலி
+
+🌟 *ஞாயிறு திருப்பலிகள்:*
+• காலை 6:30 மணி — அதிகாலைத் திருப்பலி
+• காலை 8:30 மணி — பங்குப் திருப்பலி
+
+🕯️ *புதன்கிழமை நவநாள்:*
+• மாலை 5:30 மணி — புனித அருளானந்தர் நவநாள் & திருப்பலி
+
+🕯️ *சனிக்கிழமை நவநாள்:*
+• மாலை 5:30 மணி — நித்திய சகாய மாதா நவநாள் & திருப்பலி
+
+🕊️ *ஒப்புரவு அருட்சாதனம் (பாவசங்கீர்த்தனம்):*
+• புதன் – சனி: மாலை 5:00 – 5:30 மணி திருப்பலிக்கு பின்\n`
+
+    : `📅 *Weekdays (Wednesday – Saturday):*
+• 5:30 PM — Evening Holy Mass
+
+🌟 *Sunday Holy Masses:*
+• 6:30 AM — Early Morning Mass
+• 8:30 AM — Parish Mass
+
+🕯️ *Wednesday Novena:*
+• 5:30 PM — Novena to St. John de Britto & Holy Mass
+
+🕯️ *Saturday Novena:*
+• 5:30 PM — Novena to Our Lady of Perpetual Succour (Sahaya Madha) & Holy Mass
+
+🕊️ *Confessions (Reconciliation):*
+• Wed – Sat: after evening Mass\n`;
 
   return {
     header: isTamil ? `⛪ *திருப்பலி நேரங்கள் (Holy Mass Timings)*` : `⛪ *Holy Mass Timings*`,
@@ -1075,7 +1142,7 @@ async function answerChurchQuestion(rawText, userPreferredLang = null, userAuthC
         sections.push(buildChurchHistorySection(isTamil));
         break;
       case 'saint_of_the_day':
-        sections.push(buildSaintSection(dailyContent, isTamil));
+        sections.push(buildSaintSection(dailyContent, isTamil, queryLang));
         break;
       case 'verse':
         sections.push(buildVerseSection(dailyContent, isTamil));
@@ -1147,7 +1214,7 @@ async function answerChurchQuestion(rawText, userPreferredLang = null, userAuthC
     const cat = classification.category;
     if (cat === CHURCH_CATEGORIES.MASS_TIMINGS) sections.push(buildMassTimingsSection(isTamil));
     else if (cat === CHURCH_CATEGORIES.CONFESSION) sections.push(buildConfessionSection(isTamil));
-    else if (cat === CHURCH_CATEGORIES.SAINTS) sections.push(buildSaintSection(dailyContent, isTamil));
+    else if (cat === CHURCH_CATEGORIES.SAINTS) sections.push(buildSaintSection(dailyContent, isTamil, queryLang));
     else if (cat === CHURCH_CATEGORIES.DAILY_READINGS) sections.push(buildReadingsSection(dailyContent, isTamil));
     else if (cat === CHURCH_CATEGORIES.PRAYERS) sections.push(buildPrayersSection(rawText, isTamil));
     else if (cat === CHURCH_CATEGORIES.SACRAMENTS) sections.push(buildSacramentsSection(rawText, isTamil));

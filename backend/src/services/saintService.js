@@ -111,8 +111,41 @@ function splitIntoSentences(text) {
 
 const saintTranslationCache = new Map();
 
+/**
+ * Natural Catholic Tamil Post-Processor
+ * Ensures proper Catholic ecclesiastical vocabulary instead of crude or secular machine translations.
+ */
+function postProcessCatholicTamil(text) {
+  if (!text || typeof text !== 'string') return '';
+  return text
+    .replace(/\bசெயிண்ட்\b/g, 'புனித')
+    .replace(/\bசெயின்ட்ஸ்\b/g, 'புனிதர்கள்')
+    .replace(/நினைவுச்சின்னம்/g, 'நினைவுநாள்')
+    .replace(/நினைவு விழா/g, 'நினைவுநாள்')
+    .replace(/நினைவு நாள்/g, 'நினைவுநாள்')
+    .replace(/தியாகிகள்/g, 'மறைசாட்சிகள்')
+    .replace(/தியாகி/g, 'மறைசாட்சி')
+    .replace(/இரத்தசாட்சிகள்/g, 'மறைசாட்சிகள்')
+    .replace(/இரத்தசாட்சி/g, 'மறைசாட்சி')
+    .replace(/போஹேமியா பிரபு/g, 'போஹீமியாவின் டியூக்')
+    .replace(/போமியா டியூக்/g, 'போஹீமியாவின் டியூக்')
+    .replace(/போஹேமியாவின் டியூக்/g, 'போஹீமியாவின் டியூக்')
+    .replace(/புரவலர் துறவி/g, 'பாதுகாவலர்')
+    .replace(/புரவலர் புனிதர்/g, 'பாதுகாவலர் புனிதர்')
+    .replace(/வீரமரணம் அடைந்தனர்/g, 'மறைசாட்சியாய் உயிர்நீத்தனர்')
+    .replace(/வீரமரணம் அடைந்தார்/g, 'மறைசாட்சியாய் உயிர்நீத்தார்')
+    .replace(/வீரமரணம்/g, 'மறைசாட்சி மரணம்')
+    .trim();
+}
+
+/**
+ * Multi-tier English -> Tamil Translation Engine
+ * Tier 1: Clients5 Dict Chrome Extension (fast, high concurrency, zero 429 rate limit)
+ * Tier 2: Google Translate GTX endpoint
+ * Tier 3: MyMemory API
+ */
 async function translateText(text, targetLang = 'ta') {
-  if (!text || text.trim() === '') return '';
+  if (!text || typeof text !== 'string' || text.trim() === '') return '';
   const trimmed = text.trim();
   const cacheKey = `${targetLang}:${trimmed}`;
 
@@ -120,28 +153,80 @@ async function translateText(text, targetLang = 'ta') {
     return saintTranslationCache.get(cacheKey);
   }
 
+  // Check known feast/saint dictionary first
+  if (targetLang === 'ta') {
+    if (KNOWN_FEAST_TRANSLATIONS[trimmed]) {
+      saintTranslationCache.set(cacheKey, KNOWN_FEAST_TRANSLATIONS[trimmed]);
+      return KNOWN_FEAST_TRANSLATIONS[trimmed];
+    }
+    const cleanT = trimmed.toLowerCase();
+    if (cleanT === 'saint of the day') return 'இன்றைய புனிதர்';
+    if (cleanT === 'martyr') return 'மறைசாட்சி';
+    if (cleanT === 'martyrs') return 'மறைசாட்சிகள்';
+  }
+
+  // Tier 1: Clients5 Dict Chrome Extension (reliable, does not return 429)
+  try {
+    const url = `https://clients5.google.com/translate_a/t?client=dict-chrome-ex&sl=en&tl=${targetLang}&q=${encodeURIComponent(trimmed)}`;
+    const response = await axios.get(url, {
+      timeout: 8000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*'
+      }
+    });
+    if (response.data) {
+      let translated = '';
+      if (Array.isArray(response.data)) {
+        translated = response.data.join(' ').trim();
+      } else if (typeof response.data === 'string') {
+        translated = response.data.trim();
+      }
+      if (translated && (targetLang !== 'ta' || /[\u0B80-\u0BFF]/.test(translated))) {
+        const polished = targetLang === 'ta' ? postProcessCatholicTamil(translated) : translated;
+        saintTranslationCache.set(cacheKey, polished);
+        return polished;
+      }
+    }
+  } catch (err) {
+    // Continue to Tier 2
+  }
+
+  // Tier 2: Google Translate GTX endpoint
   try {
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${targetLang}&dt=t&q=${encodeURIComponent(trimmed)}`;
     const response = await axios.get(url, {
-      timeout: 10000,
+      timeout: 8000,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       }
     });
     if (response.data && response.data[0]) {
       const translated = response.data[0].map(item => item[0]).join('').trim();
-      if (translated) {
-        saintTranslationCache.set(cacheKey, translated);
-        return translated;
+      if (translated && (targetLang !== 'ta' || /[\u0B80-\u0BFF]/.test(translated))) {
+        const polished = targetLang === 'ta' ? postProcessCatholicTamil(translated) : translated;
+        saintTranslationCache.set(cacheKey, polished);
+        return polished;
       }
     }
   } catch (error) {
-    if (error.response?.status === 429) {
-      console.warn(`[Saint Service] Google Translate rate-limit (429) — using untranslated fallback.`);
-    } else {
-      console.warn(`[Saint Service] Translation notice: ${error.message}`);
-    }
+    // Continue to Tier 3
   }
+
+  // Tier 3: MyMemory API Fallback
+  try {
+    const myMemoryUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(trimmed)}&langpair=en|${targetLang}`;
+    const response = await axios.get(myMemoryUrl, { timeout: 7000 });
+    const trans = response.data?.responseData?.translatedText?.trim();
+    if (trans && (targetLang !== 'ta' || /[\u0B80-\u0BFF]/.test(trans))) {
+      const polished = targetLang === 'ta' ? postProcessCatholicTamil(trans) : trans;
+      saintTranslationCache.set(cacheKey, polished);
+      return polished;
+    }
+  } catch (mmErr) {
+    console.warn(`[Saint Service] Translation Tier 3 notice: ${mmErr.message}`);
+  }
+
   return '';
 }
 
@@ -318,16 +403,36 @@ async function fetchWikipediaBio(saintName) {
  * and cleaning post-nominals that confuse machine translation.
  */
 async function translateBiography(text, targetLang = 'ta') {
-  if (!text || text.trim() === '') return '';
+  if (!text || typeof text !== 'string' || text.trim() === '') return '';
   const paragraphs = text.split(/\n+/).map(p => p.trim()).filter(Boolean);
   if (paragraphs.length === 0) return '';
 
   const translatedParas = [];
   for (const para of paragraphs) {
     const cleanPara = para.replace(/,\s*[A-Z]{2,5}(?=\s*[\(,])/g, '');
-    const trans = await translateText(cleanPara, targetLang);
-    translatedParas.push(trans || cleanPara);
+    let trans = await translateText(cleanPara, targetLang);
+
+    // If paragraph translation failed, split into sentences and translate each
+    if (!trans && cleanPara.length > 150) {
+      const sentences = splitIntoSentences(cleanPara);
+      const transSentences = [];
+      for (const sent of sentences) {
+        const sTrans = await translateText(sent, targetLang);
+        if (sTrans && (targetLang !== 'ta' || /[\u0B80-\u0BFF]/.test(sTrans))) {
+          transSentences.push(sTrans);
+        }
+      }
+      if (transSentences.length > 0) {
+        trans = transSentences.join(' ');
+      }
+    }
+
+    if (trans && (targetLang !== 'ta' || /[\u0B80-\u0BFF]/.test(trans))) {
+      translatedParas.push(trans);
+    }
   }
+
+  // Never return raw untranslated English when target is Tamil
   return translatedParas.join('\n\n');
 }
 
@@ -396,17 +501,26 @@ const MEMORIAL_PATTERNS = [
 const KNOWN_FEAST_TRANSLATIONS = {
   "Parish Patron Feast of St. John de Britto": "புனித அருளானந்தர் ஆலயப் பாதுகாவலர் பெருவிழா",
   "Blessed Virgin Mary of the Mercy": "இரக்கத்தின் தூய கன்னி மரியா திருவிழா",
-  "Memorial of Saint Pio of Pietrelcina": "பியட்ரல்சினாவின் புனித பியோ நினைவு நாள்",
-  "Memorial of Saints Cosmas and Damian, Martyrs": "புனிதர்கள் கோஸ்மாஸ் மற்றும் தமியானஸ் மறைசாட்சியர் நினைவு நாள்",
-  "Memorial of Saint Vincent de Paul": "புனித வின்சென்ட் தே பவுல் நினைவு நாள்",
-  "Memorial of Saint Jerome, Priest and Doctor of the Church": "புனித ஜெரோம் (மறைவல்லுநர்) நினைவு நாள்",
+  "Memorial of Saint Pio of Pietrelcina": "பியட்ரல்சினாவின் புனித பியோ நினைவுநாள்",
+  "Memorial of Saints Cosmas and Damian, Martyrs": "புனிதர்கள் கோஸ்மாஸ் மற்றும் தமியானஸ் மறைசாட்சியர் நினைவுநாள்",
+  "Memorial of Saint Vincent de Paul": "புனித வின்சென்ட் தே பவுல் நினைவுநாள்",
+  "Memorial of Saint Jerome, Priest and Doctor of the Church": "புனித ஜெரோம் (மறைவல்லுநர்) நினைவுநாள்",
   "Feast of Saints Michael, Gabriel and Raphael, Archangels": "புனித மிக்கேல், கபிரியேல், ரபேல் அதிதூதர்கள் திருவிழா",
   "Feast of the Holy Archangels": "தூய அதிதூதர்கள் திருவிழா",
   "Solemnity of Mary, Mother of God": "மரியாவின் இறைத்தாய்மை பெருவிழா",
   "Solemnity of St. Joseph, Spouse of the Blessed Virgin Mary": "தூய கன்னி மரியாவின் கணவரான புனித யோசேப்பு பெருவிழா",
   "Birth of st. John the Baptist": "புனித திருமுழுக்கு யோவானின் பிறப்பு பெருவிழா",
-  "Solemnity of Saints Peter and Paul, Apostles": "திருத்தூதர்களான புனித பேதுரு, புனித பவுல் பெருவிழா"
+  "Solemnity of Saints Peter and Paul, Apostles": "திருத்தூதர்களான புனித பேதுரு, புனித பவுல் பெருவிழா",
+  "Memorial of Sts. Lorenzo Ruiz and Companions, Martyrs": "புனித லோரென்சோ ரூயிஸ் மற்றும் தோழர்கள் நினைவுநாள்",
+  "Memorial of Saint Lorenzo Ruiz and Companions": "புனித லோரென்சோ ரூயிஸ் மற்றும் தோழர்கள் நினைவுநாள்",
+  "Memorial of Sts. Lorenzo Ruiz and Companions": "புனித லோரென்சோ ரூயிஸ் மற்றும் தோழர்கள் நினைவுநாள்",
+  "Memorial of Saint Wenceslaus, Duke of Boemia": "போஹீமியாவின் டியூக் புனித வென்செஸ்லாஸ் நினைவுநாள்",
+  "Memorial of Saint Wenceslaus, Duke of Bohemia": "போஹீமியாவின் டியூக் புனித வென்செஸ்லாஸ் நினைவுநாள்",
+  "Memorial of Saint Wenceslaus, Duke of Boemia, Martyr": "போஹீமியாவின் டியூக் புனித வென்செஸ்லாஸ் நினைவுநாள்",
+  "Memorial of Saint Wenceslaus, Duke of Bohemia, Martyr": "போஹீமியாவின் டியூக் புனித வென்செஸ்லாஸ் நினைவுநாள்",
+  "Saint of the Day": "இன்றைய புனிதர்"
 };
+
 
 /**
  * Extracts feast, solemnity, memorial, or liturgical celebration information
@@ -608,16 +722,18 @@ async function fetchFromVaticanNews(month, day, year = new Date().getFullYear())
     console.log(`[Saint Service] Vatican News Page Title: "${pageTitle}"`);
 
     const saints = [];
+    const sectionEls = $('section.section').toArray();
 
-    // Parse each section
-    $('section.section').each((idx, el) => {
+    // Parse each saint section displayed on that day's page
+    for (const el of sectionEls) {
       // Exclude introduction block
-      if ($(el).find('.intro--saint').length > 0) return;
+      if ($(el).find('.intro--saint').length > 0) continue;
 
-      const h2 = $(el).find('.section__head h2').text().replace(/\s+/g, ' ').trim();
-      if (!h2) return;
+      let h2 = $(el).find('.section__head h2, h2').text().replace(/\s+/g, ' ').trim();
+      if (!h2) continue;
+      h2 = h2.replace(/\bSt\s+\.\s*/gi, 'St. ').replace(/\bSts\s+\.\s*/gi, 'Sts. ');
 
-      // Extract biography paragraphs
+      // Extract biography paragraphs from the section
       const paragraphs = [];
       $(el).find('.section__content p').each((pi, pel) => {
         const text = $(pel).text().replace(/\s+/g, ' ').trim();
@@ -626,29 +742,62 @@ async function fetchFromVaticanNews(month, day, year = new Date().getFullYear())
         }
       });
 
-      const bio = paragraphs.join('\n\n').trim();
+      let bio = paragraphs.join('\n\n').trim();
       const isEvidence = $(el).hasClass('section--evidence');
-
-      // In Vatican News CSS:
-      // .page .section__head h2 { color: #c00 } (Liturgical RED)
-      // .page .section--evidence .section__head h2 { color: #373737 } (Grey box)
-      // Any section without `section--evidence` has a RED title (#c00), representing
-      // the General Roman Calendar's feast/memorial/martyrs!
       const isRed = !isEvidence;
 
-      // Check if this section has an official Vatican saint image
+      // Extract detail page URL for this specific saint
+      const detailLink = $(el).find('a[href^="/en/saints/"]').first().attr('href');
+      let saintDetailUrl = vaticanUrl;
+      if (detailLink && detailLink.endsWith('.html') && detailLink !== vaticanUrl) {
+        saintDetailUrl = detailLink.startsWith('http') ? detailLink : `https://www.vaticannews.va${detailLink}`;
+      }
+
+      // Extract image associated with this specific saint from the Vatican News section HTML
       const vaticanImgObj = getVaticanSaintImage($, vaticanUrl, el);
-      const imageUrl = vaticanImgObj ? vaticanImgObj.url : null;
+      let imageUrl = vaticanImgObj ? vaticanImgObj.url : null;
+
+      // If biography is short and section has deep detail link, fetch full article from Vatican News
+      if (saintDetailUrl !== vaticanUrl && (!bio || bio.length < 300)) {
+        try {
+          const detailRes = await axios.get(saintDetailUrl, { headers: FETCH_HEADERS, timeout: 7000 });
+          if (detailRes.status === 200 && detailRes.data) {
+            const $$ = cheerio.load(detailRes.data);
+            const deepParas = [];
+            $$('article p, .section__content p').each((dpi, dpel) => {
+              const dt = $$(dpel).text().replace(/\s+/g, ' ').trim();
+              if (dt && !dt.includes('The Saint of the day presents a daily calendar') && dt.length > 20) {
+                deepParas.push(dt);
+              }
+            });
+            if (deepParas.length > 0) {
+              bio = deepParas.join('\n\n').trim();
+              console.log(`[Saint Service] Fetched full Vatican News deep article for "${h2}" (${bio.length} chars)`);
+            }
+            if (!imageUrl) {
+              const deepImg = getVaticanSaintImage($$, saintDetailUrl);
+              if (deepImg && deepImg.url) {
+                imageUrl = deepImg.url;
+                console.log(`[Saint Service] Found Vatican News image in deep article for "${h2}": ${imageUrl}`);
+              }
+            }
+          }
+        } catch (de) {
+          console.warn(`[Saint Service] Deep article fetch notice for ${h2}: ${de.message}`);
+        }
+      }
 
       saints.push({
         name: h2,
         description: bio,
         imageUrl,
+        sourceUrl: saintDetailUrl,
+        detailUrl: saintDetailUrl,
         isEvidence,
         isRed,
         sectionEl: el
       });
-    });
+    }
 
     if (saints.length === 0) {
       console.warn(`[Saint Service] No saint sections found on Vatican News page for ${month}/${day}`);
@@ -661,60 +810,60 @@ async function fetchFromVaticanNews(month, day, year = new Date().getFullYear())
 
     // Extract feast and liturgical celebration information from the page
     const dateKey = `${year}-${month}-${day}`;
-    const feastInfo = extractFeastInfo($, saints, month, day, dateKey);
+    let feastInfo = extractFeastInfo($, saints, month, day, dateKey);
 
-    // Primary saint selection logic:
-    // 1. If any feast saint or liturgical celebration is present on the page, prioritize that feast saint!
-    // 2. If any saint has a RED title on Vatican News (isRed: true), prioritize that red-titled liturgical saint!
-    //    On Vatican News, the universal Roman Calendar celebration (e.g. Sts. Cosmas and Damian) is styled with red text.
-    // 3. Otherwise, any saint marked with section--evidence AND having a biography
-    // 4. Otherwise, the first saint that has a non-empty biography
-    // 5. Otherwise, the first saint listed
-    let primarySaint = null;
+    // Initial liturgical candidate selection
+    let initialCandidate = null;
     if (feastInfo && feastInfo.hasFeastInfo && feastInfo.feastSaintObj) {
-      primarySaint = feastInfo.feastSaintObj;
-      console.log(`[Saint Service] Feast Saint prioritized as primary: "${primarySaint.name}" (Feast: "${feastInfo.feastTitle}", Type: "${feastInfo.feastType}")`);
+      initialCandidate = feastInfo.feastSaintObj;
+      console.log(`[Saint Service] Liturgical celebration candidate: "${initialCandidate.name}" (Feast: "${feastInfo.feastTitle}")`);
     } else {
-      const redSaint = saints.find(s => s.isRed);
+      const redSaint = saints.find(s => s.isRed && s.description.length > 0);
       if (redSaint) {
-        primarySaint = redSaint;
-        console.log(`[Saint Service] Red-titled Liturgical Saint prioritized as primary: "${primarySaint.name}"`);
+        initialCandidate = redSaint;
       } else {
-        primarySaint = saints.find(s => s.isEvidence && s.description.length > 0);
-        if (!primarySaint) {
-          primarySaint = saints.find(s => s.description.length > 0);
-        }
-        if (!primarySaint) {
-          primarySaint = saints[0];
-        }
+        initialCandidate = saints.find(s => s.isEvidence && s.description.length > 0)
+          || saints.find(s => s.description.length > 0)
+          || saints[0];
       }
     }
 
-    // If primary saint has short bio, check if section has a deep "Read all..." detail link on Vatican News
-    if (primarySaint && primarySaint.sectionEl && (!primarySaint.description || primarySaint.description.length < 300)) {
-      const detailLink = $(primarySaint.sectionEl).find('a[href^="/en/saints/"]').first().attr('href');
-      if (detailLink && detailLink.endsWith('.html') && detailLink !== vaticanUrl) {
-        const fullDetailUrl = detailLink.startsWith('http') ? detailLink : `https://www.vaticannews.va${detailLink}`;
-        try {
-          const detailRes = await axios.get(fullDetailUrl, { headers: FETCH_HEADERS, timeout: 7000 });
-          if (detailRes.status === 200 && detailRes.data) {
-            const $$ = cheerio.load(detailRes.data);
-            const deepParas = [];
-            $$('article p, .section__content p').each((dpi, dpel) => {
-              const dt = $$(dpel).text().replace(/\s+/g, ' ').trim();
-              if (dt && !dt.includes('The Saint of the day presents a daily calendar') && dt.length > 20) {
-                deepParas.push(dt);
-              }
-            });
-            if (deepParas.length > 0) {
-              primarySaint.description = deepParas.join('\n\n').trim();
-              primarySaint.detailUrl = fullDetailUrl;
-              console.log(`[Saint Service] Fetched full Vatican News deep article for "${primarySaint.name}" (${primarySaint.description.length} chars)`);
-            }
-          }
-        } catch (de) {
-          console.warn(`[Saint Service] Deep article fetch notice: ${de.message}`);
+    // ─── VATICAN NEWS IMAGE SELECTION RULE ─────────────────────────────────
+    // 1. If a saint has an image on Vatican News, use that exact Vatican News image on the church website.
+    // 2. Do not select a random image from Google/Wikipedia when Vatican News already provides an image.
+    // 3. If the primary Saint of the Day candidate does not have an image, check the other saint entries
+    //    on that day's Vatican page for an available image according to selection rules.
+    // 4. Only if NO suitable Vatican News image exists on that day's page, use Wikipedia fallback.
+    let primarySaint = initialCandidate;
+
+    if (primarySaint && primarySaint.imageUrl) {
+      console.log(`[Saint Service] Primary candidate "${primarySaint.name}" has authentic Vatican News image: ${primarySaint.imageUrl}`);
+    } else {
+      // Check other saint entries on that day's Vatican page for an available image
+      const saintWithVaticanImg = saints.find(s => s.imageUrl && s.description.length > 0) || saints.find(s => s.imageUrl);
+      if (saintWithVaticanImg) {
+        console.log(`[Saint Service] Primary candidate "${initialCandidate?.name}" had no Vatican image. Prioritizing "${saintWithVaticanImg.name}" which HAS authentic Vatican News image: ${saintWithVaticanImg.imageUrl}`);
+        primarySaint = saintWithVaticanImg;
+
+        // If the newly prioritized saint has distinct feast / celebration info, adapt feastInfo
+        const saintFeast = extractFeastInfo($, [saintWithVaticanImg], month, day, dateKey);
+        if (saintFeast && saintFeast.hasFeastInfo) {
+          feastInfo = saintFeast;
+        } else {
+          // Derive Memorial/Feast for this saint if applicable
+          const rawN = saintWithVaticanImg.name.replace(/,\s*(priest|bishop|pope|martyr|martyrs|virgin).*$/i, '').trim();
+          feastInfo = {
+            feastTitle: `Memorial of ${rawN}`,
+            feastTitleTa: KNOWN_FEAST_TRANSLATIONS[`Memorial of ${rawN}`] || null,
+            feastType: "Memorial",
+            feastTypeTa: "நினைவு நாள்",
+            hasFeastInfo: true,
+            feastSaintObj: saintWithVaticanImg,
+            feastSaintName: rawN
+          };
         }
+      } else {
+        console.log(`[Saint Service] No saint on Vatican page for ${month}/${day} has an image. Will use Wikipedia fallback for "${primarySaint?.name}".`);
       }
     }
 
@@ -725,6 +874,7 @@ async function fetchFromVaticanNews(month, day, year = new Date().getFullYear())
       feastInfo,
       $
     };
+
 
   } catch (err) {
     if (err.response?.status === 404) {
@@ -807,8 +957,11 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
           (parsed.name && parsed.name.includes('Nilus')) ||
           (parsed.englishName && parsed.englishName.includes('Nilus'))
         );
+        const isStaleSep28WithoutVaticanImg = dateKey.endsWith('-09-28') && (
+          !parsed.image || !parsed.image.includes('vaticannews.va') || (parsed.saintName && parsed.saintName.includes('Wenceslaus'))
+        );
         const hasShortBio = !parsed.description || parsed.description.length < 250;
-        if (!isStaleNilusOnSep26 && !hasShortBio && parsed && parsed.date === dateKey && (parsed.saintName || parsed.name) && parsed.image && !parsed.imageFallback) {
+        if (!isStaleNilusOnSep26 && !isStaleSep28WithoutVaticanImg && !hasShortBio && parsed && parsed.date === dateKey && (parsed.saintName || parsed.name) && parsed.image && !parsed.imageFallback) {
           if (isCurrentToday) {
             dailySaint = parsed;
           }
@@ -856,7 +1009,14 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
 
     detailUrl = prim.detailUrl || vaticanResult.sourceUrl;
     usedSourceUrl = detailUrl;
-    allSaintsList = vaticanResult.allSaints;
+    // Ensure the primary selected saint (e.g. prioritized with Vatican News image) is first in allSaintsList
+    const listCopy = [...(vaticanResult.allSaints || [])];
+    const primIdx = listCopy.findIndex(s => s.name === prim.name || (s.imageUrl && s.imageUrl === prim.imageUrl));
+    if (primIdx > 0) {
+      const [foundPrim] = listCopy.splice(primIdx, 1);
+      listCopy.unshift(foundPrim);
+    }
+    allSaintsList = listCopy;
     primarySectionEl = prim.sectionEl;
     cheerioDoc = vaticanResult.$;
 
@@ -940,28 +1100,44 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
 
   // ── IMAGE RESOLUTION ─────────────────────────────────────────────────────
   // Pipeline: 
-  // 1. Vatican News official saint image
-  // 2. Wikipedia exact canonical saint portrait (identity validated)
+  // 1. Vatican News official saint image (from primarySaint)
+  // 2. Wikipedia exact canonical saint portrait (identity validated & cached locally in /uploads/saints/)
   // 3. Liturgical calendar fallback
   // 4. Online image search (Google / Web)
   // 5. Dignified sacred art (St. John de Britto)
-  let imageResult = await resolveSaintImage(saintName, detailUrl, cheerioDoc, dt, primarySectionEl);
-  if ((!imageResult || imageResult.fallback) && fallbackSaint?.image) {
-    const cleanFetched = cleanSaintName(saintName).toLowerCase();
-    const cleanFallback = cleanSaintName(fallbackSaint.name).toLowerCase();
-    if (cleanFetched.includes(cleanFallback) || cleanFallback.includes(cleanFetched) || cleanFetched.includes('cosmas')) {
-      imageResult = {
-        url: fallbackSaint.image,
-        source: 'liturgical_calendar',
-        sourceUrl: fallbackSaint.link || detailUrl,
-        fallback: false
-      };
+  let imageResult = null;
+  if (vaticanResult?.primarySaint?.imageUrl) {
+    console.log(`[Saint Service] Using authentic Vatican News image for "${saintName}": ${vaticanResult.primarySaint.imageUrl}`);
+    imageResult = {
+      url: vaticanResult.primarySaint.imageUrl,
+      source: 'vatican',
+      sourceUrl: detailUrl,
+      fallback: false
+    };
+  } else {
+    imageResult = await resolveSaintImage(saintName, detailUrl, cheerioDoc, dt, primarySectionEl);
+    if ((!imageResult || imageResult.fallback) && fallbackSaint?.image) {
+      const cleanFetched = cleanSaintName(saintName).toLowerCase();
+      const cleanFallback = cleanSaintName(fallbackSaint.name).toLowerCase();
+      if (cleanFetched.includes(cleanFallback) || cleanFallback.includes(cleanFetched) || cleanFetched.includes('cosmas')) {
+        imageResult = {
+          url: fallbackSaint.image,
+          source: 'liturgical_calendar',
+          sourceUrl: fallbackSaint.link || detailUrl,
+          fallback: false
+        };
+      }
     }
   }
 
   // ── TAMIL TRANSLATION ────────────────────────────────────────────────────
   if (!tamilName) {
-    if (feastInfo?.hasFeastInfo && feastInfo?.feastTitleTa) {
+    if (cleanSaintName(saintName).toLowerCase().includes('lorenzo ruiz')) {
+      tamilName = 'புனித லோரென்சோ ரூயிஸ் மற்றும் தோழர்கள்';
+    } else if (cleanSaintName(saintName).toLowerCase().includes('wenceslaus')) {
+      tamilName = 'புனித வென்செஸ்லாஸ்';
+    }
+    if (!tamilName && feastInfo?.hasFeastInfo && feastInfo?.feastTitleTa) {
       // Derive saint's Tamil name from known feast title if applicable
       const cleanTa = feastInfo.feastTitleTa
         .replace(/\s*(ஆலயப் பாதுகாவலர் பெருவிழா|பெருவிழா|திருவிழா|நினைவு நாள்)\s*$/i, '')
@@ -978,41 +1154,85 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
       tamilName = translated || saintName;
     }
   }
-  if (!descriptionTa || descriptionTa.length < 200 || descriptionTa === fallbackSaint?.descriptionTa) {
+  if (!descriptionTa || descriptionTa.length < 200 || !/[\u0B80-\u0BFF]/.test(descriptionTa)) {
     if (description) {
       const translatedBio = await translateBiography(description, 'ta');
-      descriptionTa = translatedBio || description;
+      if (translatedBio && /[\u0B80-\u0BFF]/.test(translatedBio)) {
+        descriptionTa = translatedBio;
+      }
     }
   }
 
   // ── BUILD & SAVE SAINT OBJECT ────────────────────────────────────────────
+  const formattedSaintsList = allSaintsList.map(s => {
+    let sTamilName = s.name;
+    const lowerN = cleanSaintName(s.name).toLowerCase();
+    if (lowerN.includes('lorenzo ruiz')) {
+      sTamilName = 'புனித லோரென்சோ ரூயிஸ் மற்றும் தோழர்கள்';
+    } else if (lowerN.includes('wenceslaus')) {
+      sTamilName = 'புனித வென்செஸ்லாஸ்';
+    } else if (lowerN.includes('eustachius') || lowerN.includes('eustochium')) {
+      sTamilName = 'புனித யூஸ்டோச்சியம்';
+    }
+    const isThisSaintPrimary = s.name === saintName;
+    const sDescTa = isThisSaintPrimary ? descriptionTa : (s.descriptionTa && /[\u0B80-\u0BFF]/.test(s.descriptionTa) ? s.descriptionTa : '');
+    return {
+      name: s.name,
+      englishName: s.name,
+      nameEn: s.name,
+      tamilName: sTamilName,
+      nameTa: sTamilName,
+      titleEn: s.feastTitle || s.name,
+      titleTa: s.feastTitleTa || sTamilName,
+      description: s.description,
+      descriptionEn: s.description,
+      descriptionTa: sDescTa,
+      imageUrl: s.imageUrl || null,
+      image: s.imageUrl || null,
+      sourceUrl: s.sourceUrl || s.detailUrl || usedSourceUrl
+    };
+  });
+
+  const titleEn = feastInfo?.feastTitle || saintName;
+  let titleTa = feastInfo?.feastTitleTa || null;
+  if (!titleTa && feastInfo?.feastTitle) {
+    titleTa = KNOWN_FEAST_TRANSLATIONS[feastInfo.feastTitle] || await translateText(feastInfo.feastTitle);
+  }
+  if (!titleTa) {
+    titleTa = tamilName || saintName;
+  }
+
   const saintPayload = {
     date: dateKey,
+    source: usedSource,
+    sourceUrl: usedSourceUrl,
+    link: usedSourceUrl,
+    nameEn: saintName,
+    titleEn,
+    descriptionEn: description,
+    nameTa: tamilName || saintName,
+    titleTa,
+    descriptionTa: descriptionTa || '',
+    imageUrl: imageResult.url,
+    image: imageResult.url,
+    imageSource: imageResult.source,
+    imageSourceUrl: imageResult.sourceUrl,
+    imageFallback: imageResult.fallback,
     saintName,
     englishName: saintName,
     tamilName: tamilName || saintName,
     name: saintName,
     nameTa: tamilName || saintName,
     description,
-    descriptionTa: descriptionTa || description,
-    image: imageResult.url,
-    imageSource: imageResult.source,
-    imageSourceUrl: imageResult.sourceUrl,
-    imageFallback: imageResult.fallback,
     feastDay: formattedFeastDay,
+    feastDayEn: formattedFeastDay,
     feastTitle: feastInfo?.feastTitle || null,
-    feastTitleTa: feastInfo?.feastTitleTa || null,
+    feastTitleTa: titleTa,
     feastType: feastInfo?.feastType || null,
     feastTypeTa: feastInfo?.feastTypeTa || null,
     hasFeastInfo: Boolean(feastInfo?.hasFeastInfo),
-    source: usedSource,
-    sourceUrl: usedSourceUrl,
-    link: usedSourceUrl,
-    allSaints: allSaintsList.map(s => ({
-      name: s.name,
-      description: s.description,
-      image: s.imageUrl || null
-    })),
+    saints: formattedSaintsList,
+    allSaints: formattedSaintsList,
     status: "Synced",
     lastSynced: new Date()
   };
@@ -1098,19 +1318,22 @@ async function loadCachedSaint() {
           (parsed.name && parsed.name.includes('Nilus')) ||
           (parsed.englishName && parsed.englishName.includes('Nilus'))
         );
+        const isStaleSep28WithoutVaticanImg = todayStr.endsWith('-09-28') && (
+          !parsed.image || !parsed.image.includes('vaticannews.va') || (parsed.saintName && parsed.saintName.includes('Wenceslaus'))
+        );
 
         const hasShortBio = !parsed.description || parsed.description.length < 250;
 
         // Valid cache: matches today's date AND has a valid image AND is not from obsolete Catholic Readings source AND not obsolete secondary saint AND has substantial bio
-        if (parsed && parsed.date === todayStr && (parsed.saintName || parsed.name) && parsed.image && !isBrokenVirginMary && !isStaleCatholicReadings && !isGarbageImage && !isStaleNilusOnSep26 && !hasShortBio) {
+        if (parsed && parsed.date === todayStr && (parsed.saintName || parsed.name) && parsed.image && !isBrokenVirginMary && !isStaleCatholicReadings && !isGarbageImage && !isStaleNilusOnSep26 && !isStaleSep28WithoutVaticanImg && !hasShortBio) {
           dailySaint = parsed;
           if (dailySaint.lastSynced) {
             dailySaint.lastSynced = new Date(dailySaint.lastSynced);
           }
           console.log(" Loaded today's daily saint from database cache:", dailySaint.saintName || dailySaint.name);
           return;
-        } else if (isStaleCatholicReadings || isGarbageImage || isStaleNilusOnSep26) {
-          console.warn("⚠️ Discarding obsolete/stale cache from database (Nilus/Catholic Readings/Invalid image). Fresh Vatican News fetch will run immediately.");
+        } else if (isStaleCatholicReadings || isGarbageImage || isStaleNilusOnSep26 || isStaleSep28WithoutVaticanImg) {
+          console.warn("⚠️ Discarding obsolete/stale cache from database (Nilus/Sep28/Catholic Readings/Invalid image). Fresh Vatican News fetch will run immediately.");
         }
       }
     }

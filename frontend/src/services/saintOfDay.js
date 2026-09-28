@@ -1,4 +1,4 @@
-import api from './api';
+import api, { getMediaUrl, getFileUrl } from './api';
 import { getSaintForDate } from '../data/catholic_saints_calendar';
 
 /**
@@ -6,6 +6,7 @@ import { getSaintForDate } from '../data/catholic_saints_calendar';
  * Supports client-side caching to prevent repeated fetches across components and tabs.
  */
 const saintClientCache = new Map();
+
 
 export function cleanSaintName(name) {
   if (!name) return 'Saint of the Day';
@@ -90,6 +91,16 @@ export async function fetchSaintOfTheDay(dateStr) {
         }
       }
 
+      if (rawImg && rawImg.startsWith('/uploads')) {
+        rawImg = getFileUrl(rawImg);
+      }
+
+      const rawSaints = res.data.saints || res.data.allSaints || [];
+      const normalizedSaints = rawSaints.map(s => ({
+        ...s,
+        image: s.image && s.image.startsWith('/uploads') ? getFileUrl(s.image) : s.image
+      }));
+
       const saintPayload = {
         date: res.data.date || dateKey,
         day: res.data.day || dayNum,
@@ -115,7 +126,29 @@ export async function fetchSaintOfTheDay(dateStr) {
         hasFeastInfo: Boolean(res.data.hasFeastInfo || fallbackSaint.hasFeastInfo),
         source: rawSource,
         sourceUrl: rawSourceUrl,
-        link: rawSourceUrl
+        link: rawSourceUrl,
+        saints: normalizedSaints.length > 0 ? normalizedSaints : [
+          {
+            name: rawSaintName,
+            englishName: rawEngName,
+            tamilName: res.data.tamilName || res.data.nameTa || rawSaintName,
+            description: rawDesc,
+            descriptionTa: rawDescTa,
+            image: rawImg,
+            sourceUrl: rawSourceUrl
+          }
+        ],
+        allSaints: normalizedSaints.length > 0 ? normalizedSaints : [
+          {
+            name: rawSaintName,
+            englishName: rawEngName,
+            tamilName: res.data.tamilName || res.data.nameTa || rawSaintName,
+            description: rawDesc,
+            descriptionTa: rawDescTa,
+            image: rawImg,
+            sourceUrl: rawSourceUrl
+          }
+        ]
       };
 
       saintClientCache.set(dateKey, { data: saintPayload, _cachedAt: Date.now() });

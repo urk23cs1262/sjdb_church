@@ -1,4 +1,6 @@
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 const { getSaintForDate } = require('../data/catholic_saints_calendar');
 
 /**
@@ -17,6 +19,65 @@ const HTTP_HEADERS = {
 };
 
 const DIGNIFIED_FALLBACK_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons/b/bf/St._John_De_Britto.jpg';
+
+/**
+ * Downloads and stores saint image locally in backend /uploads/saints/ directory
+ */
+async function cacheImageLocally(remoteUrl, baseName = 'saint') {
+  if (!remoteUrl || typeof remoteUrl !== 'string' || !remoteUrl.startsWith('http')) {
+    return remoteUrl;
+  }
+  try {
+    const uploadsDir = path.join(__dirname, '../../uploads/saints');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    let ext = '.jpg';
+    try {
+      const parsedPath = new URL(remoteUrl).pathname;
+      const parsedExt = path.extname(parsedPath).toLowerCase();
+      if (['.jpg', '.jpeg', '.png', '.webp'].includes(parsedExt)) {
+        ext = parsedExt;
+      }
+    } catch (e) {}
+
+    const safeName = baseName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '_')
+      .replace(/_+/g, '_')
+      .slice(0, 50)
+      .replace(/^_|_$/g, '');
+
+    const filename = `${safeName || 'saint'}${ext}`;
+    const filePath = path.join(uploadsDir, filename);
+
+    // If file already exists and is non-empty, use existing cached file
+    if (fs.existsSync(filePath)) {
+      const stats = fs.statSync(filePath);
+      if (stats.size > 1000) {
+        return `/uploads/saints/${filename}`;
+      }
+    }
+
+    const response = await axios.get(remoteUrl, {
+      responseType: 'arraybuffer',
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'SJDBChurchApp/1.0 (Catholic Parish Management; contact: stjdbchurch@gmail.com)'
+      }
+    });
+
+    if (response.status === 200 && response.data && response.data.length > 500) {
+      fs.writeFileSync(filePath, response.data);
+      console.log(`[Saint Image Resolver] Cached image locally: /uploads/saints/${filename} (${response.data.length} bytes)`);
+      return `/uploads/saints/${filename}`;
+    }
+  } catch (err) {
+    console.warn(`[Saint Image Resolver] Local cache notice for ${baseName}: ${err.message}. Using remote URL.`);
+  }
+  return remoteUrl;
+}
 
 const CHRISTIAN_SAINT_KEYWORDS = [
   'saint', 'catholic', 'christian', 'priest', 'monk', 'martyr', 'pope',
@@ -252,8 +313,10 @@ async function searchWikipediaSaintImage(rawSaintName) {
         const imageUrl = extractWikipediaImageUrl(data);
         if (imageUrl) {
           console.log(`[Saint Image Resolver] Found direct Wikipedia image for "${rawSaintName}" -> "${data.title}": ${imageUrl}`);
+          const localUrl = await cacheImageLocally(imageUrl, rawSaintName);
           return {
-            url: imageUrl,
+            url: localUrl,
+            remoteUrl: imageUrl,
             source: 'wikipedia',
             sourceUrl: data.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(slug)}`,
             fallback: false
@@ -309,8 +372,10 @@ async function searchWikipediaSaintImage(rawSaintName) {
         const imageUrl = extractWikipediaImageUrl(data);
         if (imageUrl) {
           console.log(`[Saint Image Resolver] Found verified Wikipedia portrait for "${rawSaintName}" -> "${data.title}" (${data.description}): ${imageUrl}`);
+          const localUrl = await cacheImageLocally(imageUrl, rawSaintName);
           return {
-            url: imageUrl,
+            url: localUrl,
+            remoteUrl: imageUrl,
             source: 'wikipedia',
             sourceUrl: data.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(hit.title)}`,
             fallback: false
@@ -385,6 +450,8 @@ module.exports = {
   resolveSaintImage,
   getVaticanSaintImage,
   searchWikipediaSaintImage,
+  cacheImageLocally,
   cleanSaintName,
   DIGNIFIED_FALLBACK_IMAGE
 };
+

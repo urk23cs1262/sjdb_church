@@ -1,5 +1,5 @@
-# St. John de Britto Church — Parish Management System
-### *புனித அருளானந்தர் ஆலயம், காளையார்கோவில் / Kalayarkoil*
+# St. John de Britto Church, Kalayarkovil — Parish Management System
+### *புனித அருளானந்தர் ஆலயம், காளையார்கோவில்*
 
 [![Live Website](https://img.shields.io/badge/Live_Website-st--jb--church.vercel.app-blue?style=for-the-badge&logo=vercel)](https://st-jb-church.vercel.app/)
 [![React](https://img.shields.io/badge/React_19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://react.dev/)
@@ -10,7 +10,7 @@
 
 A modern, full-stack Catholic Parish Management and Community Web Application built for **St. John de Britto Church**. The system connects parishioners, priests, and administrators with online Mass intention bookings, certificate requests, daily liturgical readings, Saint of the Day calendar, interactive Holy Rosary audio prayer, WhatsApp broadcast automation, event registrations, and parishioner record management.
 
-**Production Website:** [https://st-jb-church.vercel.app/](https://st-jb-church.vercel.app/) — *(Official Parish Portal)*
+**Production Website:** [https://st-jb-church.vercel.app/](https://st-jb-church.vercel.app) — *(Official Parish Portal)*
 
 ---
 
@@ -280,5 +280,5 @@ Frontend will be accessible on `http://localhost:5173`.
 
 ## License & Attribution
 
-Developed for **St. John de Britto Church** — *"Serving God, Serving People."*  
+Developed for **St. John de Britto Church, Kalayarkovil** — *"."*  
 All rights reserved © 2026. Dedicated to the parish community and administration.

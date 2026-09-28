@@ -1,5 +1,6 @@
 const axios = require('axios');
 const { SITE_ROUTES, EXTERNAL_LINKS, getSiteUrl, getBaseClientUrl } = require('../config/siteRoutes');
+const { normalizeContentLanguage } = require('../utils/userLanguageHelper');
 
 const PUBLIC_CLIENT_URL = 'https://st-jb-church.vercel.app';
 
@@ -142,7 +143,8 @@ function createExcerpt(text, maxLength = 300) {
  * "நீங்கள் உங்கள் இருதயங்களில் கர்த்தராகிய கிறிஸ்துவைப் பரிசுத்தப்படுத்தி, உங்களில் இருக்கும் நம்பிக்கையைக்குறித்துக் காரணம் கேட்கிற எவருக்கும், சாந்தத்தோடும் வணக்கத்தோடும் உத்தரவு கொடுக்க எப்பொழுதும் ஆயத்தமாயிருங்கள்."
  * — 1 Peter 3:15
  */
-function generateDailyVerseCaption({ dailyContent }) {
+function generateDailyVerseCaption({ dailyContent, language = 'ta' }) {
+  const lang = normalizeContentLanguage(language);
   const verseEn = (dailyContent?.bible?.english || dailyContent?.verse?.english || '').trim();
   const verseTa = (dailyContent?.bible?.tamil || dailyContent?.verse?.tamil || '').trim();
   const rawRef = (dailyContent?.bible?.ref || dailyContent?.verse?.reference || '').trim();
@@ -151,15 +153,37 @@ function generateDailyVerseCaption({ dailyContent }) {
   const refEn = getEnglishBibleReference(rawRef);
   const refTa = getTamilBibleReference(rawRef);
 
-  let caption = `📖 *இன்றைய இறைவார்த்தை / DAILY BIBLE VERSE*\n\n`;
-  if (verseEn) {
-    caption += `"${verseEn}"\n`;
-    if (refEn) caption += `— *${refEn}*\n\n`;
-    else caption += `\n`;
+  if (lang === 'ta') {
+    let caption = `📖 *இன்றைய இறைவார்த்தை*\n\n`;
+    if (verseTa) {
+      caption += `"${verseTa}"\n`;
+      if (refTa) caption += `— *${refTa}*`;
+    } else if (verseEn) {
+      caption += `"${verseEn}"\n— *${refEn}*`;
+    }
+    return removeAllUrls(caption.trim());
   }
+
+  if (lang === 'en') {
+    let caption = `📖 *Daily Bible Verse*\n\n`;
+    if (verseEn) {
+      caption += `"${verseEn}"\n`;
+      if (refEn) caption += `— *${refEn}*`;
+    } else if (verseTa) {
+      caption += `"${verseTa}"\n— *${refTa}*`;
+    }
+    return removeAllUrls(caption.trim());
+  }
+
+  // Both
+  let caption = `📖 *இன்றைய இறைவார்த்தை / DAILY BIBLE VERSE*\n\n`;
   if (verseTa) {
     caption += `"${verseTa}"\n`;
-    if (refTa) caption += `— *${refTa}*`;
+    if (refTa) caption += `— *${refTa}*\n\n`;
+  }
+  if (verseEn) {
+    caption += `"${verseEn}"\n`;
+    if (refEn) caption += `— *${refEn}*`;
   }
   return removeAllUrls(caption.trim());
 }
@@ -170,6 +194,7 @@ function generateDailyVerseCaption({ dailyContent }) {
  * Guaranteed to contain 0 URLs. Contains both English and Tamil verses with scripture reference under each language.
  */
 function generateDailyVerseMessage({ dailyContent, language = 'ta' }) {
+  const lang = normalizeContentLanguage(language);
   const verseEn = (dailyContent?.bible?.english || dailyContent?.verse?.english || '').trim();
   const verseTa = (dailyContent?.bible?.tamil || dailyContent?.verse?.tamil || '').trim();
   const rawRef = (dailyContent?.bible?.ref || dailyContent?.verse?.reference || '').trim();
@@ -177,6 +202,14 @@ function generateDailyVerseMessage({ dailyContent, language = 'ta' }) {
   const { getTamilBibleReference, getEnglishBibleReference } = require('../utils/bibleRefHelper');
   const refEn = getEnglishBibleReference(rawRef);
   const refTa = getTamilBibleReference(rawRef);
+
+  if (lang === 'ta') {
+    return removeAllUrls(`⛪ *புனித அருளானந்தர் திருத்தலம், காளையார்கோவில்*\n_SJDB Connect_\n\n📖 *இன்றைய இறைவார்த்தை*\n\n"${verseTa || verseEn}"\n— *${refTa || refEn}*`);
+  }
+
+  if (lang === 'en') {
+    return removeAllUrls(`⛪ *St. John de Britto Church, Kalayarkoil*\n_SJDB Connect_\n\n📖 *Daily Bible Verse*\n\n"${verseEn || verseTa}"\n— *${refEn || refTa}*`);
+  }
 
   const msg = `⛪ *St. John de Britto Church, Kalayarkoil*
 _புனித ஜான் டி பிரிட்டோ திருத்தலம்_
@@ -205,12 +238,7 @@ _புனித ஜான் டி பிரிட்டோ திருத்
  * Complete readings without unnecessary truncation. Guaranteed 0 URLs.
  */
 function generateDailyMassReadingsMessage({ dailyContent, language = 'ta', readingPreference = 'full' }) {
-  const rawLang = String(language || 'ta').toLowerCase();
-  let lang = 'ta';
-  if (rawLang === 'en' || rawLang.startsWith('en')) lang = 'en';
-  else if (rawLang === 'ml' || rawLang.startsWith('ml')) lang = 'ml';
-  else if (rawLang === 'both' || (rawLang.includes('ta') && rawLang.includes('en'))) lang = 'both';
-
+  const lang = normalizeContentLanguage(language);
   const isShort = String(readingPreference || 'full').toLowerCase() === 'short';
 
   const dateEn = dailyContent.formattedDate || new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' });
@@ -308,11 +336,7 @@ ${gospelR || 'இன்றைய நற்செய்தி வாசகம் 
  * Guaranteed 0 URLs. Delivered strictly after Daily Mass Readings and before Saint of the Day image.
  */
 function generateDailyReflectionMessage({ dailyContent, language = 'ta' }) {
-  const rawLang = String(language || 'ta').toLowerCase();
-  let lang = 'ta';
-  if (rawLang === 'en' || rawLang.startsWith('en')) lang = 'en';
-  else if (rawLang === 'ml' || rawLang.startsWith('ml')) lang = 'ml';
-  else if (rawLang === 'both' || (rawLang.includes('ta') && rawLang.includes('en'))) lang = 'both';
+  const lang = normalizeContentLanguage(language);
 
   const reflTa = (dailyContent?.reflection?.tamil || '').trim();
   const reflEn = (dailyContent?.reflection?.english || '').trim();
@@ -321,7 +345,7 @@ function generateDailyReflectionMessage({ dailyContent, language = 'ta' }) {
 
   if (lang === 'en') {
     const text = reflEn || reflTa || 'The Word of God is a lamp to our feet and a light to our path. May God bless and guide you today.';
-    msg = `🕊️ *Daily Reflection (இன்றைய தியானம்)*
+    msg = `🕊️ *Daily Reflection*
 
 ${text}
 
@@ -339,11 +363,11 @@ _SJDB Connect_`;
   } else {
     // Tamil (default)
     const text = reflTa || reflEn || 'இறைவனின் வார்த்தை நம் வாழ்வின் வழிகாட்டி. இன்றைய நாளில் இறைவனின் அன்பிலும் இரக்கத்திலும் திளைப்போம்.';
-    msg = `🕊️ *இன்றைய தியானம் (DAILY REFLECTION)*
+    msg = `🕊️ *இன்றைய தியானம்*
 
 ${text}
 
-— *புனித அருளானந்தர் ஆலயம் (St. John de Britto Church), காளையார்கோவில்*
+— *புனித அருளானந்தர் திருத்தலம், காளையார்கோவில்*
 _SJDB Connect_`;
   }
 
@@ -383,111 +407,121 @@ function getDailySaintImagePayload({ dailyContent }) {
 }
 
 /**
- * MESSAGE 4 — SAINT OF THE DAY CONTENT (Sent as its own separate WhatsApp text message)
+ * MESSAGE 5 — SAINT OF THE DAY CONTENT (Sent as its own separate WhatsApp text message)
  *
  * Contains:
  * - Saint's name
  * - Saint's title / feast information if available
  * - Feast day information
- * - Biography / description in selected language
+ * - Biography / description in selected language (Tamil, English, or Both)
  * - Church footer
  *
  * Guaranteed 0 URLs. No Read More link.
  */
 function generateSaintContentMessage({ dailyContent, language = 'ta' }) {
-  const rawLang = String(language || 'ta').toLowerCase();
-  let lang = 'ta';
-  if (rawLang === 'en' || rawLang.startsWith('en')) lang = 'en';
-  else if (rawLang === 'ml' || rawLang.startsWith('ml')) lang = 'ml';
-  else if (rawLang === 'both' || (rawLang.includes('ta') && rawLang.includes('en'))) lang = 'both';
+  const lang = normalizeContentLanguage(language);
 
-  const saintNameEn = dailyContent?.saint?.nameEnglish || dailyContent?.saint?.name || dailyContent?.saintOfTheDay?.english?.name || dailyContent?.saintName || 'Saint of the Day';
-  const saintNameTa = dailyContent?.saint?.nameTamil || dailyContent?.saint?.nameTa || dailyContent?.saintOfTheDay?.tamil?.name || dailyContent?.saintNameTa || saintNameEn;
-  const feastDay = dailyContent?.saint?.feastDay || dailyContent?.saintOfTheDay?.english?.feastDay || dailyContent?.formattedDate || '';
+  const saintNameEn = dailyContent?.saint?.nameEn || dailyContent?.saint?.nameEnglish || dailyContent?.saint?.name || dailyContent?.saintName || 'Saint of the Day';
+  const saintNameTa = dailyContent?.saint?.nameTa || dailyContent?.saint?.nameTamil || dailyContent?.saintNameTa || '';
+  const titleEn = dailyContent?.saint?.titleEn || dailyContent?.saint?.feastTitle || saintNameEn;
+  const titleTa = dailyContent?.saint?.titleTa || dailyContent?.saint?.feastTitleTa || saintNameTa;
+  const feastDayEn = dailyContent?.saint?.feastDayEn || dailyContent?.saint?.feastDay || dailyContent?.formattedDate || '';
+  const feastDayTa = dailyContent?.saint?.feastDayTa || dailyContent?.formattedDateTa || feastDayEn;
+
   const descEn = (
+    dailyContent?.saint?.descriptionEn ||
     dailyContent?.saint?.description ||
     dailyContent?.saint?.descriptionEnglish ||
-    dailyContent?.saint?.englishDescription ||
-    dailyContent?.saintOfTheDay?.english?.description ||
     dailyContent?.saintDescription ||
     dailyContent?.saintDescriptionEn ||
     ''
   ).trim();
-  const descTa = (
-    dailyContent?.saint?.descriptionTamil ||
+
+  const descTaRaw = (
     dailyContent?.saint?.descriptionTa ||
-    dailyContent?.saint?.tamilDescription ||
-    dailyContent?.saintOfTheDay?.tamil?.description ||
+    dailyContent?.saint?.descriptionTamil ||
     dailyContent?.saintDescriptionTa ||
-    descEn
+    ''
   ).trim();
 
-  const feastTitleEn = dailyContent?.saint?.feastTitle;
-  const feastTitleTa = dailyContent?.saint?.feastTitleTa || feastTitleEn;
+  // Validate that Tamil biography actually contains Tamil characters
+  const hasTamilInBio = Boolean(descTaRaw && /[\u0B80-\u0BFF]/.test(descTaRaw));
+  const descTa = hasTamilInBio ? descTaRaw : '';
+
   const feastTypeEn = dailyContent?.saint?.feastType || 'Feast';
-  const feastTypeTa = dailyContent?.saint?.feastTypeTa || 'திருவிழா';
+  const feastTypeTa = dailyContent?.saint?.feastTypeTa || 'நினைவுநாள்';
 
   let msg = '';
 
+  // 1. ENGLISH ONLY
   if (lang === 'en') {
-    msg = `✨ *Saint of the Day*
-
-👑 *${saintNameEn}*
-
-`;
-    if (feastDay) {
-      msg += `📅 *Feast Day:* ${feastDay}\n\n`;
+    msg = `✨ *Saint of the Day*\n\n👑 *${saintNameEn}*\n\n`;
+    if (feastDayEn) {
+      msg += `📅 *Feast Day:* ${feastDayEn}\n\n`;
     }
-    if (feastTitleEn) {
-      msg += `🎉 *${feastTypeEn}:* ${feastTitleEn}\n\n`;
-    }
-    const finalDescEn = descEn || descTa;
-    if (finalDescEn) {
-      msg += `${finalDescEn}\n\n`;
-    }
-    msg += `— *St. John de Britto Church, Kalayarkoil*\n_SJDB Connect_`;
-
-  } else if (lang === 'both') {
-    msg = `✨ *Saint of the Day / இன்றைய புனிதர்*
-
-👑 *${saintNameEn}* ${saintNameTa && saintNameTa !== saintNameEn ? `/ *${saintNameTa}*` : ''}
-
-`;
-    if (feastDay) {
-      msg += `📅 *Feast Day / திருவிழா:* ${feastDay}\n\n`;
-    }
-    if (feastTitleEn) {
-      msg += `🎉 *${feastTypeEn} / ${feastTypeTa}:* ${feastTitleEn}${feastTitleTa && feastTitleTa !== feastTitleEn ? ` (${feastTitleTa})` : ''}\n\n`;
+    if (titleEn && titleEn !== saintNameEn) {
+      msg += `🎉 *${feastTypeEn}:* ${titleEn}\n\n`;
     }
     if (descEn) {
       msg += `${descEn}\n\n`;
     }
-    if (descTa && descTa !== descEn) {
-      msg += `*தமிழ் குறிப்பு:*\n${descTa}\n\n`;
-    }
-    msg += `— *St. John de Britto Church, Kalayarkoil*\n_புனித ஜான் டி பிரிட்டோ திருத்தலம்_`;
-
-  } else {
-    // Tamil (default)
-    const name = saintNameTa || saintNameEn;
-    const desc = descTa || descEn;
-
-    msg = `✨ *இன்றைய புனிதர் (Saint of the Day)*
-
-👑 *${name}*
-
-`;
-    if (feastDay) {
-      msg += `📅 *திருவிழா நாள்:* ${feastDay}\n\n`;
-    }
-    // if (feastTitleTa || feastTitleEn) {
-    //   msg += `🎉 *${feastTypeTa}:* ${feastTitleTa || feastTitleEn}\n\n`;
-    // }
-    if (desc) {
-      msg += `${desc}\n\n`;
-    }
-    msg += `— *புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்*\n_SJDB Connect_`;
+    msg += `— *St. John de Britto Church, Kalayarkoil*\n_SJDB Connect_`;
+    return removeAllUrls(msg.trim());
   }
+
+  // 2. BILINGUAL (TAMIL + ENGLISH)
+  if (lang === 'both') {
+    const finalNameTa = saintNameTa || saintNameEn;
+    const finalFeastDayTa = feastDayTa || feastDayEn;
+    const finalTitleTa = titleTa && titleTa !== titleEn ? titleTa : (dailyContent?.saint?.feastTitleTa || null);
+
+    msg = `🇮🇳 *தமிழ் (Tamil)*\n✨ *இன்றைய புனிதர்*\n\n👑 *${finalNameTa}*\n\n`;
+    if (finalFeastDayTa) {
+      msg += `📅 *திருவிழா நாள்:* ${finalFeastDayTa}\n\n`;
+    }
+    if (finalTitleTa && finalTitleTa !== finalNameTa) {
+      msg += `🎉 *${feastTypeTa}:* ${finalTitleTa}\n\n`;
+    }
+    if (descTa) {
+      msg += `${descTa}\n\n`;
+    } else {
+      msg += `இன்றைய புனிதரின் வாழ்க்கை வரலாறு மற்றும் அருளுரைகள் எமது ஆலய இணையதளத்தில் வாசிக்கலாம்.\n\n`;
+    }
+
+    msg += `🇬🇧 *English*\n✨ *Saint of the Day*\n\n👑 *${saintNameEn}*\n\n`;
+    if (feastDayEn) {
+      msg += `📅 *Feast Day:* ${feastDayEn}\n\n`;
+    }
+    if (titleEn && titleEn !== saintNameEn) {
+      msg += `🎉 *${feastTypeEn}:* ${titleEn}\n\n`;
+    }
+    if (descEn) {
+      msg += `${descEn}\n\n`;
+    }
+
+    msg += `— *St. John de Britto Church, Kalayarkoil*\n_SJDB Connect_`;
+    return removeAllUrls(msg.trim());
+  }
+
+  // 3. TAMIL ONLY (Strict default)
+  const finalName = saintNameTa || saintNameEn;
+  const finalFeastDay = feastDayTa || feastDayEn;
+  const finalTitle = titleTa && titleTa !== titleEn ? titleTa : (dailyContent?.saint?.feastTitleTa || null);
+
+  msg = `✨ *இன்றைய புனிதர்*\n\n👑 *${finalName}*\n\n`;
+  if (finalFeastDay) {
+    msg += `📅 *திருவிழா நாள்:* ${finalFeastDay}\n\n`;
+  }
+  if (finalTitle && finalTitle !== finalName) {
+    msg += `🎉 *${feastTypeTa}:* ${finalTitle}\n\n`;
+  }
+  if (descTa) {
+    msg += `${descTa}\n\n`;
+  } else {
+    console.warn('[SaintOfDay] Tamil biography unavailable — using dignified Tamil notice');
+    msg += `இன்றைய புனிதரின் வாழ்க்கை வரலாறு மற்றும் அருளுரைகள் எமது ஆலய இணையதளத்தில் வாசிக்கலாம்.\nஇறைவனின் ஆசீரும் புனிதரின் பரிந்துரையும் நம்மோடு இருப்பதாக.\n\n`;
+  }
+  msg += `— *புனித அருளானந்தர் திருத்தலம், காளையார்கோவில்*\n_SJDB Connect_`;
 
   return removeAllUrls(msg.trim());
 }

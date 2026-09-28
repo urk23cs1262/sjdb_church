@@ -252,21 +252,30 @@ async function getTodayDailyContent(targetDate = new Date()) {
 
   const saint = {
     date: saintData?.date || dateKey,
-    nameTamil: saintData?.tamilName || saintData?.nameTa || saintData?.saintName || 'இன்றைய புனிதர்',
-    nameEnglish: saintData?.englishName || saintData?.saintName || saintData?.name || 'Saint of the Day',
-    description: saintData?.description || saintData?.descriptionEnglish || '',
-    descriptionEnglish: saintData?.description || saintData?.descriptionEnglish || '',
-    descriptionTa: saintData?.descriptionTa || saintData?.descriptionTamil || saintData?.description || '',
-    descriptionTamil: saintData?.descriptionTa || saintData?.descriptionTamil || saintData?.description || '',
+    nameEnglish: saintData?.nameEn || saintData?.englishName || saintData?.saintName || saintData?.name || 'Saint of the Day',
+    nameTamil: saintData?.nameTa || saintData?.tamilName || 'இன்றைய புனிதர்',
+    nameEn: saintData?.nameEn || saintData?.englishName || saintData?.saintName || 'Saint of the Day',
+    nameTa: saintData?.nameTa || saintData?.tamilName || 'இன்றைய புனிதர்',
+    titleEn: saintData?.titleEn || saintData?.feastTitle || saintData?.englishName || 'Saint of the Day',
+    titleTa: saintData?.titleTa || saintData?.feastTitleTa || saintData?.tamilName || 'இன்றைய புனிதர்',
+    description: saintData?.descriptionEn || saintData?.description || saintData?.descriptionEnglish || '',
+    descriptionEnglish: saintData?.descriptionEn || saintData?.description || '',
+    descriptionEn: saintData?.descriptionEn || saintData?.description || '',
+    descriptionTa: saintData?.descriptionTa && /[\u0B80-\u0BFF]/.test(saintData.descriptionTa) ? saintData.descriptionTa : '',
+    descriptionTamil: saintData?.descriptionTa && /[\u0B80-\u0BFF]/.test(saintData.descriptionTa) ? saintData.descriptionTa : '',
     feastDay: saintData?.feastDay || formattedEn,
-    feastTitle: saintData?.feastTitle || null,
-    feastTitleTa: saintData?.feastTitleTa || null,
+    feastDayEn: formattedEn,
+    feastDayTa: formattedTa,
+    feastTitle: saintData?.feastTitle || saintData?.titleEn || null,
+    feastTitleTa: saintData?.feastTitleTa || saintData?.titleTa || null,
     feastType: saintData?.feastType || null,
     feastTypeTa: saintData?.feastTypeTa || null,
     hasFeastInfo: Boolean(saintData?.hasFeastInfo),
     image: saintImageUrl,
+    imageUrl: saintImageUrl,
     imageSource: saintData?.imageSource || 'Vatican News',
-    sourceUrl: saintData?.sourceUrl || saintData?.link || 'https://www.vaticannews.va/en/saints.html'
+    sourceUrl: saintData?.sourceUrl || saintData?.link || 'https://www.vaticannews.va/en/saints.html',
+    saints: saintData?.saints || []
   };
 
   const { getSiteUrl } = require('../config/siteRoutes');
@@ -278,10 +287,11 @@ async function getTodayDailyContent(targetDate = new Date()) {
     formattedDateTa: formattedTa,
     saintName: saint.nameEnglish,
     saintNameTa: saint.nameTamil,
-    saintDescription: saint.description,
+    saintDescription: saint.descriptionEnglish,
     saintDescriptionTa: saint.descriptionTamil,
     saintImage: saintImageUrl,
     saintFeastDay: saint.feastDay,
+    saintFeastDayTa: formattedTa,
     bible: {
       tamil: verseData.verseTa || verseData.verseTextTa || verseData.tamil || '',
       english: verseData.verseEn || verseData.verseTextEn || verseData.english || '',

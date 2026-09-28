@@ -112,7 +112,8 @@ const getSaint = async (req, res) => {
       source: saint.source || "Vatican News",
       sourceUrl: saint.sourceUrl || saint.link || VATICAN_NEWS_DEFAULT_URL,
       link: saint.link || saint.sourceUrl || VATICAN_NEWS_DEFAULT_URL,
-      allSaints: saint.allSaints || [],
+      saints: saint.saints || saint.allSaints || [],
+      allSaints: saint.allSaints || saint.saints || [],
       saint
     });
   } catch (err) {
@@ -162,7 +163,8 @@ const refreshSaint = async (req, res) => {
       source: saint.source || "Vatican News",
       sourceUrl: saint.sourceUrl || saint.link || VATICAN_NEWS_DEFAULT_URL,
       link: saint.link || saint.sourceUrl || VATICAN_NEWS_DEFAULT_URL,
-      allSaints: saint.allSaints || [],
+      saints: saint.saints || saint.allSaints || [],
+      allSaints: saint.allSaints || saint.saints || [],
       saint
     });
   } catch (err) {
@@ -195,7 +197,8 @@ const getSaintStatus = async (req, res) => {
       feastType: saint ? (saint.feastType || null) : null,
       feastTypeTa: saint ? (saint.feastTypeTa || null) : null,
       hasFeastInfo: Boolean(saint && saint.hasFeastInfo),
-      allSaints: saint ? (saint.allSaints || []) : []
+      saints: saint ? (saint.saints || saint.allSaints || []) : [],
+      allSaints: saint ? (saint.allSaints || saint.saints || []) : []
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

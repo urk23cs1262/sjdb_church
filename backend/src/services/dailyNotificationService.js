@@ -21,6 +21,10 @@ const {
 } = require('./whatsappDailyFormatter');
 const { getDailyVerseImage } = require('./bibleVerseImageService');
 const { SITE_ROUTES, EXTERNAL_LINKS, getSiteUrl, getBaseClientUrl } = require('../config/siteRoutes');
+const {
+  getUserDailyContentLanguage,
+  normalizeContentLanguage
+} = require('../utils/userLanguageHelper');
 
 // Lazy-load WhatsApp bot to avoid startup race conditions
 function getWhatsApp() {
@@ -41,18 +45,7 @@ let isBroadcasting = false;
  */
 function resolveUserLanguage(user) {
   if (!user) return 'ta';
-  const rawLang = String(
-    user.mass_reflection_language ||
-    user.settings?.notifications?.mass_reflection_language ||
-    user.preferredLanguage ||
-    user.language ||
-    'ta'
-  ).trim().toLowerCase();
-
-  if (rawLang === 'en' || rawLang.startsWith('en')) return 'en';
-  if (rawLang === 'ml' || rawLang.startsWith('ml') || rawLang.includes('malayalam')) return 'ml';
-  if (rawLang === 'both' || rawLang.includes('ta-en') || (rawLang.includes('ta') && rawLang.includes('en'))) return 'both';
-  return 'ta'; // Default to Tamil
+  return getUserDailyContentLanguage(user);
 }
 
 /**
@@ -265,6 +258,14 @@ async function sendDailyWhatsAppSequence({
   // ── 5. ✨ Saint of the Day Content message ────────────────────────────────
   if (!messagesSent.includes('saint_content')) {
     try {
+      const dateKey = dailyContent.dateKey || new Date().toISOString().slice(0, 10);
+      const hasTa = Boolean(dailyContent.saint?.descriptionTa && /[\u0B80-\u0BFF]/.test(dailyContent.saint.descriptionTa));
+      console.log(`[SaintOfDay] Date: ${dateKey}`);
+      console.log(`[SaintOfDay] Source: ${dailyContent.saint?.imageSource || 'Vatican News'}`);
+      console.log(`[SaintOfDay] User language: ${userLang}`);
+      console.log(`[SaintOfDay] Tamil translation: ${hasTa ? 'available' : 'unavailable'}`);
+      console.log(`[SaintOfDay] Sending ${userLang === 'ta' ? 'Tamil' : userLang === 'both' ? 'Bilingual' : 'English'} Saint content`);
+
       const saintContentMsg = generateSaintContentMessage({ dailyContent, language: userLang });
       const ok = await waService.sendWhatsAppMessage(phone, saintContentMsg);
       if (ok) {
@@ -1065,5 +1066,7 @@ module.exports = {
   sendDailyChurchNotifications,
   getDailyNotificationStatus,
   getUserNotificationHistory,
-  checkAndSendOnStartup
+  checkAndSendOnStartup,
+  sendDailyWhatsAppSequence,
+  resolveUserLanguage
 };

@@ -69,6 +69,8 @@ export const getMediaUrl = (path) => {
   return `${baseUrl}${cleanPath}`;
 };
 
+export const getFileUrl = getMediaUrl;
+
 export { API_URL, UPLOADS_URL, MEDIA_BASE_URL };
 export default api;
 
