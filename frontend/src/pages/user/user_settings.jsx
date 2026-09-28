@@ -127,7 +127,9 @@ export default function UserSettings() {
           whatsapp: true,
           email: true,
           inApp: true,
-          push: true
+          push: true,
+          loginAlerts: true,
+          loginAlertScope: 'all'
         },
         language: 'en',
         theme: 'light',
@@ -319,6 +321,8 @@ export default function UserSettings() {
             email: true,
             inApp: true,
             push: true,
+            loginAlerts: true,
+            loginAlertScope: 'all',
             ...(user.settings?.notifications || {})
           },
           language: user.settings?.language || user.preferredLanguage || 'en',
@@ -964,6 +968,44 @@ export default function UserSettings() {
                           <span className="text-xs font-semibold text-gray-800">{item.label}</span>
                         </label>
                       ))}
+                    </div>
+
+                    {/* Login Alert Scope Preference */}
+                    <div className="pt-4 border-t border-gray-100 space-y-3">
+                      <div>
+                        <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                          <FiShield className="text-church-gold" /> Login Security Alerts Frequency
+                        </h3>
+                        <p className="text-gray-500 text-xs mt-0.5">Control how frequently you receive login detection notifications across email, in-app, push, and WhatsApp</p>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label className="flex items-start gap-3 p-3.5 bg-gray-50 rounded-xl hover:bg-gray-100 cursor-pointer border border-gray-200 transition-colors">
+                          <input
+                            type="radio"
+                            value="all"
+                            {...register('settings.notifications.loginAlertScope')}
+                            className="mt-0.5 w-4 h-4 text-church-gold focus:ring-church-gold"
+                          />
+                          <div>
+                            <div className="text-xs font-bold text-church-royal-blue">Every Successful Login (Recommended)</div>
+                            <div className="text-[11px] text-gray-500">Receive an alert on every login so you are immediately aware of any account access.</div>
+                          </div>
+                        </label>
+
+                        <label className="flex items-start gap-3 p-3.5 bg-gray-50 rounded-xl hover:bg-gray-100 cursor-pointer border border-gray-200 transition-colors">
+                          <input
+                            type="radio"
+                            value="new_devices"
+                            {...register('settings.notifications.loginAlertScope')}
+                            className="mt-0.5 w-4 h-4 text-church-gold focus:ring-church-gold"
+                          />
+                          <div>
+                            <div className="text-xs font-bold text-church-royal-blue">New Devices &amp; Locations Only</div>
+                            <div className="text-[11px] text-gray-500">Only alert when a login occurs from an unrecognized device, new city, or suspicious activity.</div>
+                          </div>
+                        </label>
+                      </div>
                     </div>
 
                     {/* Daily Notification Language Preference */}

@@ -8,13 +8,7 @@ function parseUserAgent(ua = '') {
   let device = 'Desktop Device';
   let browser = 'Web Browser';
 
-  if (/windows/i.test(ua)) {
-    os = 'Windows';
-    device = 'Windows PC / Laptop';
-  } else if (/macintosh|mac os/i.test(ua)) {
-    os = 'macOS';
-    device = 'Mac Workstation';
-  } else if (/iphone/i.test(ua)) {
+  if (/iphone/i.test(ua)) {
     os = 'iOS';
     device = 'iPhone';
   } else if (/ipad/i.test(ua)) {
@@ -23,6 +17,12 @@ function parseUserAgent(ua = '') {
   } else if (/android/i.test(ua)) {
     os = 'Android';
     device = 'Android Smartphone';
+  } else if (/windows/i.test(ua)) {
+    os = 'Windows';
+    device = 'Windows PC / Laptop';
+  } else if (/macintosh|mac os/i.test(ua)) {
+    os = 'macOS';
+    device = 'Mac Workstation';
   } else if (/linux/i.test(ua)) {
     os = 'Linux';
     device = 'Linux Workstation';
@@ -45,9 +45,26 @@ function parseUserAgent(ua = '') {
 
 // Format client IP and Location
 function parseClientIpAndLocation(req) {
-  let ip = (req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || '127.0.0.1').split(',')[0].trim();
+  let ip = (
+    req?.headers?.['cf-connecting-ip'] ||
+    req?.headers?.['x-real-ip'] ||
+    req?.headers?.['x-forwarded-for'] ||
+    req?.socket?.remoteAddress ||
+    req?.ip ||
+    '127.0.0.1'
+  ).split(',')[0].trim();
 
-  if (ip === '::1' || ip === '127.0.0.1' || ip.startsWith('::ffff:127.0.0.1')) {
+  // Check headers for real location if behind proxy/CDN
+  const city = req?.headers?.['cf-ipcity'] || req?.headers?.['x-vercel-ip-city'];
+  const region = req?.headers?.['cf-region'] || req?.headers?.['cf-region-code'] || req?.headers?.['x-vercel-ip-country-region'];
+  const country = req?.headers?.['cf-ipcountry'] || req?.headers?.['x-vercel-ip-country'];
+
+  if (city || country) {
+    const parts = [city, region, country].filter(Boolean);
+    return { ip, location: parts.join(', ') };
+  }
+
+  if (ip === '::1' || ip === '127.0.0.1' || ip.startsWith('::ffff:127.0.0.1') || ip.startsWith('192.168.') || ip.startsWith('10.')) {
     ip = '127.0.0.1';
     return { ip, location: 'Local Network (Dev)' };
   }
@@ -68,22 +85,129 @@ function generateSecurityReportToken(userId, extra = {}) {
   );
 }
 
-// Asynchronously send successful login alert email
-async function sendLoginAlertEmail({ user, req, loginMethod = 'Password' }) {
-  if (!user || !user.email) return;
+// Dispatch WhatsApp message via Baileys bot or Twilio fallback
+async function dispatchWhatsAppAlert(phone, text) {
+  if (!phone) return false;
+  try {
+    const waBot = require('../bot/whatsapp');
+    if (waBot && typeof waBot.sendWhatsAppMessage === 'function') {
+      const sent = await waBot.sendWhatsAppMessage(phone, text);
+      if (sent) return true;
+    }
+  } catch (e) {
+    // Continue to Twilio fallback
+  }
 
   try {
-    const uaInfo = parseUserAgent(req.headers['user-agent']);
+    const { sendWhatsApp } = require('../config/twilio');
+    if (typeof sendWhatsApp === 'function') {
+      let formattedPhone = phone.trim();
+      if (!formattedPhone.startsWith('+')) {
+        formattedPhone = '+' + formattedPhone;
+      }
+      await sendWhatsApp(formattedPhone, text);
+      return true;
+    }
+  } catch (e) {}
+
+  return false;
+}
+
+/**
+ * Dispatches a Multi-Channel Login Alert across ALL 5 notification channels:
+ * 1. Email (HTML card matching exact template with "Wasn't you?" report action)
+ * 2. In-App Notification (Notification model for user dashboard / bell icon)
+ * 3. Browser Web Push Notification (Desktop & mobile system notifications)
+ * 4. WhatsApp Notification (Direct instant alert via SJDB Connect Bot)
+ * 5. Admin Security Telemetry (Notification for admin panel if suspicious or new device)
+ */
+async function sendLoginAlertEmail({ user, req, loginMethod = 'Password', extra = {} }) {
+  if (!user) return;
+
+  try {
+    const User = require('../models/User');
+    const { createNotification } = require('./notificationService');
+    const { sendPushToUser } = require('./webPushService');
+    const { notifyAdmin } = require('./adminNotificationService');
+
+    const uaInfo = parseUserAgent(req?.headers?.['user-agent'] || '');
     const ipInfo = parseClientIpAndLocation(req);
-    const securityToken = generateSecurityReportToken(user._id, {
+    const clientUrl = getSiteUrl('');
+
+    // Fetch freshest user document to examine trusted devices & login history
+    const freshUser = (user._id ? await User.findById(user._id) : null) || user;
+
+    const trustedDevices = freshUser.trustedDevices || [];
+    const loginHistory = freshUser.loginHistory || [];
+    const hasPastLogins = loginHistory.length > 0;
+
+    // 1. Device Evaluation
+    const deviceKey = `${uaInfo.browser}-${uaInfo.os}`;
+    const isRecognizedDevice = trustedDevices.some(
+      d => (d.deviceId === deviceKey || d.deviceName === uaInfo.device) && d.isTrusted !== false
+    );
+    const isNewDevice = !isRecognizedDevice;
+
+    // 2. Location Evaluation
+    const isRecognizedLocation = !hasPastLogins || loginHistory.some(
+      h => (h.location === ipInfo.location || h.ip === ipInfo.ip)
+    );
+    const isNewLocation = hasPastLogins && !isRecognizedLocation;
+
+    // 3. Suspicious Pattern Detection
+    const hadRecentFailures = (freshUser.failedLoginAttempts || 0) > 0;
+
+    let impossibleTravel = false;
+    if (hasPastLogins && loginHistory[0]?.location && ipInfo.location) {
+      const lastLoginTime = new Date(loginHistory[0].timestamp || Date.now()).getTime();
+      const timeDiffHours = (Date.now() - lastLoginTime) / (1000 * 60 * 60);
+      if (timeDiffHours < 2 && loginHistory[0].location !== ipInfo.location && !loginHistory[0].location.includes('Dev') && !ipInfo.location.includes('Dev')) {
+        impossibleTravel = true;
+      }
+    }
+
+    const isSuspicious = hadRecentFailures || impossibleTravel || (isNewDevice && isNewLocation);
+
+    // 4. Scope Filtering Check
+    // If user explicitly configured loginAlertScope to 'new_devices', notify only on new device / location / suspicious
+    const alertScope = freshUser.settings?.notifications?.loginAlertScope || 'all';
+    if (alertScope === 'new_devices' && !isNewDevice && !isNewLocation && !isSuspicious) {
+      console.log(`[LoginSecurity] Routine login from recognized device (${deviceKey}) skipped for ${freshUser.email} (scope: new_devices)`);
+      return;
+    }
+
+    // 5. Priority and Badge classification
+    let priority = 'low';
+    let alertBadge = 'Security Alert';
+    let alertTitle = 'New Login Detected';
+
+    if (isSuspicious) {
+      priority = 'urgent';
+      alertBadge = '🚨 Critical Security Alert';
+      alertTitle = 'Suspicious Login Detected';
+    } else if (isNewDevice) {
+      priority = 'high';
+      alertBadge = '🛡️ New Device Alert';
+      alertTitle = 'New Device Login Detected';
+    } else if (isNewLocation) {
+      priority = 'high';
+      alertBadge = '📍 New Location Alert';
+      alertTitle = 'New Location Login Detected';
+    }
+
+    // 6. Generate 24-hour cryptographic report token with full login telemetry
+    const securityToken = generateSecurityReportToken(freshUser._id, {
       device: uaInfo.device,
       browser: uaInfo.browser,
       os: uaInfo.os,
       ip: ipInfo.ip,
       location: ipInfo.location,
-      loginMethod
+      loginMethod,
+      isSuspicious,
+      isNewDevice,
+      isNewLocation
     });
-    const reportUrl = getSiteUrl(`/security/report-unauthorized?token=${securityToken}&userId=${user._id}`);
+    const reportUrl = getSiteUrl(`/security/report-unauthorized?token=${securityToken}&userId=${freshUser._id}`);
 
     const formattedTime = new Date().toLocaleString('en-IN', {
       timeZone: 'Asia/Kolkata',
@@ -95,110 +219,232 @@ async function sendLoginAlertEmail({ user, req, loginMethod = 'Password' }) {
       hour12: true
     }) + ' IST';
 
-    const emailHtml = `
-<div style="background-color:#f1f5f9; padding:20px 10px; font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <div style="max-width:560px; margin:0 auto; background-color:#ffffff; border-radius:18px; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,0.08); border:1px solid #e2e8f0;">
+    // ─────────────────────────────────────────────────────────────────────────────
+    // CHANNEL 1: EMAIL NOTIFICATION
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (freshUser.email && freshUser.settings?.notifications?.email !== false) {
+      const emailHtml = `
+<div style="background-color:#f1f5f9; padding:30px 15px; font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <div style="max-width:580px; margin:0 auto; background-color:#ffffff; border-radius:18px; overflow:hidden; box-shadow:0 8px 30px rgba(0,0,0,0.08); border:1px solid #e2e8f0;">
     
     <!-- Header -->
-    <div style="background:linear-gradient(135deg,#1e3a8a 0%,#0f172a 100%); padding:28px 22px; text-align:center;">
+    <div style="background:linear-gradient(135deg,#1e3a8a 0%,#0f172a 100%); padding:28px 24px; text-align:center;">
       <div style="width:75px; height:75px; margin:0 auto 12px; border-radius:50%; overflow:hidden; border:3px solid #fbbf24; background:#ffffff; box-shadow:0 4px 14px rgba(0,0,0,0.25);">
         <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width:100%; height:100%; object-fit:cover; display:block;" />
       </div>
-      <div style="display:inline-block; background-color:rgba(255,255,255,0.15); padding:4px 14px; border-radius:30px; margin-bottom:8px;">
-        <span style="color:#fbbf24; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Security Alert</span>
+      <div style="display:inline-block; background-color:${isSuspicious ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.15)'}; padding:4px 14px; border-radius:30px; margin-bottom:8px; border:1px solid ${isSuspicious ? '#ef4444' : 'rgba(255,255,255,0.2)'};">
+        <span style="color:${isSuspicious ? '#fca5a5' : '#fbbf24'}; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">
+          ${alertBadge}
+        </span>
       </div>
-      <h1 style="margin:4px 0 0; color:#ffffff; font-size:22px; font-weight:800; line-height:1.3;">New Login Detected</h1>
-      <p style="margin:4px 0 0; color:#e2e8f0; opacity:0.9; font-size:13px;">St. John de Britto Church</p>
+      <h1 style="margin:4px 0 0; color:#ffffff; font-size:22px; font-weight:800; line-height:1.3;">
+        ${alertTitle}
+      </h1>
+      <p style="margin:4px 0 0; color:#e2e8f0; opacity:0.9; font-size:13px;">St. John de Britto Church, Kalayarkoil</p>
     </div>
 
     <!-- Body Content -->
-    <div style="padding:26px 22px;">
-      <p style="color:#1e293b; font-size:15px; font-weight:700; margin-top:0;">Dear ${user.name},</p>
-      <p style="color:#475569; font-size:14px; line-height:1.6; margin-bottom:20px;">
-        A new successful login to your Parish Account was detected.
+    <div style="padding:28px 24px;">
+      <p style="color:#1e293b; font-size:15px; font-weight:700; margin:0 0 16px;">Dear ${freshUser.name},</p>
+      
+      <p style="color:#334155; font-size:14px; line-height:1.6; margin:0 0 20px;">
+        A new login to your Parish Account was detected.
       </p>
 
       <!-- Details Box -->
-      <div style="background-color:#f8fafc; border:1px solid #cbd5e1; border-radius:14px; padding:16px 18px; margin-bottom:24px;">
-        <h3 style="margin:0 0 12px; color:#1e3a8a; font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; border-b:1px solid #e2e8f0; padding-bottom:8px;">
+      <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:14px; padding:18px 20px; margin-bottom:24px;">
+        <h3 style="margin:0 0 14px; color:#1e3a8a; font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid #e2e8f0; padding-bottom:8px;">
           Login Details
         </h3>
         
         <table style="width:100%; border-collapse:collapse; font-size:13px; color:#334155;">
           <tr>
-            <td style="padding:6px 0; color:#64748b; font-weight:600; width:40%;">Date & Time:</td>
-            <td style="padding:6px 0; font-weight:700; color:#0f172a;">${formattedTime}</td>
+            <td style="padding:7px 0; color:#64748b; font-weight:600; width:42%;">Date &amp; Time:</td>
+            <td style="padding:7px 0; font-weight:700; color:#0f172a;">${formattedTime}</td>
           </tr>
           <tr>
-            <td style="padding:6px 0; color:#64748b; font-weight:600;">Device / Browser:</td>
-            <td style="padding:6px 0; font-weight:700; color:#0f172a;">${uaInfo.device}</td>
+            <td style="padding:7px 0; color:#64748b; font-weight:600;">Device:</td>
+            <td style="padding:7px 0; font-weight:700; color:#0f172a;">${uaInfo.device}</td>
           </tr>
           <tr>
-            <td style="padding:6px 0; color:#64748b; font-weight:600;">Operating System:</td>
-            <td style="padding:6px 0; font-weight:700; color:#0f172a;">${uaInfo.os}</td>
+            <td style="padding:7px 0; color:#64748b; font-weight:600;">Operating System:</td>
+            <td style="padding:7px 0; font-weight:700; color:#0f172a;">${uaInfo.os}</td>
           </tr>
           <tr>
-            <td style="padding:6px 0; color:#64748b; font-weight:600;">IP Address:</td>
-            <td style="padding:6px 0; font-weight:700; color:#0f172a; font-family:monospace;">${ipInfo.ip}</td>
+            <td style="padding:7px 0; color:#64748b; font-weight:600;">IP Address:</td>
+            <td style="padding:7px 0; font-weight:700; color:#0f172a; font-family:monospace;">${ipInfo.ip}</td>
           </tr>
           <tr>
-            <td style="padding:6px 0; color:#64748b; font-weight:600;">Approx. Location:</td>
-            <td style="padding:6px 0; font-weight:700; color:#0f172a;">${ipInfo.location}</td>
+            <td style="padding:7px 0; color:#64748b; font-weight:600;">Approximate Location:</td>
+            <td style="padding:7px 0; font-weight:700; color:#0f172a;">${ipInfo.location}</td>
           </tr>
           <tr>
-            <td style="padding:6px 0; color:#64748b; font-weight:600;">Login Method:</td>
-            <td style="padding:6px 0; font-weight:700; color:#1e3a8a;">${loginMethod}</td>
+            <td style="padding:7px 0; color:#64748b; font-weight:600;">Login Method:</td>
+            <td style="padding:7px 0; font-weight:700; color:#1e3a8a;">${loginMethod}</td>
           </tr>
         </table>
       </div>
 
-      <!-- Action Button -->
-      <div style="text-align:center; margin-bottom:26px;">
-        <p style="color:#64748b; font-size:12px; margin-bottom:12px; font-style:italic;">
-          Didn't log in recently? Secure your account immediately:
+      <p style="color:#475569; font-size:13px; line-height:1.6; margin:0 0 16px;">
+        If this login was performed by you, no action is required.
+      </p>
+
+      <!-- Wasn't You Action Button -->
+      <div style="background-color:#fef2f2; border:1px solid #fee2e2; border-radius:14px; padding:20px; text-align:center; margin:22px 0;">
+        <p style="margin:0 0 12px; color:#991b1b; font-size:13px; font-weight:700;">
+          Did not recognize this login or device?
         </p>
-        <a href="${reportUrl}" style="display:inline-block; background-color:#dc2626; color:#ffffff; font-weight:800; font-size:14px; text-decoration:none; padding:13px 28px; border-radius:10px; box-shadow:0 4px 14px rgba(220,38,38,0.35);">
-          Wasn't You? Secure Account Now →
+        <a href="${reportUrl}" style="display:inline-block; background-color:#dc2626; color:#ffffff; font-weight:800; font-size:14px; text-decoration:none; padding:13px 30px; border-radius:10px; box-shadow:0 4px 14px rgba(220,38,38,0.35); text-transform:uppercase; letter-spacing:0.5px;">
+          Wasn't You? Report Unauthorized Access &rarr;
         </a>
+        <p style="margin:10px 0 0; color:#b91c1c; font-size:11px;">
+          Clicking this will instantly revoke all active sessions and start password recovery.
+        </p>
       </div>
 
-      <div style="background-color:#fffbe6; border-left:4px solid #d97706; padding:12px 14px; border-radius:8px; margin-bottom:20px; font-size:12px; color:#92400e; line-height:1.5;">
-        <strong>If you do not recognize this login, we recommend that you:</strong>
-        <ul style="margin:6px 0 0; padding-left:18px;">
-          <li>Click the <strong>"Wasn't You?"</strong> button above to secure your account immediately.</li>
-          <li>Change your password immediately.</li>
-          <li>Review your recent account activity.</li>
-        </ul>
+      <!-- Recommendation Steps -->
+      <div style="background-color:#fffbe6; border-left:4px solid #d97706; padding:14px 16px; border-radius:8px; margin-bottom:20px; font-size:13px; color:#92400e; line-height:1.6;">
+        <strong style="display:block; margin-bottom:6px;">If you do not recognize this login, we recommend that you:</strong>
+        <ol style="margin:0; padding-left:20px;">
+          <li style="margin-bottom:4px;">Change your password immediately.</li>
+          <li style="margin-bottom:4px;">Review your account activity in your Settings &gt; Security page.</li>
+          <li>Contact your parish administrator if you need assistance.</li>
+        </ol>
       </div>
 
-      <p style="color:#64748b; font-size:12px; line-height:1.5; margin-bottom:0;">
+      <p style="color:#475569; font-size:13px; line-height:1.5; margin:0 0 20px;">
         Keeping your account secure is important to us.
+      </p>
+
+      <p style="color:#334155; font-size:13px; line-height:1.5; margin:0 0 2px;">Thank you,</p>
+      <p style="color:#0f172a; font-size:14px; font-weight:800; margin:0 0 2px;">St. John de Britto Church</p>
+      <p style="color:#64748b; font-size:12px; margin:0 0 2px;">Parish Management System</p>
+      <p style="color:#2563eb; font-size:12px; margin:0;">
+        <a href="${clientUrl}" style="color:#1e40af; text-decoration:none;">${clientUrl}</a>
       </p>
     </div>
 
     <!-- Footer -->
-    <div style="background-color:#0f172a; padding:18px 22px; text-align:center; color:#94a3b8; font-size:12px;">
+    <div style="background-color:#0f172a; padding:18px 24px; text-align:center; color:#94a3b8; font-size:11px; border-top:1px solid #1e293b;">
       <p style="margin:0; font-weight:700; color:#f8fafc;">St. John de Britto Church, Kalayarkoil</p>
-      <p style="margin:4px 0 0; color:#64748b; font-size:11px;">Parish Management System • <a href="${clientUrl}" style="color:#fbbf24; text-decoration:none;">Website</a></p>
+      <p style="margin:4px 0 0; color:#64748b;">Parish Management System • Sivagangai District, Tamil Nadu</p>
     </div>
 
   </div>
 </div>
-    `;
+      `;
 
-    sendMail({
-      to: user.email,
-      subject: `Security Alert: New Login Detected — St. John de Britto Church`,
-      html: emailHtml
-    }).then(res => {
-      if (res.success) console.log(` Login alert email sent to ${user.email}`);
-      else console.warn(` Login alert email skipped/failed for ${user.email}: ${res.error}`);
-    }).catch(err => console.error(' Login alert email error:', err.message));
+      sendMail({
+        to: freshUser.email,
+        subject: `${isSuspicious ? '🚨 Critical Security Alert: Suspicious Login Detected' : isNewDevice ? '🛡️ Security Alert: New Device Login' : 'Security Alert: New Login Detected'} — St. John de Britto Church`,
+        html: emailHtml
+      }).catch(err => console.error(' Login alert email error:', err.message));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // CHANNEL 2: IN-APP NOTIFICATION
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (freshUser.settings?.notifications?.inApp !== false) {
+      createNotification({
+        userId: freshUser._id,
+        recipient: 'user',
+        title: alertTitle,
+        message: `A login was detected on ${formattedTime} from ${uaInfo.device} (${ipInfo.location}) via ${loginMethod}. If this was not you, report unauthorized access immediately.`,
+        type: 'security',
+        category: 'security',
+        priority,
+        actionUrl: reportUrl,
+        channels: ['inApp']
+      }).catch(err => console.warn('In-app login notification error:', err.message));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // CHANNEL 3: BROWSER WEB PUSH NOTIFICATION
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (freshUser.settings?.notifications?.push !== false) {
+      sendPushToUser(freshUser._id, {
+        title: `${alertTitle} — St. John de Britto Church`,
+        body: `Login detected from ${uaInfo.device} (${ipInfo.location}). Wasn't you? Tap to secure your account.`,
+        url: reportUrl,
+        notificationId: `login-${Date.now()}`,
+        tag: `login-alert-${freshUser._id}`
+      }).catch(err => console.warn('Web push login alert error:', err.message));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // CHANNEL 4: WHATSAPP BOT NOTIFICATION
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (freshUser.phone && freshUser.settings?.notifications?.whatsapp !== false && freshUser.whatsappOptIn !== false) {
+      let cleanPhone = freshUser.phone.replace(/[^0-9]/g, '');
+      if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
+
+      const waText =
+`*${isSuspicious ? '🚨 CRITICAL SECURITY ALERT: Suspicious Login Detected' : isNewDevice ? '🛡️ SECURITY ALERT: New Device Login Detected' : '🔒 SECURITY ALERT: New Login Detected'}*
+
+Dear ${freshUser.name},
+
+A new login to your Parish Account was detected.
+
+*Login Details*
+• *Date & Time:* ${formattedTime}
+• *Device:* ${uaInfo.device}
+• *Operating System:* ${uaInfo.os}
+• *IP Address:* ${ipInfo.ip}
+• *Approximate Location:* ${ipInfo.location}
+• *Login Method:* ${loginMethod}
+
+If this login was performed by you, no action is required.
+
+*If you do not recognize this login:*
+1. Change your password immediately.
+2. Review your account activity.
+3. Contact your parish administrator if you need assistance.
+
+👉 *Wasn't you? Secure your account immediately:*
+${reportUrl}
+
+Keeping your account secure is important to us.
+
+Thank you,
+*St. John de Britto Church*
+Parish Management System
+${clientUrl}`;
+
+      dispatchWhatsAppAlert(cleanPhone, waText).catch(err => console.warn('WhatsApp login alert error:', err.message));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // CHANNEL 5: ADMINISTRATOR SECURITY TELEMETRY
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (isSuspicious || isNewDevice || isNewLocation || Boolean(extra.isFirstLogin)) {
+      notifyAdmin({
+        type: isSuspicious ? 'MULTIPLE_FAILED_LOGIN' : isNewDevice ? 'LOGIN_ATTEMPT' : 'LOGIN_SUCCESS',
+        user: freshUser,
+        req,
+        reason: isSuspicious
+          ? (impossibleTravel ? 'Impossible travel anomaly detected between logins' : 'Login succeeded after failed attempts')
+          : isNewDevice
+            ? 'New unrecognized device login'
+            : isNewLocation
+              ? 'New location login detected'
+              : 'Routine login verified',
+        extra: {
+          isNewDevice,
+          isNewLocation,
+          isSuspicious,
+          device: uaInfo.device,
+          ip: ipInfo.ip,
+          location: ipInfo.location,
+          loginMethod
+        }
+      }).catch(err => console.warn('Admin login telemetry error:', err.message));
+    }
 
   } catch (err) {
     console.error(' sendLoginAlertEmail error:', err.message);
   }
 }
+
 
 // Asynchronously send "Password Updated Successfully" confirmation email
 async function sendPasswordUpdatedEmail({ user }) {
@@ -762,7 +1008,7 @@ async function recordLoginHistory({ userId, req, loginMethod = 'Password', statu
   if (!userId) return;
   try {
     const User = require('../models/User');
-    const uaInfo = parseUserAgent(req.headers['user-agent']);
+    const uaInfo = parseUserAgent(req?.headers?.['user-agent'] || '');
     const ipInfo = parseClientIpAndLocation(req);
 
     const historyEntry = {
@@ -780,11 +1026,17 @@ async function recordLoginHistory({ userId, req, loginMethod = 'Password', statu
     const user = await User.findById(userId);
     if (!user) return;
 
-    // Keep last 25 login records
-    user.loginHistory = [historyEntry, ...(user.loginHistory || [])].slice(0, 25);
+    // Keep last 50 login records
+    user.loginHistory = [historyEntry, ...(user.loginHistory || [])].slice(0, 50);
 
-    // Update trusted devices on successful login
+    // Update trusted devices and clear failure counters on successful login
     if (status === 'success') {
+      user.failedLoginAttempts = 0;
+      user.lastLogin = new Date();
+      if (!user.firstSuccessfulLoginAt) {
+        user.firstSuccessfulLoginAt = new Date();
+      }
+
       const deviceKey = `${uaInfo.browser}-${uaInfo.os}`;
       const devices = user.trustedDevices || [];
       const existingIdx = devices.findIndex(d => d.deviceId === deviceKey || d.deviceName === uaInfo.device);
@@ -801,7 +1053,7 @@ async function recordLoginHistory({ userId, req, loginMethod = 'Password', statu
           isTrusted: true
         });
       }
-      user.trustedDevices = devices.slice(0, 10);
+      user.trustedDevices = devices.slice(0, 15);
     }
 
     await user.save();
@@ -815,6 +1067,8 @@ module.exports = {
   parseClientIpAndLocation,
   generateSecurityReportToken,
   sendLoginAlertEmail,
+  sendLoginAlert: sendLoginAlertEmail,
+  sendMultiChannelLoginAlert: sendLoginAlertEmail,
   sendPasswordUpdatedEmail,
   sendUserSuspensionEmail,
   sendAdminSuspensionIncidentEmail,
@@ -822,3 +1076,4 @@ module.exports = {
   sendUserTemporaryLockoutEmail,
   recordLoginHistory
 };
+

@@ -126,7 +126,9 @@ const userSchema = new mongoose.Schema({
         whatsapp: true,
         email: true,
         inApp: true,
-        push: true
+        push: true,
+        loginAlerts: true,
+        loginAlertScope: 'all' // 'all' = every successful login, 'new_devices' = only new devices & locations
       },
       language: 'en',
       accessibility: {
