@@ -274,6 +274,8 @@ async function searchWikipediaSaintImage(rawSaintName) {
     directSlugs.push('Vincent_de_Paul');
   } else if (lower.includes('wenceslaus')) {
     directSlugs.push('Wenceslaus_I,_Duke_of_Bohemia');
+  } else if (lower.includes('eustachius') || lower.includes('eustochium')) {
+    directSlugs.push('Eustochium', 'Saint_Eustochium');
   } else if (lower.includes('jerome')) {
     directSlugs.push('Jerome');
   } else if (lower.includes('therese') || lower.includes('thérèse')) {

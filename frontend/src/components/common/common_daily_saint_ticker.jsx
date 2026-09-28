@@ -386,11 +386,15 @@ export default function DailySaintTicker() {
                                 <span className="inline-block bg-church-gold/95 text-amber-950 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md shadow-xs">
                                   {isTamil ? 'இன்றைய புனிதர்' : 'Saint of the Day'}
                                 </span>
-                                {mImage && mImage.includes('vaticannews.va') && (
+                                {mImage && (mImage.includes('vaticannews.va') || activeModalSaint.imageSource === 'vatican') ? (
                                   <span className="inline-block bg-white/20 backdrop-blur-xs text-white text-[9px] font-bold px-2 py-0.5 rounded-md">
                                     Vatican News
                                   </span>
-                                )}
+                                ) : mImage ? (
+                                  <span className="inline-block bg-white/20 backdrop-blur-xs text-white text-[9px] font-bold px-2 py-0.5 rounded-md">
+                                    Wikipedia
+                                  </span>
+                                ) : null}
                               </div>
 
                               <h2 className="text-lg sm:text-xl md:text-2xl font-bold font-display leading-tight drop-shadow-md text-white">
@@ -420,7 +424,7 @@ export default function DailySaintTicker() {
                                       }`}
                                     >
                                       <span>{isTamil && s.tamilName ? s.tamilName : cleanDisplayName(s.englishName || s.name)}</span>
-                                      {s.image && <span className="text-[9px]">🖼️</span>}
+                                      {(s.image || s.imageUrl) && <span className="text-[9px]">🖼️</span>}
                                     </button>
                                   ))}
                                 </div>
@@ -492,11 +496,18 @@ export default function DailySaintTicker() {
                                   <FiExternalLink className="text-base" />
                                   <span>
                                     {(() => {
-                                      const rawSite = saintOfDay.source || '';
-                                      const siteName = (!rawSite || rawSite.includes('Catholic Readings'))
-                                        ? 'Vatican News'
-                                        : rawSite.split('/')[0].trim();
-                                      return isTamil ? `${siteName}-ல் வாசிக்க` : `Read on ${siteName}`;
+                                      let siteName = 'Vatican News';
+                                      if (mSourceUrl && mSourceUrl.includes('wikipedia.org')) {
+                                        siteName = 'Wikipedia';
+                                      } else if (activeModalSaint.contentSource) {
+                                        siteName = activeModalSaint.contentSource;
+                                      } else {
+                                        const rawSite = saintOfDay.source || '';
+                                        siteName = (!rawSite || rawSite.includes('Catholic Readings'))
+                                          ? 'Vatican News'
+                                          : rawSite.split('/')[0].trim();
+                                      }
+                                      return isTamil ? `${siteName}-ல் வாசிக்க` : `Read full story on ${siteName}`;
                                     })()}
                                   </span>
                                 </a>

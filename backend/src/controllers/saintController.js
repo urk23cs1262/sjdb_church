@@ -25,6 +25,8 @@ const getSaint = async (req, res) => {
         if (isToday) {
           saint = getDailySaint();
           const hasShortBio = !saint || !saint.description || saint.description.length < 250;
+          const hasMissingSecondaryImages = saint?.saints && saint.saints.length > 1 && saint.saints.some(s => !s.image && !s.imageUrl);
+          const hasMissingSecondaryBio = saint?.saints && saint.saints.length > 1 && saint.saints.some(s => !s.description || s.description.length < 200);
           const isStale = forceRefresh ||
             !saint ||
             saint.date !== currentIST ||
@@ -37,6 +39,8 @@ const getSaint = async (req, res) => {
             saint.image?.includes('Superdome') ||
             saint.image?.includes('Rossano_NILO') ||
             saint.imageFallback ||
+            hasMissingSecondaryImages ||
+            hasMissingSecondaryBio ||
             hasShortBio;
           if (isStale) {
             saint = await fetchDailySaint(undefined, true);
@@ -52,6 +56,8 @@ const getSaint = async (req, res) => {
       const forceRefresh = req.query.force === 'true' || req.query.refresh === 'true';
       saint = getDailySaint();
       const hasShortBio = !saint || !saint.description || saint.description.length < 250;
+      const hasMissingSecondaryImages = saint?.saints && saint.saints.length > 1 && saint.saints.some(s => !s.image && !s.imageUrl);
+      const hasMissingSecondaryBio = saint?.saints && saint.saints.length > 1 && saint.saints.some(s => !s.description || s.description.length < 200);
       const isStale = forceRefresh ||
         !saint ||
         saint.date !== currentIST ||
@@ -64,6 +70,8 @@ const getSaint = async (req, res) => {
         saint.image?.includes('Superdome') ||
         saint.image?.includes('Rossano_NILO') ||
         saint.imageFallback ||
+        hasMissingSecondaryImages ||
+        hasMissingSecondaryBio ||
         hasShortBio;
       if (isStale) {
         saint = await fetchDailySaint(undefined, true);

@@ -2,7 +2,7 @@
  * Test Suite: Separated Daily Catholic Content Messages
  * Verifies all requirements of the updated SJDB Connect specification:
  * 1. 6 separate messages in strict order:
- *    📖 Bible Verse (Image) -> ✝️ Mass Readings -> 🕊️ Daily Reflection -> 🖼️ Saint Image -> ✨ Saint Content -> 🌐 Read More
+ *    📖 Bible Verse (Image) -> ✝️ Mass Readings -> 🕊️ Daily Reflection ->  Saint Image -> ✨ Saint Content -> 🌐 Read More
  * 2. Proper language handling (English, Tamil, Both)
  * 3. URLs restricted ONLY to Message 6 (Read More)
  * 4. Bible verse image generator (renders Royal Blue/Gold Catholic card with proper Tamil/English fonts)
@@ -133,7 +133,7 @@ async function runUnitTests() {
   assert(!sentSequence[0].media?.caption?.includes('http') && !sentSequence[0].media?.caption?.includes('www.'), 'Stage 1 caption contains 0 URLs');
   assert(sentSequence[1].type === 'text' && (sentSequence[1].content.includes('Mass Readings') || sentSequence[1].content.includes('திருப்பலி வாசகங்கள்')), 'Stage 2 is ✝️ Daily Mass Readings');
   assert(sentSequence[2].type === 'text' && (sentSequence[2].content.includes('DAILY REFLECTION') || sentSequence[2].content.includes('இன்றைய தியானம்')), 'Stage 3 is 🕊️ இன்றைய தியானம் (DAILY REFLECTION)');
-  assert(sentSequence[3].type === 'media', 'Stage 4 is 🖼️ Saint of the Day Image');
+  assert(sentSequence[3].type === 'media', 'Stage 4 is  Saint of the Day Image');
   assert(sentSequence[4].type === 'text' && (sentSequence[4].content.includes('Saint of the Day') || sentSequence[4].content.includes('இன்றைய புனிதர்')), 'Stage 5 is ✨ Saint of the Day Content');
   assert(sentSequence[5].type === 'text' && (sentSequence[5].content.includes('Read More') || sentSequence[5].content.includes('மேலும் வாசிக்க')), 'Stage 6 is 🌐 Read More Website Link');
 

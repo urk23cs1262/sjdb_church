@@ -1058,14 +1058,14 @@ export default function DailyCatholicContent() {
                   : (saintData || {});
 
                 const isPrimarySaint = cleanSaintName(activeSaint.englishName || activeSaint.name).toLowerCase() === cleanSaintName(saintData?.saintName || saintData?.name).toLowerCase();
-                const activeImage = activeSaint.image || (isPrimarySaint ? saintData?.image : null);
+                const activeImage = activeSaint.image || activeSaint.imageUrl || (isPrimarySaint ? saintData?.image : null);
                 const activeName = isTamil && activeSaint.tamilName
                   ? activeSaint.tamilName
                   : cleanSaintName(activeSaint.englishName || activeSaint.saintName || activeSaint.name);
                 const activeDesc = isTamil && activeSaint.descriptionTa
                   ? activeSaint.descriptionTa
                   : (activeSaint.description || saintData?.description || 'Daily Saint details.');
-                const activeSourceUrl = activeSaint.sourceUrl || saintData?.sourceUrl || 'https://www.vaticannews.va/en/saints.html';
+                const activeSourceUrl = activeSaint.sourceUrl || activeSaint.detailUrl || saintData?.sourceUrl || 'https://www.vaticannews.va/en/saints.html';
 
                 return (
                   <div>
@@ -1092,7 +1092,7 @@ export default function DailyCatholicContent() {
                               }`}
                             >
                               <span>{isTamil && s.tamilName ? s.tamilName : cleanSaintName(s.englishName || s.name)}</span>
-                              {s.image && <span className="text-[10px] opacity-75">🖼️</span>}
+                              {(s.image || s.imageUrl) && <span className="text-[10px] opacity-75">🖼️</span>}
                             </button>
                           );
                         })}
@@ -1121,11 +1121,15 @@ export default function DailyCatholicContent() {
                             <span className="inline-block px-2.5 py-0.5 rounded-md bg-church-gold text-amber-950 font-black text-[10px] uppercase tracking-wider">
                               {isTamil ? 'இன்றைய புனிதர்' : 'Saint of the Day'}
                             </span>
-                            {activeImage && activeImage.includes('vaticannews.va') && (
+                            {activeImage && (activeImage.includes('vaticannews.va') || activeSaint.imageSource === 'vatican') ? (
                               <span className="inline-block px-2 py-0.5 rounded-md bg-white/20 backdrop-blur-xs text-white text-[9px] font-bold tracking-wider">
                                 Vatican News
                               </span>
-                            )}
+                            ) : activeImage ? (
+                              <span className="inline-block px-2 py-0.5 rounded-md bg-white/20 backdrop-blur-xs text-white text-[9px] font-bold tracking-wider">
+                                Wikipedia
+                              </span>
+                            ) : null}
                           </div>
                           <h4 className="font-bold text-base sm:text-lg text-white drop-shadow">
                             {activeName}
@@ -1174,11 +1178,18 @@ export default function DailyCatholicContent() {
                               <FiExternalLink />
                               <span>
                                 {(() => {
-                                  const rawSite = saintData?.source || '';
-                                  const siteName = (!rawSite || rawSite.includes('Catholic Readings'))
-                                    ? 'Vatican News'
-                                    : rawSite.split('/')[0].trim();
-                                  return isTamil ? `${siteName}-ல் வாசிக்க` : `Read on ${siteName}`;
+                                  let siteName = 'Vatican News';
+                                  if (activeSourceUrl && activeSourceUrl.includes('wikipedia.org')) {
+                                    siteName = 'Wikipedia';
+                                  } else if (activeSaint.contentSource) {
+                                    siteName = activeSaint.contentSource;
+                                  } else {
+                                    const rawSite = saintData?.source || '';
+                                    siteName = (!rawSite || rawSite.includes('Catholic Readings'))
+                                      ? 'Vatican News'
+                                      : rawSite.split('/')[0].trim();
+                                  }
+                                  return isTamil ? `${siteName}-ல் வாசிக்க` : `Read full story on ${siteName}`;
                                 })()}
                               </span>
                             </a>

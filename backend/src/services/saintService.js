@@ -236,6 +236,10 @@ async function translateText(text, targetLang = 'ta') {
  */
 function cleanSaintNameForWiki(rawName) {
   if (!rawName) return '';
+  const lowerRaw = rawName.toLowerCase();
+  if (lowerRaw.includes('eustachius') && (lowerRaw.includes('paula') || lowerRaw.includes('virgin'))) {
+    return 'Eustochium';
+  }
   let name = rawName
     // Strip everything after first comma or dash (e.g. ", priest...", ", Apostle...", " - Martyr")
     .replace(/,.*$/, '')
@@ -273,6 +277,8 @@ function validateWikiMatch(displayedSaintName, wikiTitle) {
   if (cleanDisplay.includes('matthew') && cleanWiki.includes('matthew')) return true;
   if (cleanDisplay.includes('therese') && cleanWiki.includes('lisieux')) return true;
   if (cleanDisplay.includes('francis') && cleanWiki.includes('francis')) return true;
+  if (cleanDisplay.includes('wenceslaus') && cleanWiki.includes('wenceslaus')) return true;
+  if ((cleanDisplay.includes('eustachius') || cleanDisplay.includes('eustochium')) && (cleanWiki.includes('eustochium') || cleanWiki.includes('eustachius'))) return true;
 
   const displayTokens = cleanDisplay.split(/\s+/).filter(w => w.length > 3 && !['saint', 'blessed', 'pope', 'martyr'].includes(w));
   const wikiTokens = cleanWiki.split(/\s+/).filter(w => w.length > 3 && !['saint', 'blessed', 'pope', 'martyr'].includes(w));
@@ -308,12 +314,17 @@ async function fetchWikipediaBio(saintName) {
   ];
 
   const lower = cleanName.toLowerCase();
+  const rawLower = (saintName || '').toLowerCase();
   if (lower.includes('vincent de paul')) {
     slugs.unshift('Vincent_de_Paul');
   } else if (lower.includes('pius of pietrelcina') || lower.includes('padre pio')) {
     slugs.unshift('Padre_Pio');
   } else if (lower.includes('cosmas and damian')) {
     slugs.unshift('Cosmas_and_Damian', 'Saints_Cosmas_and_Damian');
+  } else if (lower.includes('wenceslaus') || rawLower.includes('wenceslaus')) {
+    slugs.unshift('Wenceslaus_I,_Duke_of_Bohemia', 'Wenceslaus_I', 'Saint_Wenceslaus');
+  } else if (lower.includes('eustachius') || lower.includes('eustochium') || rawLower.includes('eustachius')) {
+    slugs.unshift('Eustochium', 'Saint_Eustochium');
   } else if (lower === 'matthew') {
     slugs.unshift('Matthew_the_Apostle', 'Saint_Matthew');
   } else if (lower.includes('therese')) {
@@ -957,11 +968,10 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
           (parsed.name && parsed.name.includes('Nilus')) ||
           (parsed.englishName && parsed.englishName.includes('Nilus'))
         );
-        const isStaleSep28WithoutVaticanImg = dateKey.endsWith('-09-28') && (
-          !parsed.image || !parsed.image.includes('vaticannews.va') || (parsed.saintName && parsed.saintName.includes('Wenceslaus'))
-        );
         const hasShortBio = !parsed.description || parsed.description.length < 250;
-        if (!isStaleNilusOnSep26 && !isStaleSep28WithoutVaticanImg && !hasShortBio && parsed && parsed.date === dateKey && (parsed.saintName || parsed.name) && parsed.image && !parsed.imageFallback) {
+        const hasMissingSecondaryImages = parsed.saints && parsed.saints.length > 1 && parsed.saints.some(s => !s.image && !s.imageUrl);
+        const hasMissingSecondaryBio = parsed.saints && parsed.saints.length > 1 && parsed.saints.some(s => !s.description || s.description.length < 200);
+        if (!isStaleNilusOnSep26 && !isStaleSep28WithoutVaticanImg && !hasShortBio && !hasMissingSecondaryImages && !hasMissingSecondaryBio && parsed && parsed.date === dateKey && (parsed.saintName || parsed.name) && parsed.image && !parsed.imageFallback) {
           if (isCurrentToday) {
             dailySaint = parsed;
           }
@@ -1163,35 +1173,127 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
     }
   }
 
-  // ── BUILD & SAVE SAINT OBJECT ────────────────────────────────────────────
-  const formattedSaintsList = allSaintsList.map(s => {
-    let sTamilName = s.name;
-    const lowerN = cleanSaintName(s.name).toLowerCase();
-    if (lowerN.includes('lorenzo ruiz')) {
-      sTamilName = 'புனித லோரென்சோ ரூயிஸ் மற்றும் தோழர்கள்';
-    } else if (lowerN.includes('wenceslaus')) {
-      sTamilName = 'புனித வென்செஸ்லாஸ்';
-    } else if (lowerN.includes('eustachius') || lowerN.includes('eustochium')) {
-      sTamilName = 'புனித யூஸ்டோச்சியம்';
+  // ── BUILD & SAVE SAINT OBJECT (FOR ALL SAINTS: ENHANCE CONTENT & FETCH WIKI IMAGE) ──
+  const formattedSaintsList = [];
+  for (const s of allSaintsList) {
+    const cleanS = cleanSaintName(s.name).toLowerCase();
+    const cleanPrim = cleanSaintName(saintName).toLowerCase();
+    const isThisSaintPrimary = (s.name === saintName || cleanS === cleanPrim || cleanS.includes(cleanPrim) || cleanPrim.includes(cleanS) || (s.imageUrl && s.imageUrl === imageResult?.url));
+
+    let sBio = s.description || '';
+    let sImageUrl = s.imageUrl || null;
+    let sImageSource = s.imageUrl ? 'vatican' : null;
+    let sImageSourceUrl = s.sourceUrl || s.detailUrl || usedSourceUrl;
+    let sSourceUrl = s.sourceUrl || s.detailUrl || usedSourceUrl;
+    let sContentSource = 'Vatican News';
+
+    // 1. Content: If this saint is primary, use the already selected full description.
+    // Otherwise, if biography is short (< 300 chars) or empty, fetch from Wikipedia by saint name
+    if (isThisSaintPrimary && description && description.length >= 250) {
+      sBio = description;
+      sSourceUrl = usedSourceUrl;
+      sContentSource = usedSource;
+    } else if (!sBio || sBio.length < 300) {
+      console.log(`[Saint Service] Fetching content from original Wikipedia link for "${s.name}"...`);
+      try {
+        const wikiBio = await fetchWikipediaBio(s.name);
+        if (wikiBio && isSufficientBio(wikiBio.text)) {
+          sBio = wikiBio.text;
+          sSourceUrl = wikiBio.url;
+          sContentSource = 'Wikipedia';
+          console.log(`[Saint Service] Content fetched from Wikipedia for "${s.name}" (${sBio.length} chars) -> ${wikiBio.url}`);
+        }
+      } catch (wbErr) {
+        console.warn(`[Saint Service] Wikipedia bio fetch notice for "${s.name}":`, wbErr.message);
+      }
     }
-    const isThisSaintPrimary = s.name === saintName;
-    const sDescTa = isThisSaintPrimary ? descriptionTa : (s.descriptionTa && /[\u0B80-\u0BFF]/.test(s.descriptionTa) ? s.descriptionTa : '');
-    return {
+
+    // 2. Image: If this saint is primary, use the resolved imageResult.
+    // Otherwise, if saint does NOT have a Vatican image, fetch image from Wikipedia by giving the saint name!
+    if (isThisSaintPrimary && imageResult?.url && !imageResult?.fallback) {
+      sImageUrl = imageResult.url;
+      sImageSource = imageResult.source;
+      sImageSourceUrl = imageResult.sourceUrl;
+    } else if (!sImageUrl) {
+      console.log(`[Saint Service] Fetching image from Wikipedia by giving saint name for "${s.name}"...`);
+      try {
+        const wikiImg = await searchWikipediaSaintImage(s.name);
+        if (wikiImg && wikiImg.url) {
+          sImageUrl = wikiImg.url;
+          sImageSource = 'wikipedia';
+          sImageSourceUrl = wikiImg.sourceUrl;
+          console.log(`[Saint Service] Wikipedia image found for "${s.name}": ${sImageUrl}`);
+        }
+      } catch (imgErr) {
+        console.warn(`[Saint Service] Wikipedia image fetch notice for "${s.name}":`, imgErr.message);
+      }
+    }
+
+    // 3. Tamil translations for name, title, and biography
+    let sTamilName = '';
+    if (cleanS.includes('lorenzo ruiz')) {
+      sTamilName = 'புனித லோரென்சோ ரூயிஸ் மற்றும் தோழர்கள்';
+    } else if (cleanS.includes('wenceslaus')) {
+      sTamilName = 'புனித வென்செஸ்லாஸ்';
+    } else if (cleanS.includes('eustachius') || cleanS.includes('eustochium')) {
+      sTamilName = 'புனித யூஸ்டோச்சியம்';
+    } else if (isThisSaintPrimary && tamilName) {
+      sTamilName = tamilName;
+    } else {
+      try {
+        sTamilName = await translateText(s.name, 'ta');
+      } catch (e) {}
+      if (!sTamilName || !/[\u0B80-\u0BFF]/.test(sTamilName)) {
+        sTamilName = s.name;
+      }
+    }
+
+    let sTitleEn = s.feastTitle || s.name;
+    let sTitleTa = s.feastTitleTa || null;
+    if (!sTitleTa) {
+      if (KNOWN_FEAST_TRANSLATIONS[sTitleEn]) {
+        sTitleTa = KNOWN_FEAST_TRANSLATIONS[sTitleEn];
+      } else {
+        sTitleTa = sTamilName;
+      }
+    }
+
+    let sDescTa = '';
+    if (isThisSaintPrimary && descriptionTa && /[\u0B80-\u0BFF]/.test(descriptionTa)) {
+      sDescTa = descriptionTa;
+    } else if (s.descriptionTa && /[\u0B80-\u0BFF]/.test(s.descriptionTa) && s.descriptionTa.length > 200) {
+      sDescTa = s.descriptionTa;
+    } else if (sBio) {
+      try {
+        const translatedBio = await translateBiography(sBio, 'ta');
+        if (translatedBio && /[\u0B80-\u0BFF]/.test(translatedBio)) {
+          sDescTa = translatedBio;
+        }
+      } catch (trErr) {
+        console.warn(`[Saint Service] Tamil biography translation notice for "${s.name}":`, trErr.message);
+      }
+    }
+
+    formattedSaintsList.push({
       name: s.name,
       englishName: s.name,
       nameEn: s.name,
       tamilName: sTamilName,
       nameTa: sTamilName,
-      titleEn: s.feastTitle || s.name,
-      titleTa: s.feastTitleTa || sTamilName,
-      description: s.description,
-      descriptionEn: s.description,
+      titleEn: sTitleEn,
+      titleTa: sTitleTa,
+      description: sBio,
+      descriptionEn: sBio,
       descriptionTa: sDescTa,
-      imageUrl: s.imageUrl || null,
-      image: s.imageUrl || null,
-      sourceUrl: s.sourceUrl || s.detailUrl || usedSourceUrl
-    };
-  });
+      imageUrl: sImageUrl,
+      image: sImageUrl,
+      imageSource: sImageSource || 'vatican',
+      imageSourceUrl: sImageSourceUrl,
+      sourceUrl: sSourceUrl,
+      detailUrl: sSourceUrl,
+      contentSource: sContentSource
+    });
+  }
 
   const titleEn = feastInfo?.feastTitle || saintName;
   let titleTa = feastInfo?.feastTitleTa || null;
