@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { FiUsers, FiBriefcase, FiBookOpen, FiCalendar, FiFileText, FiMessageSquare, FiVolume2, FiDollarSign, FiImage, FiBell, FiMenu, FiX, FiLogOut, FiArrowLeft, FiSettings, FiTool } from 'react-icons/fi';
+import { FiUsers, FiBriefcase, FiBookOpen, FiCalendar, FiFileText, FiMessageSquare, FiVolume2, FiDollarSign, FiImage, FiBell, FiMenu, FiX, FiLogOut, FiArrowLeft, FiSettings, FiTool, FiHardDrive } from 'react-icons/fi';
 import { SiWhatsapp } from 'react-icons/si';
 import { GiChurch, GiCrucifix, GiPrayer } from 'react-icons/gi';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,6 +24,7 @@ const NAV_ITEMS = [
   { icon: <GiPrayer />, label: 'Prayers', path: '/admin/prayers', color: 'bg-church-gold' },
   { icon: <SiWhatsapp />, label: 'WhatsApp Bot', path: '/admin/whatsapp', color: 'bg-[#25D366]' },
   { icon: <FiSettings />, label: 'Site Settings', path: '/admin/settings', color: 'bg-gray-600' },
+  // { icon: <FiHardDrive />, label: 'Storage Manager', path: '/admin/settings#storage-manager-section', color: 'bg-indigo-600' },
 ];
 
 export default function AdminLayout() {

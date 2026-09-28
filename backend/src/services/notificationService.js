@@ -230,17 +230,23 @@ const notifyAdmins = async ({ title, message, fileUrl }) => {
 };
 
 const {
+  createAdminNotification,
+  createUserNotification,
   emitRequestCreated,
   emitRequestStatusChanged,
   notifyAdminRequest,
+  notifyUserRequestStatus,
   requestEvents
 } = require('./requestNotificationService');
 
 module.exports = {
   createNotification,
   notifyAdmins,
+  createAdminNotification,
+  createUserNotification,
   emitRequestCreated,
   emitRequestStatusChanged,
   notifyAdminRequest,
+  notifyUserRequestStatus,
   requestEvents
 };

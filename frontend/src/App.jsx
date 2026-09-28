@@ -165,6 +165,13 @@ function AppRoutes() {
               <Route path="/settings" element={<ProtectedRoute><Navigate to="/dashboard/settings" replace /></ProtectedRoute>} />
 
               {/* Dedicated User Request-Status Review Deep Links */}
+              <Route path="/dashboard/bookings/:id" element={<ProtectedRoute><UserRequestDetail module="mass-intentions" /></ProtectedRoute>} />
+              <Route path="/dashboard/mass-booking/:id" element={<ProtectedRoute><UserRequestDetail module="mass-intentions" /></ProtectedRoute>} />
+              <Route path="/dashboard/documents/:id" element={<ProtectedRoute><UserRequestDetail module="document-requests" /></ProtectedRoute>} />
+              <Route path="/dashboard/tickets/:id" element={<ProtectedRoute><UserRequestDetail module="tickets" /></ProtectedRoute>} />
+              <Route path="/dashboard/prayer-requests/:id" element={<ProtectedRoute><UserRequestDetail module="prayer-requests" /></ProtectedRoute>} />
+              <Route path="/dashboard/prayers/:id" element={<ProtectedRoute><UserRequestDetail module="prayer-requests" /></ProtectedRoute>} />
+              <Route path="/dashboard/requests/:module/:id" element={<ProtectedRoute><UserRequestDetail /></ProtectedRoute>} />
               <Route path="/my-requests/:module/:id" element={<ProtectedRoute><UserRequestDetail /></ProtectedRoute>} />
               <Route path="/my-requests/mass-intentions/:id" element={<ProtectedRoute><UserRequestDetail module="mass-intentions" /></ProtectedRoute>} />
               <Route path="/my-requests/prayer-requests/:id" element={<ProtectedRoute><UserRequestDetail module="prayer-requests" /></ProtectedRoute>} />
@@ -210,6 +217,7 @@ function AppRoutes() {
               <Route path="whatsapp" element={<AdminWhatsApp />} />
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="team" element={<AdminTeam />} />
+              <Route path="storage" element={<Navigate to="/admin/settings#storage-manager-section" replace />} />
             </Route>
 
             {/* 404 */}

@@ -47,7 +47,24 @@ const getUnreadCount = async (req, res) => {
 // PUT /api/notifications/:id/read
 const markRead = async (req, res) => {
   try {
-    await Notification.findByIdAndUpdate(req.params.id, { isRead: true });
+    const notif = await Notification.findById(req.params.id);
+    if (!notif) return res.status(404).json({ success: false, message: 'Notification not found' });
+
+    const isAdminOrStaff = req.user && (
+      req.user.role === 'admin' ||
+      req.user.role === 'priest' ||
+      req.user.role === 'staff' ||
+      req.user.isTechnicalTeam
+    );
+
+    if (notif.recipient === 'admin' || (notif.recipient === 'both' && isAdminOrStaff)) {
+      await Notification.findByIdAndUpdate(req.params.id, {
+        $addToSet: { readBy: req.user._id },
+        $set: { isRead: true }
+      });
+    } else {
+      await Notification.findByIdAndUpdate(req.params.id, { isRead: true });
+    }
     res.json({ success: true, message: 'Marked as read' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -161,7 +178,17 @@ const getAdminNotifications = async (req, res) => {
       Notification.countDocuments(filter)
     ]);
 
-    res.json({ success: true, notifications, total });
+    const adminIdStr = req.user?._id ? req.user._id.toString() : null;
+    const formattedNotifications = notifications.map(n => {
+      const notifObj = n.toObject ? n.toObject() : { ...n };
+      if (adminIdStr) {
+        const hasRead = Array.isArray(n.readBy) && n.readBy.some(id => id && id.toString() === adminIdStr);
+        notifObj.isRead = hasRead || (Boolean(n.isRead) && (!n.readBy || n.readBy.length === 0));
+      }
+      return notifObj;
+    });
+
+    res.json({ success: true, notifications: formattedNotifications, total });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -170,10 +197,26 @@ const getAdminNotifications = async (req, res) => {
 // GET /api/notifications/admin/unread-count
 const getAdminUnreadCount = async (req, res) => {
   try {
-    const count = await Notification.countDocuments({
-      recipient: { $in: ['admin', 'both'] },
-      isRead: false
-    });
+    const adminId = req.user?._id;
+    let filter = {
+      recipient: { $in: ['admin', 'both'] }
+    };
+    if (adminId) {
+      filter.$and = [
+        { recipient: { $in: ['admin', 'both'] } },
+        { readBy: { $ne: adminId } },
+        {
+          $or: [
+            { readBy: { $exists: true, $not: { $size: 0 } } },
+            { isRead: false }
+          ]
+        }
+      ];
+    } else {
+      filter.isRead = false;
+    }
+
+    const count = await Notification.countDocuments(filter);
     res.json({ success: true, count });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -183,10 +226,21 @@ const getAdminUnreadCount = async (req, res) => {
 // PUT /api/notifications/admin/read-all
 const markAllAdminRead = async (req, res) => {
   try {
-    await Notification.updateMany(
-      { recipient: { $in: ['admin', 'both'] }, isRead: false },
-      { $set: { isRead: true } }
-    );
+    const adminId = req.user?._id;
+    if (adminId) {
+      await Notification.updateMany(
+        { recipient: { $in: ['admin', 'both'] } },
+        {
+          $addToSet: { readBy: adminId },
+          $set: { isRead: true }
+        }
+      );
+    } else {
+      await Notification.updateMany(
+        { recipient: { $in: ['admin', 'both'] }, isRead: false },
+        { $set: { isRead: true } }
+      );
+    }
     res.json({ success: true, message: 'All admin notifications marked as read' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

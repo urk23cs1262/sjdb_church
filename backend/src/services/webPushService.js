@@ -155,7 +155,13 @@ async function sendPushBroadcast(payload) {
  */
 async function sendPushToAdmins(payload) {
   try {
-    const adminUsers = await User.find({ role: 'admin' }).select('_id');
+    const adminUsers = await User.find({
+      $or: [
+        { role: { $in: ['admin', 'priest', 'staff'] } },
+        { isTechnicalTeam: true }
+      ],
+      isActive: { $ne: false }
+    }).select('_id');
     const adminIds = adminUsers.map(u => u._id);
     if (!adminIds.length) return { success: false, reason: 'No admin accounts' };
 

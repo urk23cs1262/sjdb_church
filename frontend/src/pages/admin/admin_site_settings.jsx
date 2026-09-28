@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FiSun, FiSettings, FiUpload, FiYoutube, FiMusic, FiImage, FiCheck, FiLoader, FiExternalLink, FiTrash2, FiTool } from 'react-icons/fi';
+import { FiSun, FiSettings, FiUpload, FiYoutube, FiMusic, FiImage, FiCheck, FiLoader, FiExternalLink, FiTrash2, FiTool, FiDatabase } from 'react-icons/fi';
 import { GiCrucifix, GiSpellBook } from 'react-icons/gi';
 import toast from 'react-hot-toast';
 import api, { UPLOADS_URL, getMediaUrl } from '../../services/api';
@@ -9,6 +9,7 @@ import DailyVersesManager from '../../components/admin/admin_daily_verses_manage
 import DailySaintManager from '../../components/admin/admin_daily_saint_manager';
 import RosarySongsManager from '../../components/admin/admin_rosary_songs_manager';
 import DailyNotificationManager from '../../components/admin/admin_daily_notification_manager';
+import StorageManager from '../../components/admin/admin_storage_manager';
 
 const SETTING_CARDS = [
   {
@@ -356,13 +357,23 @@ export default function SiteSettings() {
           </div>
         </div>
 
-        <Link
-          to="/admin/maintenance"
-          className="flex items-center justify-center gap-2 px-5 py-2.5 sm:py-3 bg-gradient-to-r from-amber-600 via-red-600 to-amber-700 hover:from-amber-700 hover:via-red-700 hover:to-amber-800 text-white rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer whitespace-nowrap group w-full sm:w-auto"
-        >
-          <FiTool className="text-base text-amber-200 group-hover:rotate-45 transition-transform duration-300" />
-          <span>Maintenance Mode</span>
-        </Link>
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <a
+            href="#storage-manager-section"
+            className="flex items-center justify-center gap-2 px-4 py-2.5 sm:py-3 bg-indigo-700 hover:bg-indigo-800 text-white rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm shadow-md transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+          >
+            <FiDatabase className="text-base text-indigo-200" />
+            <span>Storage Manager</span>
+          </a>
+
+          <Link
+            to="/admin/maintenance"
+            className="flex items-center justify-center gap-2 px-5 py-2.5 sm:py-3 bg-gradient-to-r from-amber-600 via-red-600 to-amber-700 hover:from-amber-700 hover:via-red-700 hover:to-amber-800 text-white rounded-xl sm:rounded-2xl font-bold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer whitespace-nowrap group"
+          >
+            <FiTool className="text-base text-amber-200 group-hover:rotate-45 transition-transform duration-300" />
+            <span>Maintenance Mode</span>
+          </Link>
+        </div>
       </div>
 
       <div className="p-3.5 sm:p-4 bg-amber-50/90 border border-amber-200 rounded-2xl text-xs text-amber-800 leading-relaxed shadow-xs">
@@ -397,7 +408,10 @@ export default function SiteSettings() {
       {/* ─── 4. ROSARY & DEVOTIONAL SONGS MANAGEMENT (ZIP & MULTI-AUDIO) ─── */}
       <RosarySongsManager />
 
-      {/* ─── 5. DAILY BIBLE VERSES CMS MANAGER ─── */}
+      {/* ─── 5. MONGODB GRIDFS STORAGE & LOGS RETENTION MANAGER ─── */}
+      <StorageManager />
+
+      {/* ─── 6. DAILY BIBLE VERSES CMS MANAGER ─── */}
       <DailyVersesManager />
     </div>
   );

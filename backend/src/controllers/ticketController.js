@@ -1,7 +1,6 @@
 const Ticket = require('../models/Ticket');
 const User = require('../models/User');
-const { notifyAdmins, createNotification } = require('../services/notificationService');
-const { emitRequestCreated, emitRequestStatusChanged } = require('../services/requestNotificationService');
+const { createAdminNotification, createUserNotification } = require('../services/requestNotificationService');
 
 const getMyTickets = async (req, res) => {
   try {
@@ -53,31 +52,61 @@ const getAll = async (req, res) => {
 
 const create = async (req, res) => {
   try {
-    const { subject, message, category, priority } = req.body;
-    const ticket = await Ticket.create({ userId: req.user._id, subject, message, category, priority });
+    const { subject, message, category, priority, name, email, phone } = req.body;
+    const userId = req.user?._id || null;
+    const userName = req.user?.name || name || 'Website Visitor';
+    const userEmail = req.user?.email || email || '';
+    const userPhone = req.user?.phone || phone || '';
+    const memberId = req.user?.parishMemberId || 'GUEST';
 
-    // Confirm to the user that their message was received
-    createNotification({
-      userId: req.user._id,
-      recipient: 'user',
-      title: 'We Received Your Message ',
-      message: `Dear ${req.user.name}, thank you for contacting St. John de Britto Church. We received your inquiry about "${subject}". Our team will get back to you soon.`,
-      type: 'ticket',
-      category: 'tickets',
-      priority: 'low',
-      actionUrl: '/dashboard/tickets',
-      relatedId: ticket._id,
-      relatedModel: 'Ticket',
-      channels: ['email'],
-    }).catch(e => console.error('Ticket user notification error:', e.message));
+    const ticketData = {
+      subject,
+      message,
+      category: category || 'enquiry',
+      priority: priority || 'medium'
+    };
+    if (userId) ticketData.userId = userId;
+    if (name || !userId) ticketData.name = userName;
+    if (email || !userId) ticketData.email = userEmail;
+    if (phone || !userId) ticketData.phone = userPhone;
 
-    // Central Admin Request Notification (WhatsApp Bot, Email, Push, In-App)
-    emitRequestCreated({
-      module: 'ticket_request',
+    const ticket = await Ticket.create(ticketData);
+    const isEnquiry = category === 'enquiry';
+    const typeLabel = isEnquiry ? 'Website Enquiry' : 'Support Ticket';
+
+    // 1. Central Admin Notification
+    createAdminNotification({
+      type: isEnquiry ? 'CONTACT_ENQUIRY' : 'TICKET',
+      requestType: isEnquiry ? 'CONTACT_ENQUIRY' : 'TICKET',
+      title: `New ${typeLabel}`,
+      message: `${userName} submitted a new ${typeLabel.toLowerCase()}: "${subject}".`,
+      userId: userId,
+      memberId: memberId,
+      requestId: ticket.ticketNumber || ticket._id,
+      priority: priority || 'normal',
+      status: 'OPEN',
+      details: `${subject} — ${message.slice(0, 120)}`,
       request: ticket,
-      user: req.user,
+      user: req.user || { _id: userId, name: userName, email: userEmail, phone: userPhone, parishMemberId: memberId },
       req
-    });
+    }).catch(e => console.error('[TicketController] Central Admin notification error:', e.message));
+
+    // 2. Central User Confirmation Notification (if user or email/phone provided)
+    if (userId || userEmail || userPhone) {
+      createUserNotification({
+        userId: userId,
+        type: 'REQUEST_STATUS_UPDATE',
+        requestType: isEnquiry ? 'CONTACT_ENQUIRY' : 'TICKET',
+        requestId: ticket.ticketNumber || ticket._id,
+        status: 'OPEN',
+        title: 'We Received Your Inquiry',
+        message: `Dear ${userName}, thank you for contacting St. John de Britto Church. We received your message about "${subject}". Our team will review and respond promptly.`,
+        redirectUrl: `/dashboard/tickets/${ticket.ticketNumber || ticket._id}`,
+        request: ticket,
+        user: req.user || { _id: userId, name: userName, email: userEmail, phone: userPhone, parishMemberId: memberId },
+        req
+      }).catch(e => console.error('[TicketController] Central User notification error:', e.message));
+    }
 
     res.status(201).json({ success: true, ticket });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -94,34 +123,27 @@ const reply = async (req, res) => {
     if (from === 'admin') ticket.status = 'in_progress';
     await ticket.save();
 
-    // Email user when admin replies
+    // Central User Notification when Admin replies
     if (from === 'admin' && ticket.userId) {
-      createNotification({
+      createUserNotification({
         userId: ticket.userId._id || ticket.userId,
-        recipient: 'user',
-        title: 'Reply to Your Inquiry ',
-        message: `The parish office replied to your inquiry "${ticket.subject}": ${message}`,
-        type: 'ticket',
-        category: 'tickets',
-        priority: 'medium',
-        actionUrl: '/dashboard/tickets',
-        relatedId: ticket._id,
-        relatedModel: 'Ticket',
-        channels: ['email'],
-      }).catch(e => console.error('Ticket reply notification error:', e.message));
+        type: 'REQUEST_STATUS_UPDATE',
+        requestType: 'TICKET',
+        requestId: ticket.ticketNumber || ticket._id,
+        status: 'IN_PROGRESS',
+        title: `Reply to: ${ticket.subject}`,
+        message: `Parish administration replied to your ticket "${ticket.subject}": ${message}`,
+        adminComment: message,
+        redirectUrl: `/dashboard/tickets/${ticket.ticketNumber || ticket._id}`,
+        metadata: {
+          previousStatus,
+          newStatus: 'in_progress',
+          adminComment: message
+        },
+        request: ticket,
+        req
+      }).catch(e => console.error('[TicketController] Central User reply notification error:', e.message));
     }
-
-    // Central Admin Notification on reply if user replied or status updated
-    emitRequestStatusChanged({
-      module: 'ticket_request',
-      request: ticket,
-      previousStatus,
-      newStatus: ticket.status,
-      user: ticket.userId,
-      updatedBy: req.user,
-      note: `Reply from ${from === 'admin' ? 'Parish Admin' : ticket.userId?.name || 'User'}: "${message.slice(0, 80)}"`,
-      req
-    });
 
     res.json({ success: true, ticket });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -129,7 +151,7 @@ const reply = async (req, res) => {
 
 const updateStatus = async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, adminComment } = req.body;
     const previousTicket = await Ticket.findById(req.params.id);
     const previousStatus = previousTicket?.status || 'open';
 
@@ -137,33 +159,25 @@ const updateStatus = async (req, res) => {
     if (status === 'resolved') update.resolvedAt = new Date();
     const ticket = await Ticket.findByIdAndUpdate(req.params.id, update, { new: true }).populate('userId', 'name email phone parishMemberId familyId anbiyam');
 
-    // Email user when ticket is resolved
-    if (status === 'resolved' && ticket.userId) {
-      createNotification({
+    // Central User Notification on status change
+    if (ticket.userId) {
+      createUserNotification({
         userId: ticket.userId._id || ticket.userId,
-        recipient: 'user',
-        title: 'Your Inquiry Has Been Resolved and closed ',
-        message: `Your inquiry regarding "${ticket.subject}" has been marked as resolved and closed. Thank you for contacting St. John de Britto Church.`,
-        type: 'ticket',
-        category: 'tickets',
-        priority: 'medium',
-        actionUrl: '/dashboard/tickets',
-        relatedId: ticket._id,
-        relatedModel: 'Ticket',
-        channels: ['email'],
-      }).catch(e => console.error('Ticket resolved notification error:', e.message));
+        type: 'REQUEST_STATUS_UPDATE',
+        requestType: 'TICKET',
+        requestId: ticket.ticketNumber || ticket._id,
+        status,
+        adminComment,
+        redirectUrl: `/dashboard/tickets/${ticket.ticketNumber || ticket._id}`,
+        metadata: {
+          previousStatus,
+          newStatus: status,
+          adminComment
+        },
+        request: ticket,
+        req
+      }).catch(e => console.error('[TicketController] Central User status notification error:', e.message));
     }
-
-    // Central Admin Status Change Notification
-    emitRequestStatusChanged({
-      module: 'ticket_request',
-      request: ticket,
-      previousStatus,
-      newStatus: status,
-      user: ticket.userId,
-      updatedBy: req.user,
-      req
-    });
 
     res.json({ success: true, ticket });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }

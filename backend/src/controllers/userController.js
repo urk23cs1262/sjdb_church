@@ -111,15 +111,23 @@ const updateProfile = async (req, res) => {
 
     if (settings) updateData.settings = settings;
 
+    const { uploadToGridFS, deleteFromGridFS } = require('../services/gridfsService');
+    const previousPhoto = req.user?.profilePhoto;
+
     if (req.body.removeProfilePhoto === 'true' || req.body.profilePhoto === '') {
       updateData.profilePhoto = '';
+      if (previousPhoto && previousPhoto.startsWith('/api/files/')) {
+        deleteFromGridFS(previousPhoto.replace('/api/files/', '')).catch(() => {});
+      }
     } else if (req.file) {
       try {
-        const { uploadToGridFS } = require('../services/gridfsService');
         const buffer = req.file.buffer || (req.file.path ? fs.readFileSync(req.file.path) : null);
         if (buffer) {
           const fileInfo = await uploadToGridFS(buffer, req.file.originalname || 'profile.jpg', req.file.mimetype || 'image/jpeg');
           updateData.profilePhoto = fileInfo.url;
+          if (previousPhoto && previousPhoto.startsWith('/api/files/')) {
+            deleteFromGridFS(previousPhoto.replace('/api/files/', '')).catch(() => {});
+          }
         }
       } catch (e) {
         console.error('Error uploading profile photo to GridFS:', e.message);

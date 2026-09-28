@@ -5,8 +5,9 @@ import {
   FiBell, FiSearch, FiTrash2, FiCheckCircle, FiX, FiCheck,
   FiFilter, FiAlertCircle, FiRefreshCw, FiMoreVertical, FiArrowLeft,
   FiShield, FiCalendar, FiDollarSign, FiFileText, FiBookOpen, FiVolume2, FiUsers, FiUser,
-  FiMail, FiGlobe
+  FiMail, FiGlobe, FiMessageSquare
 } from 'react-icons/fi';
+import { HiSparkles } from 'react-icons/hi2';
 import { FaWhatsapp } from 'react-icons/fa';
 import { GiPrayer } from 'react-icons/gi';
 import { MdOutlinePushPin, MdPushPin } from 'react-icons/md';
@@ -99,18 +100,20 @@ function NotifCard({ notif, onMarkRead, onDelete, onTogglePin, onAction, isHighl
   const cat = isPermission ? 'permission' : isMessage ? 'messages' : (notif.category || notif.type || 'general');
   const catConfig = CATEGORIES.find(c => c.key === cat) || CATEGORIES[CATEGORIES.length - 1];
 
-  const isApproved = notif.title?.includes('Approved') || notif.message?.includes('approved');
-  const isRejected = notif.title?.includes('Rejected') || notif.message?.includes('rejected');
+  const isApproved = notif.title?.includes('Approved') || notif.message?.includes('approved') || notif.status === 'approved' || notif.status === 'confirmed';
+  const isRejected = notif.title?.includes('Rejected') || notif.message?.includes('rejected') || notif.status === 'rejected';
+  const isCompleted = notif.title?.includes('Completed') || notif.status === 'completed';
+  const isUnderReview = notif.title?.includes('Under Review') || notif.status === 'under_review' || notif.status === 'in_progress';
 
-  const targetUrl = notif.actionUrl || (
+  const targetUrl = notif.redirectUrl || notif.actionUrl || (
     isPermission && !isApproved && !isRejected ? `/dashboard?requestId=${notif.relatedId || ''}` :
     isMessage ? '/dashboard/notifications?category=messages' :
     cat === 'events' ? '/events' :
     cat === 'announcements' ? '/announcements' :
     cat === 'donations' ? '/donate' :
-    cat === 'bookings' ? '/dashboard' :
+    cat === 'bookings' ? '/dashboard/bookings' :
     cat === 'documents' ? '/dashboard/documents' :
-    cat === 'tickets' ? '/dashboard' :
+    cat === 'tickets' ? '/dashboard/tickets' :
     cat === 'prayer' ? '/prayers' : null
   );
 
@@ -227,37 +230,53 @@ function NotifCard({ notif, onMarkRead, onDelete, onTogglePin, onAction, isHighl
             <span className="text-[10px] text-gray-400">{timeAgo(notif.createdAt)}</span>
           </div>
 
-          {cat === 'prayer' || notif.relatedModel === 'PrayerRequest' ? (
-            <Link
-              to={notif.actionUrl || '/prayer-requests'}
-              onClick={() => !notif.isRead && onMarkRead(notif._id)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-church-royal-blue text-white hover:bg-church-royal-blue/90 text-xs font-bold transition-all shadow-sm flex-shrink-0 ml-auto"
-            >
-              <GiPrayer className="text-sm" /> View Prayer Wall
-            </Link>
-          ) : isApproved ? (
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-green-100 text-green-700 text-xs font-black border border-green-300 ml-auto flex-shrink-0 shadow-xs">
-              <FiCheckCircle className="text-sm text-green-600" /> Approved
-            </span>
-          ) : isRejected ? (
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-red-100 text-red-700 text-xs font-black border border-red-300 ml-auto flex-shrink-0 shadow-xs">
-              <FiX className="text-sm text-red-600" /> Rejected
-            </span>
-          ) : targetUrl ? (
-            <Link
-              to={targetUrl}
-              onClick={() => !notif.isRead && onMarkRead(notif._id)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-church-royal-blue text-white hover:bg-church-royal-blue/90 text-xs font-bold transition-all shadow-sm flex-shrink-0 ml-auto"
-            >
-              {isPermission ? <><FiShield className="text-xs" /> Review Request</> :
-               cat === 'events' ? <><FiCalendar className="text-xs" /> View Event</> :
-               cat === 'announcements' ? <><FiVolume2 className="text-xs" /> Read Announcement</> :
-               cat === 'donations' ? <><FiDollarSign className="text-xs" /> View Donation</> :
-               cat === 'bookings' ? <><FiCalendar className="text-xs" /> View Booking</> :
-               cat === 'documents' ? <><FiFileText className="text-xs" /> View Document</> :
-               'View Details →'}
-            </Link>
-          ) : null}
+          <div className="flex items-center gap-2 ml-auto flex-shrink-0 flex-wrap justify-end">
+            {isApproved && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-green-100 text-green-700 text-xs font-bold border border-green-300 shadow-2xs">
+                <FiCheckCircle className="text-xs text-green-600" /> Approved
+              </span>
+            )}
+            {isRejected && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-red-100 text-red-700 text-xs font-bold border border-red-300 shadow-2xs">
+                <FiX className="text-xs text-red-600" /> Rejected
+              </span>
+            )}
+            {isCompleted && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-100 text-purple-700 text-xs font-bold border border-purple-300 shadow-2xs">
+                <HiSparkles className="text-xs text-purple-600" /> Completed
+              </span>
+            )}
+
+            {targetUrl && (
+              <Link
+                to={targetUrl}
+                onClick={() => !notif.isRead && onMarkRead(notif._id)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-church-royal-blue text-white hover:bg-church-royal-blue/90 text-xs font-bold transition-all shadow-sm flex-shrink-0"
+              >
+                {notif.type === 'REQUEST_STATUS_UPDATE' || notif.requestId ? (
+                  <>View Request →</>
+                ) : isPermission ? (
+                  <><FiShield className="text-xs" /> Review Request</>
+                ) : cat === 'events' ? (
+                  <><FiCalendar className="text-xs" /> View Event</>
+                ) : cat === 'announcements' ? (
+                  <><FiVolume2 className="text-xs" /> Read Announcement</>
+                ) : cat === 'donations' ? (
+                  <><FiDollarSign className="text-xs" /> View Donation</>
+                ) : cat === 'bookings' ? (
+                  <><FiCalendar className="text-xs" /> View Booking</>
+                ) : cat === 'documents' ? (
+                  <><FiFileText className="text-xs" /> View Document</>
+                ) : cat === 'tickets' ? (
+                  <><FiMessageSquare className="text-xs" /> View Ticket</>
+                ) : cat === 'prayer' ? (
+                  <><GiPrayer className="text-xs" /> View Prayer</>
+                ) : (
+                  'View Details →'
+                )}
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     </motion.div>

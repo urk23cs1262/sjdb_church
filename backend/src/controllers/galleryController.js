@@ -56,13 +56,21 @@ const create = async (req, res) => {
 
 const update = async (req, res) => {
   try {
+    const { uploadToGridFS, deleteFromGridFS } = require('../services/gridfsService');
+    const previous = await Gallery.findById(req.params.id);
+    if (!previous) return res.status(404).json({ success: false, message: 'Gallery item not found' });
+
     const data = { ...req.body };
     if (req.file) {
-      const { uploadToGridFS } = require('../services/gridfsService');
       const buffer = req.file.buffer || (req.file.path ? fs.readFileSync(req.file.path) : null);
       if (buffer) {
         const fileInfo = await uploadToGridFS(buffer, req.file.originalname, req.file.mimetype);
         data.imageUrl = fileInfo.url;
+
+        // Clean up previous GridFS image if it was replaced
+        if (previous.imageUrl && previous.imageUrl.startsWith('/api/files/')) {
+          deleteFromGridFS(previous.imageUrl.replace('/api/files/', '')).catch(() => {});
+        }
       }
     }
     const item = await Gallery.findByIdAndUpdate(req.params.id, data, { new: true });
@@ -72,6 +80,11 @@ const update = async (req, res) => {
 
 const remove = async (req, res) => {
   try {
+    const { deleteFromGridFS } = require('../services/gridfsService');
+    const item = await Gallery.findById(req.params.id);
+    if (item && item.imageUrl && item.imageUrl.startsWith('/api/files/')) {
+      deleteFromGridFS(item.imageUrl.replace('/api/files/', '')).catch(() => {});
+    }
     await Gallery.findByIdAndDelete(req.params.id);
     res.json({ success: true, message: 'Gallery item deleted' });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -79,10 +92,17 @@ const remove = async (req, res) => {
 
 const removeAll = async (req, res) => {
   try {
+    const { deleteFromGridFS } = require('../services/gridfsService');
     const { category } = req.query;
     const query = {};
     if (category && category !== 'all') {
       query.category = category.toLowerCase();
+    }
+    const items = await Gallery.find(query).select('imageUrl').lean();
+    for (const it of items) {
+      if (it.imageUrl && it.imageUrl.startsWith('/api/files/')) {
+        deleteFromGridFS(it.imageUrl.replace('/api/files/', '')).catch(() => {});
+      }
     }
     const result = await Gallery.deleteMany(query);
     res.json({ success: true, message: `Deleted ${result.deletedCount} gallery items permanently`, count: result.deletedCount });

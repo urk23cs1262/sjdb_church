@@ -120,14 +120,24 @@ const update = async (req, res) => {
       }
     }
 
+    const previousEvent = await Event.findById(req.params.id);
+    if (!previousEvent) return res.status(404).json({ success: false, message: 'Event not found' });
+
     if (req.body.removeImage === 'true') {
       data.image = '';
+      if (previousEvent.image && previousEvent.image.startsWith('/api/files/')) {
+        const { deleteFromGridFS } = require('../services/gridfsService');
+        deleteFromGridFS(previousEvent.image.replace('/api/files/', '')).catch(() => {});
+      }
     } else if (req.file) {
-      const { uploadToGridFS } = require('../services/gridfsService');
+      const { uploadToGridFS, deleteFromGridFS } = require('../services/gridfsService');
       const buffer = req.file.buffer || (req.file.path ? fs.readFileSync(req.file.path) : null);
       if (buffer) {
         const fileInfo = await uploadToGridFS(buffer, req.file.originalname, req.file.mimetype);
         data.image = fileInfo.url;
+        if (previousEvent.image && previousEvent.image.startsWith('/api/files/')) {
+          deleteFromGridFS(previousEvent.image.replace('/api/files/', '')).catch(() => {});
+        }
       }
     }
     const event = await Event.findByIdAndUpdate(req.params.id, data, { new: true });
@@ -149,8 +159,15 @@ const update = async (req, res) => {
 
 const remove = async (req, res) => {
   try {
-    const event = await Event.findByIdAndDelete(req.params.id);
+    const event = await Event.findById(req.params.id);
     if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
+
+    if (event.image && event.image.startsWith('/api/files/')) {
+      const { deleteFromGridFS } = require('../services/gridfsService');
+      deleteFromGridFS(event.image.replace('/api/files/', '')).catch(() => {});
+    }
+
+    await Event.findByIdAndDelete(req.params.id);
 
     // Multi-Channel Broadcast for Cancelled Event
     if (event.isPublished !== false) {

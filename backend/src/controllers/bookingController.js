@@ -1,6 +1,5 @@
 const Booking = require('../models/Booking');
-const { createNotification, notifyAdmins } = require('../services/notificationService');
-const { emitRequestCreated, emitRequestStatusChanged } = require('../services/requestNotificationService');
+const { createAdminNotification, createUserNotification } = require('../services/requestNotificationService');
 
 const getMyBookings = async (req, res) => {
   try {
@@ -64,43 +63,38 @@ const createBooking = async (req, res) => {
     });
     
     const formattedDate = new Date(massDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const detailString = `${personName || familyName ? `For: ${personName || familyName}. ` : ''}Intention: ${(intentionType || '').replace(/_/g, ' ')} on ${formattedDate} (${massTime || 'Any Time'})`;
 
-    // Notify user with confirmation email format
-    createNotification({ 
-      userId: req.user._id, 
-      recipient: 'user',
-      title: 'Mass Booking Received ', 
-      message: `Mass Booking Received\n\nReference Number: ${booking.bookingNumber}\nRequested Date: ${formattedDate}\nMass Time: ${massTime || 'Any Available Time'}\nFor: ${personName || familyName || 'Intention'}\nIntention: ${intentionType?.replace('_', ' ')}\nStatus: Pending Approval\n\nWe will review your request and notify you once approved.`, 
-      type: 'booking', 
-      category: 'bookings',
-      priority: 'medium',
-      actionUrl: '/dashboard/booking',
-      relatedId: booking._id, 
-      relatedModel: 'Booking',
-      channels: ['email'] 
-    }).catch(e => console.error('Booking notification error:', e.message));
-    
-    // Admin in-app notification
-    createNotification({
-      recipient: 'admin',
-      title: ` New Mass Booking (${booking.bookingNumber})`,
-      message: `${req.user.name} booked a mass for ${formattedDate} (${massTime || 'Any time'}). Intention: ${intentionType}.`,
-      type: 'booking',
-      category: 'bookings',
-      priority: 'medium',
-      actionUrl: '/admin/bookings',
-      relatedId: booking._id,
-      relatedModel: 'Booking',
-      channels: []
-    }).catch(e => console.error('Booking admin notification error:', e.message));
-    
-    // Trigger central admin request notification (WhatsApp Bot, Email, Push, In-App)
-    emitRequestCreated({
-      module: 'mass_intention',
+    // 1. Central Admin Notification (Dashboard Bell, WhatsApp, Web Push, Email)
+    createAdminNotification({
+      type: 'MASS_BOOKING',
+      requestType: 'MASS_BOOKING',
+      title: 'New Mass Booking Request',
+      message: `${req.user.name} submitted a new Mass Booking request for ${formattedDate}.`,
+      userId: req.user._id,
+      memberId: req.user.parishMemberId,
+      requestId: booking.bookingNumber || booking._id,
+      priority: 'normal',
+      status: 'PENDING',
+      details: detailString,
       request: booking,
       user: req.user,
       req
-    });
+    }).catch(e => console.error('[BookingController] Central Admin notification error:', e.message));
+
+    // 2. Central User Confirmation Notification (Dashboard Bell, Web Push, Email, WhatsApp)
+    createUserNotification({
+      userId: req.user._id,
+      type: 'REQUEST_STATUS_UPDATE',
+      requestType: 'MASS_BOOKING',
+      requestId: booking.bookingNumber || booking._id,
+      status: 'PENDING',
+      title: 'Mass Booking Received',
+      message: `Your Mass Booking request for ${formattedDate} has been received and is pending church review.`,
+      redirectUrl: `/dashboard/bookings/${booking.bookingNumber || booking._id}`,
+      request: booking,
+      req
+    }).catch(e => console.error('[BookingController] Central User notification error:', e.message));
 
     res.status(201).json({ success: true, booking });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -117,39 +111,26 @@ const updateBookingStatus = async (req, res) => {
     if (suggestedTime) updateData.suggestedTime = suggestedTime;
 
     const booking = await Booking.findByIdAndUpdate(req.params.id, updateData, { new: true }).populate('userId', 'name phone email parishMemberId familyId anbiyam');
-    
-    const statusText = status === 'approved' ? 'Approved ' : status === 'completed' ? 'Completed ' : 'Rejected ';
-    let msg = `Your mass booking (${booking.bookingNumber || 'Ref'}) for ${new Date(booking.massDate).toLocaleDateString()} has been ${status}.`;
-    if (suggestedDate) {
-      msg += ` The parish office suggested another date/time: ${new Date(suggestedDate).toLocaleDateString()} (${suggestedTime || 'Any time'}).`;
-    }
-    if (adminNote) msg += ` Note: ${adminNote}`;
 
-    createNotification({ 
-        userId: booking.userId?._id || booking.userId, 
-        recipient: 'user',
-        title: `Mass Booking ${statusText}`, 
-        message: msg, 
-        type: 'booking', 
-        category: 'bookings',
-        priority: status === 'rejected' ? 'high' : 'medium',
-        actionUrl: '/dashboard/booking',
-        relatedId: booking._id, 
-        relatedModel: 'Booking',
-        channels: ['email'] 
-    }).catch(e => console.error('Booking status notification error:', e.message));
-    
-    // Trigger central admin notification for status change
-    emitRequestStatusChanged({
-      module: 'mass_intention',
+    const adminComment = adminNote || (suggestedDate ? `Parish office suggested: ${new Date(suggestedDate).toLocaleDateString()} (${suggestedTime || 'Any time'})` : null);
+
+    // Central User Status Notification through ALL channels (Website bell, Web Push, Email, WhatsApp)
+    createUserNotification({
+      userId: booking.userId?._id || booking.userId,
+      type: 'REQUEST_STATUS_UPDATE',
+      requestType: 'MASS_BOOKING',
+      requestId: booking.bookingNumber || booking._id,
+      status,
+      adminComment,
+      redirectUrl: `/dashboard/bookings/${booking.bookingNumber || booking._id}`,
+      metadata: {
+        previousStatus,
+        newStatus: status,
+        adminComment
+      },
       request: booking,
-      previousStatus,
-      newStatus: status,
-      user: booking.userId,
-      updatedBy: req.user,
-      note: adminNote || (suggestedDate ? `Alternative date suggested: ${new Date(suggestedDate).toLocaleDateString()}` : null),
       req
-    });
+    }).catch(e => console.error('[BookingController] Central User status notification error:', e.message));
 
     res.json({ success: true, booking });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }

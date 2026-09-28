@@ -30,6 +30,9 @@ export default function Contact() {
   const onSubmit = async (data) => {
     try {
       await api.post('/tickets', {
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
         subject: data.subject,
         message: data.message,
         category: 'enquiry',

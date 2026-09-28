@@ -29,6 +29,10 @@ const rosarySongSchema = new mongoose.Schema({
   sortOrder: {
     type: Number,
     default: 0
+  },
+  sha256: {
+    type: String,
+    index: true
   }
 }, {
   timestamps: true

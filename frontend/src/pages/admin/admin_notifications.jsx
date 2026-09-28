@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiBell, FiSearch, FiTrash2, FiCheckCircle, FiFilter,
   FiRefreshCw, FiSend, FiMoreVertical, FiCheck, FiAlertCircle, FiX, FiArrowLeft, FiArrowRight, FiDownload, FiShield, FiKey,
-  FiUsers, FiCalendar, FiDollarSign, FiFileText, FiBookOpen, FiVolume2, FiLock, FiUser, FiMonitor
+  FiUsers, FiCalendar, FiDollarSign, FiFileText, FiBookOpen, FiVolume2, FiLock, FiUser, FiMonitor,
+  FiMail, FiPhone
 } from 'react-icons/fi';
 import { GiPrayer } from 'react-icons/gi';
 import { MdOutlinePushPin, MdPushPin } from 'react-icons/md';
@@ -142,12 +143,53 @@ function AdminNotifCard({ notif, onMarkRead, onDelete, onTogglePin, onAction }) 
 
         <p className="text-gray-500 text-xs mt-1 leading-relaxed line-clamp-2">{notif.message}</p>
 
-        {/* Sender info if available */}
-        {notif.userId?.name && (
+        {/* Sender and Request Details */}
+        {(notif.memberId || notif.requestId || notif.userId?.name || notif.metadata?.userEmail || notif.metadata?.userPhone) ? (
+          <div className="flex items-center gap-2 flex-wrap text-[10px] text-gray-600 mt-1.5">
+            {(notif.userId?.name || notif.metadata?.userName) && (
+              <span className="font-semibold text-church-royal-blue">User: {notif.userId?.name || notif.metadata?.userName}</span>
+            )}
+            {(notif.memberId || notif.userId?.parishMemberId || notif.metadata?.memberId) && (
+              <span className="font-mono bg-amber-50 text-amber-900 px-1.5 py-0.5 rounded border border-amber-200">
+                ID: {notif.memberId || notif.userId?.parishMemberId || notif.metadata?.memberId}
+              </span>
+            )}
+            {(notif.userId?.email || notif.metadata?.userEmail) && (notif.userId?.email || notif.metadata?.userEmail) !== 'None' && (
+              <a
+                href={`mailto:${notif.userId?.email || notif.metadata?.userEmail}`}
+                onClick={(e) => e.stopPropagation()}
+                className="font-mono bg-blue-50 text-blue-900 hover:text-blue-950 px-1.5 py-0.5 rounded border border-blue-200 flex items-center gap-1"
+                title="Email User"
+              >
+                📧 {notif.userId?.email || notif.metadata?.userEmail}
+              </a>
+            )}
+            {(notif.userId?.phone || notif.metadata?.userPhone) && (notif.userId?.phone || notif.metadata?.userPhone) !== 'N/A' && (
+              <a
+                href={`tel:${notif.userId?.phone || notif.metadata?.userPhone}`}
+                onClick={(e) => e.stopPropagation()}
+                className="font-mono bg-emerald-50 text-emerald-900 hover:text-emerald-950 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-1"
+                title="Call User"
+              >
+                📞 {notif.userId?.phone || notif.metadata?.userPhone}
+              </a>
+            )}
+            {notif.requestId && (
+              <span className="font-mono bg-purple-50 text-purple-900 px-1.5 py-0.5 rounded border border-purple-200">
+                Req: {notif.requestId}
+              </span>
+            )}
+            {notif.status && (
+              <span className="uppercase font-bold text-[9px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">
+                {notif.status}
+              </span>
+            )}
+          </div>
+        ) : notif.userId?.email ? (
           <p className="text-[10px] text-church-royal-blue font-semibold mt-1">
-            From: {notif.userId.name} ({notif.userId.email || notif.userId.phone})
+            From: {notif.userId.email || notif.userId.phone}
           </p>
-        )}
+        ) : null}
 
         <div className="flex items-center gap-3 mt-2 flex-wrap">
           <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${CATEGORY_COLORS[cat] || CATEGORY_COLORS.general
@@ -169,12 +211,26 @@ function AdminNotifCard({ notif, onMarkRead, onDelete, onTogglePin, onAction }) 
             </a>
           )}
 
-          <button
-            onClick={() => onAction(notif)}
-            className="text-[10px] text-church-royal-blue hover:text-church-royal-blue/80 font-bold underline ml-auto cursor-pointer"
-          >
-            View →
-          </button>
+          <div className="flex items-center gap-2 ml-auto">
+            {(notif.actionUrl || notif.redirectUrl) && (
+              <Link
+                to={notif.actionUrl || notif.redirectUrl}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!notif.isRead) onMarkRead(notif._id);
+                }}
+                className="inline-flex items-center gap-1 text-[11px] font-bold text-church-royal-blue hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-200 transition-all cursor-pointer"
+              >
+                View Request →
+              </Link>
+            )}
+            <button
+              onClick={() => onAction(notif)}
+              className="text-[10px] text-gray-500 hover:text-church-royal-blue font-semibold underline cursor-pointer"
+            >
+              Details
+            </button>
+          </div>
         </div>
       </div>
     </motion.div>
@@ -527,11 +583,35 @@ function NotificationDetailModal({ notif, onClose, onMarkRead, onDelete }) {
         </div>
 
         {/* Sender details */}
-        {notif.userId?.name && (
-          <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-3.5 mb-4 text-xs space-y-1">
-            <div className="text-gray-400 font-bold uppercase text-[10px]">User / Sender Details</div>
-            <div className="font-bold text-gray-900 text-sm">{notif.userId.name}</div>
-            <div className="text-gray-600 font-medium">{notif.userId.email || notif.userId.phone}</div>
+        {(notif.userId?.name || notif.metadata?.userName || notif.metadata?.userEmail || notif.metadata?.userPhone) && (
+          <div className="bg-slate-50 border border-slate-200/60 rounded-2xl p-4 mb-4 text-xs space-y-2">
+            <div className="text-gray-400 font-bold uppercase text-[10px] tracking-wider">User & Contact Information</div>
+            <div className="font-bold text-gray-900 text-sm flex items-center gap-2">
+              <span>{notif.userId?.name || notif.metadata?.userName || 'Parish Member'}</span>
+              {(notif.memberId || notif.userId?.parishMemberId || notif.metadata?.memberId) && (
+                <span className="font-mono text-xs bg-amber-100 text-amber-900 px-2 py-0.5 rounded font-bold">
+                  {notif.memberId || notif.userId?.parishMemberId || notif.metadata?.memberId}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-4 text-xs pt-1">
+              {(notif.userId?.email || notif.metadata?.userEmail) && (notif.userId?.email || notif.metadata?.userEmail) !== 'None' && (
+                <a
+                  href={`mailto:${notif.userId?.email || notif.metadata?.userEmail}`}
+                  className="inline-flex items-center gap-1.5 text-church-royal-blue font-bold hover:underline"
+                >
+                  <FiMail className="text-xs" /> {notif.userId?.email || notif.metadata?.userEmail}
+                </a>
+              )}
+              {(notif.userId?.phone || notif.metadata?.userPhone) && (notif.userId?.phone || notif.metadata?.userPhone) !== 'N/A' && (
+                <a
+                  href={`tel:${notif.userId?.phone || notif.metadata?.userPhone}`}
+                  className="inline-flex items-center gap-1.5 text-emerald-700 font-mono font-bold hover:underline"
+                >
+                  <FiPhone className="text-xs" /> {notif.userId?.phone || notif.metadata?.userPhone}
+                </a>
+              )}
+            </div>
           </div>
         )}
 

@@ -52,11 +52,21 @@ const create = async (req, res) => {
 
 const update = async (req, res) => {
   try {
+    const { deleteFromGridFS } = require('../services/gridfsService');
+    const previous = await Priest.findById(req.params.id);
+    if (!previous) return res.status(404).json({ success: false, message: 'Priest not found' });
+
     const data = { ...req.body };
     if (req.body.removePhoto === 'true') {
       data.photo = '';
+      if (previous.photo && previous.photo.startsWith('/api/files/')) {
+        deleteFromGridFS(previous.photo.replace('/api/files/', '')).catch(() => {});
+      }
     } else if (req.file) {
       data.photo = await processPhoto(req.file);
+      if (previous.photo && previous.photo.startsWith('/api/files/')) {
+        deleteFromGridFS(previous.photo.replace('/api/files/', '')).catch(() => {});
+      }
     } else {
       delete data.photo; // Keep existing photo in database
     }
@@ -81,6 +91,11 @@ const update = async (req, res) => {
 
 const remove = async (req, res) => {
   try {
+    const { deleteFromGridFS } = require('../services/gridfsService');
+    const priest = await Priest.findById(req.params.id);
+    if (priest && priest.photo && priest.photo.startsWith('/api/files/')) {
+      deleteFromGridFS(priest.photo.replace('/api/files/', '')).catch(() => {});
+    }
     await Priest.findByIdAndDelete(req.params.id);
     res.json({ success: true, message: 'Priest deleted' });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }

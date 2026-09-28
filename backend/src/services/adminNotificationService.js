@@ -324,7 +324,13 @@ const notifyAdmin = async (event) => {
 
     // 2. Dispatch Email Alert to System Administrators
     if (sendEmailAlert) {
-      const admins = await User.find({ role: 'admin' }).select('email phone name');
+      const admins = await User.find({
+        $or: [
+          { role: { $in: ['admin', 'priest', 'staff'] } },
+          { isTechnicalTeam: true }
+        ],
+        isActive: { $ne: false }
+      }).select('email phone name');
       const adminList = [...admins];
       const primaryAdminEmail = process.env.ADMIN_EMAIL || 'stjdbchurch@gmail.com';
       if (!adminList.some(a => (a.email || '').toLowerCase() === primaryAdminEmail.toLowerCase())) {
@@ -631,7 +637,13 @@ const notifyAdmin = async (event) => {
 
     // 3. Dispatch Critical SMS / WhatsApp Alert
     if (sendSmsAlert) {
-      const admins = await User.find({ role: 'admin' }).select('phone');
+      const admins = await User.find({
+        $or: [
+          { role: { $in: ['admin', 'priest', 'staff'] } },
+          { isTechnicalTeam: true }
+        ],
+        isActive: { $ne: false }
+      }).select('phone');
       for (const admin of admins) {
         if (admin.phone) {
           let formattedPhone = admin.phone.trim();

@@ -2,6 +2,9 @@ const mongoose = require('mongoose');
 
 const ticketSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  name: { type: String },
+  email: { type: String },
+  phone: { type: String },
   ticketNumber: { type: String, unique: true },
   subject: { type: String, required: true },
   message: { type: String, required: true },

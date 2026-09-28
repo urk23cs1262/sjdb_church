@@ -1,7 +1,6 @@
 const PrayerRequest = require('../models/PrayerRequest');
 const User = require('../models/User');
-const { notifyAdmins, createNotification } = require('../services/notificationService');
-const { emitRequestCreated, emitRequestStatusChanged } = require('../services/requestNotificationService');
+const { createAdminNotification, createUserNotification } = require('../services/requestNotificationService');
 const { sendMail } = require('../config/mailer');
 
 function sendWA(phone, text) {
@@ -123,75 +122,41 @@ const create = async (req, res) => {
       contactPhone: userPhone
     });
 
-    const notifTitle = isConfession ? ' New Confession Request' : ' New Prayer Request';
-    const { getSiteUrl } = require('../config/siteRoutes');
-    const clientBaseUrl = getSiteUrl('');
-    const userActionUrl = isConfession ? '/dashboard' : '/prayer-requests';
+    const notifTitle = isConfession ? 'New Confession Request' : 'New Prayer Request';
+    const userActionUrl = isConfession ? '/dashboard' : '/dashboard/prayer-requests/' + prayer._id;
 
-    // 1. Admin In-App Notification (ActionUrl: /admin/prayers)
-    createNotification({
-      recipient: 'admin',
+    // 1. Central Admin Notification (WhatsApp, Email, Web Push, In-App Bell)
+    createAdminNotification({
+      type: isConfession ? 'CONFESSION_REQUEST' : 'PRAYER_REQUEST',
+      requestType: isConfession ? 'CONFESSION_REQUEST' : 'PRAYER_REQUEST',
       title: notifTitle,
-      message: `${applicantName} submitted a ${type || 'prayer request'}: "${finalIntention.slice(0, 100)}${finalIntention.length > 100 ? '...' : ''}".`,
-      type: 'prayer',
-      category: 'prayer',
+      message: `${applicantName} submitted a ${type || 'prayer request'}: "${finalIntention.slice(0, 100)}".`,
+      userId: req.user?._id,
+      memberId: req.user?.parishMemberId,
+      requestId: prayer._id,
       priority: 'high',
-      actionUrl: '/admin/prayers',
-      relatedId: prayer._id,
-      relatedModel: 'PrayerRequest',
-      channels: []
-    }).catch(e => console.error('Prayer in-app admin notification error:', e.message));
-
-    // 2. Email & WhatsApp to Admin alone
-    notifyAdmins({
-      title: notifTitle,
-      message: `A new ${isConfession ? 'private confession request' : 'prayer request'} has been received:\n\n Name: ${applicantName}\n Type: ${type || 'Prayer'}\n Location: ${churchLocation || confessionLocation || (prayerLocation === 'personal' ? 'Home' : prayerLocation === 'church' ? 'Church' : prayerLocation === 'confession' ? 'Confession' : prayerLocation || 'Home')}\n${preferredDate ? ` Preferred Date: ${new Date(preferredDate).toLocaleDateString('en-IN')}\n` : ''}${preferredTime ? ` Preferred Time: ${preferredTime}\n` : ''}${userPhone ? ` Phone: ${userPhone}\n` : ''} Intention: ${finalIntention}\n\nReview & manage in Admin Panel: ${clientBaseUrl}/admin/prayers`
-    }).catch(e => console.error('Prayer admin notification error:', e.message));
-
-    // 3. User Notifications (In-App, Email, WhatsApp Bot) -> Submitted
-    if (req.user?._id || userEmail || userPhone) {
-      // User In-App Notification
-      if (req.user?._id) {
-        createNotification({
-          userId: req.user._id,
-          recipient: 'user',
-          title: isConfession ? ' Confession Request Submitted' : ' Prayer Request Submitted',
-          message: isConfession
-            ? 'Your confidential confession request has been submitted to the Parish Priest.'
-            : 'Your prayer request has been submitted and sent to the parish for review.',
-          type: 'prayer',
-          category: 'prayer',
-          priority: 'medium',
-          actionUrl: userActionUrl,
-          relatedId: prayer._id,
-          relatedModel: 'PrayerRequest',
-          channels: []
-        }).catch(e => console.error('User prayer submission notification error:', e.message));
-      }
-
-      // User WhatsApp Bot Message
-      if (userPhone) {
-        sendWA(userPhone, ` *${isConfession ? 'Confession Request Received' : 'Prayer Request Received'}*
-
-Dear ${applicantName},
-Your ${isConfession ? 'confidential confession request' : 'prayer intention'} has been submitted successfully to St. John de Britto Church.
-
- *Type:* ${type}
- *Intention:* "${finalIntention.slice(0, 100)}${finalIntention.length > 100 ? '...' : ''}"
-
- *View Prayer Wall:* ${clientBaseUrl}${userActionUrl}
-
- _St. John de Britto Church, Kalayarkoil_`);
-      }
-    }
-
-    // 4. Central Admin Request Notification (WhatsApp Bot, Email, Push, In-App)
-    emitRequestCreated({
-      module: 'prayer_request',
+      status: 'PENDING',
+      details: finalIntention,
       request: prayer,
       user: req.user,
       req
-    });
+    }).catch(e => console.error('[PrayerController] Central Admin notification error:', e.message));
+
+    // 2. Central User Confirmation Notification
+    createUserNotification({
+      userId: req.user?._id,
+      type: 'REQUEST_STATUS_UPDATE',
+      requestType: isConfession ? 'CONFESSION_REQUEST' : 'PRAYER_REQUEST',
+      requestId: prayer._id,
+      status: 'PENDING',
+      title: isConfession ? 'Confession Request Submitted' : 'Prayer Request Received',
+      message: isConfession
+        ? 'Your confidential confession request has been submitted to the Parish Priest.'
+        : 'Your prayer request has been received and submitted for church review.',
+      redirectUrl: userActionUrl,
+      request: prayer,
+      req
+    }).catch(e => console.error('[PrayerController] Central User notification error:', e.message));
 
     res.status(201).json({ success: true, prayer });
   } catch (err) {
@@ -202,71 +167,34 @@ Your ${isConfession ? 'confidential confession request' : 'prayer intention'} ha
 
 const updateStatus = async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, adminComment, adminNote } = req.body;
+    const comment = adminComment || adminNote;
     const previousPrayer = await PrayerRequest.findById(req.params.id);
     const previousStatus = previousPrayer?.status || 'pending';
 
     const prayer = await PrayerRequest.findByIdAndUpdate(req.params.id, { status }, { new: true }).populate('userId', 'name email phone parishMemberId familyId anbiyam');
 
     if (prayer) {
-      const userObj = prayer.userId;
-      const userEmail = userObj?.email || prayer.email;
-      const userPhone = prayer.contactPhone || userObj?.phone;
       const isConfession = prayer.type === 'Confession Request';
-      const isApproved = status === 'approved';
-      const { getSiteUrl } = require('../config/siteRoutes');
-      const clientBaseUrl = getSiteUrl('');
-      const userActionUrl = isConfession ? '/dashboard' : '/prayer-requests';
+      const userActionUrl = isConfession ? '/dashboard' : '/dashboard/prayer-requests/' + prayer._id;
 
-      // 1. User In-App Notification
-      if (userObj?._id) {
-        createNotification({
-          userId: userObj._id,
-          recipient: 'user',
-          title: isApproved
-            ? (isConfession ? 'Confession Appointment Confirmed' : 'Prayer Request Approved')
-            : (isConfession ? 'Confession Request Updated' : 'Prayer Request Update'),
-          message: isApproved
-            ? (isConfession
-              ? 'Your confession request has been accepted by the Parish Priest.'
-              : 'Your prayer intention has been approved and placed on the Prayer Wall / Mass Intentions.')
-            : (isConfession
-              ? 'Your confession request was reviewed by the Parish Priest. Please contact the parish office for alternative timing.'
-              : 'Your prayer request update: Thank you for sharing your intention with our parish.'),
-          type: 'prayer',
-          category: 'prayer',
-          priority: 'medium',
-          actionUrl: userActionUrl,
-          relatedId: prayer._id,
-          relatedModel: 'PrayerRequest',
-          channels: []
-        }).catch(e => console.error('Status update in-app notification error:', e.message));
-      }
-
-      // 2. User WhatsApp Bot
-      if (userPhone) {
-        sendWA(userPhone, `*${prayer.type} Status Update*
-
-Status: *${status.toUpperCase()}*
-Intention: "${prayer.intention.slice(0, 100)}"
-
-${isApproved ? 'May God bless you and grant your prayer intentions.' : 'Thank you for reaching out to St. John de Britto\'s Church.'}
-
-*View Prayer Wall:* ${clientBaseUrl}${userActionUrl}
-
-_St. John de Britto Church, Kalayarkoil_`);
-      }
-
-      // 3. Central Admin Status Change Notification
-      emitRequestStatusChanged({
-        module: 'prayer_request',
+      // Central User Status Notification through ALL channels (Website bell, Web Push, Email, WhatsApp)
+      createUserNotification({
+        userId: prayer.userId?._id || prayer.userId,
+        type: 'REQUEST_STATUS_UPDATE',
+        requestType: isConfession ? 'CONFESSION_REQUEST' : 'PRAYER_REQUEST',
+        requestId: prayer._id,
+        status,
+        adminComment: comment,
+        redirectUrl: userActionUrl,
+        metadata: {
+          previousStatus,
+          newStatus: status,
+          adminComment: comment
+        },
         request: prayer,
-        previousStatus,
-        newStatus: status,
-        user: prayer.userId,
-        updatedBy: req.user,
         req
-      });
+      }).catch(e => console.error('[PrayerController] Central User status notification error:', e.message));
     }
 
     res.json({ success: true, prayer });

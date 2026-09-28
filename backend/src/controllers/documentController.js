@@ -1,9 +1,6 @@
 const Document = require('../models/Document');
-const { createNotification, notifyAdmins } = require('../services/notificationService');
-const { emitRequestCreated, emitRequestStatusChanged } = require('../services/requestNotificationService');
+const { createAdminNotification, createUserNotification } = require('../services/requestNotificationService');
 const User = require('../models/User');
-const { sendMail } = require('../config/mailer');
-const { sendWhatsApp } = require('../config/twilio');
 
 const getMyDocuments = async (req, res) => {
   try {
@@ -59,28 +56,38 @@ const requestDocument = async (req, res) => {
   try {
     const { type, requestDetails } = req.body;
     const doc = await Document.create({ userId: req.user._id, type, requestDetails });
-    // Notify user (Async)
-    createNotification({ 
-      userId: req.user._id, 
-      recipient: 'user',
-      title: 'Document Request Received ', 
-      message: `Your request for ${type.replace('_', ' ')} certificate has been received and is being processed.`, 
-      type: 'document', 
-      category: 'documents',
-      priority: 'low',
-      actionUrl: '/dashboard/documents',
-      relatedId: doc._id, 
-      relatedModel: 'Document',
-      channels: ['email'] 
-    }).catch(e => console.error('Doc notification error:', e.message));
-    
-    // Central Admin Request Notification (WhatsApp Bot, Email, Push, In-App)
-    emitRequestCreated({
-      module: 'document_request',
+    const formattedType = (type || 'Certificate').replace(/_/g, ' ');
+
+    // 1. Central Admin Request Notification
+    createAdminNotification({
+      type: 'DOCUMENT_REQUEST',
+      requestType: 'DOCUMENT_REQUEST',
+      title: 'New Document Request',
+      message: `${req.user.name} requested a ${formattedType} certificate.`,
+      userId: req.user._id,
+      memberId: req.user.parishMemberId,
+      requestId: doc._id,
+      priority: 'normal',
+      status: 'PENDING',
+      details: `${formattedType} Certificate${requestDetails ? ` — ${requestDetails}` : ''}`,
       request: doc,
       user: req.user,
       req
-    });
+    }).catch(e => console.error('[DocumentController] Central Admin notification error:', e.message));
+
+    // 2. Central User Confirmation Notification
+    createUserNotification({
+      userId: req.user._id,
+      type: 'REQUEST_STATUS_UPDATE',
+      requestType: 'DOCUMENT_REQUEST',
+      requestId: doc._id,
+      status: 'PENDING',
+      title: 'Document Request Received',
+      message: `Your request for ${formattedType} certificate has been received and is pending church review.`,
+      redirectUrl: `/dashboard/documents/DOC-${doc._id.toString().slice(-6).toUpperCase()}`,
+      request: doc,
+      req
+    }).catch(e => console.error('[DocumentController] Central User notification error:', e.message));
 
     res.status(201).json({ success: true, document: doc });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -99,18 +106,22 @@ const updateDocumentStatus = async (req, res) => {
     let preparedPdf = null;
 
     if (req.file) {
-      const { uploadToGridFS } = require('../services/gridfsService');
+      const { uploadToGridFS, deleteFromGridFS } = require('../services/gridfsService');
       const { prepareFinalDocumentPdf } = require('../services/documentDeliveryService');
 
       preparedPdf = await prepareFinalDocumentPdf(req.file, previousDoc.type);
       const fileInfo = await uploadToGridFS(preparedPdf.buffer, preparedPdf.filename, 'application/pdf');
       updateData.uploadedFile = fileInfo.url;
+
+      if (previousDoc.uploadedFile && previousDoc.uploadedFile.startsWith('/api/files/')) {
+        deleteFromGridFS(previousDoc.uploadedFile.replace('/api/files/', '')).catch(() => {});
+      }
     }
 
     const doc = await Document.findByIdAndUpdate(req.params.id, updateData, { new: true })
       .populate('userId', 'name phone email parishMemberId familyId anbiyam settings whatsappOptIn');
 
-    if (status === 'approved') {
+    if (status === 'approved' && preparedPdf?.buffer) {
       const { deliverApprovedDocument } = require('../services/documentDeliveryService');
       deliverApprovedDocument({
         document: doc,
@@ -119,45 +130,25 @@ const updateDocumentStatus = async (req, res) => {
         filename: preparedPdf?.filename,
         adminNote
       }).catch(e => console.error('[DocumentController] Document delivery error:', e.message));
-
-      emitRequestStatusChanged({
-        module: 'document_request',
-        request: doc,
-        previousStatus,
-        newStatus: status,
-        user: doc.userId,
-        updatedBy: req.user,
-        note: adminNote,
-        req
-      });
-    } else {
-      createNotification({ 
-        userId: doc.userId?._id || doc.userId, 
-        recipient: 'user',
-        title: `Document Request: ${status === 'processing' ? 'Processing' : 'Status Updated'}`, 
-        message: status === 'processing' 
-          ? `Your ${doc.type.replace(/_/g, ' ')} certificate request is now being processed by the parish administration.`
-          : `Your ${doc.type.replace(/_/g, ' ')} certificate request has been ${status}.${adminNote ? ` Note: ${adminNote}` : ''}`, 
-        type: 'document', 
-        category: 'documents',
-        priority: status === 'rejected' ? 'high' : 'medium',
-        actionUrl: `/my-requests/document-requests/DOC-${doc._id.toString().slice(-6).toUpperCase()}`,
-        relatedId: doc._id, 
-        relatedModel: 'Document',
-        channels: ['email', 'whatsapp', 'push', 'inApp'] 
-      }).catch(e => console.error('Doc status notification error:', e.message));
-
-      emitRequestStatusChanged({
-        module: 'document_request',
-        request: doc,
-        previousStatus,
-        newStatus: status,
-        user: doc.userId,
-        updatedBy: req.user,
-        note: adminNote,
-        req
-      });
     }
+
+    // Central User Status Notification through ALL channels
+    createUserNotification({
+      userId: doc.userId?._id || doc.userId,
+      type: 'REQUEST_STATUS_UPDATE',
+      requestType: 'DOCUMENT_REQUEST',
+      requestId: doc._id,
+      status,
+      adminComment: adminNote,
+      redirectUrl: `/dashboard/documents/DOC-${doc._id.toString().slice(-6).toUpperCase()}`,
+      metadata: {
+        previousStatus,
+        newStatus: status,
+        adminComment: adminNote
+      },
+      request: doc,
+      req
+    }).catch(e => console.error('[DocumentController] Central User status notification error:', e.message));
 
     res.json({ success: true, document: doc });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }

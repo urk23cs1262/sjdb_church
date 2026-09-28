@@ -311,13 +311,20 @@ const updateTeamMember = async (req, res) => {
       }
     }
 
+    const previous = await TeamMember.findById(req.params.id);
+    if (!previous) return res.status(404).json({ success: false, message: 'Team member not found' });
+
     if (req.file) {
       try {
-        const { uploadToGridFS } = require('../services/gridfsService');
+        const { uploadToGridFS, deleteFromGridFS } = require('../services/gridfsService');
         const buffer = req.file.buffer || (req.file.path ? fs.readFileSync(req.file.path) : null);
         if (buffer) {
           const fileInfo = await uploadToGridFS(buffer, req.file.originalname || 'team.jpg', req.file.mimetype || 'image/jpeg');
           updateData.image = fileInfo.url;
+
+          if (previous.image && previous.image.startsWith('/api/files/')) {
+            deleteFromGridFS(previous.image.replace('/api/files/', '')).catch(() => {});
+          }
         }
       } catch (e) {
         console.error('Error uploading team photo to GridFS:', e.message);
@@ -338,6 +345,11 @@ const updateTeamMember = async (req, res) => {
 // DELETE /api/team/:id — admin (permanent database deletion)
 const deleteTeamMember = async (req, res) => {
   try {
+    const { deleteFromGridFS } = require('../services/gridfsService');
+    const member = await TeamMember.findById(req.params.id);
+    if (member && member.image && member.image.startsWith('/api/files/')) {
+      deleteFromGridFS(member.image.replace('/api/files/', '')).catch(() => {});
+    }
     const deleted = await TeamMember.findByIdAndDelete(req.params.id);
     if (!deleted) return res.status(404).json({ success: false, message: 'Team member not found' });
     res.json({ success: true, message: 'Team member permanently deleted from database' });

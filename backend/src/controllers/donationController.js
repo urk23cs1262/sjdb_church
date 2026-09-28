@@ -4,7 +4,7 @@ const fs = require('fs');
 const Razorpay = require('razorpay');
 const Donation = require('../models/Donation');
 const User = require('../models/User');
-const { notifyAdmins, createNotification } = require('../services/notificationService');
+const { createAdminNotification, createUserNotification } = require('../services/requestNotificationService');
 const { generateDonationReceipt } = require('../services/pdfService');
 const { sendMail } = require('../config/mailer');
 
@@ -230,10 +230,8 @@ const sendDonationReceiptEmails = async (donation, { force = false } = {}) => {
 </div>
     `;
 
-    // 2. Send email to Donor and Church/Admin copy. Await both sends so the
-    // receipt delivery flag is not marked successful before the mailer finishes.
+    // 2. Send email to Donor and all Church Admins with official receipt PDF attached.
     const donorEmail = donation.email || (donation.userId && typeof donation.userId === 'object' ? donation.userId.email : null);
-    const adminEmail = process.env.ADMIN_EMAIL || process.env.SMTP_FROM || null;
     const emailJobs = [];
 
     if (donorEmail) {
@@ -247,15 +245,34 @@ const sendDonationReceiptEmails = async (donation, { force = false } = {}) => {
       );
     }
 
-    if (adminEmail && adminEmail.toLowerCase() !== donorEmail?.toLowerCase()) {
-      emailJobs.push(
-        sendMail({
-          to: adminEmail,
-          subject: `[Admin Copy] New Donation ${amountFormatted} (${donorName}) — ${receiptNumber}`,
-          html: emailTemplate,
-          attachments,
-        })
-      );
+    try {
+      const { getAllAdminEmailRecipients } = require('../services/requestNotificationService');
+      const adminRecipients = await getAllAdminEmailRecipients();
+      for (const adm of adminRecipients) {
+        if (adm.email && adm.email.toLowerCase() !== donorEmail?.toLowerCase()) {
+          emailJobs.push(
+            sendMail({
+              to: adm.email,
+              subject: `Admin Alert: New Donation Received (Paid) — ${donorName} (${receiptNumber})`,
+              html: emailTemplate,
+              attachments,
+            })
+          );
+        }
+      }
+    } catch (admEmailErr) {
+      console.warn('[Donation] Error resolving admin email recipients:', admEmailErr.message);
+      const fallbackAdminEmail = process.env.ADMIN_EMAIL || process.env.SMTP_FROM || 'stjdbchurch@gmail.com';
+      if (fallbackAdminEmail && fallbackAdminEmail.toLowerCase() !== donorEmail?.toLowerCase()) {
+        emailJobs.push(
+          sendMail({
+            to: fallbackAdminEmail,
+            subject: `Admin Alert: New Donation Received (Paid) — ${donorName} (${receiptNumber})`,
+            html: emailTemplate,
+            attachments,
+          })
+        );
+      }
     }
 
     const emailResults = await Promise.allSettled(emailJobs);
@@ -267,19 +284,17 @@ const sendDonationReceiptEmails = async (donation, { force = false } = {}) => {
 
     // 4. Send In-App & Push Notification to Donor (User)
     if (donation.userId) {
-      createNotification({
+      createUserNotification({
         userId: donation.userId,
-        recipient: 'user',
+        type: 'REQUEST_STATUS_UPDATE',
+        requestType: 'DONATION',
+        requestId: receiptNumber,
+        status: 'PAID',
         title: 'Thank You for Your Donation',
         message: `Dear ${donorName}, thank you for your generous offering of ₹${donation.amount} towards ${categoryLabel} of St. John de Britto Church.\nReceipt No: ${receiptNumber}\nPayment ID: ${paymentRef}\nMay God bless you and your family abundantly!`,
-        type: 'donation',
-        category: 'donations',
-        priority: 'medium',
-        actionUrl: '/dashboard',
-        relatedId: donation._id,
-        relatedModel: 'Donation',
-        fileUrl: receiptPath,
-        channels: ['push', 'sms', 'whatsapp'],
+        actionUrl: '/dashboard/donations',
+        redirectUrl: '/dashboard/donations',
+        request: donation
       }).catch(e => console.warn('[Donation] Donor in-app/push error:', e.message));
     }
 
@@ -308,12 +323,64 @@ const sendDonationReceiptEmails = async (donation, { force = false } = {}) => {
       }
     }
 
-    // 6. Send In-App, Push, and WhatsApp Alert to Church Admins
-    notifyAdmins({
-      title: 'New Donation Received (Paid)',
-      message: `A new donation has been received!\n\nDonor: ${donorName}\nAmount: ₹${donation.amount}\nCategory: ${categoryLabel}\nReceipt No: ${receiptNumber}\nPayment ID: ${paymentRef}\nIntention: ${donation.note || donation.message || 'None'}\n\nOfficial receipt PDF is generated and attached for download.`,
-      fileUrl: receiptPath,
-    }).catch(e => console.warn('[Donation] Admin notification error:', e.message));
+    // 6. Send WhatsApp direct notification WITH RECEIPT PDF, In-App, and Push Alert to Church Admins
+    try {
+      const adminWaCaption =
+`🔔 *Admin Alert: New Donation Received (Paid)*
+
+A new donation has been received!
+
+👤 *Donor:* ${donorName}
+💰 *Amount:* ₹${donation.amount}
+🏷️ *Category:* ${categoryLabel}
+🔖 *Receipt No:* ${receiptNumber}
+💳 *Payment ID:* ${paymentRef}
+📝 *Intention:* ${donation.note || donation.message || 'None'}
+📅 *Date:* ${paymentDateStr}
+
+📎 Official donation receipt PDF is attached for church records.`;
+
+      const fileBuffer = fs.existsSync(fullPath) ? fs.readFileSync(fullPath) : null;
+
+      // Deliver via Central Admin Notification Service (delivers to all admin WhatsApp bot numbers with PDF, in-app bell, push)
+      await createAdminNotification({
+        type: 'DONATION',
+        requestType: 'DONATION',
+        title: `New Donation Received: ₹${donation.amount} (${donorName})`,
+        message: `A new donation of ₹${donation.amount} was received from ${donorName} for ${categoryLabel}. Receipt: ${receiptNumber}. Payment ID: ${paymentRef}.`,
+        userId: donation.userId,
+        memberId: donation.userId?.parishMemberId,
+        requestId: receiptNumber,
+        status: 'PAID',
+        priority: 'high',
+        details: `Donation of ₹${donation.amount} towards ${categoryLabel} (Receipt: ${receiptNumber}, Payment ID: ${paymentRef})`,
+        actionUrl: '/admin/donations',
+        redirectUrl: '/admin/donations',
+        fileUrl: receiptPath,
+        pdfPath: fullPath,
+        skipEmail: true, // Rich admin email already dispatched with attached PDF in Step 3
+        mediaOptions: fileBuffer ? {
+          url: fullPath,
+          buffer: fileBuffer,
+          mimetype: 'application/pdf',
+          fileName: filename,
+          caption: adminWaCaption
+        } : null,
+        metadata: {
+          donationId: donation._id,
+          donorName,
+          amount: donation.amount,
+          category: categoryLabel,
+          receiptNumber,
+          paymentRef,
+          paymentDate: paymentDateStr,
+          receiptPath,
+          intention: donation.note || donation.message || 'None'
+        }
+      });
+    } catch (aErr) {
+      console.warn('[Donation] Admin notification / WhatsApp dispatch error:', aErr.message);
+    }
 
     // 7. Update and persist donation record. Mark delivery successful only if
     // at least one configured email was actually accepted by the mailer.
@@ -583,19 +650,56 @@ const getAll = async (req, res) => {
 const create = async (req, res) => {
   try {
     const { amount, type, paymentMethod, transactionId, donorName, note, isAnonymous, email, phone } = req.body;
+    const finalName = isAnonymous ? 'Anonymous Parishioner' : (donorName || req.user?.name || 'Parishioner');
+    const finalEmail = email || req.user?.email;
+    const finalPhone = phone || req.user?.phone;
+
     const donation = await Donation.create({
       userId: req.user?._id,
       amount,
       type,
       paymentMethod: paymentMethod || 'upi',
       transactionId,
-      donorName: isAnonymous ? 'Anonymous' : (donorName || req.user?.name),
-      email: email || req.user?.email,
-      phone: phone || req.user?.phone,
+      donorName: finalName,
+      email: finalEmail,
+      phone: finalPhone,
       note,
       isAnonymous,
       status: 'pending'
     });
+
+    // 1. Central Admin Notification (Dashboard Bell, WhatsApp, Web Push, Email)
+    createAdminNotification({
+      type: 'DONATION',
+      requestType: 'DONATION',
+      title: 'New Donation Submission',
+      message: `${finalName} submitted a donation of ₹${amount} (${type || 'General Offering'}).`,
+      userId: req.user?._id,
+      memberId: req.user?.parishMemberId,
+      requestId: donation.transactionId || donation._id,
+      priority: 'normal',
+      status: 'PENDING',
+      details: `Amount: ₹${amount} | Method: ${(paymentMethod || 'upi').toUpperCase()} | Ref: ${transactionId || 'Pending'}`,
+      request: donation,
+      user: req.user,
+      req
+    }).catch(e => console.error('[DonationController] Central Admin notification error:', e.message));
+
+    // 2. Central User Confirmation Notification
+    if (req.user?._id) {
+      createUserNotification({
+        userId: req.user._id,
+        type: 'REQUEST_STATUS_UPDATE',
+        requestType: 'DONATION',
+        requestId: donation.transactionId || donation._id,
+        status: 'PENDING',
+        title: 'Donation Received',
+        message: `Your donation of ₹${amount} has been received and is pending church verification.`,
+        redirectUrl: '/dashboard/donations',
+        request: donation,
+        req
+      }).catch(e => console.error('[DonationController] Central User notification error:', e.message));
+    }
 
     res.status(201).json({ success: true, donation });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
@@ -612,6 +716,20 @@ const verify = async (req, res) => {
 
     if (donation) {
       await sendDonationReceiptEmails(donation);
+
+      // Central User Status Notification through ALL channels
+      createUserNotification({
+        userId: donation.userId,
+        type: 'REQUEST_STATUS_UPDATE',
+        requestType: 'DONATION',
+        requestId: donation.transactionId || donation._id,
+        status: 'VERIFIED',
+        title: 'Donation Verified & Approved',
+        message: `Your donation of ₹${donation.amount} has been verified and confirmed. Official receipt has been generated. Thank you for your generous support!`,
+        redirectUrl: '/dashboard/donations',
+        request: donation,
+        req
+      }).catch(e => console.error('[DonationController] Central User verify notification error:', e.message));
     }
 
     res.json({ success: true, donation });
@@ -620,11 +738,29 @@ const verify = async (req, res) => {
 
 const rejectDonation = async (req, res) => {
   try {
+    const { reason } = req.body;
     const donation = await Donation.findByIdAndUpdate(req.params.id, {
       status: 'rejected',
       isVerified: false,
       verifiedBy: req.user._id
     }, { new: true });
+
+    if (donation && donation.userId) {
+      createUserNotification({
+        userId: donation.userId,
+        type: 'REQUEST_STATUS_UPDATE',
+        requestType: 'DONATION',
+        requestId: donation.transactionId || donation._id,
+        status: 'REJECTED',
+        title: 'Donation Verification Update',
+        message: `Your donation submission of ₹${donation.amount} could not be verified.${reason ? ` Reason: ${reason}` : ''}`,
+        adminComment: reason,
+        redirectUrl: '/dashboard/donations',
+        request: donation,
+        req
+      }).catch(e => console.error('[DonationController] Central User reject notification error:', e.message));
+    }
+
     res.json({ success: true, donation });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };

@@ -208,6 +208,7 @@ const getAllSongsAdmin = async (req, res) => {
 /**
  * Admin: Upload individual audio files (appended to the end of the list)
  * Streams directly from temporary disk storage into GridFS (Zero-RAM accumulation)
+ * Includes SHA-256 hash & title duplicate prevention
  */
 const uploadIndividualSongs = async (req, res) => {
   const tempFilesToClean = [];
@@ -217,6 +218,11 @@ const uploadIndividualSongs = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No audio files provided' });
     }
 
+    const crypto = require('crypto');
+    const existingSongs = await RosarySong.find().lean();
+    const existingNames = new Set(existingSongs.map(s => normalizeSongName(s.title || s.fileName)));
+    const existingHashes = new Set(existingSongs.map(s => s.sha256).filter(Boolean));
+
     const lastSong = await RosarySong.findOne().sort({ sortOrder: -1 }).select('sortOrder').lean();
     const baseSortOrder = lastSong ? (lastSong.sortOrder || 0) + 1 : 1;
 
@@ -224,26 +230,43 @@ const uploadIndividualSongs = async (req, res) => {
       if (f.path) tempFilesToClean.push(f.path);
     });
 
+    const skippedDuplicates = [];
+
     // High-speed parallel upload to GridFS (6 concurrent streams)
     const songResults = await pMap(files.map((file, idx) => ({ file, idx })), async ({ file, idx }) => {
       try {
         const ext = path.extname(file.originalname).toLowerCase();
         const mimeType = file.mimetype || MIME_MAP[ext] || 'audio/mpeg';
 
-        let fileInfo;
+        let fileBuffer = null;
         let fileSize = 0;
 
         if (file.path && fs.existsSync(file.path)) {
-          const stats = fs.statSync(file.path);
-          fileSize = stats.size;
-          const readStream = fs.createReadStream(file.path);
-          fileInfo = await uploadStreamToGridFS(readStream, file.originalname, mimeType);
+          fileBuffer = fs.readFileSync(file.path);
+          fileSize = fileBuffer.length;
         } else if (file.buffer) {
-          fileSize = file.size || file.buffer.length;
-          fileInfo = await uploadToGridFS(file.buffer, file.originalname, mimeType);
+          fileBuffer = file.buffer;
+          fileSize = fileBuffer.length;
         } else {
           return null;
         }
+
+        const sha256 = crypto.createHash('sha256').update(fileBuffer).digest('hex');
+        const normName = normalizeSongName(file.originalname);
+
+        // Check if exact binary duplicate or exact title duplicate
+        if (existingHashes.has(sha256) || existingNames.has(normName)) {
+          skippedDuplicates.push({
+            filename: file.originalname,
+            reason: existingHashes.has(sha256) ? 'Identical audio content already exists' : 'Song with same title already exists'
+          });
+          return null;
+        }
+
+        existingHashes.add(sha256);
+        existingNames.add(normName);
+
+        const fileInfo = await uploadToGridFS(fileBuffer, file.originalname, mimeType, { sha256 });
 
         const song = await RosarySong.create({
           title: formatTitle(file.originalname),
@@ -252,7 +275,8 @@ const uploadIndividualSongs = async (req, res) => {
           fileSize: fileSize || fileInfo.size,
           mimeType,
           sortOrder: baseSortOrder + idx,
-          isActive: true
+          isActive: true,
+          sha256
         });
 
         return song;
@@ -264,10 +288,16 @@ const uploadIndividualSongs = async (req, res) => {
 
     const createdSongs = songResults.filter(Boolean);
 
+    let message = `Successfully uploaded ${createdSongs.length} of ${files.length} song(s).`;
+    if (skippedDuplicates.length > 0) {
+      message += ` (${skippedDuplicates.length} duplicate(s) skipped to protect storage).`;
+    }
+
     res.json({
       success: true,
-      message: `Successfully uploaded ${createdSongs.length} of ${files.length} song(s)`,
-      songs: createdSongs
+      message,
+      songs: createdSongs,
+      skippedDuplicates
     });
   } catch (err) {
     console.error('Upload individual songs error:', err);
@@ -287,7 +317,7 @@ const uploadIndividualSongs = async (req, res) => {
  * 1. Multer streams ZIP straight to disk (0 MB in Node RAM)
  * 2. AdmZip reads catalog from disk
  * 3. Extract audio files to temporary staging folder
- * 4. Normalize song names and compare against existing DB songs & intra-ZIP songs
+ * 4. Compute SHA-256 binary hash + normalized title and compare against DB songs & intra-ZIP songs
  * 5. If duplicates found:
  *    - Save session state to session.json in staging folder
  *    - Return duplicates list + sessionId to frontend (DO NOT import duplicates yet)
@@ -305,6 +335,8 @@ const uploadZipSongs = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'Please select a ZIP file' });
     }
+
+    const crypto = require('crypto');
 
     let zip;
     try {
@@ -326,17 +358,21 @@ const uploadZipSongs = async (req, res) => {
     // Fetch existing songs from database for duplicate comparison
     const existingSongs = await RosarySong.find().lean();
     const existingMap = new Map();
+    const existingHashMap = new Map();
+
     for (const s of existingSongs) {
       const nTitle = normalizeSongName(s.title);
       const nFile = normalizeSongName(s.fileName);
       if (nTitle) existingMap.set(nTitle, s);
       if (nFile) existingMap.set(nFile, s);
+      if (s.sha256) existingHashMap.set(s.sha256, s);
     }
 
     const zipEntries = zip.getEntries();
     const duplicates = [];
     const nonDuplicates = [];
     const seenInZip = new Map();
+    const seenHashInZip = new Map();
     let duplicateIndex = 1;
     let skippedCount = 0;
 
@@ -368,14 +404,20 @@ const uploadZipSongs = async (req, res) => {
 
         const fileSize = entryData.length;
         const normalized = normalizeSongName(baseName);
+        const contentHash = crypto.createHash('sha256').update(entryData).digest('hex');
 
-        // Check if duplicate of an existing song in DB
-        if (existingMap.has(normalized)) {
-          const existing = existingMap.get(normalized);
+        // Check if duplicate of an existing song in DB (by content hash OR normalized name)
+        const isHashMatch = existingHashMap.has(contentHash);
+        const isNameMatch = existingMap.has(normalized);
+
+        if (isHashMatch || isNameMatch) {
+          const existing = isHashMatch ? existingHashMap.get(contentHash) : existingMap.get(normalized);
           duplicates.push({
             id: `dup_${duplicateIndex++}`,
             normalizedName: normalized,
             title: formatTitle(baseName),
+            matchType: isHashMatch ? 'Exact Binary Duplicate (100% Identical Audio)' : 'Title / Filename Match',
+            contentHash,
             existingSong: {
               id: existing._id.toString(),
               title: existing.title || formatTitle(existing.fileName),
@@ -389,16 +431,19 @@ const uploadZipSongs = async (req, res) => {
               title: formatTitle(baseName),
               fileSize: fileSize,
               mimeType: mimeType,
+              contentHash,
               previewUrl: `/api/rosary-songs/temp-preview/${sessionId}/${encodeURIComponent(safeTempName)}`
             }
           });
-        } else if (seenInZip.has(normalized)) {
+        } else if (seenHashInZip.has(contentHash) || seenInZip.has(normalized)) {
           // Intra-ZIP duplicate
-          const firstOccur = seenInZip.get(normalized);
+          const firstOccur = seenHashInZip.get(contentHash) || seenInZip.get(normalized);
           duplicates.push({
             id: `dup_${duplicateIndex++}`,
             normalizedName: normalized,
             title: formatTitle(baseName),
+            matchType: seenHashInZip.has(contentHash) ? 'Duplicate File Inside ZIP (Identical Audio)' : 'Duplicate Title Inside ZIP',
+            contentHash,
             existingSong: {
               id: null,
               title: firstOccur.title,
@@ -412,6 +457,7 @@ const uploadZipSongs = async (req, res) => {
               title: formatTitle(baseName),
               fileSize: fileSize,
               mimeType: mimeType,
+              contentHash,
               previewUrl: `/api/rosary-songs/temp-preview/${sessionId}/${encodeURIComponent(safeTempName)}`
             }
           });
@@ -421,9 +467,16 @@ const uploadZipSongs = async (req, res) => {
             fileName: baseName,
             title: formatTitle(baseName),
             fileSize: fileSize,
-            mimeType: mimeType
+            mimeType: mimeType,
+            contentHash
           });
           seenInZip.set(normalized, {
+            tempFileName: safeTempName,
+            fileName: baseName,
+            title: formatTitle(baseName),
+            fileSize: fileSize
+          });
+          seenHashInZip.set(contentHash, {
             tempFileName: safeTempName,
             fileName: baseName,
             title: formatTitle(baseName),
@@ -556,7 +609,8 @@ const confirmZipImport = async (req, res) => {
           fileSize: item.fileSize || fileInfo.size,
           mimeType: item.mimeType,
           sortOrder: nextSortOrder + idx,
-          isActive: true
+          isActive: true,
+          sha256: item.contentHash
         });
         return true;
       } catch (err) {
@@ -577,15 +631,18 @@ const confirmZipImport = async (req, res) => {
           const filePath = path.join(stagingDir, dup.uploadedSong.tempFileName);
           if (fs.existsSync(filePath)) {
             const readStream = fs.createReadStream(filePath);
-            const fileInfo = await uploadStreamToGridFS(readStream, dup.uploadedSong.fileName, dup.uploadedSong.mimeType);
+            const fileInfo = await uploadStreamToGridFS(readStream, dup.uploadedSong.fileName, dup.uploadedSong.mimeType, { sha256: dup.uploadedSong.contentHash });
 
             if (dup.existingSong?.id) {
               const existing = await RosarySong.findById(dup.existingSong.id);
               if (existing) {
-                // Delete old GridFS file
+                // Delete old GridFS file only if no other song references it
                 if (existing.fileUrl && existing.fileUrl.startsWith('/api/files/')) {
                   const oldId = existing.fileUrl.replace('/api/files/', '');
-                  try { await deleteFromGridFS(oldId); } catch (_) {}
+                  const otherUsingOld = await RosarySong.countDocuments({ _id: { $ne: existing._id }, fileUrl: existing.fileUrl });
+                  if (otherUsingOld === 0) {
+                    try { await deleteFromGridFS(oldId); } catch (_) {}
+                  }
                 }
 
                 // Update existing record with uploaded song metadata, preserving original sortOrder
@@ -594,6 +651,7 @@ const confirmZipImport = async (req, res) => {
                 existing.fileSize = dup.uploadedSong.fileSize || fileInfo.size;
                 existing.fileUrl = fileInfo.url;
                 existing.mimeType = dup.uploadedSong.mimeType;
+                existing.sha256 = dup.uploadedSong.contentHash;
                 await existing.save();
                 replacedCount++;
               } else {
@@ -604,7 +662,8 @@ const confirmZipImport = async (req, res) => {
                   fileSize: dup.uploadedSong.fileSize || fileInfo.size,
                   mimeType: dup.uploadedSong.mimeType,
                   sortOrder: nextSortOrder + idx,
-                  isActive: true
+                  isActive: true,
+                  sha256: dup.uploadedSong.contentHash
                 });
                 importedCount++;
               }
@@ -616,7 +675,8 @@ const confirmZipImport = async (req, res) => {
                 fileSize: dup.uploadedSong.fileSize || fileInfo.size,
                 mimeType: dup.uploadedSong.mimeType,
                 sortOrder: nextSortOrder + idx,
-                isActive: true
+                isActive: true,
+                sha256: dup.uploadedSong.contentHash
               });
               importedCount++;
             }

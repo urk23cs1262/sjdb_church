@@ -16,18 +16,21 @@ const getBucket = () => {
   return bucket;
 };
 
+const crypto = require('crypto');
+
 /**
  * Upload buffer directly into GridFS
  */
-const uploadToGridFS = (buffer, filename, mimetype) => {
+const uploadToGridFS = (buffer, filename, mimetype, customMetadata = {}) => {
   return new Promise((resolve, reject) => {
     try {
       const gridBucket = getBucket();
       const uniqueFilename = `${Date.now()}-${Math.round(Math.random() * 1e9)}-${filename.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+      const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
       
       const uploadStream = gridBucket.openUploadStream(uniqueFilename, {
         contentType: mimetype,
-        metadata: { originalName: filename, uploadDate: new Date() }
+        metadata: { originalName: filename, uploadDate: new Date(), sha256, ...customMetadata }
       });
 
       const readableStream = new Readable();
@@ -41,6 +44,7 @@ const uploadToGridFS = (buffer, filename, mimetype) => {
           filename: uniqueFilename,
           contentType: mimetype,
           size: buffer.length,
+          sha256,
           url: `/api/files/${uploadStream.id}`
         });
       });
@@ -55,7 +59,7 @@ const uploadToGridFS = (buffer, filename, mimetype) => {
 /**
  * Upload readable stream directly into GridFS (zero-RAM streaming)
  */
-const uploadStreamToGridFS = (readableStream, filename, mimetype) => {
+const uploadStreamToGridFS = (readableStream, filename, mimetype, customMetadata = {}) => {
   return new Promise((resolve, reject) => {
     try {
       const gridBucket = getBucket();
@@ -63,7 +67,7 @@ const uploadStreamToGridFS = (readableStream, filename, mimetype) => {
       
       const uploadStream = gridBucket.openUploadStream(uniqueFilename, {
         contentType: mimetype,
-        metadata: { originalName: filename, uploadDate: new Date() }
+        metadata: { originalName: filename, uploadDate: new Date(), ...customMetadata }
       });
 
       uploadStream.on('error', (err) => reject(err));

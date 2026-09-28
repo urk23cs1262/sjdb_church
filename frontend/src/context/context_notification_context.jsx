@@ -34,34 +34,36 @@ export const NotificationProvider = ({ children }) => {
   }, []);
 
   const triggerNativePush = (notif) => {
-    let title = "St. John de Britto Church ";
+    let title = notif.title || "St. John de Britto Church";
     let body = notif.message || notif.title;
-    let url = notif.actionUrl || '/dashboard';
+    let url = notif.redirectUrl || notif.actionUrl || '/dashboard';
 
     const cat = notif.category || notif.type;
-    if (cat === 'events' || cat === 'event') {
-      title = " St. John de Britto Church — New Event";
-      url = '/events';
-    } else if (cat === 'announcements' || cat === 'announcement') {
-      title = " Church Announcement";
-      url = '/announcements';
-    } else if (cat === 'donations' || cat === 'donation') {
-      title = " Donation Campaign";
-      url = '/donate';
-    } else if (cat === 'prayer' || cat === 'prayers') {
-      title = " Community Prayer Request";
-      url = '/prayers';
-    } else if (cat === 'permission') {
-      title = " Permission Request Alert";
-      url = '/dashboard';
-    } else if (cat === 'system' || notif.title?.includes('Security')) {
-      title = " Security Alert";
-      url = '/dashboard/notifications';
+    if (!notif.redirectUrl && !notif.actionUrl) {
+      if (cat === 'events' || cat === 'event') {
+        title = " St. John de Britto Church — New Event";
+        url = '/events';
+      } else if (cat === 'announcements' || cat === 'announcement') {
+        title = " Church Announcement";
+        url = '/announcements';
+      } else if (cat === 'donations' || cat === 'donation') {
+        title = " Donation Campaign";
+        url = '/donate';
+      } else if (cat === 'prayer' || cat === 'prayers') {
+        title = " Community Prayer Request";
+        url = '/prayers';
+      } else if (cat === 'permission') {
+        title = " Permission Request Alert";
+        url = '/dashboard';
+      } else if (cat === 'system' || notif.title?.includes('Security')) {
+        title = " Security Alert";
+        url = '/dashboard/notifications';
+      }
     }
 
     showNativeNotification({
       title,
-      body: `${notif.title}\n${body}`,
+      body: notif.title && notif.message && notif.title !== body ? `${notif.title}\n${body}` : body,
       url,
       tag: `notif-${notif._id}`
     });

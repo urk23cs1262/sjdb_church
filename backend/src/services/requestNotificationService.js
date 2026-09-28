@@ -1,66 +1,232 @@
 const EventEmitter = require('events');
+const mongoose = require('mongoose');
 const { sendMail } = require('../config/mailer');
 const { sendSMS, sendWhatsApp: sendTwilioWhatsApp } = require('../config/twilio');
 const { sendPushToAdmins, sendPushToUser } = require('./webPushService');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
 const SiteSettings = require('../models/SiteSettings');
+const { getSiteUrl } = require('../config/siteRoutes');
 
 class RequestEventEmitter extends EventEmitter {}
 const requestEvents = new RequestEventEmitter();
 
 /**
- * Centrally resolves the Church Admin's WhatsApp phone number.
- * Priority order:
- * 1. process.env.ADMIN_WHATSAPP_PHONE
- * 2. Database SiteSettings (key: 'admin_whatsapp_phone')
- * 3. process.env.ADMIN_PHONE
- * 4. Active Admin User record phone in DB
- * 5. Default church phone ('919655639144')
+ * Normalizes any raw phone number string into clean digits with country code.
+ * e.g. "07639520006" -> "917639520006", "9655639144" -> "919655639144"
  */
-const getAdminWhatsAppNumber = async () => {
-  if (process.env.ADMIN_WHATSAPP_PHONE && process.env.ADMIN_WHATSAPP_PHONE.trim()) {
-    return process.env.ADMIN_WHATSAPP_PHONE.trim().replace(/\D/g, '');
+const normalizePhoneNumber = (raw) => {
+  if (!raw) return null;
+  let clean = String(raw).replace(/\D/g, '');
+  if (!clean) return null;
+  if (clean.startsWith('0') && clean.length === 11) {
+    clean = clean.slice(1);
   }
-
-  try {
-    const setting = await SiteSettings.findOne({ key: 'admin_whatsapp_phone' });
-    if (setting && setting.value && setting.value.trim()) {
-      return setting.value.trim().replace(/\D/g, '');
-    }
-  } catch (err) {
-    // Ignore db setting lookup error
+  if (clean.length === 10) {
+    clean = `91${clean}`;
   }
-
-  if (process.env.ADMIN_PHONE && process.env.ADMIN_PHONE.trim()) {
-    return process.env.ADMIN_PHONE.trim().replace(/\D/g, '');
+  if (clean.length >= 10 && clean.length <= 15) {
+    return clean;
   }
-
-  try {
-    const adminUser = await User.findOne({ role: 'admin', phone: { $exists: true, $ne: '' } });
-    if (adminUser?.phone) {
-      return adminUser.phone.trim().replace(/\D/g, '');
-    }
-  } catch (err) {
-    // Ignore db user lookup error
-  }
-
-  return '919655639144';
+  return null;
 };
 
 /**
- * Normalizes request module metadata, labels, and deep link paths.
+ * Resolves all distinct administrator phone numbers for WhatsApp broadcasts.
+ * Supports 1, 2, 3, or more admins, priests, technical team, and fallback configs.
  */
-const getModuleMeta = (moduleType, requestObj = {}) => {
+const getAllAdminPhoneNumbers = async () => {
+  const phones = new Set();
+
+  // 1. Environment variables
+  if (process.env.ADMIN_WHATSAPP_PHONE) {
+    const p = normalizePhoneNumber(process.env.ADMIN_WHATSAPP_PHONE);
+    if (p) phones.add(p);
+  }
+  if (process.env.ADMIN_PHONE) {
+    const p = normalizePhoneNumber(process.env.ADMIN_PHONE);
+    if (p) phones.add(p);
+  }
+
+  // 2. Site settings
+  try {
+    const setting = await SiteSettings.findOne({ key: 'admin_whatsapp_phone' });
+    if (setting?.value) {
+      const p = normalizePhoneNumber(setting.value);
+      if (p) phones.add(p);
+    }
+  } catch (err) { }
+
+  // 3. All Admin, Priest, and Staff users registered in database
+  try {
+    const adminUsers = await User.find({
+      $or: [
+        { role: { $in: ['admin', 'priest', 'staff'] } },
+        { isTechnicalTeam: true }
+      ],
+      isActive: { $ne: false },
+      phone: { $exists: true, $ne: '' }
+    }).select('name phone email role');
+
+    for (const adm of adminUsers) {
+      const p = normalizePhoneNumber(adm.phone);
+      if (p) phones.add(p);
+    }
+  } catch (err) {
+    console.warn('[RequestNotification] Error fetching admin phone numbers from DB:', err.message);
+  }
+
+  // Fallback if none found
+  if (phones.size === 0) {
+    phones.add('919655639144');
+  }
+
+  return Array.from(phones);
+};
+
+/**
+ * Resolves all distinct administrator email recipients for notification broadcasts.
+ * Supports 1, 2, 3, or more admins, priests, technical team, and fallback configs.
+ */
+const getAllAdminEmailRecipients = async () => {
+  const emailMap = new Map(); // email.toLowerCase() -> { email, name }
+
+  const addEmail = (email, name = 'Parish Administrator') => {
+    if (!email) return;
+    const clean = String(email).trim().toLowerCase();
+    if (clean.includes('@') && clean.includes('.')) {
+      if (!emailMap.has(clean)) {
+        emailMap.set(clean, { email: clean, name: name || 'Parish Administrator' });
+      }
+    }
+  };
+
+  // 1. Primary admin email from environment
+  const primaryAdminEmail = process.env.ADMIN_EMAIL || 'stjdbchurch@gmail.com';
+  addEmail(primaryAdminEmail, 'St. John de Britto Church Admin');
+
+  // 2. Site settings
+  try {
+    const setting = await SiteSettings.findOne({ key: 'admin_email' });
+    if (setting?.value) {
+      addEmail(setting.value, 'Parish Office');
+    }
+  } catch (err) { }
+
+  // 3. All Admin, Priest, and Staff users in database
+  try {
+    const adminUsers = await User.find({
+      $or: [
+        { role: { $in: ['admin', 'priest', 'staff'] } },
+        { isTechnicalTeam: true }
+      ],
+      isActive: { $ne: false },
+      email: { $exists: true, $ne: '' }
+    }).select('name email role');
+
+    for (const adm of adminUsers) {
+      addEmail(adm.email, adm.name);
+    }
+  } catch (err) {
+    console.warn('[RequestNotification] Error fetching admin emails from DB:', err.message);
+  }
+
+  return Array.from(emailMap.values());
+};
+
+/**
+ * Centrally resolves the primary Church Admin's WhatsApp phone number (backward-compatible).
+ */
+const getAdminWhatsAppNumber = async () => {
+  const allPhones = await getAllAdminPhoneNumbers();
+  return allPhones[0] || '919655639144';
+};
+
+/**
+ * Helper to dispatch WhatsApp message via Baileys bot socket, falling back to Twilio.
+ * Supports sending documents/PDF attachments (e.g. donation receipts).
+ */
+const dispatchWhatsApp = async (phoneNumber, text, mediaOptions = null) => {
+  if (!phoneNumber) return false;
+  const cleanPhone = String(phoneNumber).replace(/\D/g, '');
+  if (!cleanPhone || cleanPhone.length < 10) return false;
+
+  try {
+    const whatsappBot = require('../bot/whatsapp');
+    if (whatsappBot) {
+      // If a document/PDF attachment is provided, deliver as media message
+      if (mediaOptions && (mediaOptions.url || mediaOptions.buffer || mediaOptions.path)) {
+        if (typeof whatsappBot.sendWhatsAppMedia === 'function') {
+          const sentMedia = await whatsappBot.sendWhatsAppMedia(cleanPhone, {
+            url: mediaOptions.url || mediaOptions.path,
+            buffer: mediaOptions.buffer,
+            mimetype: mediaOptions.mimetype || 'application/pdf',
+            fileName: mediaOptions.fileName || mediaOptions.filename || 'Donation_Receipt.pdf',
+            caption: mediaOptions.caption || text
+          });
+          if (sentMedia) return true;
+        }
+      }
+
+      if (typeof whatsappBot.sendWhatsAppMessage === 'function') {
+        const sent = await whatsappBot.sendWhatsAppMessage(cleanPhone, text);
+        if (sent) return true;
+      }
+    }
+  } catch (err) {
+    console.warn('[RequestNotification] Baileys bot dispatch error:', err.message);
+  }
+
+  // Fallback to Twilio
+  try {
+    let formatted = cleanPhone.startsWith('+') ? cleanPhone : `+${cleanPhone}`;
+    if (!formatted.startsWith('+91') && formatted.length === 11) {
+      formatted = `+91${cleanPhone}`;
+    }
+    await sendTwilioWhatsApp(formatted, text);
+    return true;
+  } catch (tErr) {
+    console.warn('[RequestNotification] Twilio WhatsApp fallback error:', tErr.message);
+    return false;
+  }
+};
+
+/**
+ * Safely resolves relative and absolute server file paths (e.g. /uploads/receipts/...)
+ * ensuring reliable disk lookup on both Windows and Linux environments.
+ */
+const resolveLocalFilePath = (targetPath) => {
+  if (!targetPath) return null;
+  const fs = require('fs');
+  const path = require('path');
+  if (path.isAbsolute(targetPath) && fs.existsSync(targetPath)) {
+    return targetPath;
+  }
+  const rel = String(targetPath).replace(/^[/\\]+/, '');
+  const candidate1 = path.join(__dirname, '..', '..', rel);
+  if (fs.existsSync(candidate1)) return candidate1;
+  const candidate2 = path.join(__dirname, '..', rel);
+  if (fs.existsSync(candidate2)) return candidate2;
+  const candidate3 = path.resolve(process.cwd(), rel);
+  if (fs.existsSync(candidate3)) return candidate3;
+  return candidate1;
+};
+
+/**
+ * Normalizes request module metadata, labels, icons and categories.
+ */
+const getModuleMeta = (moduleType = '', requestObj = {}) => {
   const norm = String(moduleType || '').toLowerCase().replace(/[-_ ]/g, '');
 
   if (norm.includes('mass') || norm.includes('booking') || norm.includes('intention')) {
-    const reqId = requestObj.bookingNumber || (requestObj._id ? requestObj._id.toString() : 'MI-REQ');
+    const reqId = requestObj.bookingNumber || (requestObj._id ? requestObj._id.toString() : 'MB-REQ');
     return {
-      typeLabel: 'Mass Intention',
+      typeKey: 'MASS_BOOKING',
+      typeLabel: 'Mass Booking',
       icon: '📖',
       intentionLabel: 'Intention',
-      deepLinkPath: `/admin/mass-intentions/${reqId}`,
+      adminDeepLink: `/admin/bookings/${reqId}`,
+      userDeepLink: `/dashboard/bookings/${reqId}`,
       relatedModel: 'Booking',
       category: 'bookings',
       defaultDetail: requestObj.intentionDetails || requestObj.intentionType || 'Holy Mass Booking'
@@ -71,13 +237,16 @@ const getModuleMeta = (moduleType, requestObj = {}) => {
     const isConfession = requestObj.prayerLocation === 'confession' || requestObj.type === 'Confession Request';
     const reqId = requestObj._id ? requestObj._id.toString() : 'PR-REQ';
     return {
+      typeKey: isConfession ? 'CONFESSION_REQUEST' : 'PRAYER_REQUEST',
       typeLabel: isConfession ? 'Confession & Spiritual Counsel' : 'Prayer Request',
-      icon: '🙏',
-      intentionLabel: isConfession ? 'Request Details' : 'Prayer Intention',
-      deepLinkPath: `/admin/prayer-requests/${reqId}`,
+      icon: isConfession ? '✝️' : '🙏',
+      intentionLabel: isConfession ? 'Confidential Request' : 'Prayer Intention',
+      adminDeepLink: `/admin/prayers/${reqId}`,
+      userDeepLink: `/dashboard/prayer-requests/${reqId}`,
       relatedModel: 'PrayerRequest',
-      category: 'prayers',
-      defaultDetail: requestObj.intention || requestObj.type || 'Personal Intention'
+      category: 'prayer',
+      isConfidential: isConfession,
+      defaultDetail: isConfession ? 'Confession & Spiritual Counsel Appointment' : (requestObj.intention || requestObj.type || 'Personal Intention')
     };
   }
 
@@ -85,39 +254,62 @@ const getModuleMeta = (moduleType, requestObj = {}) => {
     const reqId = requestObj._id ? requestObj._id.toString() : 'DOC-REQ';
     const typeClean = (requestObj.type || 'Certificate').replace(/_/g, ' ').toUpperCase();
     return {
+      typeKey: 'DOCUMENT_REQUEST',
       typeLabel: `Document (${typeClean})`,
       icon: '📄',
       intentionLabel: 'Document Requested',
-      deepLinkPath: `/admin/document-requests/${reqId}`,
+      adminDeepLink: `/admin/documents/${reqId}`,
+      userDeepLink: `/dashboard/documents/${reqId}`,
       relatedModel: 'Document',
       category: 'documents',
       defaultDetail: requestObj.requestDetails || `${typeClean} Certificate`
     };
   }
 
-  if (norm.includes('ticket') || norm.includes('support') || norm.includes('enquiry') || norm.includes('complaint')) {
+  if (norm.includes('ticket') || norm.includes('support') || norm.includes('enquiry') || norm.includes('complaint') || norm.includes('contact')) {
     const reqId = requestObj.ticketNumber || (requestObj._id ? requestObj._id.toString() : 'TKT-REQ');
+    const isEnquiry = norm.includes('enquiry') || norm.includes('contact');
     return {
-      typeLabel: 'Support Ticket',
+      typeKey: isEnquiry ? 'CONTACT_ENQUIRY' : 'TICKET',
+      typeLabel: isEnquiry ? 'Website Enquiry' : 'Support Ticket',
       icon: '🎫',
       intentionLabel: 'Subject & Inquiry',
-      deepLinkPath: `/admin/tickets/${reqId}`,
+      adminDeepLink: `/admin/tickets/${reqId}`,
+      userDeepLink: `/dashboard/tickets/${reqId}`,
       relatedModel: 'Ticket',
       category: 'tickets',
       defaultDetail: requestObj.subject || requestObj.message || 'Support Inquiry'
     };
   }
 
+  if (norm.includes('donat')) {
+    const reqId = requestObj.transactionId || (requestObj._id ? requestObj._id.toString() : 'DON-REQ');
+    return {
+      typeKey: 'DONATION',
+      typeLabel: 'Donation Submission',
+      icon: '💰',
+      intentionLabel: 'Donation Details',
+      adminDeepLink: `/admin/donations`,
+      userDeepLink: `/dashboard/donations`,
+      relatedModel: 'Donation',
+      category: 'donations',
+      defaultDetail: requestObj.amount ? `Donation of ₹${requestObj.amount} (${requestObj.type || 'General Offering'})` : 'Donation'
+    };
+  }
+
   // Generic fallback for any future request module
   const reqId = requestObj.referenceNumber || requestObj.code || (requestObj._id ? requestObj._id.toString() : 'REQ');
   const cleanModule = String(moduleType || 'Request').replace(/_/g, ' ').toUpperCase();
+  const slug = String(moduleType || 'requests').toLowerCase().replace(/_/g, '-');
   return {
+    typeKey: String(moduleType || 'REQUEST').toUpperCase().replace(/[- ]/g, '_'),
     typeLabel: cleanModule,
     icon: '🔔',
     intentionLabel: 'Details',
-    deepLinkPath: `/admin/${String(moduleType || 'requests').toLowerCase()}/${reqId}`,
+    adminDeepLink: `/admin/${slug}/${reqId}`,
+    userDeepLink: `/dashboard/requests/${slug}/${reqId}`,
     relatedModel: 'Request',
-    category: 'requests',
+    category: 'general',
     defaultDetail: requestObj.details || requestObj.description || 'New Service Request'
   };
 };
@@ -129,25 +321,25 @@ const formatRequestId = (requestObj = {}, moduleType = '') => {
   if (requestObj.bookingNumber) return requestObj.bookingNumber;
   if (requestObj.ticketNumber) return requestObj.ticketNumber;
   if (requestObj.referenceNumber) return requestObj.referenceNumber;
+  if (requestObj.transactionId) return requestObj.transactionId;
 
-  const mongoId = requestObj._id ? requestObj._id.toString() : '';
-  const shortId = mongoId ? mongoId.slice(-6).toUpperCase() : Math.random().toString(36).substring(2, 8).toUpperCase();
+  const mongoId = requestObj._id ? requestObj._id.toString() : (typeof requestObj === 'string' && requestObj.length === 24 ? requestObj : '');
+  const shortId = mongoId ? mongoId.slice(-6).toUpperCase() : (typeof requestObj === 'string' ? requestObj : Math.random().toString(36).substring(2, 8).toUpperCase());
 
   const norm = String(moduleType || '').toLowerCase();
-  if (norm.includes('mass') || norm.includes('booking')) return `MI-${shortId}`;
+  if (norm.includes('mass') || norm.includes('booking')) return `MB-${new Date().getFullYear()}-${shortId}`;
   if (norm.includes('prayer')) return `PR-${shortId}`;
   if (norm.includes('doc')) return `DOC-${shortId}`;
-  if (norm.includes('ticket')) return `TKT-${shortId}`;
+  if (norm.includes('ticket') || norm.includes('contact') || norm.includes('enquiry')) return `TKT-${shortId}`;
+  if (norm.includes('donat')) return `DON-${shortId}`;
 
   return `REQ-${shortId}`;
 };
 
 /**
  * Builds the canonical client review URL for the admin.
- * Guaranteed to use production website URL, never localhost.
  */
 const getAdminReviewUrl = (deepLinkPath) => {
-  const { getSiteUrl } = require('../config/siteRoutes');
   return getSiteUrl(deepLinkPath);
 };
 
@@ -157,47 +349,47 @@ const getAdminReviewUrl = (deepLinkPath) => {
 const getUserDeepLinkPath = (moduleType, requestId) => {
   const norm = String(moduleType || '').toLowerCase().replace(/[-_ ]/g, '');
   if (norm.includes('mass') || norm.includes('booking') || norm.includes('intention')) {
-    return `/my-requests/mass-intentions/${requestId}`;
+    return `/dashboard/bookings/${requestId}`;
   }
   if (norm.includes('prayer') || norm.includes('confession')) {
-    return `/my-requests/prayer-requests/${requestId}`;
+    return `/dashboard/prayer-requests/${requestId}`;
   }
   if (norm.includes('doc') || norm.includes('certificate')) {
-    return `/my-requests/document-requests/${requestId}`;
+    return `/dashboard/documents/${requestId}`;
   }
-  if (norm.includes('ticket') || norm.includes('support') || norm.includes('enquiry') || norm.includes('complaint')) {
-    return `/my-requests/tickets/${requestId}`;
+  if (norm.includes('ticket') || norm.includes('support') || norm.includes('enquiry') || norm.includes('complaint') || norm.includes('contact')) {
+    return `/dashboard/tickets/${requestId}`;
   }
-  return `/my-requests/${String(moduleType || 'request').toLowerCase()}/${requestId}`;
+  if (norm.includes('donat')) {
+    return `/dashboard/donations`;
+  }
+  return `/dashboard/requests/${String(moduleType || 'request').toLowerCase().replace(/_/g, '-')}/${requestId}`;
 };
 
 /**
  * Builds the canonical client review URL for the user.
- * Guaranteed to use production website URL, never localhost.
  */
 const getUserReviewUrl = (deepLinkPath) => {
-  const { getSiteUrl } = require('../config/siteRoutes');
   return getSiteUrl(deepLinkPath);
 };
 
 /**
- * Resolves appropriate status emoji matching user specification.
+ * Resolves appropriate status emoji.
  */
 const getStatusEmoji = (status) => {
-  const s = String(status || '').toLowerCase();
-  if (s.includes('approv') || s.includes('confirm')) return '✅';
-  if (s.includes('reject') || s.includes('declin')) return '❌';
-  if (s.includes('cancel')) return '🚫';
-  if (s.includes('complet')) return '🎉';
-  if (s.includes('process') || s.includes('progress')) return '⚙️';
-  if (s.includes('resolv')) return '🌟';
-  if (s.includes('close')) return '🔒';
-  if (s.includes('pend') || s.includes('submit')) return '⏳';
+  const s = String(status || '').toUpperCase();
+  if (s.includes('APPROV') || s.includes('CONFIRM') || s.includes('VERIF')) return '✅';
+  if (s.includes('REJECT') || s.includes('DECLIN')) return '❌';
+  if (s.includes('CANCEL')) return '🚫';
+  if (s.includes('COMPLET') || s.includes('RESOLV')) return '🎉';
+  if (s.includes('REVIEW') || s.includes('PROGRESS') || s.includes('PROCESS')) return '⚙️';
+  if (s.includes('CLOSE')) return '🔒';
+  if (s.includes('PEND') || s.includes('SUBMIT') || s.includes('NEW')) return '⏳';
   return '🔔';
 };
 
 /**
- * Formats a clean capitalized status string (e.g. "Approved", "In Progress").
+ * Formats a clean capitalized status string (e.g. "Approved", "Under Review").
  */
 const formatDisplayStatus = (status) => {
   const s = String(status || 'Pending').toLowerCase().replace(/_/g, ' ');
@@ -205,259 +397,379 @@ const formatDisplayStatus = (status) => {
 };
 
 /**
- * Provides a respectful, pastoral default status message for the user if no custom admin note is supplied.
+ * Generates status-specific user notification title.
  */
-const getDefaultUserStatusMessage = (meta, status, action) => {
-  const s = String(status || '').toLowerCase();
-  const typeName = meta.typeLabel;
-  if (action === 'created') {
-    return `Your ${typeName} request has been received and is pending Church review.`;
-  }
-  if (s.includes('approv') || s.includes('confirm')) {
-    return `Your ${typeName} has been approved by the Church.`;
-  }
-  if (s.includes('reject') || s.includes('declin')) {
-    return `Your ${typeName} request could not be approved at this time. Please contact the parish office for further details.`;
-  }
-  if (s.includes('cancel')) {
-    return `Your ${typeName} request has been cancelled.`;
-  }
-  if (s.includes('complet')) {
-    return `Your ${typeName} request has been completed by the Church.`;
-  }
-  if (s.includes('process') || s.includes('progress')) {
-    return `Your ${typeName} request is currently being processed by the parish administration.`;
-  }
-  if (s.includes('resolv')) {
-    return `Your support inquiry has been resolved by Church administration.`;
-  }
-  if (s.includes('close')) {
-    return `Your ticket has been closed.`;
-  }
-  return `Your ${typeName} request status has been updated to ${formatDisplayStatus(status)}.`;
+const generateStatusTitle = (requestType, status) => {
+  const norm = String(status || '').toUpperCase();
+  const typeClean = String(requestType || 'Request').replace(/[-_]/g, ' ').trim();
+  const typeLabel = typeClean.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+
+  if (norm.includes('APPROV') || norm.includes('CONFIRM') || norm.includes('VERIF')) return `${typeLabel} Approved`;
+  if (norm.includes('REJECT') || norm.includes('DECLIN')) return `${typeLabel} Not Approved`;
+  if (norm.includes('COMPLET')) return `${typeLabel} Completed`;
+  if (norm.includes('RESOLV')) return `${typeLabel} Resolved`;
+  if (norm.includes('REVIEW') || norm.includes('PROGRESS') || norm.includes('PROCESS')) return `${typeLabel} Under Review`;
+  if (norm.includes('CANCEL')) return `${typeLabel} Cancelled`;
+  return `${typeLabel} Status Updated: ${formatDisplayStatus(status)}`;
 };
 
 /**
- * Helper to dispatch WhatsApp message via Baileys bot socket, falling back to Twilio.
+ * Generates status-specific user-facing message.
  */
-const dispatchWhatsApp = async (phoneNumber, text) => {
-  try {
-    const whatsappBot = require('../bot/whatsapp');
-    if (whatsappBot && typeof whatsappBot.sendWhatsAppMessage === 'function') {
-      const sent = await whatsappBot.sendWhatsAppMessage(phoneNumber, text);
-      if (sent) return true;
-    }
-  } catch (err) {
-    console.warn('[RequestNotification] Baileys bot dispatch error:', err.message);
+const generateStatusMessage = (request = {}, status, adminComment) => {
+  const norm = String(status || '').toUpperCase();
+  const meta = getModuleMeta(request.type || request.requestType || request.moduleType || '', request);
+  const typeName = meta.typeLabel || 'request';
+
+  let baseMsg = '';
+  if (meta.isConfidential) {
+    baseMsg = `Your confidential spiritual appointment request status has been updated. Please sign in to view private details.`;
+  } else if (norm.includes('APPROV') || norm.includes('CONFIRM') || norm.includes('VERIF')) {
+    baseMsg = `Your ${typeName} request has been approved.`;
+  } else if (norm.includes('REJECT') || norm.includes('DECLIN')) {
+    baseMsg = `Your ${typeName} request has been reviewed and could not be approved at this time.`;
+  } else if (norm.includes('COMPLET')) {
+    baseMsg = `Your ${typeName} request has been completed and is ready to view.`;
+  } else if (norm.includes('RESOLV')) {
+    baseMsg = `Your ${typeName} has been marked as resolved and closed.`;
+  } else if (norm.includes('REVIEW') || norm.includes('PROGRESS') || norm.includes('PROCESS')) {
+    baseMsg = `Your ${typeName} request is currently being reviewed.`;
+  } else if (norm.includes('CANCEL')) {
+    baseMsg = `Your ${typeName} request has been cancelled.`;
+  } else {
+    baseMsg = `Your ${typeName} request status has been updated to ${formatDisplayStatus(status)}.`;
   }
 
-  // Fallback to Twilio if Baileys did not deliver
-  try {
-    let formatted = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
-    await sendTwilioWhatsApp(formatted, text);
-    return true;
-  } catch (tErr) {
-    console.warn('[RequestNotification] Twilio WhatsApp fallback error:', tErr.message);
-    return false;
+  if (adminComment && String(adminComment).trim()) {
+    baseMsg += `\n\nAdmin note: ${String(adminComment).trim()}`;
   }
+
+  return baseMsg;
 };
 
 /**
- * Main Central Dispatcher for Admin Request Notifications.
+ * Resolves redirect URL for user notification deep link.
  */
-const notifyAdminRequest = async ({
-  action = 'created',
-  module: moduleType,
-  request = {},
+const generateRequestRedirectUrl = (request = {}, requestType = '') => {
+  const type = requestType || request.type || request.requestType || '';
+  const reqId = formatRequestId(request, type);
+  return getUserDeepLinkPath(type, reqId);
+};
+
+/**
+ * Resolves admin review URL for admin notification deep link.
+ */
+const generateAdminReviewUrl = (request = {}, requestType = '') => {
+  const type = requestType || request.type || request.requestType || '';
+  const meta = getModuleMeta(type, request);
+  return meta.adminDeepLink;
+};
+
+// ─── 1. CENTRAL ADMIN NOTIFICATION SERVICE ──────────────────────────────────
+/**
+ * Centralized service to create and deliver an admin request notification through:
+ * 1. Admin In-App Database Notification & Bell counter
+ * 2. Admin WhatsApp via SJDB Connect / Baileys
+ * 3. Admin Browser / Web Push Notification
+ * 4. Admin Rich HTML Email Notification
+ */
+const createAdminNotification = async ({
+  type,
+  requestType,
+  title,
+  message,
+  userId,
   user: userParam,
-  previousStatus,
-  newStatus,
-  updatedBy,
-  note,
-  req
+  memberId: memberIdParam,
+  requestId: requestIdParam,
+  status = 'PENDING',
+  priority = 'normal',
+  details,
+  actionUrl: actionUrlParam,
+  redirectUrl: redirectUrlParam,
+  fileUrl,
+  pdfPath,
+  mediaOptions,
+  skipEmail = false,
+  metadata = {},
+  req,
+  request: requestParam
 }) => {
   try {
-    // 1. Resolve User / Parishioner
+    const rawType = requestType || type || 'REQUEST';
+    let requestObj = requestParam || {};
+    if (!requestObj._id && requestIdParam) {
+      requestObj._id = requestIdParam;
+    }
+
+    // 1. Resolve User
     let user = userParam;
-    if (!user && request.userId) {
-      if (typeof request.userId === 'object' && request.userId.name) {
-        user = request.userId;
-      } else {
+    const lookupId = userId || requestObj.userId || (user && user._id);
+    if ((!user || !user.email || !user.phone || !user.parishMemberId) && lookupId) {
+      const uId = (typeof lookupId === 'object' && lookupId._id) ? lookupId._id : lookupId;
+      if (uId && (typeof uId === 'string' || uId instanceof mongoose.Types.ObjectId)) {
         try {
-          user = await User.findById(request.userId).select('name parishMemberId familyId email phone anbiyam');
-        } catch (uErr) {
-          // ignore
-        }
+          const dbUser = await User.findById(uId).select('name parishMemberId familyId email phone');
+          if (dbUser) {
+            user = { ...(user && typeof user.toObject === 'function' ? user.toObject() : (user || {})), ...dbUser.toObject() };
+          }
+        } catch { }
       }
     }
 
-    const userName = user?.name || request.personName || request.familyName || request.name || 'Parishioner';
-    const memberId = user?.parishMemberId || 'SJDB_M01';
-    const familyId = user?.familyId || 'SJDB_FAM';
-    const userPhone = user?.phone || request.contactPhone || request.phone || 'N/A';
-    const userEmail = user?.email || request.email || 'stjdbchurch@gmail.com';
+    const userName = user?.name || requestObj.personName || requestObj.name || metadata.userName || (req?.user?.name) || 'Parishioner';
+    const memberId = memberIdParam || user?.parishMemberId || metadata.memberId || (req?.user?.parishMemberId) || 'SJDB_M01';
+    const familyId = user?.familyId || metadata.familyId || (req?.user?.familyId) || 'N/A';
+    const userPhone = user?.phone || requestObj.contactPhone || requestObj.phone || metadata.userPhone || (req?.user?.phone) || 'N/A';
+    const userEmail = user?.email || requestObj.email || requestObj.contactEmail || metadata.userEmail || (req?.user?.email) || 'None';
 
     // 2. Resolve Module Metadata & IDs
-    const meta = getModuleMeta(moduleType, request);
-    const requestId = formatRequestId(request, moduleType);
-    const reviewUrl = getAdminReviewUrl(meta.deepLinkPath);
+    const meta = getModuleMeta(rawType, requestObj);
+    const reqId = formatRequestId(requestObj, rawType);
+    const deepLink = actionUrlParam || redirectUrlParam || meta.adminDeepLink;
+    const reviewUrl = getAdminReviewUrl(deepLink);
 
     const now = new Date();
-    const formattedDate = now.toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    });
+    const formattedDate = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
     const formattedDateTime = now.toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
     });
 
-    const currentStatus = (newStatus || request.status || 'Pending').toUpperCase();
-    const prevStatusFormatted = previousStatus ? previousStatus.toUpperCase() : null;
+    const currentStatus = String(status || 'PENDING').toUpperCase();
 
     // Resolve details text
-    let detailsText = meta.defaultDetail;
-    if (request.massDate) {
-      const massDateStr = new Date(request.massDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' });
-      detailsText = `${request.intentionType ? request.intentionType.replace(/_/g, ' ') : 'Mass Intention'} (${massDateStr}${request.massTime ? ` at ${request.massTime}` : ''})`;
-      if (request.intentionDetails) detailsText += ` — "${request.intentionDetails}"`;
-    } else if (request.intention) {
-      detailsText = request.intention;
-    } else if (request.subject) {
-      detailsText = `${request.subject}${request.message ? ` — ${request.message.slice(0, 100)}` : ''}`;
+    let shortDetail = details || meta.defaultDetail;
+    if (requestObj.massDate) {
+      const massDateStr = new Date(requestObj.massDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' });
+      shortDetail = `${requestObj.intentionType ? requestObj.intentionType.replace(/_/g, ' ') : 'Mass Intention'} (${massDateStr}${requestObj.massTime ? ` at ${requestObj.massTime}` : ''})`;
+      if (requestObj.intentionDetails) shortDetail += ` — "${requestObj.intentionDetails}"`;
+    } else if (requestObj.intention) {
+      shortDetail = requestObj.intention;
+    } else if (requestObj.subject) {
+      shortDetail = `${requestObj.subject}${requestObj.message ? ` — ${requestObj.message.slice(0, 100)}` : ''}`;
     }
 
-    // 3. Format WhatsApp Bot Message matching exact user specification
-    let waMessage = '';
-    if (action === 'created') {
-      waMessage =
-`🔔 *New ${meta.typeLabel} Request*
-👤 Name: ${userName}
-🆔 Member ID: ${memberId}${familyId && familyId !== 'N/A' ? ` (Family: ${familyId})` : ''}
-${meta.icon} ${meta.intentionLabel}: ${detailsText}
-📅 Date: ${formattedDate}
-🔖 Request ID: ${requestId}
-⏳ Status: ${currentStatus}
-
-👉 Review Request:
-${reviewUrl}
-
-Please review and take the required action.`;
-    } else {
-      waMessage =
-`🔔 *${meta.typeLabel} Request Status Updated*
-👤 Name: ${userName}
-🆔 Member ID: ${memberId}
-${meta.icon} ${meta.intentionLabel}: ${detailsText}
-📅 Date: ${formattedDate}
-🔖 Request ID: ${requestId}
-${prevStatusFormatted ? `🔄 Previous Status: ${prevStatusFormatted}\n` : ''}⏳ Status: ${currentStatus}${note ? `\n📝 Note: ${note}` : ''}
-
-👉 Review Request:
-${reviewUrl}
-
-Please review in the Church Admin Dashboard.`;
+    // 3. Idempotency Check
+    const idempotencyKey = `ADMIN_${String(rawType).toUpperCase()}_${String(reqId)}_${currentStatus}`;
+    const existingNotif = await Notification.findOne({ idempotencyKey });
+    if (existingNotif) {
+      console.log(`[AdminNotification] Idempotency match found for ${idempotencyKey}. Skipping duplicate.`);
+      return existingNotif;
     }
 
-    // 4. Send Immediate WhatsApp to Central Admin Phone
-    const adminWhatsAppPhone = await getAdminWhatsAppNumber();
-    dispatchWhatsApp(adminWhatsAppPhone, waMessage)
-      .then(ok => console.log(`[RequestNotification] WhatsApp sent to Admin (${adminWhatsAppPhone}): ${ok ? 'SUCCESS' : 'QUEUED/FAILED'}`))
-      .catch(err => console.error('[RequestNotification] WhatsApp error:', err.message));
+    const notifTitle = title || `New ${meta.typeLabel} Request`;
+    const notifMessage = message || `${userName} (${memberId}) submitted a new ${meta.typeLabel} request.${shortDetail ? ` "${shortDetail}"` : ''}`;
+    const contactSummary = [
+      userPhone && userPhone !== 'N/A' ? `📞 ${userPhone}` : null,
+      userEmail && userEmail !== 'None' ? `📧 ${userEmail}` : null
+    ].filter(Boolean).join(' | ');
 
-    // 5. In-App Notification for Admin Panel
-    const notifTitle = action === 'created'
-      ? `New ${meta.typeLabel} Request (${requestId})`
-      : `${meta.typeLabel} ${currentStatus} (${requestId})`;
+    const safeObjectId = (id) => {
+      if (!id) return null;
+      if (id instanceof mongoose.Types.ObjectId) return id;
+      if (typeof id === 'object' && id._id) return safeObjectId(id._id);
+      if (typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id)) {
+        try { return new mongoose.Types.ObjectId(id); } catch { return null; }
+      }
+      return null;
+    };
+    const validRelatedId = safeObjectId(requestObj._id) || safeObjectId(userId) || safeObjectId(user?._id) || null;
 
-    const notifMessage = action === 'created'
-      ? `${userName} submitted a ${meta.typeLabel}. ID: ${requestId}. Details: ${detailsText.slice(0, 140)}.`
-      : `${meta.typeLabel} (${requestId}) status updated to ${currentStatus} for ${userName}.${note ? ` Note: ${note}` : ''}`;
-
-    await Notification.create({
+    // 4. Save to Database for Admin Notification Panel / Bell
+    const notif = await Notification.create({
       recipient: 'admin',
       userId: user?._id,
       title: notifTitle,
       message: notifMessage,
       type: meta.category,
-      category: 'requests',
-      priority: action === 'created' ? 'high' : 'medium',
-      actionUrl: meta.deepLinkPath,
-      relatedId: request._id,
+      category: meta.category,
+      requestType: rawType,
+      requestId: reqId,
+      status: currentStatus,
+      priority: priority === 'urgent' || priority === 'critical' ? 'critical' : priority === 'high' ? 'high' : 'medium',
+      actionUrl: deepLink,
+      redirectUrl: deepLink,
+      fileUrl: fileUrl || requestObj.receiptUrl || requestObj.fileUrl || null,
+      relatedId: validRelatedId,
       relatedModel: meta.relatedModel,
+      idempotencyKey,
       metadata: {
-        action,
-        module: moduleType,
-        requestId,
+        requestType: rawType,
+        requestId: reqId,
         memberId,
         familyId,
         userName,
         userEmail,
         userPhone,
         status: currentStatus,
-        previousStatus: prevStatusFormatted,
-        details: detailsText,
+        details: shortDetail,
         reviewUrl,
-        timestamp: now
+        fileUrl: fileUrl || requestObj.receiptUrl || requestObj.fileUrl || null,
+        ...metadata
       },
-      sentVia: ['whatsapp', 'email', 'push']
-    }).catch(err => console.error('[RequestNotification] In-app notification error:', err.message));
-
-    // 6. Web Push Alert to Admin Devices
-    sendPushToAdmins({
-      title: notifTitle,
-      body: notifMessage.slice(0, 120),
-      url: meta.deepLinkPath,
-      tag: `admin-req-${requestId}`,
-      icon: '/favicon.png',
-      badge: '/favicon.png',
-      data: {
-        url: meta.deepLinkPath,
-        requestId
+      sentVia: ['website', 'email', 'push', 'whatsapp'],
+      channels: {
+        website: { sent: true, sentAt: now, read: false },
+        push: { sent: false },
+        email: { sent: false },
+        whatsapp: { sent: false }
       }
-    }).catch(err => console.warn('[RequestNotification] Push to admins error:', err.message));
+    });
 
-    // 7. Rich HTML Email Alert to System Admins
-    const primaryAdminEmail = process.env.ADMIN_EMAIL || 'stjdbchurch@gmail.com';
-    const adminUsers = await User.find({ role: 'admin' }).select('email name');
-    const adminRecipients = [];
+    // 5. Deliver through other channels asynchronously (Non-blocking & Resilient)
+    Promise.allSettled([
+      // Channel A: Admin WhatsApp (Multi-Admin Delivery with PDF Document support)
+      (async () => {
+        try {
+          const adminPhoneNumbers = await getAllAdminPhoneNumbers();
+          const targetPdf = pdfPath || fileUrl || requestObj.receiptUrl || requestObj.fileUrl;
+          let resolvedMedia = mediaOptions || null;
 
-    if (!adminUsers.some(a => (a.email || '').toLowerCase() === primaryAdminEmail.toLowerCase())) {
-      adminRecipients.push({ email: primaryAdminEmail, name: 'Parish Administrator' });
-    }
-    for (const adm of adminUsers) {
-      if (adm.email && !adminRecipients.some(r => r.email.toLowerCase() === adm.email.toLowerCase())) {
-        adminRecipients.push(adm);
-      }
-    }
+          if (!resolvedMedia && targetPdf) {
+            const fs = require('fs');
+            const path = require('path');
+            const candidatePath = resolveLocalFilePath(targetPdf);
+            if (candidatePath && fs.existsSync(candidatePath)) {
+              resolvedMedia = {
+                url: candidatePath,
+                buffer: fs.readFileSync(candidatePath),
+                mimetype: 'application/pdf',
+                fileName: path.basename(candidatePath)
+              };
+            }
+          }
 
-    const emailSubject = action === 'created'
-      ? `🔔 New ${meta.typeLabel} Request — ${userName} (${requestId})`
-      : `🔄 ${meta.typeLabel} Request Updated — ${currentStatus} (${requestId})`;
+          const isDonation = (rawType === 'DONATION' || meta.typeKey === 'DONATION');
+          const donationAmount = requestObj.amount || metadata.amount || '';
+          const donationCategory = requestObj.category || metadata.category || requestObj.type || 'Donation';
+          const donationReceiptNo = requestObj.receiptNumber || metadata.receiptNumber || reqId;
+          const donationPaymentId = requestObj.paymentId || metadata.paymentRef || requestObj.transactionId || 'N/A';
+          const donationIntention = requestObj.intention || metadata.intention || requestObj.note || requestObj.message || 'None';
 
-    const emailHtml = `<!DOCTYPE html>
+          const waMessage = isDonation ?
+`🔔 *Admin Alert: New Donation Received (Paid)*
+
+A new donation has been received!
+
+👤 *Donor:* ${userName}
+🆔 *Member ID:* ${memberId}${familyId && familyId !== 'N/A' ? ` (Family: ${familyId})` : ''}
+📧 *Donor Email:* ${userEmail && userEmail !== 'None' ? userEmail : '—'}
+📞 *Phone Number:* ${userPhone && userPhone !== 'N/A' ? userPhone : '—'}
+💰 *Amount:* ₹${donationAmount || '0'}
+🏷️ *Category:* ${donationCategory}
+🧾 *Receipt No:* ${donationReceiptNo}
+💳 *Payment ID:* ${donationPaymentId}
+🙏 *Intention:* ${donationIntention}
+📅 *Date:* ${formattedDateTime}
+
+📎 Official donation receipt PDF is attached for church records.
+
+👉 Review in Admin Panel:
+${reviewUrl}`
+:
+`🔔 *New ${meta.typeLabel} Request*
+👤 User Name: ${userName}
+🆔 Member ID: ${memberId}${familyId && familyId !== 'N/A' ? ` (Family: ${familyId})` : ''}
+📧 User Email: ${userEmail && userEmail !== 'None' ? userEmail : '—'}
+📞 Phone Number: ${userPhone && userPhone !== 'N/A' ? userPhone : '—'}
+🔖 Request ID: ${reqId}
+📅 Submitted: ${formattedDateTime}
+⏳ Status: ${currentStatus}
+${meta.icon} ${meta.intentionLabel}: ${shortDetail}
+
+👉 Review Request:
+${reviewUrl}
+
+Please review in Admin Panel.`;
+
+          if (resolvedMedia) {
+            resolvedMedia.caption = resolvedMedia.caption || waMessage;
+          }
+
+          const waResults = await Promise.allSettled(
+            adminPhoneNumbers.map(phone => dispatchWhatsApp(phone, waMessage, resolvedMedia))
+          );
+          const successfulPhones = [];
+          const failedPhones = [];
+          waResults.forEach((res, idx) => {
+            const phone = adminPhoneNumbers[idx];
+            if (res.status === 'fulfilled' && res.value === true) {
+              successfulPhones.push(phone);
+            } else {
+              failedPhones.push(phone);
+            }
+          });
+
+          const anySent = successfulPhones.length > 0;
+          await Notification.findByIdAndUpdate(notif._id, {
+            'channels.whatsapp.sent': anySent,
+            'channels.whatsapp.sentAt': new Date(),
+            'channels.whatsapp.recipients': adminPhoneNumbers,
+            'channels.whatsapp.hasAttachment': Boolean(resolvedMedia),
+            ...(!anySent ? { 'channels.whatsapp.error': 'Dispatch failed for all admin numbers' } : {})
+          });
+          console.log(`[AdminNotification] WhatsApp dispatched to ${adminPhoneNumbers.length} admin(s) ${resolvedMedia ? '(WITH PDF ATTACHMENT)' : ''} [Success: ${successfulPhones.length}, Failed: ${failedPhones.length}]`);
+        } catch (waErr) {
+          console.error('[AdminNotification] WhatsApp error:', waErr.message);
+          await Notification.findByIdAndUpdate(notif._id, {
+            'channels.whatsapp.sent': false,
+            'channels.whatsapp.error': waErr.message
+          }).catch(() => {});
+        }
+      })(),
+
+      // Channel B: Admin Web Push
+      (async () => {
+        try {
+          const pushRes = await sendPushToAdmins({
+            title: notifTitle,
+            body: `${userName} (${memberId}) | ${userPhone !== 'N/A' ? userPhone : userEmail !== 'None' ? userEmail : ''}: ${shortDetail.slice(0, 80)}`,
+            url: deepLink,
+            tag: `admin-req-${reqId}`,
+            icon: '/favicon.png',
+            badge: '/favicon.png',
+            data: { url: deepLink, requestId: reqId }
+          });
+          await Notification.findByIdAndUpdate(notif._id, {
+            'channels.push.sent': !!pushRes?.success,
+            'channels.push.sentAt': new Date(),
+            ...(!pushRes?.success ? { 'channels.push.error': pushRes?.reason || pushRes?.error } : {})
+          });
+        } catch (pushErr) {
+          console.warn('[AdminNotification] Push error:', pushErr.message);
+          await Notification.findByIdAndUpdate(notif._id, {
+            'channels.push.sent': false,
+            'channels.push.error': pushErr.message
+          }).catch(() => {});
+        }
+      })(),
+
+      // Channel C: Admin Email (Multi-Admin Delivery)
+      (async () => {
+        if (skipEmail || metadata.skipEmail || metadata.skipAdminEmail) {
+          return;
+        }
+        try {
+          const adminRecipients = await getAllAdminEmailRecipients();
+          const emailSubject = `New ${meta.typeLabel} Request — ${userName} (${reqId})`;
+          const emailHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${notifTitle}</title>
   <style>
-    body { margin: 0; padding: 0; background-color: #f1f5f9; font-family: 'Segoe UI', -apple-system, Roboto, Helvetica, Arial, sans-serif; }
+    body { margin: 0; padding: 0; background-color: #f1f5f9; font-family: 'Segoe UI', -apple-system, Roboto, sans-serif; }
     .container { max-width: 620px; margin: 25px auto; background: #ffffff; border-radius: 18px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.06); }
     .header { background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); padding: 28px 24px; text-align: center; color: #ffffff; }
     .logo-box { width: 70px; height: 70px; margin: 0 auto 10px; border-radius: 50%; background: #ffffff; overflow: hidden; border: 3px solid #fbbf24; }
     .content { padding: 28px 24px; color: #1e293b; }
-    .badge { display: inline-block; padding: 5px 12px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+    .badge { display: inline-block; padding: 5px 12px; border-radius: 999px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
     .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
     .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #e2e8f0; font-size: 13px; }
     .row:last-child { border-bottom: none; }
     .label { color: #64748b; font-weight: 600; }
     .val { color: #0f172a; font-weight: 700; text-align: right; }
-    .btn { display: inline-block; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff !important; text-decoration: none; padding: 14px 30px; border-radius: 12px; font-weight: 800; font-size: 14px; box-shadow: 0 4px 14px rgba(37,99,235,0.3); }
+    .btn { display: inline-block; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff !important; text-decoration: none; padding: 14px 30px; border-radius: 12px; font-weight: 800; font-size: 14px; }
     .footer { background: #0f172a; padding: 18px; text-align: center; color: #94a3b8; font-size: 11.5px; }
   </style>
 </head>
@@ -468,290 +780,338 @@ Please review in the Church Admin Dashboard.`;
         <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width:100%; height:100%; object-fit:cover; display:block;" />
       </div>
       <h1 style="color:#fbbf24; margin:0 0 4px; font-size:20px; font-weight:800;">St. John de Britto Church</h1>
-      <p style="margin:0; font-size:12px; color:#cbd5e1; font-weight:600; letter-spacing:0.5px;">ADMINISTRATIVE REQUEST ALERT</p>
+      <p style="margin:0; font-size:12px; color:#cbd5e1; font-weight:600;">NEW REQUEST ALERT</p>
     </div>
     <div class="content">
       <div style="margin-bottom:14px;">
-        <span class="badge" style="background:#dbeafe; color:#1e40af; border:1px solid #bfdbfe;">
-          ${action === 'created' ? '✨ NEW SUBMISSION' : '🔄 STATUS UPDATE'} • ${meta.typeLabel.toUpperCase()}
+        <span class="badge" style="background:#dbeafe; color:#1e40af;">
+          ✨ NEW REQUEST • ${meta.typeLabel.toUpperCase()}
         </span>
       </div>
-
       <h2 style="color:#1e3a8a; margin:0 0 14px; font-size:18px; font-weight:800;">
         ${notifTitle}
       </h2>
-
       <div class="card">
-        <div class="row">
-          <span class="label">Parishioner Name:</span>
-          <span class="val">${userName}</span>
-        </div>
-        <div class="row">
-          <span class="label">Member / Family ID:</span>
-          <span class="val font-mono">${memberId} / ${familyId}</span>
-        </div>
-        <div class="row">
-          <span class="label">Contact Mobile:</span>
-          <span class="val font-mono">${userPhone}</span>
-        </div>
-        <div class="row">
-          <span class="label">Registered Email:</span>
-          <span class="val">${userEmail}</span>
-        </div>
-        <div class="row">
-          <span class="label">Request / Reference ID:</span>
-          <span class="val" style="color:#2563eb; font-family:monospace; font-weight:800;">${requestId}</span>
-        </div>
-        <div class="row">
-          <span class="label">Submitted Time:</span>
-          <span class="val">${formattedDateTime}</span>
-        </div>
-        <div class="row">
-          <span class="label">Current Status:</span>
-          <span class="val" style="color:${currentStatus === 'APPROVED' ? '#16a34a' : currentStatus === 'REJECTED' ? '#dc2626' : '#d97706'}; font-weight:800;">
-            ${currentStatus}
-          </span>
-        </div>
+        <div class="row"><span class="label">User Name:</span><span class="val">${userName}</span></div>
+        <div class="row"><span class="label">Member ID:</span><span class="val font-mono">${memberId}</span></div>
+        <div class="row"><span class="label">User Email:</span><span class="val">${userEmail && userEmail !== 'None' ? `<a href="mailto:${userEmail}" style="color:#2563eb; text-decoration:none; font-weight:700;">${userEmail}</a>` : '<span style="color:#94a3b8;">—</span>'}</span></div>
+        <div class="row"><span class="label">Phone Number:</span><span class="val font-mono">${userPhone && userPhone !== 'N/A' ? `<a href="tel:${userPhone}" style="color:#0f172a; text-decoration:none; font-weight:700;">${userPhone}</a>` : '<span style="color:#94a3b8;">—</span>'}</span></div>
+        <div class="row"><span class="label">Request ID:</span><span class="val" style="color:#2563eb; font-family:monospace;">${reqId}</span></div>
+        <div class="row"><span class="label">Submitted:</span><span class="val">${formattedDateTime}</span></div>
+        <div class="row"><span class="label">Status:</span><span class="val" style="color:#d97706; font-weight:800;">${currentStatus}</span></div>
       </div>
-
-      <!-- Details Block -->
       <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:12px; padding:14px 16px; margin-bottom:22px;">
         <div style="font-size:11px; font-weight:800; color:#92400e; text-transform:uppercase; margin-bottom:4px;">
           ${meta.icon} ${meta.intentionLabel}
         </div>
         <div style="font-size:13.5px; color:#78350f; font-weight:600; line-height:1.5;">
-          ${detailsText}
+          ${shortDetail}
         </div>
       </div>
-
-      <!-- Action Button (Direct Secure Deep Link) -->
       <div style="text-align:center; margin:24px 0 10px;">
-        <a href="${reviewUrl}" class="btn">
-          👉 Review & Process in Admin Dashboard →
-        </a>
-        <p style="margin:8px 0 0; font-size:11px; color:#94a3b8;">
-          (Requires administrator sign-in credentials. Forwarded links remain protected.)
-        </p>
+        <a href="${reviewUrl}" class="btn">👉 View Request in Admin Panel →</a>
       </div>
     </div>
     <div class="footer">
       <p style="margin:0 0 4px; font-weight:700; color:#cbd5e1;">St. John de Britto Church, Kalayarkoil - 630551</p>
-      <p style="margin:0; color:#64748b;">Automated Request Management System • Dispatched via WhatsApp, Email & Web Push</p>
+      <p style="margin:0; color:#64748b;">Central Admin Request System • Dispatched via WhatsApp, Email & Web Push</p>
     </div>
   </div>
 </body>
 </html>`;
 
-    for (const recipient of adminRecipients) {
-      if (recipient.email) {
-        sendMail({
-          to: recipient.email,
-          subject: emailSubject,
-          html: emailHtml
-        }).catch(err => console.error(`[RequestNotification] Email alert error to ${recipient.email}:`, err.message));
-      }
-    }
+          const emailAttachments = [];
+          const fs = require('fs');
+          const path = require('path');
+          const targetPdf = pdfPath || fileUrl || requestObj.receiptUrl || requestObj.fileUrl;
+          if (targetPdf) {
+            const pdfAbsPath = resolveLocalFilePath(targetPdf);
+            if (pdfAbsPath && fs.existsSync(pdfAbsPath)) {
+              emailAttachments.push({
+                filename: path.basename(pdfAbsPath),
+                path: pdfAbsPath,
+                contentType: 'application/pdf'
+              });
+            }
+          }
 
-    return true;
+          const mailResults = await Promise.allSettled(
+            adminRecipients.map(recipient =>
+              sendMail({ to: recipient.email, subject: emailSubject, html: emailHtml, attachments: emailAttachments })
+            )
+          );
+
+          const successfulEmails = [];
+          const failedEmails = [];
+          mailResults.forEach((res, idx) => {
+            const email = adminRecipients[idx].email;
+            if (res.status === 'fulfilled') {
+              successfulEmails.push(email);
+            } else {
+              failedEmails.push(email);
+            }
+          });
+
+          const anySent = successfulEmails.length > 0;
+          await Notification.findByIdAndUpdate(notif._id, {
+            'channels.email.sent': anySent,
+            'channels.email.sentAt': new Date(),
+            'channels.email.recipients': adminRecipients.map(r => r.email),
+            ...(!anySent ? { 'channels.email.error': 'Email delivery failed for all admin addresses' } : {})
+          });
+          console.log(`[AdminNotification] Email dispatched to ${adminRecipients.length} admin(s) [Success: ${successfulEmails.length}, Failed: ${failedEmails.length}]`);
+        } catch (mailErr) {
+          console.error('[AdminNotification] Email error:', mailErr.message);
+          await Notification.findByIdAndUpdate(notif._id, {
+            'channels.email.sent': false,
+            'channels.email.error': mailErr.message
+          }).catch(() => {});
+        }
+      })()
+    ]);
+
+    return notif;
   } catch (err) {
-    console.error('[RequestNotification] notifyAdminRequest error:', err.message);
-    return false;
+    console.error('[AdminNotification] createAdminNotification error:', err.message);
+    return null;
   }
 };
 
+// ─── 2. CENTRAL USER STATUS NOTIFICATION SERVICE ────────────────────────────
 /**
- * Main Central Dispatcher for User Request-Status Notifications.
- * Delivers across all configured channels:
- * 1. WhatsApp Bot (User WhatsApp)
- * 2. Email (User registered email)
- * 3. In-App / Website Notification (recipient: 'user', userId: user._id)
- * 4. Web Push Notification (sendPushToUser)
+ * Centralized service to deliver a status-update notification to the requesting user through:
+ * 1. User In-App Database Notification & Bell counter
+ * 2. User WhatsApp via SJDB Connect / Baileys
+ * 3. User Browser / Web Push Notification
+ * 4. User Rich HTML Email Notification with direct "View Request" link
  */
-const notifyUserRequestStatus = async ({
-  action = 'created',
-  module: moduleType,
-  request = {},
-  user: userParam,
-  previousStatus,
-  newStatus,
-  updatedBy,
-  note,
-  req
+const createUserNotification = async ({
+  userId,
+  type = 'REQUEST_STATUS_UPDATE',
+  requestType,
+  requestId,
+  status,
+  title,
+  message,
+  redirectUrl,
+  actionUrl,
+  adminComment,
+  metadata = {},
+  req,
+  request: requestParam
 }) => {
   try {
-    // 1. Resolve User / Parishioner
-    let user = userParam;
-    if (!user && request.userId) {
-      if (typeof request.userId === 'object' && (request.userId.email || request.userId.phone || request.userId.name)) {
-        user = request.userId;
+    const rawType = requestType || type || 'REQUEST';
+    let requestObj = requestParam || {};
+    if (!requestObj._id && requestId) {
+      requestObj._id = requestId;
+    }
+
+    // 1. Resolve User
+    let user = null;
+    const targetUserId = userId || requestObj.userId;
+    if (targetUserId) {
+      if (typeof targetUserId === 'object' && targetUserId.name && targetUserId.email && targetUserId.phone) {
+        user = targetUserId;
       } else {
+        const uId = (typeof targetUserId === 'object' && targetUserId._id) ? targetUserId._id : targetUserId;
         try {
-          user = await User.findById(request.userId).select('name parishMemberId familyId email phone anbiyam settings');
-        } catch (uErr) {
-          // ignore
-        }
+          user = await User.findById(uId).select('name parishMemberId familyId email phone settings');
+        } catch { }
       }
     }
 
-    const userName = user?.name || request.personName || request.familyName || request.name || 'Parishioner';
-    const memberId = user?.parishMemberId || request.parishMemberId || null;
-    const familyId = user?.familyId || request.familyId || null;
-    let userPhone = user?.phone || request.contactPhone || request.phone || null;
-    const userEmail = user?.email || request.email || null;
+    const userName = user?.name || requestObj.personName || requestObj.name || metadata.userName || (req?.user?.name) || 'Parishioner';
+    const memberId = user?.parishMemberId || metadata.memberId || (req?.user?.parishMemberId) || 'SJDB_M01';
+    const userPhone = user?.phone || requestObj.contactPhone || requestObj.phone || metadata.userPhone || (req?.user?.phone) || null;
+    const userEmail = user?.email || requestObj.email || metadata.userEmail || (req?.user?.email) || null;
 
-    if (userPhone) {
-      userPhone = userPhone.trim().replace(/\D/g, '');
-    }
+    // 2. Resolve Meta & IDs
+    const meta = getModuleMeta(rawType, requestObj);
+    const reqId = formatRequestId(requestObj, rawType);
+    const cleanStatus = String(status || requestObj.status || 'PENDING').toUpperCase();
+    const displayStatus = formatDisplayStatus(cleanStatus);
+    const statusEmoji = getStatusEmoji(cleanStatus);
 
-    // 2. Resolve Module Metadata, IDs & Deep Links
-    const meta = getModuleMeta(moduleType, request);
-    const requestId = formatRequestId(request, moduleType);
-    const userDeepLinkPath = getUserDeepLinkPath(moduleType, requestId);
-    const userReviewUrl = getUserReviewUrl(userDeepLinkPath);
+    const deepLink = redirectUrl || actionUrl || generateRequestRedirectUrl(requestObj, rawType);
+    const reviewUrl = getUserReviewUrl(deepLink);
 
     const now = new Date();
-    const formattedDate = now.toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    });
     const formattedDateTime = now.toLocaleDateString('en-IN', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+      day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
     });
 
-    const rawStatus = newStatus || request.status || 'Pending';
-    const displayStatus = formatDisplayStatus(rawStatus);
-    const statusEmoji = getStatusEmoji(rawStatus);
+    // 3. Resolve Content
+    const notifTitle = title || generateStatusTitle(meta.typeLabel, cleanStatus);
+    const notifMessage = message || generateStatusMessage(requestObj, cleanStatus, adminComment || metadata.adminComment);
 
-    // Resolve details text
-    let detailsText = meta.defaultDetail;
-    if (request.massDate) {
-      const massDateStr = new Date(request.massDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'long' });
-      detailsText = `${request.intentionType ? request.intentionType.replace(/_/g, ' ') : 'Mass Intention'} (${massDateStr}${request.massTime ? ` at ${request.massTime}` : ''})`;
-      if (request.intentionDetails) detailsText += ` — "${request.intentionDetails}"`;
-    } else if (request.intention) {
-      detailsText = request.intention;
-    } else if (request.subject) {
-      detailsText = `${request.subject}${request.message ? ` — ${request.message.slice(0, 100)}` : ''}`;
+    // 4. Idempotency Check
+    const idempotencyKey = `USER_${user?._id || 'ANON'}_${String(rawType).toUpperCase()}_${String(reqId)}_${cleanStatus}`;
+    const existingNotif = await Notification.findOne({ idempotencyKey });
+    if (existingNotif) {
+      console.log(`[UserNotification] Idempotency match found for ${idempotencyKey}. Skipping duplicate.`);
+      return existingNotif;
     }
 
-    // Resolve user message/reason:
-    const messageContent = (note && note.trim()) ? note.trim() : getDefaultUserStatusMessage(meta, rawStatus, action);
-
-    // 3. Format WhatsApp Message matching exact user specification
-    const waMessage = action === 'created'
-      ? `🔔 *Your ${meta.typeLabel} Request has been Received*
-${meta.icon} Request: ${detailsText}
-🔖 Request ID: ${requestId}
-📅 Date: ${formattedDate}
-${statusEmoji} Status: ${displayStatus}
-📝 Message: ${messageContent}
-
-👉 View Request:
-${userReviewUrl}`
-      : `🔔 *Your ${meta.typeLabel} Request has been Updated*
-${meta.icon} Request: ${detailsText}
-🔖 Request ID: ${requestId}
-📅 Date: ${formattedDate}
-${statusEmoji} Status: ${displayStatus}
-📝 Message: ${messageContent}
-
-👉 View Request:
-${userReviewUrl}`;
-
-    // 4. Send Immediate WhatsApp Notification to User's phone
-    if (userPhone && userPhone.length >= 10) {
-      dispatchWhatsApp(userPhone, waMessage)
-        .then(ok => console.log(`[RequestNotification] WhatsApp sent to User (${userPhone}): ${ok ? 'SUCCESS' : 'QUEUED/FAILED'}`))
-        .catch(err => console.error(`[RequestNotification] WhatsApp error for user ${userPhone}:`, err.message));
-    }
-
-    // 5. In-App Notification for User
+    // 5. Save to Database for User Notification Bell / Panel
+    let notif = null;
     if (user?._id) {
-      const notifTitle = action === 'created'
-        ? `Your ${meta.typeLabel} Request has been Received`
-        : `Your ${meta.typeLabel} Request has been Updated`;
-
-      const notifMessage = `${meta.typeLabel} (${requestId}) is now ${displayStatus}. ${messageContent}`;
-
-      await Notification.create({
+      notif = await Notification.create({
         recipient: 'user',
         userId: user._id,
         title: notifTitle,
         message: notifMessage,
         type: meta.category,
-        category: 'requests',
-        priority: (displayStatus === 'Approved' || displayStatus === 'Rejected') ? 'high' : 'normal',
-        actionUrl: userDeepLinkPath,
-        relatedId: request._id,
+        category: meta.category,
+        requestType: rawType,
+        requestId: reqId,
+        status: cleanStatus,
+        priority: cleanStatus === 'APPROVED' || cleanStatus === 'REJECTED' ? 'high' : 'normal',
+        actionUrl: deepLink,
+        redirectUrl: deepLink,
+        relatedId: requestObj._id,
         relatedModel: meta.relatedModel,
+        idempotencyKey,
         metadata: {
-          action,
-          module: moduleType,
-          requestId,
-          status: displayStatus,
-          details: detailsText,
-          adminMessage: messageContent,
-          reviewUrl: userReviewUrl,
-          timestamp: now
+          requestType: rawType,
+          requestId: reqId,
+          userName,
+          memberId,
+          userEmail,
+          userPhone,
+          status: cleanStatus,
+          adminComment: adminComment || metadata.adminComment,
+          reviewUrl,
+          ...metadata
         },
-        sentVia: ['whatsapp', 'email', 'push', 'inApp', 'website']
-      }).catch(err => console.error('[RequestNotification] User in-app notification error:', err.message));
-    }
-
-    // 6. Web Push Notification to User Devices
-    if (user?._id) {
-      sendPushToUser(user._id, {
-        title: `Request ${action === 'created' ? 'Received' : 'Updated'}: ${meta.typeLabel}`,
-        body: `${requestId}: Status is ${displayStatus}. ${messageContent.slice(0, 100)}`,
-        url: userDeepLinkPath,
-        tag: `user-req-${requestId}`,
-        icon: '/favicon.png',
-        badge: '/favicon.png',
-        data: {
-          url: userDeepLinkPath,
-          requestId
+        sentVia: ['website', 'email', 'push', 'whatsapp'],
+        channels: {
+          website: { sent: true, sentAt: now, read: false },
+          push: { sent: false },
+          email: { sent: false },
+          whatsapp: { sent: false }
         }
-      }).catch(err => console.warn('[RequestNotification] Push to user error:', err.message));
+      });
     }
 
-    // 7. Rich Branded HTML Status Email to User
-    if (userEmail && userEmail.includes('@')) {
-      const statusColor = rawStatus.toLowerCase().includes('approv') || rawStatus.toLowerCase().includes('confirm')
-        ? '#16a34a'
-        : rawStatus.toLowerCase().includes('reject') || rawStatus.toLowerCase().includes('declin')
-        ? '#dc2626'
-        : rawStatus.toLowerCase().includes('complet')
-        ? '#7c3aed'
-        : '#d97706';
+    // 6. Deliver through other channels asynchronously
+    Promise.allSettled([
+      // Channel A: User WhatsApp
+      (async () => {
+        if (!userPhone) return;
+        try {
+          const contactLines = [
+            userEmail && userEmail !== 'None' ? `📧 Email: ${userEmail}` : null,
+            userPhone && userPhone !== 'N/A' ? `📞 Phone: ${userPhone}` : null
+          ].filter(Boolean).join('\n');
 
-      const emailSubject = action === 'created'
-        ? `🔔 Your ${meta.typeLabel} Request has been Received (${requestId})`
-        : `🔔 Your ${meta.typeLabel} Request has been Updated: ${displayStatus} (${requestId})`;
+          const waMessage = meta.isConfidential
+            ? `🔔 *${meta.typeLabel} Status Update*
+👤 User: ${userName} (${memberId})
+${contactLines ? `${contactLines}\n` : ''}${statusEmoji} Status: *${displayStatus}*
+Your confidential spiritual appointment request has been updated.
 
-      const emailHtml = `<!DOCTYPE html>
+👉 View your request:
+${reviewUrl}
+
+_St. John de Britto Church, Kalayarkoil_`
+            : `🔔 *${meta.typeLabel} Status Update*
+👤 User: ${userName} (${memberId})
+${contactLines ? `${contactLines}\n` : ''}${statusEmoji} Status: *${displayStatus}*
+
+Your ${meta.typeLabel} request has been *${displayStatus}*.
+${adminComment ? `\n📝 *Admin message:* ${adminComment}\n` : ''}
+👉 View your request:
+${reviewUrl}
+
+_St. John de Britto Church, Kalayarkoil_`;
+
+          const sent = await dispatchWhatsApp(userPhone, waMessage);
+          if (notif?._id) {
+            await Notification.findByIdAndUpdate(notif._id, {
+              'channels.whatsapp.sent': !!sent,
+              'channels.whatsapp.sentAt': new Date(),
+              ...(!sent ? { 'channels.whatsapp.error': 'Dispatch returned false' } : {})
+            });
+          }
+          console.log(`[UserNotification] WhatsApp dispatched to user (${userPhone}): ${sent ? 'SUCCESS' : 'FAILED'}`);
+        } catch (waErr) {
+          console.error('[UserNotification] WhatsApp error:', waErr.message);
+          if (notif?._id) {
+            await Notification.findByIdAndUpdate(notif._id, {
+              'channels.whatsapp.sent': false,
+              'channels.whatsapp.error': waErr.message
+            }).catch(() => {});
+          }
+        }
+      })(),
+
+      // Channel B: User Web Push
+      (async () => {
+        if (!user?._id) return;
+        try {
+          const pushBody = meta.isConfidential
+            ? 'Your confidential spiritual request has been updated.'
+            : `${reqId}: ${displayStatus}. ${adminComment ? `Note: ${adminComment.slice(0, 80)}` : ''}`;
+
+          const pushRes = await sendPushToUser(user._id, {
+            title: notifTitle,
+            body: pushBody,
+            url: deepLink,
+            tag: `user-req-${reqId}-${cleanStatus}`,
+            icon: '/favicon.png',
+            badge: '/favicon.png',
+            data: { url: deepLink, requestId: reqId }
+          });
+          if (notif?._id) {
+            await Notification.findByIdAndUpdate(notif._id, {
+              'channels.push.sent': !!pushRes?.success,
+              'channels.push.sentAt': new Date(),
+              ...(!pushRes?.success ? { 'channels.push.error': pushRes?.reason || pushRes?.error } : {})
+            });
+          }
+        } catch (pushErr) {
+          console.warn('[UserNotification] Push error:', pushErr.message);
+          if (notif?._id) {
+            await Notification.findByIdAndUpdate(notif._id, {
+              'channels.push.sent': false,
+              'channels.push.error': pushErr.message
+            }).catch(() => {});
+          }
+        }
+      })(),
+
+      // Channel C: User Email
+      (async () => {
+        if (!userEmail || !userEmail.includes('@')) return;
+        try {
+          const statusColor = cleanStatus.includes('APPROV') || cleanStatus.includes('CONFIRM') || cleanStatus.includes('VERIF')
+            ? '#16a34a'
+            : cleanStatus.includes('REJECT') || cleanStatus.includes('DECLIN')
+            ? '#dc2626'
+            : cleanStatus.includes('COMPLET') || cleanStatus.includes('RESOLV')
+            ? '#7c3aed'
+            : '#d97706';
+
+          const emailSubject = `${meta.typeLabel} Status Updated: ${displayStatus} (${reqId})`;
+          const emailHtml = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${emailSubject}</title>
   <style>
-    body { margin: 0; padding: 0; background-color: #f8fafc; font-family: 'Segoe UI', -apple-system, Roboto, Helvetica, Arial, sans-serif; }
+    body { margin: 0; padding: 0; background-color: #f8fafc; font-family: 'Segoe UI', -apple-system, Roboto, sans-serif; }
     .container { max-width: 620px; margin: 25px auto; background: #ffffff; border-radius: 18px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.06); }
     .header { background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); padding: 28px 24px; text-align: center; color: #ffffff; }
     .logo-box { width: 70px; height: 70px; margin: 0 auto 10px; border-radius: 50%; background: #ffffff; overflow: hidden; border: 3px solid #fbbf24; }
     .content { padding: 28px 24px; color: #1e293b; }
-    .badge { display: inline-block; padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+    .badge { display: inline-block; padding: 6px 14px; border-radius: 999px; font-size: 12px; font-weight: 800; text-transform: uppercase; }
     .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
     .row { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px dashed #e2e8f0; font-size: 13px; }
     .row:last-child { border-bottom: none; }
     .label { color: #64748b; font-weight: 600; }
     .val { color: #0f172a; font-weight: 700; text-align: right; }
-    .btn { display: inline-block; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff !important; text-decoration: none; padding: 14px 30px; border-radius: 12px; font-weight: 800; font-size: 14px; box-shadow: 0 4px 14px rgba(37,99,235,0.3); }
+    .btn { display: inline-block; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff !important; text-decoration: none; padding: 14px 30px; border-radius: 12px; font-weight: 800; font-size: 14px; }
     .footer { background: #0f172a; padding: 18px; text-align: center; color: #94a3b8; font-size: 11.5px; }
   </style>
 </head>
@@ -762,7 +1122,7 @@ ${userReviewUrl}`;
         <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width:100%; height:100%; object-fit:cover; display:block;" />
       </div>
       <h1 style="color:#fbbf24; margin:0 0 4px; font-size:20px; font-weight:800;">St. John de Britto Church</h1>
-      <p style="margin:0; font-size:12px; color:#cbd5e1; font-weight:600; letter-spacing:0.5px;">REQUEST STATUS NOTIFICATION</p>
+      <p style="margin:0; font-size:12px; color:#cbd5e1; font-weight:600;">REQUEST STATUS NOTIFICATION</p>
     </div>
     <div class="content">
       <div style="margin-bottom:16px;">
@@ -770,68 +1130,27 @@ ${userReviewUrl}`;
           ${statusEmoji} ${displayStatus}
         </span>
       </div>
-
-      <h2 style="color:#1e3a8a; margin:0 0 10px; font-size:18px; font-weight:800;">
-        Dear ${userName},
-      </h2>
+      <h2 style="color:#1e3a8a; margin:0 0 10px; font-size:18px; font-weight:800;">Dear ${userName},</h2>
       <p style="margin:0 0 16px; color:#475569; font-size:14px; line-height:1.5;">
         Your <strong>${meta.typeLabel}</strong> request with the church has an update.
       </p>
-
       <div class="card">
-        <div class="row">
-          <span class="label">Request Type:</span>
-          <span class="val">${meta.typeLabel}</span>
-        </div>
-        <div class="row">
-          <span class="label">Request ID:</span>
-          <span class="val" style="color:#2563eb; font-family:monospace; font-weight:800;">${requestId}</span>
-        </div>
-        <div class="row">
-          <span class="label">Current Status:</span>
-          <span class="val" style="color:${statusColor}; font-weight:800;">
-            ${statusEmoji} ${displayStatus}
-          </span>
-        </div>
-        <div class="row">
-          <span class="label">Date / Time:</span>
-          <span class="val">${formattedDateTime}</span>
-        </div>
-        ${memberId ? `
-        <div class="row">
-          <span class="label">Parish Member ID:</span>
-          <span class="val font-mono">${memberId}</span>
-        </div>` : ''}
+        <div class="row"><span class="label">User Name:</span><span class="val">${userName}</span></div>
+        <div class="row"><span class="label">Member ID:</span><span class="val font-mono">${memberId}</span></div>
+        ${userEmail && userEmail !== 'None' ? `<div class="row"><span class="label">User Email:</span><span class="val" style="color:#2563eb;"><a href="mailto:${userEmail}" style="color:#2563eb; text-decoration:none;">${userEmail}</a></span></div>` : ''}
+        ${userPhone && userPhone !== 'N/A' ? `<div class="row"><span class="label">Phone Number:</span><span class="val font-mono"><a href="tel:${userPhone}" style="color:#0f172a; text-decoration:none;">${userPhone}</a></span></div>` : ''}
+        <div class="row"><span class="label">Request Type:</span><span class="val">${meta.typeLabel}</span></div>
+        <div class="row"><span class="label">Request ID:</span><span class="val" style="color:#2563eb; font-family:monospace; font-weight:800;">${reqId}</span></div>
+        <div class="row"><span class="label">Current Status:</span><span class="val" style="color:${statusColor}; font-weight:800;">${statusEmoji} ${displayStatus}</span></div>
+        <div class="row"><span class="label">Date / Time:</span><span class="val">${formattedDateTime}</span></div>
       </div>
-
-      <!-- Request Details -->
-      <div style="background:#f1f5f9; border:1px solid #e2e8f0; border-radius:12px; padding:14px 16px; margin-bottom:14px;">
-        <div style="font-size:11px; font-weight:800; color:#475569; text-transform:uppercase; margin-bottom:4px;">
-          ${meta.icon} ${meta.intentionLabel}
-        </div>
-        <div style="font-size:13.5px; color:#1e293b; font-weight:600; line-height:1.5;">
-          ${detailsText}
-        </div>
-      </div>
-
-      <!-- Church / Admin Message -->
+      ${adminComment ? `
       <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:12px; padding:14px 16px; margin-bottom:22px;">
-        <div style="font-size:11px; font-weight:800; color:#92400e; text-transform:uppercase; margin-bottom:4px;">
-          📝 Church Message
-        </div>
-        <div style="font-size:13.5px; color:#78350f; font-weight:600; line-height:1.5;">
-          ${messageContent}
-        </div>
-      </div>
-
-      <!-- Secure Deep Link Button -->
+        <div style="font-size:11px; font-weight:800; color:#92400e; text-transform:uppercase; margin-bottom:4px;">📝 Church Administration Note</div>
+        <div style="font-size:13.5px; color:#78350f; font-weight:600; line-height:1.5;">${adminComment}</div>
+      </div>` : ''}
       <div style="text-align:center; margin:26px 0 12px;">
-        <a href="${userReviewUrl}" class="btn">
-          👉 View & Review Your Request →
-        </a>
-        <p style="margin:8px 0 0; font-size:11.5px; color:#94a3b8;">
-          Click the button above to view complete details on the Church website.
-        </p>
+        <a href="${reviewUrl}" class="btn">👉 View & Review Your Request →</a>
       </div>
     </div>
     <div class="footer">
@@ -842,60 +1161,114 @@ ${userReviewUrl}`;
 </body>
 </html>`;
 
-      sendMail({
-        to: userEmail,
-        subject: emailSubject,
-        html: emailHtml
-      }).catch(err => console.error(`[RequestNotification] User email error to ${userEmail}:`, err.message));
-    }
+          await sendMail({ to: userEmail, subject: emailSubject, html: emailHtml });
+          if (notif?._id) {
+            await Notification.findByIdAndUpdate(notif._id, {
+              'channels.email.sent': true,
+              'channels.email.sentAt': new Date()
+            });
+          }
+        } catch (mailErr) {
+          console.error('[UserNotification] Email error:', mailErr.message);
+          if (notif?._id) {
+            await Notification.findByIdAndUpdate(notif._id, {
+              'channels.email.sent': false,
+              'channels.email.error': mailErr.message
+            }).catch(() => {});
+          }
+        }
+      })()
+    ]);
 
-    return true;
+    return notif;
   } catch (err) {
-    console.error('[RequestNotification] notifyUserRequestStatus error:', err.message);
-    return false;
+    console.error('[UserNotification] createUserNotification error:', err.message);
+    return null;
   }
 };
 
-// ── Event Bus Listeners ───────────────────────────────────────────────────────
+// ─── Backward-compatible bridges ─────────────────────────────────────────────
+const notifyAdminRequest = async (payload) => {
+  return createAdminNotification({
+    type: payload.module,
+    request: payload.request,
+    user: payload.user,
+    status: payload.newStatus || payload.request?.status || 'PENDING',
+    details: payload.note,
+    req: payload.req
+  });
+};
+
+const notifyUserRequestStatus = async (payload) => {
+  return createUserNotification({
+    userId: payload.user?._id || payload.request?.userId,
+    requestType: payload.module,
+    requestId: payload.request?._id,
+    status: payload.newStatus || payload.request?.status || 'PENDING',
+    adminComment: payload.note,
+    request: payload.request,
+    req: payload.req
+  });
+};
+
 requestEvents.on('request:created', (payload) => {
   Promise.allSettled([
-    notifyAdminRequest({ ...payload, action: 'created' }),
-    notifyUserRequestStatus({ ...payload, action: 'created' })
-  ]).catch(err => {
-    console.error('[RequestNotification] Error on request:created event:', err.message);
-  });
+    createAdminNotification({
+      type: payload.module,
+      request: payload.request,
+      user: payload.user,
+      status: 'PENDING',
+      req: payload.req
+    }),
+    createUserNotification({
+      userId: payload.user?._id || payload.request?.userId,
+      requestType: payload.module,
+      requestId: payload.request?._id,
+      status: 'PENDING',
+      request: payload.request,
+      req: payload.req
+    })
+  ]).catch(err => console.error('[RequestNotification] Error on request:created:', err.message));
 });
 
 requestEvents.on('request:status_changed', (payload) => {
   Promise.allSettled([
-    notifyAdminRequest({ ...payload, action: 'status_changed' }),
-    notifyUserRequestStatus({ ...payload, action: 'status_changed' })
-  ]).catch(err => {
-    console.error('[RequestNotification] Error on request:status_changed event:', err.message);
-  });
+    createUserNotification({
+      userId: payload.user?._id || payload.request?.userId,
+      requestType: payload.module,
+      requestId: payload.request?._id,
+      status: payload.newStatus,
+      adminComment: payload.note,
+      request: payload.request,
+      req: payload.req
+    })
+  ]).catch(err => console.error('[RequestNotification] Error on request:status_changed:', err.message));
 });
 
-/**
- * Convenience helper to emit a new request creation event.
- */
 const emitRequestCreated = (payload) => {
   requestEvents.emit('request:created', payload);
 };
 
-/**
- * Convenience helper to emit a request status change event.
- */
 const emitRequestStatusChanged = (payload) => {
   requestEvents.emit('request:status_changed', payload);
 };
 
 module.exports = {
-  requestEvents,
+  createAdminNotification,
+  createUserNotification,
+  generateStatusTitle,
+  generateStatusMessage,
+  generateRequestRedirectUrl,
+  generateAdminReviewUrl,
   notifyAdminRequest,
   notifyUserRequestStatus,
   emitRequestCreated,
   emitRequestStatusChanged,
+  requestEvents,
   getAdminWhatsAppNumber,
+  getAllAdminPhoneNumbers,
+  getAllAdminEmailRecipients,
+  normalizePhoneNumber,
   getModuleMeta,
   formatRequestId,
   getAdminReviewUrl,
@@ -903,5 +1276,5 @@ module.exports = {
   getUserReviewUrl,
   getStatusEmoji,
   formatDisplayStatus,
-  getDefaultUserStatusMessage
+  dispatchWhatsApp
 };

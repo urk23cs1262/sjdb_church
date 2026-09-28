@@ -29,70 +29,69 @@ import api, { getMediaUrl } from '../../services/api';
 import { useAuth } from '../../context/context_auth_context';
 import { SectionLoader } from '../../components/common/common_loader';
 
+const MASS_BOOKING_CONFIG = {
+  title: 'Mass Intention Booking',
+  icon: GiChurch,
+  apiEndpoint: '/bookings',
+  dataKey: 'booking',
+  accentColor: 'blue',
+  backLink: '/dashboard/booking',
+  backLabel: 'My Mass Bookings'
+};
+
+const PRAYER_CONFIG = {
+  title: 'Prayer Intention Request',
+  icon: GiPrayer,
+  apiEndpoint: '/prayers',
+  dataKey: 'prayer',
+  accentColor: 'amber',
+  backLink: '/prayers',
+  backLabel: 'Prayer Wall'
+};
+
+const DOCUMENT_CONFIG = {
+  title: 'Document & Certificate Request',
+  icon: FiFileText,
+  apiEndpoint: '/documents',
+  dataKey: 'document',
+  accentColor: 'emerald',
+  backLink: '/dashboard/documents',
+  backLabel: 'My Documents'
+};
+
+const TICKET_CONFIG = {
+  title: 'Support Inquiry & Ticket',
+  icon: FiMessageSquare,
+  apiEndpoint: '/tickets',
+  dataKey: 'ticket',
+  accentColor: 'purple',
+  backLink: '/dashboard/tickets',
+  backLabel: 'My Tickets'
+};
+
 const MODULE_CONFIG = {
-  'mass-intentions': {
-    title: 'Mass Intention Booking',
-    icon: GiChurch,
-    apiEndpoint: '/bookings',
-    dataKey: 'booking',
-    accentColor: 'blue',
-    backLink: '/dashboard/booking',
-    backLabel: 'My Mass Bookings'
-  },
-  'mass_intentions': {
-    title: 'Mass Intention Booking',
-    icon: GiChurch,
-    apiEndpoint: '/bookings',
-    dataKey: 'booking',
-    accentColor: 'blue',
-    backLink: '/dashboard/booking',
-    backLabel: 'My Mass Bookings'
-  },
-  'prayer-requests': {
-    title: 'Prayer Intention Request',
-    icon: GiPrayer,
-    apiEndpoint: '/prayers',
-    dataKey: 'prayer',
-    accentColor: 'amber',
-    backLink: '/prayers',
-    backLabel: 'Prayer Wall'
-  },
-  'prayer_requests': {
-    title: 'Prayer Intention Request',
-    icon: GiPrayer,
-    apiEndpoint: '/prayers',
-    dataKey: 'prayer',
-    accentColor: 'amber',
-    backLink: '/prayers',
-    backLabel: 'Prayer Wall'
-  },
-  'document-requests': {
-    title: 'Document & Certificate Request',
-    icon: FiFileText,
-    apiEndpoint: '/documents',
-    dataKey: 'document',
-    accentColor: 'emerald',
-    backLink: '/dashboard/documents',
-    backLabel: 'My Documents'
-  },
-  'document_requests': {
-    title: 'Document & Certificate Request',
-    icon: FiFileText,
-    apiEndpoint: '/documents',
-    dataKey: 'document',
-    accentColor: 'emerald',
-    backLink: '/dashboard/documents',
-    backLabel: 'My Documents'
-  },
-  'tickets': {
-    title: 'Support Inquiry & Ticket',
-    icon: FiMessageSquare,
-    apiEndpoint: '/tickets',
-    dataKey: 'ticket',
-    accentColor: 'purple',
-    backLink: '/dashboard/tickets',
-    backLabel: 'My Tickets'
-  }
+  'mass-intentions': MASS_BOOKING_CONFIG,
+  'mass_intentions': MASS_BOOKING_CONFIG,
+  'mass-booking': MASS_BOOKING_CONFIG,
+  'mass-bookings': MASS_BOOKING_CONFIG,
+  'bookings': MASS_BOOKING_CONFIG,
+  'booking': MASS_BOOKING_CONFIG,
+
+  'prayer-requests': PRAYER_CONFIG,
+  'prayer_requests': PRAYER_CONFIG,
+  'prayer': PRAYER_CONFIG,
+  'prayers': PRAYER_CONFIG,
+  'confession': PRAYER_CONFIG,
+
+  'document-requests': DOCUMENT_CONFIG,
+  'document_requests': DOCUMENT_CONFIG,
+  'documents': DOCUMENT_CONFIG,
+  'document': DOCUMENT_CONFIG,
+
+  'tickets': TICKET_CONFIG,
+  'ticket': TICKET_CONFIG,
+  'enquiry': TICKET_CONFIG,
+  'support': TICKET_CONFIG
 };
 
 export default function UserRequestDetail({ module: moduleProp }) {
@@ -140,16 +139,22 @@ export default function UserRequestDetail({ module: moduleProp }) {
       setRequestData(data);
     } catch (err) {
       console.error('Error fetching request details:', err);
-      // Fallback try other modules if ID prefix might belong elsewhere
+      // Fallback try each distinct endpoint once if ID might belong to another request type
       let recovered = false;
-      const otherModules = Object.keys(MODULE_CONFIG).filter(k => k !== currentModuleKey && !k.includes('_'));
-      for (const altKey of otherModules) {
+      const endpointsToTry = [
+        { key: 'mass-intentions', endpoint: '/bookings', dataKey: 'booking' },
+        { key: 'prayer-requests', endpoint: '/prayers', dataKey: 'prayer' },
+        { key: 'document-requests', endpoint: '/documents', dataKey: 'document' },
+        { key: 'tickets', endpoint: '/tickets', dataKey: 'ticket' }
+      ].filter(e => e.endpoint !== currentConfig.apiEndpoint);
+
+      for (const item of endpointsToTry) {
         try {
-          const altRes = await api.get(`${MODULE_CONFIG[altKey].apiEndpoint}/${id}`);
-          const altData = altRes.data[MODULE_CONFIG[altKey].dataKey] || altRes.data;
+          const altRes = await api.get(`${item.endpoint}/${id}`);
+          const altData = altRes.data[item.dataKey] || altRes.data;
           if (altData) {
             setRequestData(altData);
-            setResolvedModule(altKey);
+            setResolvedModule(item.key);
             recovered = true;
             break;
           }

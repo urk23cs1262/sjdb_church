@@ -15,6 +15,8 @@ const {
   fetchLatestBaileysVersion,
   Browsers,
 } = require('@whiskeysockets/baileys');
+const fs = require('fs');
+const path = require('path');
 const QRCode = require('qrcode');
 const { handleIncomingMessage } = require('./botHandler');
 const { useMongoDBAuthState, clearMongoDBAuthState } = require('./mongoAuthState');
@@ -295,6 +297,18 @@ async function sendWhatsAppMedia(phone, mediaArg, optionalCaption) {
   }
 
   if (!url && !buffer) return false;
+
+  // If url is a local file path and no buffer is passed, read into Buffer for 100% reliable Baileys transfer
+  if (!buffer && url && typeof url === 'string') {
+    try {
+      if (fs.existsSync(url)) {
+        buffer = fs.readFileSync(url);
+        if (!fileName) fileName = path.basename(url);
+      }
+    } catch (e) {
+      console.warn('[WhatsApp] Could not read local file buffer:', e.message);
+    }
+  }
 
   const dupKey = buffer ? `buf:${fileName || 'doc'}:${caption || ''}` : `${url}:${caption || ''}`;
   if (isDuplicateOutgoing(jid, dupKey)) {

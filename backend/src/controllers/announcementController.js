@@ -110,16 +110,29 @@ const update = async (req, res) => {
       data.isPublished = data.isPublished === 'true';
     }
 
+    const previousAnn = await Announcement.findById(req.params.id);
+    if (!previousAnn) return res.status(404).json({ success: false, message: 'Announcement not found' });
+
     if (req.body.removeImage === 'true') {
       data.attachment = '';
       data.image = '';
+      const { deleteFromGridFS } = require('../services/gridfsService');
+      if (previousAnn.image && previousAnn.image.startsWith('/api/files/')) {
+        deleteFromGridFS(previousAnn.image.replace('/api/files/', '')).catch(() => {});
+      }
+      if (previousAnn.attachment && previousAnn.attachment.startsWith('/api/files/')) {
+        deleteFromGridFS(previousAnn.attachment.replace('/api/files/', '')).catch(() => {});
+      }
     } else if (req.file) {
-      const { uploadToGridFS } = require('../services/gridfsService');
+      const { uploadToGridFS, deleteFromGridFS } = require('../services/gridfsService');
       const buffer = req.file.buffer || (req.file.path ? fs.readFileSync(req.file.path) : null);
       if (buffer) {
         const fileInfo = await uploadToGridFS(buffer, req.file.originalname, req.file.mimetype);
         data.attachment = fileInfo.url;
         data.image = fileInfo.url;
+        if (previousAnn.image && previousAnn.image.startsWith('/api/files/')) {
+          deleteFromGridFS(previousAnn.image.replace('/api/files/', '')).catch(() => {});
+        }
       }
     }
     const ann = await Announcement.findByIdAndUpdate(req.params.id, data, { new: true });
@@ -136,14 +149,23 @@ const update = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
-
 const remove = async (req, res) => {
   try {
     const annId = req.params.id;
-    const ann = await Announcement.findByIdAndDelete(annId);
+    const ann = await Announcement.findById(annId);
 
-    // Clean up linked notifications in Notification collection
     if (ann) {
+      const { deleteFromGridFS } = require('../services/gridfsService');
+      if (ann.image && ann.image.startsWith('/api/files/')) {
+        deleteFromGridFS(ann.image.replace('/api/files/', '')).catch(() => {});
+      }
+      if (ann.attachment && ann.attachment.startsWith('/api/files/')) {
+        deleteFromGridFS(ann.attachment.replace('/api/files/', '')).catch(() => {});
+      }
+
+      await Announcement.findByIdAndDelete(annId);
+
+      // Clean up linked notifications in Notification collection
       const titleClean = ann.title ? ann.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : '';
       const filter = {
         $or: [
