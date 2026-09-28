@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   FiDatabase, FiHardDrive, FiTrash2, FiRefreshCw, FiAlertTriangle,
   FiCheck, FiX, FiPlay, FiPause, FiEye, FiMusic, FiFileText,
-  FiImage, FiLayers, FiInfo, FiSliders, FiClock
+  FiImage, FiLayers, FiInfo, FiSliders, FiClock, FiHelpCircle,
+  FiChevronDown, FiChevronUp, FiSearch, FiShield
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
 import api, { getMediaUrl } from '../../services/api';
@@ -10,7 +11,7 @@ import api, { getMediaUrl } from '../../services/api';
 export default function StorageManager() {
   const [loading, setLoading] = useState(false);
   const [storageData, setStorageData] = useState(null);
-  const [activeTab, setActiveTab] = useState('unreferenced'); // 'unreferenced' | 'all' | 'duplicates' | 'inuse' | 'logs'
+  const [activeTab, setActiveTab] = useState('unreferenced'); // 'unreferenced' | 'duplicates' | 'inuse' | 'all' | 'logs'
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState(new Set());
   
@@ -23,6 +24,12 @@ export default function StorageManager() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Inspect File Modal
+  const [inspectingFile, setInspectingFile] = useState(null);
+
+  // Explainer toggle
+  const [showStorageExplainer, setShowStorageExplainer] = useState(false);
 
   // Log Retention state
   const [logsData, setLogsData] = useState(null);
@@ -81,7 +88,7 @@ export default function StorageManager() {
         audioRef.current.play().then(() => {
           setPlayingUrl(fullUrl);
           setIsPlaying(true);
-        }).catch(err => {
+        }).catch(() => {
           toast.error('Could not play audio preview');
           setIsPlaying(false);
         });
@@ -172,6 +179,7 @@ export default function StorageManager() {
         setShowDeleteModal(false);
         setDeleteConfirmationText('');
         setSelectedIds(new Set());
+        setInspectingFile(null);
         if (playingUrl && audioRef.current) {
           audioRef.current.pause();
           setIsPlaying(false);
@@ -232,6 +240,15 @@ export default function StorageManager() {
 
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowStorageExplainer(!showStorageExplainer)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
+          >
+            <FiHelpCircle />
+            <span>Storage Guide</span>
+            {showStorageExplainer ? <FiChevronUp /> : <FiChevronDown />}
+          </button>
+
+          <button
             onClick={() => fetchStorageData(true)}
             disabled={loading}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm disabled:opacity-50"
@@ -241,6 +258,31 @@ export default function StorageManager() {
           </button>
         </div>
       </div>
+
+      {/* Storage Explainer Collapsible Banner */}
+      {showStorageExplainer && (
+        <div className="mt-4 p-4 bg-indigo-50/70 border border-indigo-200 rounded-xl text-xs text-slate-700 space-y-2 animate-in fade-in">
+          <div className="font-bold text-indigo-900 flex items-center gap-1.5">
+            <FiInfo className="text-indigo-600" />
+            <span>Understanding MongoDB Atlas Storage vs. GridFS Data Size</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            <div className="bg-white p-3 rounded-lg border border-indigo-100">
+              <span className="font-bold text-slate-800 block mb-1">1. Why does Atlas show ~392 MB while GridFS reports ~224 MB?</span>
+              <p className="text-slate-600 text-[11px] leading-relaxed">
+                <strong>Data Size (223.9 MB / 362.9 MB):</strong> The uncompressed binary bytes of files stored in GridFS.<br />
+                <strong>Storage Size (392.4 MB):</strong> The physical disk space allocated by MongoDB WiredTiger, including 256 KB chunk pre-allocation extents and indexes (<code>files_id_1_n_1</code>). Also, the active Atlas cluster has 67 files vs 45 on local test DB.
+              </p>
+            </div>
+            <div className="bg-white p-3 rounded-lg border border-indigo-100">
+              <span className="font-bold text-slate-800 block mb-1">2. How WiredTiger reclaims deleted space</span>
+              <p className="text-slate-600 text-[11px] leading-relaxed">
+                When you delete files using this Storage Manager, MongoDB deletes both the <code>uploads.files</code> document and all binary <code>uploads.chunks</code>. WiredTiger marks those disk blocks as <em>free reuse space</em>, preventing future uploads from expanding your cluster.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Storage Overview Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-6">
@@ -282,7 +324,7 @@ export default function StorageManager() {
             {storageData?.orphanCount || 0}
           </div>
           <div className="text-[11px] text-amber-700 font-semibold mt-0.5">
-            {storageData?.orphanFormatted || '0 Bytes'} reclaimable
+            {storageData?.orphanFormatted || '0 Bytes'} unreferenced
           </div>
         </div>
 
@@ -296,21 +338,21 @@ export default function StorageManager() {
             {storageData?.duplicateGroupCount || 0}
           </div>
           <div className="text-[11px] text-purple-700 font-semibold mt-0.5">
-            {storageData?.duplicateReclaimableFormatted || '0 Bytes'} reclaimable
+            {storageData?.duplicateReclaimableFormatted || '0 Bytes'} duplicates
           </div>
         </div>
 
         {/* Safe Reclaimable Potential */}
         <div className="p-4 bg-rose-50/50 border border-rose-200/60 rounded-xl col-span-2 md:col-span-1">
           <div className="flex items-center justify-between text-rose-600 mb-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Safe to Free</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">Removable</span>
             <FiTrash2 className="text-rose-600" />
           </div>
           <div className="text-xl font-black text-rose-800">
             {storageData?.orphanFormatted || '0 Bytes'}
           </div>
           <div className="text-[11px] text-rose-600 mt-0.5">
-            Zero impact on website
+            Select files to delete
           </div>
         </div>
       </div>
@@ -324,7 +366,7 @@ export default function StorageManager() {
               activeTab === 'unreferenced' ? 'bg-white text-amber-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <span>Unreferenced Orphans</span>
+            <span>Unreferenced Files</span>
             <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 rounded-full text-[10px]">
               {storageData?.orphanCount || 0}
             </span>
@@ -382,18 +424,21 @@ export default function StorageManager() {
         {/* Actions & Search */}
         {activeTab !== 'logs' && (
           <div className="flex items-center gap-2">
-            <input
-              type="text"
-              placeholder="Search filename or ID..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-48 md:w-60"
-            />
+            <div className="relative">
+              <FiSearch className="absolute left-3 top-2.5 text-slate-400 text-xs" />
+              <input
+                type="text"
+                placeholder="Search filename or ID..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-48 md:w-60"
+              />
+            </div>
 
             {selectedIds.size > 0 && (
               <button
                 onClick={() => setShowDeleteModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition shadow-sm animate-pulse"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition shadow-sm animate-pulse"
               >
                 <FiTrash2 />
                 <span>Delete {selectedIds.size} Selected ({selectedTotalMB} MB)</span>
@@ -453,6 +498,143 @@ export default function StorageManager() {
             ))}
           </div>
         </div>
+      ) : activeTab === 'duplicates' && (storageData?.duplicateGroups || []).length > 0 ? (
+        /* Dedicated Duplicate Resolution Deck */
+        <div className="mt-4 space-y-4">
+          <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-900 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FiLayers className="text-purple-600 text-base" />
+              <span>
+                <strong>{storageData.duplicateGroupCount} Duplicate Groups</strong> detected by SHA-256 binary hash. Review and play each copy below, then choose which duplicate to remove.
+              </span>
+            </div>
+            <span className="font-bold text-purple-700 bg-white px-2.5 py-1 rounded-lg border border-purple-200">
+              Wasted space: {storageData.duplicateReclaimableFormatted}
+            </span>
+          </div>
+
+          {storageData.duplicateGroups.map((group, groupIdx) => {
+            return (
+              <div key={group.hash} className="border border-slate-200 rounded-xl p-4 bg-white shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 mb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded-md font-bold text-[11px]">
+                      Group #{groupIdx + 1}
+                    </span>
+                    <span className="font-bold text-slate-800 text-xs">
+                      {group.files[0]?.originalName || group.files[0]?.filename}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] text-slate-500">
+                    <span>{group.count} identical copies ({group.sizePerFile} each)</span>
+                    <span className="font-mono text-[10px] text-slate-400 bg-slate-50 px-2 py-0.5 rounded border">
+                      SHA: {group.hash.slice(0, 12)}...
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {group.files.map((file, fileIdx) => {
+                    const isSelected = selectedIds.has(file._id);
+                    const isAudio = file.contentType?.startsWith('audio/');
+                    const fullMediaUrl = getMediaUrl(file.url);
+                    const isCurrentPlaying = isPlaying && playingUrl === fullMediaUrl;
+
+                    return (
+                      <div
+                        key={file._id}
+                        className={`p-3.5 rounded-xl border transition ${
+                          isSelected
+                            ? 'bg-rose-50/40 border-rose-300 ring-2 ring-rose-200'
+                            : file.inUse
+                            ? 'bg-emerald-50/30 border-emerald-200'
+                            : 'bg-slate-50/60 border-slate-200'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Copy #{fileIdx + 1}
+                              </span>
+                              {file.inUse ? (
+                                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-bold text-[9px] flex items-center gap-1">
+                                  <FiShield className="text-[10px]" /> KEEP (In Active Use)
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full font-bold text-[9px]">
+                                  Unreferenced Duplicate
+                                </span>
+                              )}
+                            </div>
+                            <div className="font-bold text-slate-800 text-xs truncate mt-1" title={file.originalName}>
+                              {file.originalName}
+                            </div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">
+                              Uploaded: {new Date(file.uploadDate).toLocaleDateString('en-IN')} • Size: {file.sizeFormatted}
+                            </div>
+                            <div className="text-[9px] font-mono text-slate-400 truncate mt-0.5">
+                              ID: {file._id}
+                            </div>
+                          </div>
+
+                          {/* Audio Player Button */}
+                          {isAudio && (
+                            <button
+                              onClick={() => handleTogglePlay(file.url)}
+                              className={`p-2.5 rounded-xl text-xs font-bold transition flex items-center gap-1 ${
+                                isCurrentPlaying
+                                  ? 'bg-purple-600 text-white shadow-sm'
+                                  : 'bg-white hover:bg-purple-50 text-purple-700 border border-purple-200'
+                              }`}
+                              title={isCurrentPlaying ? 'Pause Audio Preview' : 'Play & Compare Audio'}
+                            >
+                              {isCurrentPlaying ? <FiPause /> : <FiPlay />}
+                              <span className="text-[10px]">{isCurrentPlaying ? 'Pause' : 'Play'}</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* Action Decision */}
+                        <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between">
+                          <button
+                            type="button"
+                            onClick={() => setInspectingFile(file)}
+                            className="text-[11px] text-slate-500 hover:text-indigo-600 font-semibold flex items-center gap-1"
+                          >
+                            <FiEye /> Inspect File
+                          </button>
+
+                          {file.inUse ? (
+                            <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200">
+                              Referenced by Website
+                            </span>
+                          ) : isSelected ? (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleSelect(file._id, false)}
+                              className="px-3 py-1 bg-rose-600 text-white rounded-lg text-[10px] font-bold shadow-xs hover:bg-rose-700 transition flex items-center gap-1"
+                            >
+                              <FiCheck /> Marked for Deletion
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleSelect(file._id, false)}
+                              className="px-3 py-1 bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 rounded-lg text-[10px] font-bold transition flex items-center gap-1"
+                            >
+                              <FiTrash2 /> Select to Delete
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       ) : (
         /* GridFS Files Table */
         <div className="mt-4 border border-slate-200 rounded-xl overflow-hidden">
@@ -476,7 +658,7 @@ export default function StorageManager() {
                   <th className="p-3">Size</th>
                   <th className="p-3">Uploaded</th>
                   <th className="p-3">Status / Reference</th>
-                  <th className="p-3 text-right">Preview</th>
+                  <th className="p-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
@@ -496,8 +678,6 @@ export default function StorageManager() {
                 ) : (
                   displayedFiles.map((file) => {
                     const isAudio = file.contentType?.startsWith('audio/');
-                    const isImage = file.contentType?.startsWith('image/');
-                    const isPdf = file.contentType === 'application/pdf';
                     const fullMediaUrl = getMediaUrl(file.url);
                     const isCurrentPlaying = isPlaying && playingUrl === fullMediaUrl;
                     const isSelected = selectedIds.has(file._id);
@@ -540,8 +720,8 @@ export default function StorageManager() {
                         <td className="p-3 whitespace-nowrap">
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700">
                             {isAudio && <FiMusic className="text-purple-600" />}
-                            {isImage && <FiImage className="text-blue-600" />}
-                            {isPdf && <FiFileText className="text-rose-600" />}
+                            {file.contentType?.startsWith('image/') && <FiImage className="text-blue-600" />}
+                            {file.contentType === 'application/pdf' && <FiFileText className="text-rose-600" />}
                             <span>{file.contentType?.split('/')[1]?.toUpperCase() || 'BIN'}</span>
                           </span>
                         </td>
@@ -579,44 +759,33 @@ export default function StorageManager() {
                           )}
                         </td>
 
-                        {/* Preview / Action */}
+                        {/* Preview / Inspect Action */}
                         <td className="p-3 text-right whitespace-nowrap">
-                          {isAudio ? (
+                          <div className="flex items-center justify-end gap-1.5">
+                            {isAudio && (
+                              <button
+                                onClick={() => handleTogglePlay(file.url)}
+                                className={`p-2 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 ${
+                                  isCurrentPlaying
+                                    ? 'bg-purple-600 text-white shadow-sm'
+                                    : 'bg-purple-50 hover:bg-purple-100 text-purple-700'
+                                }`}
+                                title={isCurrentPlaying ? 'Pause Audio Preview' : 'Play Audio Preview'}
+                              >
+                                {isCurrentPlaying ? <FiPause /> : <FiPlay />}
+                                <span className="text-[10px]">{isCurrentPlaying ? 'Pause' : 'Play'}</span>
+                              </button>
+                            )}
+
                             <button
-                              onClick={() => handleTogglePlay(file.url)}
-                              className={`p-2 rounded-lg text-xs font-bold transition inline-flex items-center gap-1 ${
-                                isCurrentPlaying
-                                  ? 'bg-purple-600 text-white shadow-sm'
-                                  : 'bg-purple-50 hover:bg-purple-100 text-purple-700'
-                              }`}
-                              title={isCurrentPlaying ? 'Pause Audio Preview' : 'Play Audio Preview'}
+                              onClick={() => setInspectingFile(file)}
+                              className="p-2 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 inline-flex items-center gap-1 transition"
+                              title="Inspect File Details"
                             >
-                              {isCurrentPlaying ? <FiPause /> : <FiPlay />}
-                              <span className="text-[10px]">{isCurrentPlaying ? 'Pause' : 'Play'}</span>
+                              <FiEye />
+                              <span className="text-[10px]">Inspect</span>
                             </button>
-                          ) : isImage ? (
-                            <a
-                              href={fullMediaUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="p-2 rounded-lg text-xs font-bold bg-blue-50 hover:bg-blue-100 text-blue-700 inline-flex items-center gap-1 transition"
-                            >
-                              <FiEye />
-                              <span className="text-[10px]">View</span>
-                            </a>
-                          ) : isPdf ? (
-                            <a
-                              href={fullMediaUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="p-2 rounded-lg text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 inline-flex items-center gap-1 transition"
-                            >
-                              <FiEye />
-                              <span className="text-[10px]">Open</span>
-                            </a>
-                          ) : (
-                            <span className="text-slate-300">—</span>
-                          )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -629,13 +798,147 @@ export default function StorageManager() {
       )}
 
       {/* Safety Notice Footer */}
-      <div className="mt-4 p-3 bg-slate-50 border border-slate-200/80 rounded-xl flex items-start gap-2 text-slate-500 text-xs">
-        <FiInfo className="text-slate-400 mt-0.5 flex-shrink-0" />
+      <div className="mt-4 p-3.5 bg-slate-50 border border-slate-200/80 rounded-xl flex items-start gap-2.5 text-slate-500 text-xs">
+        <FiShield className="text-emerald-600 mt-0.5 text-base flex-shrink-0" />
         <div>
-          <span className="font-bold text-slate-700">Safety Guarantee: </span>
-          Files currently assigned to Devotional Songs, Priests, Team Members, Users, Documents, Events, Announcements, Notifications, or Site Settings are protected and cannot be deleted. Deleting unreferenced files permanently purges both the file entry and its associated GridFS chunks from MongoDB Atlas.
+          <span className="font-bold text-slate-700">Safety Verification Guarantee: </span>
+          Files assigned to Devotional Songs, Priests, Team Members, Users, Documents, Events, Announcements, Notifications, or Site Settings are marked <span className="text-emerald-700 font-bold">In-Use</span> and protected against deletion. Always inspect audio and file details before selecting files for deletion.
         </div>
       </div>
+
+      {/* INSPECT FILE MODAL */}
+      {inspectingFile && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="p-2 bg-indigo-50 text-indigo-700 rounded-lg text-lg">
+                  <FiEye />
+                </span>
+                <h3 className="text-base font-bold text-slate-800">File Inspection</h3>
+              </div>
+              <button
+                onClick={() => setInspectingFile(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <FiX className="text-lg" />
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-3 text-xs">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">File Name:</span>
+                  <span className="font-bold text-slate-800 truncate max-w-[240px]">{inspectingFile.originalName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">GridFS File ID:</span>
+                  <span className="font-mono text-slate-700">{inspectingFile._id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Size:</span>
+                  <span className="font-bold text-slate-800">{inspectingFile.sizeFormatted}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Content Type:</span>
+                  <span className="text-slate-700">{inspectingFile.contentType}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Uploaded On:</span>
+                  <span className="text-slate-700">{new Date(inspectingFile.uploadDate).toLocaleString('en-IN')}</span>
+                </div>
+                {inspectingFile.sha256 && (
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">SHA-256 Hash:</span>
+                    <span className="font-mono text-[10px] text-slate-500 truncate max-w-[200px]" title={inspectingFile.sha256}>
+                      {inspectingFile.sha256}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Media Preview Box */}
+              <div className="p-3 bg-white rounded-xl border border-slate-200">
+                <span className="font-bold text-slate-700 block mb-2">Media Preview:</span>
+                {inspectingFile.contentType?.startsWith('audio/') ? (
+                  <div className="space-y-2">
+                    <audio
+                      controls
+                      src={getMediaUrl(inspectingFile.url)}
+                      className="w-full"
+                    />
+                    <p className="text-[11px] text-slate-400 italic">
+                      Listen to confirm this is an unused audio track before deletion.
+                    </p>
+                  </div>
+                ) : inspectingFile.contentType?.startsWith('image/') ? (
+                  <div className="text-center">
+                    <img
+                      src={getMediaUrl(inspectingFile.url)}
+                      alt={inspectingFile.originalName}
+                      className="max-h-48 mx-auto rounded-lg object-contain border"
+                    />
+                  </div>
+                ) : (
+                  <a
+                    href={getMediaUrl(inspectingFile.url)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg font-bold"
+                  >
+                    <FiEye /> Open Document in New Tab
+                  </a>
+                )}
+              </div>
+
+              {/* Reference Audit Check */}
+              <div className={`p-3 rounded-xl border ${
+                inspectingFile.inUse ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'
+              }`}>
+                <div className="font-bold flex items-center gap-1.5 mb-1">
+                  {inspectingFile.inUse ? <FiCheck /> : <FiAlertTriangle />}
+                  <span>{inspectingFile.inUse ? 'Referenced in Database' : 'Unreferenced / Orphaned File'}</span>
+                </div>
+                <p className="text-[11px]">
+                  {inspectingFile.inUse
+                    ? `Linked to: ${inspectingFile.references.map(r => `${r.collection} (${r.title})`).join(', ')}`
+                    : 'Scanned across 10 collections (RosarySong, Gallery, Priest, TeamMember, User, Document, Event, Announcement, SiteSettings, Notification). No active references found.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 mt-6 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setInspectingFile(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition"
+              >
+                Close
+              </button>
+
+              {!inspectingFile.inUse && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleToggleSelect(inspectingFile._id, false);
+                    setInspectingFile(null);
+                  }}
+                  className={`px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5 ${
+                    selectedIds.has(inspectingFile._id)
+                      ? 'bg-rose-100 text-rose-700 hover:bg-rose-200'
+                      : 'bg-rose-600 hover:bg-rose-700 text-white'
+                  }`}
+                >
+                  <FiTrash2 />
+                  <span>
+                    {selectedIds.has(inspectingFile._id) ? 'Deselect from Deletion' : 'Select for Permanent Deletion'}
+                  </span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Modal */}
       {showDeleteModal && (

@@ -16,8 +16,20 @@ const getDocumentById = async (req, res) => {
     if (id.match(/^[0-9a-fA-F]{24}$/)) {
       query = { _id: id };
     } else {
-      const rawHex = id.replace(/^DOC-/i, '');
-      query = { _id: { $regex: rawHex + '$', $options: 'i' } };
+      const cleanHex = id.replace(/^DOC-/i, '').replace(/[^0-9a-fA-F]/g, '');
+      if (cleanHex.length >= 3) {
+        query = {
+          $expr: {
+            $regexMatch: {
+              input: { $toString: '$_id' },
+              regex: cleanHex + '$',
+              options: 'i'
+            }
+          }
+        };
+      } else {
+        query = { _id: null };
+      }
     }
     const doc = await Document.findOne(query).populate('userId', 'name phone email parishMemberId familyId anbiyam');
     if (!doc) return res.status(404).json({ success: false, message: 'Document not found' });
@@ -40,7 +52,18 @@ const getAllDocuments = async (req, res) => {
       if (id.match(/^[0-9a-fA-F]{24}$/)) {
         query._id = id;
       } else {
-        query._id = { $regex: id.replace(/^DOC-/i, '') + '$', $options: 'i' };
+        const cleanHex = id.replace(/^DOC-/i, '').replace(/[^0-9a-fA-F]/g, '');
+        if (cleanHex.length >= 3) {
+          query.$expr = {
+            $regexMatch: {
+              input: { $toString: '$_id' },
+              regex: cleanHex + '$',
+              options: 'i'
+            }
+          };
+        } else {
+          query._id = null;
+        }
       }
     } else {
       if (status) query.status = status;

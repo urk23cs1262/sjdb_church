@@ -5,7 +5,7 @@ const { generateToken } = require('../middleware/auth');
 const { createAndSendOTP, verifyOTPSession, sendOTP, verifyOTP } = require('../services/otpService');
 const { createNotification } = require('../services/notificationService');
 const { notifyAdmin } = require('../services/adminNotificationService');
-const { sendLoginAlertEmail, sendPasswordUpdatedEmail } = require('../services/loginSecurityService');
+const { sendLoginAlertEmail, sendPasswordUpdatedEmail, recordLoginHistory } = require('../services/loginSecurityService');
 
 const { generateNextMemberId, generateNextFamilyId } = require('../services/memberIdService');
 const { logSecurityEvent } = require('../services/securityAuditService');
@@ -237,8 +237,9 @@ const verifyOtp = async (req, res) => {
 
     const token = generateToken(user._id, user.role, user.authVersion || user.tokenVersion || 1);
 
-    // Trigger Login Alert Email
+    // Trigger Login Alert Email & Record Login History
     sendLoginAlertEmail({ user: updatedUser, req, loginMethod: 'OTP' }).catch(e => console.error('Login alert email error:', e));
+    recordLoginHistory({ userId: user._id, req, loginMethod: 'OTP', status: 'success', trusted: true }).catch(() => {});
 
     // Notify Admin — only on first login (not routine 30-day re-verifications)
     if (isFirstLogin) {
@@ -657,8 +658,9 @@ const login = async (req, res) => {
       }).catch(e => console.warn('Admin LOGIN_SUCCESS error:', e.message));
     }
 
-    // Trigger Login Security Alert Email
+    // Trigger Login Security Alert Email & Record Login History
     sendLoginAlertEmail({ user, req, loginMethod: 'Password' }).catch(e => console.error('Login alert email error:', e));
+    recordLoginHistory({ userId: user._id, req, loginMethod: 'Password', status: 'success', trusted: true }).catch(() => {});
 
     return res.json({
       success: true,

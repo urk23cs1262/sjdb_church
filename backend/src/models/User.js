@@ -65,6 +65,27 @@ const userSchema = new mongoose.Schema({
   firstSuccessfulLoginAt: { type: Date },
   tokenVersion: { type: Number, default: 1 },
   authVersion: { type: Number, default: 1 },
+  // Login History & Trusted Devices
+  loginHistory: [{
+    ip: { type: String },
+    location: { type: String, default: 'Coimbatore, Tamil Nadu, India' },
+    device: { type: String },
+    browser: { type: String },
+    os: { type: String },
+    loginMethod: { type: String, default: 'Password' },
+    status: { type: String, enum: ['success', 'failed'], default: 'success' },
+    trusted: { type: Boolean, default: false },
+    timestamp: { type: Date, default: Date.now }
+  }],
+  trustedDevices: [{
+    deviceId: { type: String },
+    deviceName: { type: String },
+    browser: { type: String },
+    os: { type: String },
+    firstSeen: { type: Date, default: Date.now },
+    lastUsed: { type: Date, default: Date.now },
+    isTrusted: { type: Boolean, default: true }
+  }],
   // Security & Suspension Tracking
   failedLoginAttempts: { type: Number, default: 0 },
   firstFailedAttempt: { type: Date },

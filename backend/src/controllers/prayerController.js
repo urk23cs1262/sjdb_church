@@ -34,8 +34,20 @@ const getPrayerById = async (req, res) => {
     if (id.match(/^[0-9a-fA-F]{24}$/)) {
       query = { _id: id };
     } else {
-      const rawHex = id.replace(/^PR-/i, '');
-      query = { _id: { $regex: rawHex + '$', $options: 'i' } };
+      const cleanHex = id.replace(/^PR-/i, '').replace(/[^0-9a-fA-F]/g, '');
+      if (cleanHex.length >= 3) {
+        query = {
+          $expr: {
+            $regexMatch: {
+              input: { $toString: '$_id' },
+              regex: cleanHex + '$',
+              options: 'i'
+            }
+          }
+        };
+      } else {
+        query = { _id: null };
+      }
     }
     const prayer = await PrayerRequest.findOne(query).populate('userId', 'name email phone parishMemberId familyId anbiyam');
     if (!prayer) return res.status(404).json({ success: false, message: 'Prayer request not found' });
@@ -64,7 +76,18 @@ const getAll = async (req, res) => {
       if (id.match(/^[0-9a-fA-F]{24}$/)) {
         query._id = id;
       } else {
-        query._id = { $regex: id.replace(/^PR-/i, '') + '$', $options: 'i' };
+        const cleanHex = id.replace(/^PR-/i, '').replace(/[^0-9a-fA-F]/g, '');
+        if (cleanHex.length >= 3) {
+          query.$expr = {
+            $regexMatch: {
+              input: { $toString: '$_id' },
+              regex: cleanHex + '$',
+              options: 'i'
+            }
+          };
+        } else {
+          query._id = null;
+        }
       }
     } else if (status === 'completed') {
       query.$or = [

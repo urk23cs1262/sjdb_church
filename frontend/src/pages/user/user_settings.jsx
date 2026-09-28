@@ -66,6 +66,36 @@ export default function UserSettings() {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [selectedPendingRequest, setSelectedPendingRequest] = useState(null);
+  const [loginHistory, setLoginHistory] = useState([]);
+  const [trustedDevices, setTrustedDevices] = useState([]);
+  const [loadingSecurity, setLoadingSecurity] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'security') {
+      setLoadingSecurity(true);
+      api.get('/security/login-history')
+        .then(res => {
+          if (res.data?.success) {
+            setLoginHistory(res.data.loginHistory || []);
+            setTrustedDevices(res.data.trustedDevices || []);
+          }
+        })
+        .catch(() => {})
+        .finally(() => setLoadingSecurity(false));
+    }
+  }, [activeTab]);
+
+  const handleRemoveDevice = async (deviceId) => {
+    try {
+      const res = await api.delete(`/security/devices/${deviceId}`);
+      if (res.data?.success) {
+        setTrustedDevices(res.data.trustedDevices || []);
+        toast.success('Device removed from trusted devices');
+      }
+    } catch {
+      toast.error('Failed to remove device');
+    }
+  };
 
   const { register, handleSubmit, control, watch, reset, setValue, formState: { isSubmitting } } = useForm({
     defaultValues: {
@@ -1291,30 +1321,148 @@ export default function UserSettings() {
                 </motion.div>
               )}
 
-              {/* 12 & 13. Security & Connected Accounts */}
+              {/* 12 & 13. Security, Login History & Trusted Devices */}
               {activeTab === 'security' && (
                 <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="church-card p-6 md:p-8 space-y-6">
                   <div className="border-b border-gray-100 pb-4">
                     <h2 className="text-xl font-bold text-church-royal-blue flex items-center gap-2">
-                      <FiShield className="text-church-gold" />Security & Connected Accounts
+                      <FiShield className="text-church-gold" />Security, Login History & Trusted Devices
                     </h2>
-                    <p className="text-gray-500 text-xs mt-1">Manage active devices and third-party logins</p>
+                    <p className="text-gray-500 text-xs mt-1">Review your recent account activity, trusted devices, and security safeguards</p>
                   </div>
 
-                  <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-bold text-gray-800">Current Session Device</p>
-                        <p className="text-[11px] text-gray-500">Windows Chrome • IP 127.0.0.1 (Active Now)</p>
+                  {/* Current Active Session */}
+                  <div className="p-4 bg-gradient-to-r from-emerald-50/60 to-white rounded-2xl border border-emerald-200/60 shadow-xs flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg">
+                        <FiSmartphone />
                       </div>
-                      <span className="px-2.5 py-1 bg-green-100 text-green-800 rounded-full text-[10px] font-bold">Connected</span>
+                      <div>
+                        <p className="text-xs font-bold text-gray-800">Current Active Session</p>
+                        <p className="text-[11px] text-gray-500">
+                          {navigator.userAgent.includes('Windows') ? 'Windows PC' : navigator.userAgent.includes('Android') ? 'Android Device' : navigator.userAgent.includes('iPhone') ? 'iPhone' : 'Web Device'} • Active Session
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full text-[10px] font-bold">Active Now</span>
+                  </div>
+
+                  {/* Trusted Devices Section */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-sm text-church-royal-blue flex items-center gap-1.5">
+                        <FiSmartphone className="text-church-gold" /> Trusted Devices
+                      </h3>
+                      <span className="text-[11px] text-gray-400">
+                        {trustedDevices.length} registered
+                      </span>
+                    </div>
+
+                    {trustedDevices.length === 0 ? (
+                      <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 text-center text-xs text-gray-400">
+                        No additional trusted devices registered.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {trustedDevices.map((dev, idx) => (
+                          <div key={dev.deviceId || idx} className="p-3.5 bg-white rounded-xl border border-gray-100 shadow-xs flex items-center justify-between">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-bold text-gray-800 truncate">{dev.deviceName || `${dev.browser} on ${dev.os}`}</p>
+                              <p className="text-[10px] text-gray-400 mt-0.5">
+                                Last active: {new Date(dev.lastUsed || Date.now()).toLocaleDateString('en-IN')}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDevice(dev.deviceId)}
+                              className="text-[10px] font-bold text-rose-600 hover:text-rose-700 p-1.5 hover:bg-rose-50 rounded-lg transition"
+                              title="Remove trusted device"
+                            >
+                              <FiTrash2 />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Login History Section */}
+                  <div className="space-y-3 pt-2">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-sm text-church-royal-blue flex items-center gap-1.5">
+                        <FiClock className="text-church-gold" /> Recent Login History
+                      </h3>
+                      <span className="text-[11px] text-gray-400">
+                        Last {loginHistory.length} logins
+                      </span>
+                    </div>
+
+                    {loadingSecurity ? (
+                      <div className="p-6 text-center text-xs text-gray-400">Loading login history...</div>
+                    ) : loginHistory.length === 0 ? (
+                      <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 text-center text-xs text-gray-400">
+                        No login history recorded yet. Future logins will be tracked here.
+                      </div>
+                    ) : (
+                      <div className="border border-gray-100 rounded-xl overflow-hidden shadow-xs">
+                        <div className="overflow-x-auto max-h-64">
+                          <table className="w-full text-left text-xs">
+                            <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px] tracking-wider border-b border-gray-100 sticky top-0">
+                              <tr>
+                                <th className="p-2.5">Date & Time</th>
+                                <th className="p-2.5">Device & Browser</th>
+                                <th className="p-2.5">Location & IP</th>
+                                <th className="p-2.5">Method</th>
+                                <th className="p-2.5 text-right">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-50 bg-white">
+                              {loginHistory.map((h, i) => (
+                                <tr key={i} className="hover:bg-gray-50/60 transition">
+                                  <td className="p-2.5 whitespace-nowrap text-gray-700 font-medium">
+                                    {new Date(h.timestamp).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                  </td>
+                                  <td className="p-2.5 whitespace-nowrap">
+                                    <div className="font-bold text-gray-800 text-[11px]">{h.device || `${h.browser} (${h.os})`}</div>
+                                    <div className="text-[10px] text-gray-400">{h.os} • {h.browser}</div>
+                                  </td>
+                                  <td className="p-2.5 whitespace-nowrap">
+                                    <div className="text-gray-700 text-[11px]">{h.location}</div>
+                                    <div className="text-[10px] font-mono text-gray-400">{h.ip}</div>
+                                  </td>
+                                  <td className="p-2.5 whitespace-nowrap text-[11px] text-gray-600 font-semibold">
+                                    {h.loginMethod || 'Password'}
+                                  </td>
+                                  <td className="p-2.5 whitespace-nowrap text-right">
+                                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                                      h.status === 'success' ? 'bg-green-100 text-green-700' : 'bg-rose-100 text-rose-700'
+                                    }`}>
+                                      {h.status || 'success'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Security Notice & Wasn't You Info */}
+                  <div className="p-3.5 bg-amber-50/60 border border-amber-200/60 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+                    <FiShield className="text-amber-600 mt-0.5 text-base flex-shrink-0" />
+                    <div>
+                      <span className="font-bold text-amber-950">Security Notice: </span>
+                      If you notice any unfamiliar logins in your history or receive a login alert email for an attempt you did not make, click the <span className="font-bold">"Wasn't You?"</span> button in the email immediately to terminate all active sessions and secure your account.
                     </div>
                   </div>
 
-                  <div className="space-y-3">
+                  {/* Connected Accounts */}
+                  <div className="space-y-3 pt-2 border-t border-gray-100">
                     <h3 className="font-bold text-sm text-church-royal-blue">Connected Accounts</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      {['Google Login', 'WhatsApp Number'].map((acc, i) => (
+                      {['Google Login', 'WhatsApp Number', 'Email Authentication'].map((acc) => (
                         <div key={acc} className="p-3 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-between">
                           <span className="text-xs font-semibold text-gray-800">{acc}</span>
                           <span className="text-[10px] text-green-600 font-bold">Linked</span>

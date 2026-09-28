@@ -16,7 +16,20 @@ const getTicketById = async (req, res) => {
     if (id.match(/^[0-9a-fA-F]{24}$/)) {
       query = { _id: id };
     } else {
-      query = { ticketNumber: id };
+      const cleanHex = id.replace(/^TKT-/i, '').replace(/[^0-9a-fA-F]/g, '');
+      const orClauses = [{ ticketNumber: id }];
+      if (cleanHex.length >= 3) {
+        orClauses.push({
+          $expr: {
+            $regexMatch: {
+              input: { $toString: '$_id' },
+              regex: cleanHex + '$',
+              options: 'i'
+            }
+          }
+        });
+      }
+      query = { $or: orClauses };
     }
     const ticket = await Ticket.findOne(query).populate('userId', 'name phone email parishMemberId familyId anbiyam').populate('replies.repliedBy', 'name role');
     if (!ticket) return res.status(404).json({ success: false, message: 'Ticket not found' });
@@ -39,7 +52,20 @@ const getAll = async (req, res) => {
       if (id.match(/^[0-9a-fA-F]{24}$/)) {
         query._id = id;
       } else {
-        query.ticketNumber = id;
+        const cleanHex = id.replace(/^TKT-/i, '').replace(/[^0-9a-fA-F]/g, '');
+        const orClauses = [{ ticketNumber: id }];
+        if (cleanHex.length >= 3) {
+          orClauses.push({
+            $expr: {
+              $regexMatch: {
+                input: { $toString: '$_id' },
+                regex: cleanHex + '$',
+                options: 'i'
+              }
+            }
+          });
+        }
+        query.$or = orClauses;
       }
     } else if (status) {
       query.status = status;

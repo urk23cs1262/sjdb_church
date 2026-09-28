@@ -478,24 +478,107 @@ export default function UserDashboard() {
                 <Link to="/dashboard/documents" className="text-church-gold text-[12px] font-bold hover:underline uppercase tracking-tighter">+ New Request</Link>
               </div>
               <div className="space-y-3">
-                {documents.slice(0, 3).map((d, i) => (
-                  <div key={d._id} className="p-3 rounded-xl bg-white border border-gray-100 shadow-sm">
-                    <div className="flex justify-between items-start mb-2">
-                      <p className="text-xs font-bold text-gray-800 capitalize">{d.type?.replace('_', ' ')}</p>
-                      <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${d.status === 'approved' ? 'bg-green-100 text-green-600' : 'bg-gold-100 text-church-gold'}`}>{d.status}</span>
-                    </div>
-                    <div className="flex justify-between items-center mt-3">
-                      <p className="text-[10px] text-gray-400 font-medium">{new Date(d.createdAt).toLocaleDateString()}</p>
-                      {d.status === 'approved' && d.uploadedFile && (
-                        <button onClick={(e) => forceFileDownload(e, d.uploadedFile.startsWith('http') ? d.uploadedFile : `${UPLOADS_URL.replace('/uploads', '')}${d.uploadedFile.startsWith('/') ? '' : '/'}${d.uploadedFile}`, d.type)} className="flex items-center gap-1 text-church-gold text-[10px] font-bold hover:underline">
-                          <FiDownload /> Get File
-                        </button>
-                      )}
-                    </div>
+                {documents.length === 0 ? (
+                  <div className="text-center py-6 opacity-60">
+                    <FiFileText className="text-3xl text-gray-300 mx-auto mb-2" />
+                    <p className="text-gray-400 text-xs italic">No document requests yet</p>
                   </div>
-                ))}
+                ) : (
+                  documents.slice(0, 3).map((d) => (
+                    <div key={d._id} className="p-3 rounded-xl bg-white border border-gray-100 shadow-sm">
+                      <div className="flex justify-between items-start mb-2">
+                        <Link to={`/dashboard/documents/DOC-${d._id.slice(-6).toUpperCase()}`} className="text-xs font-bold text-gray-800 capitalize hover:text-church-royal-blue hover:underline">
+                          {d.type?.replace('_', ' ')}
+                        </Link>
+                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${d.status === 'approved' ? 'bg-green-100 text-green-600' : d.status === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-gold-100 text-church-gold'}`}>{d.status}</span>
+                      </div>
+                      <div className="flex justify-between items-center mt-3">
+                        <p className="text-[10px] text-gray-400 font-medium">{new Date(d.createdAt).toLocaleDateString()}</p>
+                        {d.status === 'approved' && d.uploadedFile ? (
+                          <button onClick={(e) => forceFileDownload(e, d.uploadedFile.startsWith('http') ? d.uploadedFile : `${UPLOADS_URL.replace('/uploads', '')}${d.uploadedFile.startsWith('/') ? '' : '/'}${d.uploadedFile}`, d.type)} className="flex items-center gap-1 text-church-gold text-[10px] font-bold hover:underline">
+                            <FiDownload /> Get File
+                          </button>
+                        ) : (
+                          <Link to={`/dashboard/documents/DOC-${d._id.slice(-6).toUpperCase()}`} className="text-church-gold text-[10px] font-bold hover:underline">
+                            Details →
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
+              {documents.length > 3 && (
+                <div className="text-center mt-4">
+                  <Link to="/dashboard/documents" className="text-church-gold text-xs font-bold hover:underline inline-flex items-center gap-1">
+                    View All Documents ({documents.length}) <span aria-hidden>→</span>
+                  </Link>
+                </div>
+              )}
             </div>
+
+            {/* My Raised Tickets */}
+            <div className="glass-card p-6 border border-gray-100">
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="font-display text-lg font-bold text-church-royal-blue flex items-center gap-2">
+                  <FiMessageSquare className="text-church-gold" /> Raised Tickets
+                </h2>
+                <Link to="/dashboard/tickets" className="text-church-gold text-[12px] font-bold hover:underline uppercase tracking-tighter">
+                  + Raise Ticket
+                </Link>
+              </div>
+              <div className="space-y-3">
+                {tickets.length === 0 ? (
+                  <div className="text-center py-6 opacity-60">
+                    <FiMessageSquare className="text-3xl text-gray-300 mx-auto mb-2" />
+                    <p className="text-gray-400 text-xs italic">No tickets raised yet</p>
+                  </div>
+                ) : (
+                  tickets.slice(0, 3).map((t) => (
+                    <Link
+                      key={t._id}
+                      to={`/dashboard/tickets/${t.ticketNumber || t._id}`}
+                      className="block p-3 rounded-xl bg-white border border-gray-100 shadow-sm hover:border-church-gold/60 hover:shadow-md transition-all group"
+                    >
+                      <div className="flex justify-between items-start mb-1.5 gap-2">
+                        <p className="text-xs font-bold text-gray-800 line-clamp-1 group-hover:text-church-royal-blue transition-colors">
+                          {t.subject}
+                        </p>
+                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full whitespace-nowrap ${
+                          t.status === 'resolved' || t.status === 'closed'
+                            ? 'bg-green-100 text-green-600'
+                            : t.status === 'in_progress'
+                            ? 'bg-blue-100 text-blue-600'
+                            : 'bg-gold-100 text-church-gold'
+                        }`}>
+                          {t.status?.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-gray-500 line-clamp-1 mb-2">
+                        {t.message}
+                      </p>
+                      <div className="flex justify-between items-center text-[10px] text-gray-400 font-medium">
+                        <span className="font-mono text-gray-400 font-bold">
+                          {t.ticketNumber || `TKT-${t._id.toString().slice(-6).toUpperCase()}`}
+                        </span>
+                        <div className="flex items-center gap-1 text-church-gold text-[10px] font-bold">
+                          <span>{new Date(t.createdAt).toLocaleDateString()}</span>
+                          <span className="group-hover:translate-x-0.5 transition-transform">→</span>
+                        </div>
+                      </div>
+                    </Link>
+                  ))
+                )}
+              </div>
+              {tickets.length > 3 && (
+                <div className="text-center mt-4">
+                  <Link to="/dashboard/tickets" className="text-church-gold text-xs font-bold hover:underline inline-flex items-center gap-1">
+                    View All Tickets ({tickets.length}) <span aria-hidden>→</span>
+                  </Link>
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
       </div>

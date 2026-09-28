@@ -56,13 +56,13 @@ function parseClientIpAndLocation(req) {
   return { ip, location: 'Coimbatore, Tamil Nadu, India' };
 }
 
-// Generate a signed, 24-hour report token for security verification
-function generateSecurityReportToken(userId) {
+// Generate a signed, 24-hour report token for security verification with telemetry context
+function generateSecurityReportToken(userId, extra = {}) {
   if (!process.env.JWT_SECRET) {
     throw new Error('FATAL: JWT_SECRET environment variable is not configured');
   }
   return jwt.sign(
-    { userId, purpose: 'report_unauthorized', createdAt: Date.now() },
+    { userId, purpose: 'report_unauthorized', createdAt: Date.now(), ...extra },
     process.env.JWT_SECRET,
     { expiresIn: '24h' }
   );
@@ -75,7 +75,14 @@ async function sendLoginAlertEmail({ user, req, loginMethod = 'Password' }) {
   try {
     const uaInfo = parseUserAgent(req.headers['user-agent']);
     const ipInfo = parseClientIpAndLocation(req);
-    const securityToken = generateSecurityReportToken(user._id);
+    const securityToken = generateSecurityReportToken(user._id, {
+      device: uaInfo.device,
+      browser: uaInfo.browser,
+      os: uaInfo.os,
+      ip: ipInfo.ip,
+      location: ipInfo.location,
+      loginMethod
+    });
     const reportUrl = getSiteUrl(`/security/report-unauthorized?token=${securityToken}&userId=${user._id}`);
 
     const formattedTime = new Date().toLocaleString('en-IN', {
@@ -212,7 +219,7 @@ async function sendPasswordUpdatedEmail({ user }) {
       <div style="display:inline-block; background-color:rgba(255,255,255,0.15); padding:4px 14px; border-radius:30px; margin-bottom:8px;">
         <span style="color:#6ee7b7; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Security Confirmation</span>
       </div>
-      <h1 style="margin:4px 0 0; color:#ffffff; font-size:22px; font-weight:800; line-height:1.3;">Password Updated Successfully</h1>
+      <h1 style="margin:4px 0 0; color:#ffffff; font-size:22px; font-weight:800; line-height:1.3;">Your Parish Account Has Been Secured</h1>
       <p style="margin:4px 0 0; color:#e2e8f0; opacity:0.9; font-size:13px;">St. John de Britto Church</p>
     </div>
 
@@ -220,33 +227,34 @@ async function sendPasswordUpdatedEmail({ user }) {
     <div style="padding:26px 22px;">
       <p style="color:#1e293b; font-size:15px; font-weight:700; margin-top:0;">Dear ${user.name},</p>
       <p style="color:#475569; font-size:14px; line-height:1.6; margin-bottom:16px;">
-        Your Parish Account password has been updated successfully.
+        Your Parish Account password has been updated successfully and your account has been secured.
       </p>
       <p style="color:#475569; font-size:14px; line-height:1.6; margin-bottom:20px;">
-        Your account has now been secured, and your authentication credentials have been refreshed. You can log in normally using your new password.
+        Previous sessions were secured and revoked. Your authentication state was refreshed. You can now log in normally using your new password.
       </p>
 
       <!-- Notice Box -->
       <div style="background-color:#f0fdf4; border:1px solid #bbf7d0; border-radius:14px; padding:16px 18px; margin-bottom:24px;">
         <h3 style="margin:0 0 12px; color:#166534; font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid #dcfce7; padding-bottom:8px;">
-          Security Notice
+          Security Confirmation
         </h3>
         
         <table style="width:100%; border-collapse:collapse; font-size:13px; color:#14532d;">
-          <tr><td style="padding:4px 0;"> Password updated successfully.</td></tr>
-          <tr><td style="padding:4px 0;"> All previous login sessions have been invalidated.</td></tr>
-          <tr><td style="padding:4px 0;"> Your account is now protected with your updated password.</td></tr>
+          <tr><td style="padding:4px 0;"> Password successfully updated.</td></tr>
+          <tr><td style="padding:4px 0;"> Previous sessions have been secured and revoked.</td></tr>
+          <tr><td style="padding:4px 0;"> Authentication credentials refreshed.</td></tr>
+          <tr><td style="padding:4px 0;"> You can now log in safely using your new password.</td></tr>
         </table>
       </div>
 
       <!-- Warning Disclaimer -->
       <div style="background-color:#fffbe6; border-left:4px solid #d97706; padding:12px 14px; border-radius:8px; margin-bottom:20px; font-size:12px; color:#92400e; line-height:1.5;">
-        <strong>Important Safety Reminder:</strong>
-        <p style="margin:4px 0 0;">Please do not share your login credentials, password, OTPs, or verification links with anyone, including church staff or administrators. Our team will never ask for your password.</p>
+        <strong>Important Security Advice:</strong>
+        <p style="margin:4px 0 0;">Never share your password, OTP, or verification links with anyone. St. John de Britto Church will never ask for your password or verification codes.</p>
       </div>
 
       <p style="color:#64748b; font-size:12px; line-height:1.5; margin-bottom:0;">
-        If you did not make this change, please contact your parish administrator immediately or use the account recovery option.
+        If you did not request this change, please contact your parish administrator immediately.
       </p>
     </div>
 
@@ -262,7 +270,7 @@ async function sendPasswordUpdatedEmail({ user }) {
 
     sendMail({
       to: user.email,
-      subject: ` Security Confirmation: Your Password Has Been Updated Successfully — St. John de Britto Church`,
+      subject: `Your Parish Account Has Been Secured — St. John de Britto Church`,
       html: emailHtml
     }).then(res => {
       if (res.success) console.log(` Password updated email sent to ${user.email}`);
@@ -744,9 +752,61 @@ async function sendUserTemporaryLockoutEmail({ user, lockMinutes = 15, ipDetails
       subject: `Security Alert: Account Temporarily Locked (15 Mins) — St. John de Britto Church`,
       html: emailHtml
     }).catch(err => console.error(' Lockout email dispatch error:', err.message));
-
   } catch (err) {
     console.error(' sendUserTemporaryLockoutEmail error:', err.message);
+  }
+}
+
+// Record login event in user's loginHistory and manage trusted devices
+async function recordLoginHistory({ userId, req, loginMethod = 'Password', status = 'success', trusted = true }) {
+  if (!userId) return;
+  try {
+    const User = require('../models/User');
+    const uaInfo = parseUserAgent(req.headers['user-agent']);
+    const ipInfo = parseClientIpAndLocation(req);
+
+    const historyEntry = {
+      ip: ipInfo.ip,
+      location: ipInfo.location,
+      device: uaInfo.device,
+      browser: uaInfo.browser,
+      os: uaInfo.os,
+      loginMethod,
+      status,
+      trusted,
+      timestamp: new Date()
+    };
+
+    const user = await User.findById(userId);
+    if (!user) return;
+
+    // Keep last 25 login records
+    user.loginHistory = [historyEntry, ...(user.loginHistory || [])].slice(0, 25);
+
+    // Update trusted devices on successful login
+    if (status === 'success') {
+      const deviceKey = `${uaInfo.browser}-${uaInfo.os}`;
+      const devices = user.trustedDevices || [];
+      const existingIdx = devices.findIndex(d => d.deviceId === deviceKey || d.deviceName === uaInfo.device);
+      if (existingIdx >= 0) {
+        devices[existingIdx].lastUsed = new Date();
+      } else {
+        devices.unshift({
+          deviceId: deviceKey,
+          deviceName: uaInfo.device,
+          browser: uaInfo.browser,
+          os: uaInfo.os,
+          firstSeen: new Date(),
+          lastUsed: new Date(),
+          isTrusted: true
+        });
+      }
+      user.trustedDevices = devices.slice(0, 10);
+    }
+
+    await user.save();
+  } catch (err) {
+    console.warn('recordLoginHistory error:', err.message);
   }
 }
 
@@ -759,5 +819,6 @@ module.exports = {
   sendUserSuspensionEmail,
   sendAdminSuspensionIncidentEmail,
   sendAccountReactivatedEmail,
-  sendUserTemporaryLockoutEmail
+  sendUserTemporaryLockoutEmail,
+  recordLoginHistory
 };

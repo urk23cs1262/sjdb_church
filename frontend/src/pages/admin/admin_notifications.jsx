@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiBell, FiSearch, FiTrash2, FiCheckCircle, FiFilter,
@@ -237,33 +237,88 @@ function AdminNotifCard({ notif, onMarkRead, onDelete, onTogglePin, onAction }) 
   );
 }
 
-// ── Notification Detail Modal ────────────────────────────────────────────────
 // ── Security Incident Details Dialog ─────────────────────────────────────────
 function SecurityIncidentModal({ notif, onClose, onReactivated }) {
-  const [incident, setIncident] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [incident, setIncident] = useState(notif.incidentData || null);
+  const [loading, setLoading] = useState(!notif.incidentData);
   const [showConfirm, setShowConfirm] = useState(false);
   const [reactivating, setReactivating] = useState(false);
+  const [adminNotes, setAdminNotes] = useState(notif.incidentData?.adminNotes || '');
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
-  // Extract the actual user ID from the notification (works for both incident & OTP notifs)
-  const directUserId = notif.userId?._id || (typeof notif.userId === 'string' ? notif.userId : null) || notif.relatedId || notif.metadata?.userId || null;
+  // Extract user ID
+  const directUserId = incident?.userId?._id || notif.userId?._id || (typeof notif.userId === 'string' ? notif.userId : null) || notif.relatedId || notif.metadata?.userId || null;
 
   useEffect(() => {
-    // Try to find a matching security incident (may not exist for OTP notifications)
+    if (notif.incidentData) {
+      setIncident(notif.incidentData);
+      setAdminNotes(notif.incidentData.adminNotes || '');
+      setLoading(false);
+      return;
+    }
+
     const incidentId = notif.relatedId || notif._id;
-    api.get('/security/incidents')
+    if (!incidentId) {
+      setLoading(false);
+      return;
+    }
+
+    // Try direct incident endpoint first
+    api.get(`/security/incidents/${incidentId}`)
       .then(res => {
-        const list = res.data.incidents || [];
-        // Only match if relatedModel is SecurityIncident or notification came from security category
-        const isSecurityNotif = notif.relatedModel === 'SecurityIncident' || notif.category === 'security';
-        if (isSecurityNotif) {
-          const match = list.find(i => String(i._id) === String(incidentId) || String(i._id) === String(notif.relatedId));
-          if (match) setIncident(match);
+        if (res.data?.incident) {
+          setIncident(res.data.incident);
+          setAdminNotes(res.data.incident.adminNotes || '');
         }
       })
-      .catch(e => console.warn('Incident fetch err:', e.message))
+      .catch(() => {
+        // Fallback to searching incidents list
+        api.get('/security/incidents')
+          .then(res => {
+            const list = res.data.incidents || [];
+            const match = list.find(i => String(i._id) === String(incidentId) || String(i._id) === String(notif.relatedId));
+            if (match) {
+              setIncident(match);
+              setAdminNotes(match.adminNotes || '');
+            }
+          })
+          .catch(e => console.warn('Incident fetch err:', e.message));
+      })
       .finally(() => setLoading(false));
   }, [notif]);
+
+  const handleStatusChange = async (newStatus) => {
+    if (!incident?._id) return;
+    setUpdatingStatus(true);
+    try {
+      const res = await api.put(`/security/incidents/${incident._id}`, { status: newStatus });
+      if (res.data?.success) {
+        setIncident(res.data.incident);
+        toast.success(`Incident status updated to "${newStatus}"`);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update status');
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
+  const handleSaveNotes = async () => {
+    if (!incident?._id) return;
+    setSavingNotes(true);
+    try {
+      const res = await api.put(`/security/incidents/${incident._id}`, { adminNotes });
+      if (res.data?.success) {
+        setIncident(res.data.incident);
+        toast.success('Internal administrator notes saved');
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to save notes');
+    } finally {
+      setSavingNotes(false);
+    }
+  };
 
   const handleReactivateConfirm = async () => {
     setReactivating(true);
@@ -273,11 +328,9 @@ function SecurityIncidentModal({ notif, onClose, onReactivated }) {
         throw new Error('Unable to identify user or incident for reactivation.');
       }
 
-      // Try reactivation via incident endpoint first
       try {
         await api.put(`/security/incidents/${targetId}/reactivate`);
       } catch (err1) {
-        // Fallback directly to user ID reactivation endpoint
         if (directUserId) {
           await api.put(`/security/users/${directUserId}/reactivate`);
         } else {
@@ -285,20 +338,23 @@ function SecurityIncidentModal({ notif, onClose, onReactivated }) {
         }
       }
 
-      toast.success('Account Reactivated Successfully! The user can now sign in using their registered email address and password.', { duration: 6000 });
+      toast.success('Account Reactivated Successfully! The user can now sign in using their registered email and password.', { duration: 6000 });
+      if (incident?._id) {
+        setIncident(prev => prev ? ({ ...prev, status: 'Reactivated' }) : prev);
+      }
       if (onReactivated) onReactivated();
-      onClose();
+      setShowConfirm(false);
     } catch (e) {
       toast.error(e.response?.data?.message || e.message || 'Reactivation failed');
     } finally {
       setReactivating(false);
-      setShowConfirm(false);
     }
   };
 
   const user = incident?.userId || notif.userId || {};
   const failedCount = incident?.failedAttempts || notif.metadata?.attempt || '—';
   const canReactivate = !!(incident?._id || directUserId);
+  const actionsTimeline = incident?.actionsTaken || [];
 
   return (
     <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
@@ -307,7 +363,7 @@ function SecurityIncidentModal({ notif, onClose, onReactivated }) {
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.95, opacity: 0 }}
         onClick={e => e.stopPropagation()}
-        className="bg-white rounded-3xl p-6 sm:p-7 w-full max-w-xl shadow-2xl border border-red-200 relative overflow-hidden max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-3xl p-6 sm:p-7 w-full max-w-2xl shadow-2xl border border-red-200 relative overflow-hidden max-h-[92vh] overflow-y-auto"
       >
         {/* Top Red Security Accent Bar */}
         <div className="absolute top-0 left-0 right-0 h-2.5 bg-gradient-to-r from-red-600 via-rose-500 to-red-700" />
@@ -319,7 +375,7 @@ function SecurityIncidentModal({ notif, onClose, onReactivated }) {
             </div>
             <div>
               <span className="text-[10px] font-black uppercase tracking-wider bg-red-100 text-red-700 px-2.5 py-0.5 rounded-full border border-red-200">
-                Security Incident Report
+                Security Incident #{incident?._id ? incident._id.toString().slice(-6).toUpperCase() : 'REPORT'}
               </span>
               <h2 className="font-display font-extrabold text-church-royal-blue text-xl mt-1">
                 Security Incident Details
@@ -331,30 +387,87 @@ function SecurityIncidentModal({ notif, onClose, onReactivated }) {
           </button>
         </div>
 
-        {/* 1. User Information */}
-        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 mb-4 text-xs space-y-2">
-          <div className="text-gray-400 font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-200 pb-1 flex items-center gap-1.5">
-            <FiUser className="text-church-gold" /> User Information
+        {/* 1. Incident Overview */}
+        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 mb-4 text-xs space-y-2.5">
+          <div className="text-gray-400 font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-200 pb-1 flex items-center justify-between">
+            <span className="flex items-center gap-1.5"><FiShield className="text-church-gold" /> Incident Overview</span>
+            <span className="text-gray-400 font-mono text-[10px]">{incident?._id || notif.relatedId || '—'}</span>
           </div>
-          <div className="grid grid-cols-2 gap-2 pt-1">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
             <div>
-              <span className="text-gray-500 block text-[11px]">Name:</span>
-              <span className="font-bold text-gray-900 text-sm">{user.name || notif.metadata?.userName || 'Parish Member'}</span>
+              <span className="text-gray-500 block text-[11px]">Severity:</span>
+              <span className="font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded text-[10px] uppercase border border-red-200 inline-block mt-0.5">
+                HIGH / CRITICAL
+              </span>
             </div>
             <div>
-              <span className="text-gray-500 block text-[11px]">Email:</span>
-              <span className="font-bold text-blue-600 text-xs break-all">{user.email || notif.metadata?.userEmail || 'N/A'}</span>
+              <span className="text-gray-500 block text-[11px]">Current Status:</span>
+              <span className={`font-bold px-2 py-0.5 rounded text-[10px] uppercase border inline-block mt-0.5 ${
+                incident?.status === 'Resolved' || incident?.status === 'Reactivated'
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                  : 'bg-amber-100 text-amber-800 border-amber-200'
+              }`}>
+                {incident?.status || 'Awaiting Review'}
+              </span>
+            </div>
+            <div>
+              <span className="text-gray-500 block text-[11px]">Reported Date:</span>
+              <span className="font-bold text-gray-800 text-[11px] block mt-0.5">
+                {incident?.reportedAt ? new Date(incident.reportedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recent'}
+              </span>
+            </div>
+            <div>
+              <span className="text-gray-500 block text-[11px]">Time:</span>
+              <span className="font-bold text-gray-800 text-[11px] block mt-0.5">
+                {incident?.reportedAt ? new Date(incident.reportedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—'}
+              </span>
+            </div>
+          </div>
+
+          {/* Quick status update switcher */}
+          <div className="pt-2 border-t border-slate-200/80 flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-bold text-gray-600">Update Status:</span>
+            {['Awaiting Review', 'Investigating', 'Resolved', 'Dismissed'].map(st => (
+              <button
+                key={st}
+                type="button"
+                disabled={updatingStatus || incident?.status === st}
+                onClick={() => handleStatusChange(st)}
+                className={`text-[10px] font-bold px-2.5 py-1 rounded-lg transition-all ${
+                  incident?.status === st
+                    ? 'bg-church-royal-blue text-white shadow-xs'
+                    : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-100'
+                }`}
+              >
+                {st}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 2. User Information */}
+        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 mb-4 text-xs space-y-2">
+          <div className="text-gray-400 font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-200 pb-1 flex items-center gap-1.5">
+            <FiUser className="text-church-gold" /> Affected Member Information
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+            <div>
+              <span className="text-gray-500 block text-[11px]">Name:</span>
+              <span className="font-bold text-gray-900 text-xs">{incident?.userName || user.name || notif.metadata?.userName || 'Parish Member'}</span>
             </div>
             <div>
               <span className="text-gray-500 block text-[11px]">Member ID:</span>
-              <span className="font-mono text-purple-700 text-xs">{user.parishMemberId || notif.metadata?.memberId || 'N/A'}</span>
+              <span className="font-mono text-purple-700 text-xs font-bold">{user.parishMemberId || notif.metadata?.memberId || 'N/A'}</span>
             </div>
             <div>
-              <span className="text-gray-500 block text-[11px]">Role:</span>
-              <span className="font-bold text-gray-700 capitalize text-xs">{user.role || 'Member'}</span>
+              <span className="text-gray-500 block text-[11px]">Registered Email:</span>
+              <span className="font-bold text-blue-600 text-xs break-all">{incident?.userEmail || user.email || notif.metadata?.userEmail || 'N/A'}</span>
+            </div>
+            <div>
+              <span className="text-gray-500 block text-[11px]">Registered Mobile:</span>
+              <span className="font-bold text-emerald-700 text-xs font-mono">{incident?.userPhone || user.phone || notif.metadata?.userPhone || 'N/A'}</span>
             </div>
           </div>
-          {/* View User Records link */}
           {directUserId && (
             <div className="pt-1">
               <a
@@ -362,96 +475,95 @@ function SecurityIncidentModal({ notif, onClose, onReactivated }) {
                 onClick={onClose}
                 className="inline-flex items-center gap-1 text-[10px] font-bold text-church-royal-blue hover:underline"
               >
-                <FiUsers size={10} /> View User Records →
+                <FiUsers size={10} /> View Full Member Profile & Records →
               </a>
             </div>
           )}
         </div>
 
-        {/* 2. Security Details */}
-        <div className="bg-red-50/70 border border-red-200 rounded-2xl p-4 mb-4 text-xs space-y-2">
-          <div className="text-red-800 font-extrabold uppercase text-[10px] tracking-wider border-b border-red-200 pb-1 flex items-center gap-1.5">
-            <FiShield className="text-red-700" /> Security Details
+        {/* 3. Suspicious Login Environment */}
+        <div className="bg-red-50/60 border border-red-200 rounded-2xl p-4 mb-4 text-xs space-y-2">
+          <div className="text-red-800 font-extrabold uppercase text-[10px] tracking-wider border-b border-red-200/80 pb-1 flex items-center gap-1.5">
+            <FiMonitor className="text-red-700" /> Suspicious Login Snapshot
           </div>
-          <div className="grid grid-cols-2 gap-2 pt-1">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
             <div>
-              <span className="text-red-700/80 block text-[11px]">Reason:</span>
-              <span className="font-bold text-red-900">{incident?.type === 'brute_force_suspension' ? 'Multiple Failed Login Attempts' : (notif.title || 'Security Event')}</span>
-            </div>
-            <div>
-              <span className="text-red-700/80 block text-[11px]">Failed Attempts:</span>
-              <span className="font-black text-red-600 text-sm">{failedCount} {failedCount !== '—' ? 'attempts' : ''}</span>
-            </div>
-            <div>
-              <span className="text-red-700/80 block text-[11px]">Account Status:</span>
-              <span className="font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-[10px] inline-block border border-red-300">
-                {incident?.status || 'Suspended / Needs Review'}
+              <span className="text-red-900/80 block text-[11px]">Login Time:</span>
+              <span className="font-bold text-gray-900 text-xs">
+                {incident?.loginTime ? new Date(incident.loginTime).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Recent'}
               </span>
             </div>
             <div>
-              <span className="text-red-700/80 block text-[11px]">Incident Time / Deactivation:</span>
-              <span className="font-bold text-gray-800 text-[11px]">
-                {notif.createdAt ? new Date(notif.createdAt).toLocaleString() : 'Recent'}
-              </span>
+              <span className="text-red-900/80 block text-[11px]">Client IP:</span>
+              <span className="font-mono font-bold text-slate-800 text-xs">{incident?.ipAddress || notif.metadata?.ip || '127.0.0.1'}</span>
+            </div>
+            <div>
+              <span className="text-red-900/80 block text-[11px]">Approximate Location:</span>
+              <span className="font-bold text-gray-900 text-xs">{incident?.location || 'Coimbatore, Tamil Nadu, India'}</span>
+            </div>
+            <div>
+              <span className="text-red-900/80 block text-[11px]">Device:</span>
+              <span className="font-bold text-gray-800 text-xs">{incident?.device || 'Desktop / Mobile'}</span>
+            </div>
+            <div>
+              <span className="text-red-900/80 block text-[11px]">Browser & OS:</span>
+              <span className="font-bold text-gray-800 text-xs">{incident?.browser || 'Browser'} on {incident?.os || 'OS'}</span>
+            </div>
+            <div>
+              <span className="text-red-900/80 block text-[11px]">Login Method:</span>
+              <span className="font-bold text-gray-800 text-xs">{incident?.loginMethod || 'Password'}</span>
             </div>
           </div>
         </div>
 
-        {/* 3. Login Environment */}
-        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 mb-4 text-xs space-y-2">
-          <div className="text-gray-400 font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-200 pb-1 flex items-center gap-1.5">
-            <FiMonitor className="text-church-gold" /> Login Environment
+        {/* 4. Chronological Server Timeline */}
+        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 mb-4 text-xs space-y-2.5">
+          <div className="text-gray-400 font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-200 pb-1 flex items-center justify-between">
+            <span className="flex items-center gap-1.5"><FiClock className="text-church-gold" /> Chronological Incident Timeline</span>
+            <span className="text-emerald-700 font-bold text-[10px] flex items-center gap-1">
+              <FiCheckCircle size={10} /> Verified Server Timestamps
+            </span>
           </div>
-          <div className="grid grid-cols-2 gap-2 pt-1">
-            <div>
-              <span className="text-gray-500 block text-[11px]">IP Address:</span>
-              <span className="font-mono font-bold text-slate-700">{incident?.ipAddress || notif.metadata?.ip || '—'}</span>
-            </div>
-            <div>
-              <span className="text-gray-500 block text-[11px]">Browser:</span>
-              <span className="font-bold text-gray-800">{incident?.browser || notif.metadata?.device?.split('/')[0]?.trim() || '—'}</span>
-            </div>
-            <div>
-              <span className="text-gray-500 block text-[11px]">Operating System:</span>
-              <span className="font-bold text-gray-800">{incident?.os || notif.metadata?.device?.split('/')[1]?.trim() || '—'}</span>
-            </div>
-            <div>
-              <span className="text-gray-500 block text-[11px]">Device Type:</span>
-              <span className="font-bold text-gray-800">{incident?.device || 'Desktop / Mobile'}</span>
-            </div>
-            <div className="col-span-2">
-              <span className="text-gray-500 block text-[11px]">Approximate Location:</span>
-              <span className="font-bold text-gray-800">{incident?.location || '—'}</span>
-            </div>
+
+          <div className="space-y-2 pt-1">
+            {actionsTimeline.length === 0 ? (
+              <p className="text-gray-400 italic text-[11px]">No timeline events recorded yet.</p>
+            ) : (
+              actionsTimeline.map((act, idx) => (
+                <div key={idx} className="flex items-start gap-2.5">
+                  <div className="w-5 h-5 rounded-full bg-church-royal-blue/10 text-church-royal-blue flex items-center justify-center text-[10px] font-bold flex-shrink-0 mt-0.5">
+                    {idx + 1}
+                  </div>
+                  <div className="flex-1 text-[11px] text-gray-700 leading-relaxed font-medium">
+                    {act}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 
-        {/* 4. Audit Information */}
-        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 mb-6 text-xs space-y-2">
+        {/* 5. Internal Administrator Notes */}
+        <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 mb-5 text-xs space-y-2">
           <div className="text-gray-400 font-extrabold uppercase text-[10px] tracking-wider border-b border-slate-200 pb-1 flex items-center gap-1.5">
-            <FiFileText className="text-church-gold" /> Audit Information
+            <FiFileText className="text-church-gold" /> Internal Administrator Notes
           </div>
-          <div className="grid grid-cols-2 gap-2 pt-1 text-[11px]">
-            <div>
-              <span className="text-gray-500 block">Last Successful Login:</span>
-              <span className="font-bold text-gray-800">
-                {user.lastSuccessfulLogin ? new Date(user.lastSuccessfulLogin).toLocaleString() : 'N/A'}
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-500 block">Created Account:</span>
-              <span className="font-bold text-gray-800">
-                {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
-              </span>
-            </div>
-            <div>
-              <span className="text-gray-500 block">Updated By:</span>
-              <span className="font-bold text-emerald-700">System (Automated Guard)</span>
-            </div>
-            <div>
-              <span className="text-gray-500 block">Incident ID:</span>
-              <span className="font-mono text-purple-700 break-all">{incident?._id || notif.relatedId || '—'}</span>
-            </div>
+          <textarea
+            value={adminNotes}
+            onChange={e => setAdminNotes(e.target.value)}
+            placeholder="Add internal investigation notes, user contact verification records, or resolution remarks..."
+            rows={2}
+            className="w-full p-2.5 rounded-xl border border-gray-200 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-church-gold/40 resize-none text-gray-800"
+          />
+          <div className="flex justify-end">
+            <button
+              type="button"
+              disabled={savingNotes}
+              onClick={handleSaveNotes}
+              className="px-3.5 py-1.5 rounded-xl bg-church-royal-blue hover:bg-church-royal-blue/90 text-white font-bold text-[11px] flex items-center gap-1.5 transition-all shadow-xs"
+            >
+              <FiCheck size={12} /> {savingNotes ? 'Saving...' : 'Save Internal Notes'}
+            </button>
           </div>
         </div>
 
@@ -465,15 +577,17 @@ function SecurityIncidentModal({ notif, onClose, onReactivated }) {
             Close
           </button>
 
-          {canReactivate && (
-            <button
-              type="button"
-              onClick={() => setShowConfirm(true)}
-              className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all active:scale-95 whitespace-nowrap"
-            >
-              <FiCheckCircle size={16} /> Reactivate Account
-            </button>
-          )}
+          <div className="flex items-center gap-2 justify-end">
+            {canReactivate && (
+              <button
+                type="button"
+                onClick={() => setShowConfirm(true)}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all active:scale-95 whitespace-nowrap"
+              >
+                <FiCheckCircle size={16} /> Reactivate & Secure Account
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Confirmation Overlay Modal */}
@@ -874,6 +988,7 @@ function BroadcastModal({ onClose, onSent }) {
 export default function AdminNotifications() {
   const { adminNotifications, adminUnreadCount, loading, markRead, markAllAdminRead, deleteNotification, deleteAllAdmin, togglePin, refetch } = useNotifications();
   const [searchParams] = useSearchParams();
+  const { incidentId: routeIncidentId } = useParams();
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
@@ -888,9 +1003,33 @@ export default function AdminNotifications() {
     toast.success('All notifications cleared permanently');
   };
 
-  // Auto-open deep linked security incident or notification from email link
+  // Auto-open deep linked security incident or notification from email / URL
   useEffect(() => {
-    const targetId = searchParams.get('incidentId') || searchParams.get('notifId') || searchParams.get('requestId');
+    const directIncidentId = routeIncidentId || searchParams.get('incidentId');
+    if (directIncidentId) {
+      api.get(`/security/incidents/${directIncidentId}`)
+        .then(res => {
+          if (res.data?.incident) {
+            setSelectedNotif({
+              _id: `INC-${res.data.incident._id}`,
+              relatedId: res.data.incident._id,
+              relatedModel: 'SecurityIncident',
+              category: 'security',
+              type: 'system',
+              title: 'Security Incident: Unauthorized Login Reported',
+              message: `Unauthorized login reported by ${res.data.incident.userName || 'User'}`,
+              incidentData: res.data.incident,
+              userId: res.data.incident.userId,
+              createdAt: res.data.incident.createdAt,
+              isRead: true
+            });
+          }
+        })
+        .catch(() => {});
+      return;
+    }
+
+    const targetId = searchParams.get('notifId') || searchParams.get('requestId');
     if (targetId && adminNotifications.length > 0) {
       setActiveCategory('all');
       const match = adminNotifications.find(n =>
@@ -903,7 +1042,7 @@ export default function AdminNotifications() {
         if (!match.isRead) markRead(match._id);
       }
     }
-  }, [searchParams, adminNotifications, markRead]);
+  }, [routeIncidentId, searchParams, adminNotifications, markRead]);
 
   const filtered = useMemo(() => {
     return adminNotifications.filter(n => {

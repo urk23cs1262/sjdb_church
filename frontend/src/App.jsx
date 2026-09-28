@@ -216,6 +216,7 @@ function AppRoutes() {
               <Route path="settings" element={<AdminSettings />} />
               <Route path="whatsapp" element={<AdminWhatsApp />} />
               <Route path="notifications" element={<AdminNotifications />} />
+              <Route path="notifications/security/:incidentId" element={<AdminNotifications />} />
               <Route path="team" element={<AdminTeam />} />
               <Route path="storage" element={<Navigate to="/admin/settings#storage-manager-section" replace />} />
             </Route>

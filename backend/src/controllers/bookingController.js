@@ -11,7 +11,25 @@ const getMyBookings = async (req, res) => {
 const getBookingById = async (req, res) => {
   try {
     const { id } = req.params;
-    const query = id.match(/^[0-9a-fA-F]{24}$/) ? { _id: id } : { bookingNumber: id };
+    let query;
+    if (id.match(/^[0-9a-fA-F]{24}$/)) {
+      query = { _id: id };
+    } else {
+      const cleanHex = id.replace(/^(MB|MI)-(\d+-)?/i, '').replace(/[^0-9a-fA-F]/g, '');
+      const orClauses = [{ bookingNumber: id }];
+      if (cleanHex.length >= 3) {
+        orClauses.push({
+          $expr: {
+            $regexMatch: {
+              input: { $toString: '$_id' },
+              regex: cleanHex + '$',
+              options: 'i'
+            }
+          }
+        });
+      }
+      query = { $or: orClauses };
+    }
     const booking = await Booking.findOne(query).populate('userId', 'name phone email parishMemberId familyId anbiyam');
     if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
     
@@ -30,8 +48,24 @@ const getAllBookings = async (req, res) => {
     const { status, page = 1, limit = 20, id } = req.query;
     const query = {};
     if (id) {
-      if (id.match(/^[0-9a-fA-F]{24}$/)) query._id = id;
-      else query.bookingNumber = id;
+      if (id.match(/^[0-9a-fA-F]{24}$/)) {
+        query._id = id;
+      } else {
+        const cleanHex = id.replace(/^(MB|MI)-(\d+-)?/i, '').replace(/[^0-9a-fA-F]/g, '');
+        const orClauses = [{ bookingNumber: id }];
+        if (cleanHex.length >= 3) {
+          orClauses.push({
+            $expr: {
+              $regexMatch: {
+                input: { $toString: '$_id' },
+                regex: cleanHex + '$',
+                options: 'i'
+              }
+            }
+          });
+        }
+        query.$or = orClauses;
+      }
     } else if (status) {
       query.status = status;
     }

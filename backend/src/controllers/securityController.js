@@ -43,13 +43,22 @@ const confirmUnauthorized = async (req, res) => {
     // 1. Invalidate all active sessions across all devices
     user.tokenVersion = (user.tokenVersion || 0) + 1;
 
-    // 2. Generate emergency password reset OTP
+    // 2. Remove suspicious device from trusted devices
+    if (decoded.device || decoded.browser) {
+      user.trustedDevices = (user.trustedDevices || []).filter(
+        d => !d.deviceId?.toLowerCase().includes(String(decoded.browser || '').toLowerCase()) &&
+             !d.deviceName?.toLowerCase().includes(String(decoded.device || '').toLowerCase())
+      );
+    }
+
+    // 3. Generate emergency password reset OTP
     const resetOtp = Math.floor(100000 + Math.random() * 900000).toString();
     user.otp = resetOtp;
     user.otpExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 mins
     await user.save();
 
-    // 3. Create Security Incident Record in Database
+    // 4. Create Security Incident Record in Database with full telemetry and server timeline
+    const incidentTimeStr = new Date(decoded.createdAt || Date.now()).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
     const incident = await SecurityIncident.create({
       userId: user._id,
       userName: user.name,
@@ -58,31 +67,53 @@ const confirmUnauthorized = async (req, res) => {
       type: 'unauthorized_login_reported',
       status: 'Awaiting Review',
       loginTime: decoded.createdAt ? new Date(decoded.createdAt) : new Date(),
+      device: decoded.device || 'Desktop / Mobile Device',
+      browser: decoded.browser || 'Web Browser',
+      os: decoded.os || 'Unknown OS',
+      ipAddress: decoded.ip || '127.0.0.1',
+      location: decoded.location || 'Coimbatore, Tamil Nadu, India',
+      loginMethod: decoded.loginMethod || 'Password',
       actionsTaken: [
-        'Invalidated all active sessions across all devices',
-        'Blocked suspicious token session',
-        'Initiated forced password reset OTP',
-        'Notified Parish Administrator'
+        `Login detected at ${incidentTimeStr} IST from ${decoded.device || 'Device'} (${decoded.ip || 'IP'})`,
+        'Login security alert email dispatched to member',
+        'User verified identity and confirmed unauthorized access',
+        'All active login sessions terminated across all devices (tokenVersion incremented)',
+        'Suspicious device removed from trusted devices',
+        'Emergency password recovery procedure initiated',
+        'Administrator security incident alert generated and dispatched'
       ],
       reportToken: token,
       reportedAt: new Date()
     });
 
-    // 4. Notify Admin In-App
+    // 5. Notify Admin In-App
     createNotification({
       recipient: 'admin',
-      title: ' Security Incident: Unauthorized Login Reported',
+      title: 'Security Incident: Unauthorized Login Reported',
       message: `User ${user.name} (${user.email || user.phone}) reported an unauthorized login to their account. Active sessions logged out & password reset triggered.`,
       type: 'system',
-      category: 'system',
-      priority: 'high',
-      actionUrl: '/admin/notifications',
+      category: 'security',
+      priority: 'critical',
+      actionUrl: `/admin/notifications/security/${incident._id}`,
       relatedId: incident._id,
       relatedModel: 'SecurityIncident'
     }).catch(e => console.warn('Security incident admin notification warning:', e.message));
 
-    // 5. Send Detailed Security Incident Email to Admin(s)
+    // 6. Send Detailed Security Incident Email to Admin(s)
     sendAdminSecurityIncidentEmail({ user, incident, decoded }).catch(e => console.warn('Admin security email warning:', e.message));
+
+    // 7. Security notification to the affected user (In-App, Email, Browser Push)
+    createNotification({
+      userId: user._id,
+      recipient: 'user',
+      title: 'Account Secured — Security Report Processed',
+      message: 'Your account security report was received and your account has been secured. All active sessions have been terminated. Please reset your password to restore full access.',
+      type: 'system',
+      category: 'security',
+      priority: 'critical',
+      actionUrl: '/login',
+      channels: ['inApp', 'email', 'push']
+    }).catch(e => console.warn('User security in-app notification error:', e.message));
 
     // 6. Send Emergency Password Reset OTP via Email to User
     if (user.email) {
@@ -154,15 +185,39 @@ const getIncidents = async (req, res) => {
   }
 };
 
+// GET /api/security/incidents/:id (Admin Only)
+const getIncidentById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    let incident = null;
+    if (id && id.match(/^[0-9a-fA-F]{24}$/)) {
+      incident = await SecurityIncident.findById(id).populate('userId', 'name email phone parishMemberId familyId anbiyam role lastLogin createdAt');
+    }
+    if (!incident) {
+      return res.status(404).json({ success: false, message: 'Security incident not found' });
+    }
+    res.json({ success: true, incident });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 // PUT /api/security/incidents/:id (Admin Only)
 const updateIncidentStatus = async (req, res) => {
   try {
     const { status, adminNotes } = req.body;
-    const incident = await SecurityIncident.findByIdAndUpdate(
-      req.params.id,
-      { status, adminNotes },
-      { new: true }
-    );
+    const incident = await SecurityIncident.findById(req.params.id);
+    if (!incident) return res.status(404).json({ success: false, message: 'Incident not found' });
+
+    if (status && status !== incident.status) {
+      incident.status = status;
+      incident.actionsTaken = incident.actionsTaken || [];
+      incident.actionsTaken.push(`Status updated to "${status}" by Admin ${req.user?.name || 'Administrator'} on ${new Date().toISOString()}`);
+    }
+    if (adminNotes !== undefined) {
+      incident.adminNotes = adminNotes;
+    }
+    await incident.save();
     res.json({ success: true, incident });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -352,7 +407,7 @@ async function sendAdminSecurityIncidentEmail({ user, incident, decoded }) {
     if (clientUrl.includes('localhost')) clientUrl = 'https://stjb-church.vercel.app';
     clientUrl = clientUrl.replace(/\/$/, '');
 
-    const deepLinkUrl = `${clientUrl}/admin/notifications?incidentId=${incident._id}`;
+    const deepLinkUrl = `${clientUrl}/admin/notifications/security/${incident._id}`;
     const incidentCode = incident._id.toString().slice(-6).toUpperCase();
 
     const emailHtml = `
@@ -607,12 +662,50 @@ async function sendAdminSecurityIncidentEmail({ user, incident, decoded }) {
   }
 }
 
+// GET /api/security/login-history (Protected, User)
+const getLoginHistory = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('loginHistory trustedDevices lastLogin');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    res.json({
+      success: true,
+      loginHistory: user.loginHistory || [],
+      trustedDevices: user.trustedDevices || []
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// DELETE /api/security/devices/:deviceId (Protected, User)
+const removeTrustedDevice = async (req, res) => {
+  try {
+    const { deviceId } = req.params;
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    user.trustedDevices = (user.trustedDevices || []).filter(d => d.deviceId !== deviceId && d._id?.toString() !== deviceId);
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Device removed from trusted devices',
+      trustedDevices: user.trustedDevices
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   verifyReportToken,
   confirmUnauthorized,
   getIncidents,
+  getIncidentById,
   updateIncidentStatus,
   reactivateUserAccount,
-  reactivateUserByUserId
+  reactivateUserByUserId,
+  getLoginHistory,
+  removeTrustedDevice
 };
 
