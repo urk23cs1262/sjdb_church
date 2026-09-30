@@ -262,7 +262,7 @@ function generateDailyNotificationHtml({
 
                       <!-- Attribution -->
                       <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #E2E8F0; font-size: 12px; color: #64748B; text-align: right;">
-                        Source: <a href="${escapeHtml(saint.sourceUrl || 'https://catholicreadings.org/catholic-saint-of-the-day/')}" target="_blank" style="color: #C5A059; text-decoration: none; font-weight: 600;">${escapeHtml(saint.source || 'Catholic Readings / Liturgical Calendar')}</a>
+                        Source: <a href="${escapeHtml(saint.sourceUrl || 'https://www.vaticannews.va/en/saints.html')}" target="_blank" style="color: #C5A059; text-decoration: none; font-weight: 600;">${escapeHtml(saint.source || 'Vatican News / Catholic Liturgical Calendar')}</a>
                       </div>
                     </div>
                   </td>

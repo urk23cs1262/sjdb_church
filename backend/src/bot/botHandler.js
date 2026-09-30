@@ -669,14 +669,7 @@ async function sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery =
  */
 async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false) {
   try {
-    let dailyContent = await getCachedDailyContent();
-    if (!dailyContent?.saint || (!dailyContent.saint.name && !dailyContent.saint.nameEnglish)) {
-      const { getDailySaint } = require('../services/saintService');
-      const cachedSaint = getDailySaint();
-      if (cachedSaint) {
-        dailyContent = { ...(dailyContent || {}), saint: cachedSaint };
-      }
-    }
+    const dailyContent = await getCachedDailyContent();
     const contentLang = isTamilQuery ? 'ta' : getUserDailyContentLanguage(session);
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'SAINT';
@@ -684,10 +677,10 @@ async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false) {
     session.lastSentAt = new Date();
     await session.save();
 
-    const dateKey = dailyContent?.dateKey || new Date().toISOString().slice(0, 10);
-    const hasTa = Boolean(dailyContent?.saint?.descriptionTa && /[\u0B80-\u0BFF]/.test(dailyContent?.saint?.descriptionTa));
+    const dateKey = dailyContent.dateKey || new Date().toISOString().slice(0, 10);
+    const hasTa = Boolean(dailyContent.saint?.descriptionTa && /[\u0B80-\u0BFF]/.test(dailyContent.saint.descriptionTa));
     console.log(`[SaintOfDay] Date: ${dateKey}`);
-    console.log(`[SaintOfDay] Source: ${dailyContent?.saint?.imageSource || dailyContent?.saint?.source || 'Catholic Readings'}`);
+    console.log(`[SaintOfDay] Source: ${dailyContent.saint?.imageSource || 'Vatican News'}`);
     console.log(`[SaintOfDay] User language: ${contentLang}`);
     console.log(`[SaintOfDay] Tamil translation: ${hasTa ? 'available' : 'unavailable'}`);
     console.log(`[SaintOfDay] Sending ${contentLang === 'ta' ? 'Tamil' : contentLang === 'both' ? 'Bilingual' : 'English'} Saint content`);
