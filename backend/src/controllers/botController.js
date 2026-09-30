@@ -623,7 +623,7 @@ Select your preferred language for Daily Bible Verse, Mass Readings, Reflection 
           readingPreference: 'full'
         });
         botReply = msg1;
-      } else if (text === '7' || text === '6' || /\b(SAINTS?|TODAY SAINT|SAINT OF THE DAY|WHO IS TODAY SAINT)\b/i.test(text) || /(இன்றைய புனிதர்|புனிதர் யார்)/.test(rawText)) {
+      } else if (text === '7' || text === '6' || /\b(SAINTS?|TODAY SAINT|TODAY'?S? SAINT|SAINT OF (THE|TH)? DAY|SAINT OF DAY|WHO IS TODAY SAINT)\b/i.test(text) || /(இன்றைய புனிதர்|புனிதர் யார்)/.test(rawText)) {
         const dailyContent = await getTodayDailyContent(new Date());
         const saintInfo = generateSaintInfoMessage({ dailyContent, language: newLanguage });
         botReply = saintInfo;

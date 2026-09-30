@@ -421,14 +421,28 @@ function generateSaintImageCaption({ dailyContent, language = 'ta' }) {
  * Includes saint's name and concise summary in the caption.
  */
 function getDailySaintImagePayload({ dailyContent, language = 'ta' }) {
-  let saintImageBuffer = dailyContent?.saint?.imageAttachment?.content || null;
-  const saintImageUrl = dailyContent?.saint?.remoteUrl ||
+  let saintObj = dailyContent?.saint;
+  if (!saintObj || !saintObj.nameEn) {
+    try {
+      const { getDailySaint } = require('./saintService');
+      const directSaint = getDailySaint();
+      if (directSaint) {
+        if (!dailyContent) dailyContent = {};
+        dailyContent.saint = directSaint;
+        saintObj = directSaint;
+      }
+    } catch (e) {}
+  }
+
+  let saintImageBuffer = saintObj?.imageAttachment?.content || null;
+  const saintImageUrl = saintObj?.remoteUrl ||
+                        saintObj?.imageUrl ||
+                        saintObj?.image || 
                         dailyContent?.saintImage || 
-                        dailyContent?.saint?.image || 
                         dailyContent?.saintOfTheDay?.english?.imageUrl ||
                         null;
-  const localPath = dailyContent?.saint?.localPath || null;
-  const localUrl = dailyContent?.saint?.localUrl || null;
+  const localPath = saintObj?.localPath || null;
+  const localUrl = saintObj?.localUrl || null;
 
   // If buffer is missing, try reading local file if available
   if (!saintImageBuffer) {
@@ -450,6 +464,26 @@ function getDailySaintImagePayload({ dailyContent, language = 'ta' }) {
         } catch (e) {}
       }
     }
+  }
+
+  // Scan uploads/saints/ directory if buffer is still missing
+  if (!saintImageBuffer) {
+    try {
+      const dir1 = path.join(__dirname, '../../uploads/saints');
+      const dir2 = path.join(process.cwd(), 'uploads/saints');
+      const sDir = fs.existsSync(dir1) ? dir1 : fs.existsSync(dir2) ? dir2 : null;
+      if (sDir) {
+        const files = fs.readdirSync(sDir).filter(f => f.endsWith('.jpg') || f.endsWith('.png'));
+        const sName = (saintObj?.nameEn || saintObj?.saintName || saintObj?.name || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+        const matched = files.find(f => {
+          const base = f.toLowerCase().replace(/\.[^/.]+$/, "");
+          return sName.includes(base) || base.includes(sName) || (sName.includes('jerome') && base.includes('jerome'));
+        }) || files[0];
+        if (matched) {
+          saintImageBuffer = fs.readFileSync(path.join(sDir, matched));
+        }
+      }
+    } catch (e) {}
   }
 
   if (!saintImageBuffer && !saintImageUrl) {
@@ -490,12 +524,25 @@ function getDailySaintImagePayload({ dailyContent, language = 'ta' }) {
 function generateSaintContentMessage({ dailyContent, language = 'ta' }) {
   const lang = normalizeContentLanguage(language);
 
-  const saintNameEn = dailyContent?.saint?.nameEn || dailyContent?.saint?.nameEnglish || dailyContent?.saint?.name || dailyContent?.saintName || 'Saint of the Day';
-  const saintNameTa = dailyContent?.saint?.nameTa || dailyContent?.saint?.nameTamil || dailyContent?.saintNameTa || '';
-  const titleEn = dailyContent?.saint?.titleEn || dailyContent?.saint?.feastTitle || saintNameEn;
-  const titleTa = dailyContent?.saint?.titleTa || dailyContent?.saint?.feastTitleTa || saintNameTa;
-  const feastDayEn = dailyContent?.saint?.feastDayEn || dailyContent?.saint?.feastDay || dailyContent?.formattedDate || '';
-  const feastDayTa = dailyContent?.saint?.feastDayTa || dailyContent?.formattedDateTa || feastDayEn;
+  let saintObj = dailyContent?.saint;
+  if (!saintObj || !saintObj.nameEn) {
+    try {
+      const { getDailySaint } = require('./saintService');
+      const directSaint = getDailySaint();
+      if (directSaint) {
+        if (!dailyContent) dailyContent = {};
+        dailyContent.saint = directSaint;
+        saintObj = directSaint;
+      }
+    } catch (e) {}
+  }
+
+  const saintNameEn = saintObj?.nameEn || saintObj?.nameEnglish || saintObj?.name || dailyContent?.saintName || 'Saint of the Day';
+  const saintNameTa = saintObj?.nameTa || saintObj?.nameTamil || dailyContent?.saintNameTa || '';
+  const titleEn = saintObj?.titleEn || saintObj?.feastTitle || saintNameEn;
+  const titleTa = saintObj?.titleTa || saintObj?.feastTitleTa || saintNameTa;
+  const feastDayEn = saintObj?.feastDayEn || saintObj?.feastDay || dailyContent?.formattedDate || '';
+  const feastDayTa = saintObj?.feastDayTa || dailyContent?.formattedDateTa || feastDayEn;
 
   const descEn = (
     dailyContent?.saint?.descriptionEn ||

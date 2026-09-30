@@ -316,7 +316,14 @@ async function sendWhatsAppMedia(phone, mediaArg, optionalCaption) {
         buffer = fs.readFileSync(resolvedPath);
         if (!fileName) fileName = path.basename(resolvedPath);
       } else if (url.startsWith('http://') || url.startsWith('https://')) {
-        const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 7000 });
+        const resp = await axios.get(url, {
+          responseType: 'arraybuffer',
+          timeout: 10000,
+          headers: {
+            'User-Agent': 'SJDBChurchApp/1.0 (Catholic Parish Management; contact: stjdbchurch@gmail.com)',
+            'Accept': '*/*'
+          }
+        });
         if (resp.status === 200 && resp.data && resp.data.length > 200) {
           buffer = Buffer.from(resp.data);
           if (!fileName) {
@@ -326,6 +333,22 @@ async function sendWhatsAppMedia(phone, mediaArg, optionalCaption) {
       }
     } catch (e) {
       console.warn('[WhatsApp] Could not read local/remote media buffer:', e.message);
+    }
+
+    // Local fallback for saint images if download failed
+    if (!buffer && (url?.includes('saint') || caption?.includes('Saint') || caption?.includes('புனிதர்'))) {
+      try {
+        const dir1 = path.join(__dirname, '../../uploads/saints');
+        const dir2 = path.join(process.cwd(), 'uploads/saints');
+        const sDir = fs.existsSync(dir1) ? dir1 : fs.existsSync(dir2) ? dir2 : null;
+        if (sDir) {
+          const files = fs.readdirSync(sDir).filter(f => f.endsWith('.jpg') || f.endsWith('.png'));
+          if (files.length > 0) {
+            buffer = fs.readFileSync(path.join(sDir, files[0]));
+            if (!fileName) fileName = files[0];
+          }
+        }
+      } catch (e) {}
     }
   }
 

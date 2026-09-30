@@ -486,7 +486,7 @@ const CATHOLIC_SAINTS_CALENDAR = {
     nameTa: "புனித ஜெரோம் (மறைவல்லுநர்)",
     description: "Priest, confessor, theologian, and historian best known for his translation of the Bible into Latin (the Vulgate).",
     descriptionTa: "திருவிவிலியத்தை மூல மொழிகளில் இருந்து இலத்தீன் மொழியில் மொழிபெயர்த்த தலைசிறந்த மறைவல்லுநர்.",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/eb/Caravaggio_-_Saint_Jerome_Writing.jpg/500px-Caravaggio_-_Saint_Jerome_Writing.jpg",
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/MatthiasStom-SaintJerome-Nantes.jpg/500px-MatthiasStom-SaintJerome-Nantes.jpg",
     link: "https://www.catholic.org/saints/saint.php?saint_id=10"
   },
 

@@ -132,13 +132,14 @@ async function getTodayDailyContent(targetDate = new Date()) {
   const bibleImgBuffer = await fetchImageBuffer(bibleImageUrl);
 
   // 2. Mass Readings & Reflection
-  let massReadingDoc = await getReadingForDate(dateKey);
-  if (!massReadingDoc) {
-    try {
+  let massReadingDoc = null;
+  try {
+    massReadingDoc = await getReadingForDate(dateKey);
+    if (!massReadingDoc) {
       massReadingDoc = await fetchAndStoreTamilReading(dateKey);
-    } catch (e) {
-      console.warn('[DailyContentService] Error fetching Tamil mass reading:', e.message);
     }
+  } catch (e) {
+    console.warn('[DailyContentService] Error fetching mass reading:', e.message);
   }
 
   // Ensure English translations exist
@@ -246,18 +247,58 @@ async function getTodayDailyContent(targetDate = new Date()) {
   };
 
   // 3. Saint of the Day
-  let saintData = getDailySaint(targetDate);
-  if (!saintData || saintData.date !== dateKey) {
-    try {
+  let saintData = null;
+  try {
+    saintData = getDailySaint(targetDate);
+    if (!saintData || saintData.date !== dateKey) {
       await fetchDailySaint(targetDate);
       saintData = getDailySaint(targetDate);
-    } catch (e) {
-      console.warn('[DailyContentService] Error fetching saint:', e.message);
     }
+  } catch (e) {
+    console.warn('[DailyContentService] Error fetching saint:', e.message);
+  }
+  if (!saintData) {
+    saintData = getDailySaint(targetDate);
   }
 
   const saintImageUrl = saintData?.remoteUrl || saintData?.imageUrl || saintData?.image || null;
-  const saintImgBuffer = saintImageUrl ? await fetchImageBuffer(saintData?.localPath || saintData?.localUrl || saintImageUrl) : null;
+  let saintImgBuffer = saintImageUrl ? await fetchImageBuffer(saintData?.localPath || saintData?.localUrl || saintImageUrl) : null;
+
+  // Local fallback from uploads/saints/ directory if remote download failed or buffer missing
+  if (!saintImgBuffer) {
+    try {
+      const candidates = [saintData?.localPath, saintData?.localUrl].filter(Boolean);
+      for (const c of candidates) {
+        let p = c;
+        if (typeof c === 'string' && c.startsWith('/uploads/')) {
+          p = path.join(__dirname, '../../', c);
+        }
+        if (fs.existsSync(p)) {
+          saintImgBuffer = { buffer: fs.readFileSync(p), contentType: 'image/jpeg' };
+          break;
+        }
+      }
+      if (!saintImgBuffer) {
+        const dir1 = path.join(__dirname, '../../uploads/saints');
+        const dir2 = path.join(process.cwd(), 'uploads/saints');
+        const sDir = fs.existsSync(dir1) ? dir1 : fs.existsSync(dir2) ? dir2 : null;
+        if (sDir) {
+          const files = fs.readdirSync(sDir).filter(f => f.endsWith('.jpg') || f.endsWith('.png'));
+          const sName = (saintData?.nameEn || saintData?.saintName || saintData?.name || '').toLowerCase().replace(/[^a-z0-9]/g, '_');
+          const matched = files.find(f => {
+            const base = f.toLowerCase().replace(/\.[^/.]+$/, "");
+            return sName.includes(base) || base.includes(sName) || (sName.includes('jerome') && base.includes('jerome'));
+          }) || files[0];
+          if (matched) {
+            saintImgBuffer = { buffer: fs.readFileSync(path.join(sDir, matched)), contentType: 'image/jpeg' };
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[DailyContentService] Local saint image fallback error:', e.message);
+    }
+  }
+
   const saintAttachment = saintData?.imageAttachment || (saintImgBuffer ? {
     filename: 'saint_of_the_day.jpg',
     content: saintImgBuffer.buffer,

@@ -583,10 +583,13 @@ Glory be to the Father, and to the Son, and to the Holy Spirit. As it was in the
 /**
  * Individual Dispatcher: Send Today's Bible Verse as an Image ONLY
  */
-async function sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery = false) {
+async function sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery = false, rawText = '') {
   try {
     const dailyContent = await getCachedDailyContent();
-    const contentLang = isTamilQuery ? 'ta' : getUserDailyContentLanguage(session);
+    const hasTamilScript = Boolean(rawText && /[\u0B80-\u0BFF]/.test(rawText));
+    const userChosenContentLang = getUserDailyContentLanguage(session);
+    const contentLang = hasTamilScript ? (userChosenContentLang === 'both' ? 'both' : 'ta') : userChosenContentLang;
+
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'VERSE';
     session.pendingSubmenu = '';
@@ -620,10 +623,13 @@ async function sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery = fals
 /**
  * Individual Dispatcher: Send Daily Mass Readings Text ONLY
  */
-async function sendTodayMassReadings(replyTarget, session, wa, isTamilQuery = false) {
+async function sendTodayMassReadings(replyTarget, session, wa, isTamilQuery = false, rawText = '') {
   try {
     const dailyContent = await getCachedDailyContent();
-    const contentLang = isTamilQuery ? 'ta' : getUserDailyContentLanguage(session);
+    const hasTamilScript = Boolean(rawText && /[\u0B80-\u0BFF]/.test(rawText));
+    const userChosenContentLang = getUserDailyContentLanguage(session);
+    const contentLang = hasTamilScript ? (userChosenContentLang === 'both' ? 'both' : 'ta') : userChosenContentLang;
+
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'READINGS';
     session.pendingSubmenu = '';
@@ -644,10 +650,13 @@ async function sendTodayMassReadings(replyTarget, session, wa, isTamilQuery = fa
 /**
  * Individual Dispatcher: Send Daily Reflection Text ONLY
  */
-async function sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery = false) {
+async function sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery = false, rawText = '') {
   try {
     const dailyContent = await getCachedDailyContent();
-    const contentLang = isTamilQuery ? 'ta' : getUserDailyContentLanguage(session);
+    const hasTamilScript = Boolean(rawText && /[\u0B80-\u0BFF]/.test(rawText));
+    const userChosenContentLang = getUserDailyContentLanguage(session);
+    const contentLang = hasTamilScript ? (userChosenContentLang === 'both' ? 'both' : 'ta') : userChosenContentLang;
+
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'REFLECTION';
     session.pendingSubmenu = '';
@@ -667,21 +676,41 @@ async function sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery =
 /**
  * Individual Dispatcher: Send Saint of the Day (1. Saint Image -> 2. Saint Content)
  */
-async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false) {
+async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false, rawText = '') {
   try {
-    const dailyContent = await getCachedDailyContent();
-    const contentLang = isTamilQuery ? 'ta' : getUserDailyContentLanguage(session);
+    let dailyContent = await getCachedDailyContent();
+    const hasTamilScript = Boolean(rawText && /[\u0B80-\u0BFF]/.test(rawText));
+    const userChosenContentLang = getUserDailyContentLanguage(session);
+    const contentLang = hasTamilScript ? (userChosenContentLang === 'both' ? 'both' : 'ta') : userChosenContentLang;
+
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'SAINT';
     session.pendingSubmenu = '';
     session.lastSentAt = new Date();
     await session.save();
 
-    const dateKey = dailyContent.dateKey || new Date().toISOString().slice(0, 10);
-    const hasTa = Boolean(dailyContent.saint?.descriptionTa && /[\u0B80-\u0BFF]/.test(dailyContent.saint.descriptionTa));
+    // Guarantee that saint data is populated even if Mongo readings query had an issue
+    if (!dailyContent?.saint || !dailyContent?.saint?.nameEn) {
+      try {
+        const { getDailySaint } = require('../services/saintService');
+        const sData = getDailySaint();
+        if (sData) {
+          if (!dailyContent) dailyContent = {};
+          dailyContent.saint = sData;
+          dailyContent.saintName = sData.nameEn || sData.name;
+          dailyContent.saintNameTa = sData.nameTa || sData.tamilName;
+          dailyContent.saintImage = sData.image;
+        }
+      } catch (e) {
+        console.warn('[BotHandler] Fallback getDailySaint error:', e.message);
+      }
+    }
+
+    const dateKey = dailyContent?.dateKey || new Date().toISOString().slice(0, 10);
+    const hasTa = Boolean(dailyContent?.saint?.descriptionTa && /[\u0B80-\u0BFF]/.test(dailyContent.saint.descriptionTa));
     console.log(`[SaintOfDay] Date: ${dateKey}`);
-    console.log(`[SaintOfDay] Source: ${dailyContent.saint?.imageSource || 'Vatican News'}`);
-    console.log(`[SaintOfDay] User language: ${contentLang}`);
+    console.log(`[SaintOfDay] Source: ${dailyContent?.saint?.imageSource || 'Vatican News'}`);
+    console.log(`[SaintOfDay] User chosen Daily Catholic Content language: ${contentLang}`);
     console.log(`[SaintOfDay] Tamil translation: ${hasTa ? 'available' : 'unavailable'}`);
     console.log(`[SaintOfDay] Sending ${contentLang === 'ta' ? 'Tamil' : contentLang === 'both' ? 'Bilingual' : 'English'} Saint content`);
 
@@ -710,17 +739,20 @@ async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false) {
 /**
  * Individual Dispatcher: Send Daily Prayer
  */
-async function sendTodayPrayer(replyTarget, session, wa, isTamilQuery = false) {
+async function sendTodayPrayer(replyTarget, session, wa, isTamilQuery = false, rawText = '') {
   try {
     const dailyContent = await getCachedDailyContent();
-    const contentLang = isTamilQuery ? 'ta' : getUserDailyContentLanguage(session);
+    const hasTamilScript = Boolean(rawText && /[\u0B80-\u0BFF]/.test(rawText));
+    const userChosenContentLang = getUserDailyContentLanguage(session);
+    const contentLang = hasTamilScript ? (userChosenContentLang === 'both' ? 'both' : 'ta') : userChosenContentLang;
+
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'PRAYERS';
     session.pendingSubmenu = '';
     session.lastSentAt = new Date();
     await session.save();
 
-    const isTa = contentLang === 'ta' || isTamilQuery;
+    const isTa = contentLang === 'ta';
     const prayerMsg = formatDailyPrayerMessage(dailyContent, isTa);
     await wa.sendWhatsAppMessage(replyTarget, prayerMsg);
   } catch (err) {
@@ -1632,23 +1664,23 @@ Please select your preferred language for bot conversation:
     // ── Daily Catholic Content Submenu & Quick Handlers ─────────────────────
     if (session.pendingSubmenu === 'daily_catholic') {
       if (menuNum === 1 || /\b(verse|bible|இறைவார்த்தை|வசனம்)\b/i.test(normalizedText)) {
-        await sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery);
+        await sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery, rawText);
         return;
       }
       if (menuNum === 2 || /\b(readings?|mass readings?|வாசகம்|வாசகங்கள்|திருப்பலி வாசகங்கள்)\b/i.test(normalizedText)) {
-        await sendTodayMassReadings(replyTarget, session, wa, isTamilQuery);
+        await sendTodayMassReadings(replyTarget, session, wa, isTamilQuery, rawText);
         return;
       }
       if (menuNum === 3 || /\b(reflection|தியானம்|சிந்தனை)\b/i.test(normalizedText)) {
-        await sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery);
+        await sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery, rawText);
         return;
       }
       if (menuNum === 4 || /\b(saint|புனிதர்)\b/i.test(normalizedText)) {
-        await sendTodaySaint(replyTarget, session, wa, isTamilQuery);
+        await sendTodaySaint(replyTarget, session, wa, isTamilQuery, rawText);
         return;
       }
       if (menuNum === 5 || /\b(prayer|prayers?|செபம்|ஜெபம்)\b/i.test(normalizedText)) {
-        await sendTodayPrayer(replyTarget, session, wa, isTamilQuery);
+        await sendTodayPrayer(replyTarget, session, wa, isTamilQuery, rawText);
         return;
       }
       if (menuNum === 6 || /\b(website|site|இணையதளம்)\b/i.test(normalizedText)) {
@@ -1687,7 +1719,7 @@ Please select your preferred language for bot conversation:
       /(இன்றைய தியானம்|இன்றைய சிந்தனை)/.test(rawText);
 
     if (isSpecificReflectionQuery) {
-      await sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery);
+      await sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery, rawText);
       return;
     }
 
@@ -1702,7 +1734,7 @@ Please select your preferred language for bot conversation:
       /(இன்றைய இறைவார்த்தை|வேத வசனம்|இறைவார்த்தை)/.test(rawText);
 
     if (isSpecificVerseQuery) {
-      await sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery);
+      await sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery, rawText);
       return;
     }
 
@@ -1717,14 +1749,15 @@ Please select your preferred language for bot conversation:
       /(இன்றைய திருப்பலி வாசகங்கள்|திருப்பலி வாசகங்கள்|இன்றைய வாசகங்கள்)/.test(rawText);
 
     if (isSpecificReadingsQuery) {
-      await sendTodayMassReadings(replyTarget, session, wa, isTamilQuery);
+      await sendTodayMassReadings(replyTarget, session, wa, isTamilQuery, rawText);
       return;
     }
 
     // 7️⃣ 🌟 Saint of the Day
     // - Services Menu: Option 5 | Main Menu: Option 7
     const isSaintChoice = isSaintNum ||
-      /^(today'?s saint|today saint|saint of the day|saint|saints|who is today'?s? saint|tell me about today'?s? saint|tell me about the saint|இன்றைய புனிதர்|இன்றைய புனிதர் யார்\??|இன்றைய புனிதரைப் பற்றி சொல்லுங்கள்|புனிதர் யார்|புனிதர்)$/i.test(normalizedText) ||
+      /\b(saint\s*of\s*(the|th)?\s*day|today'?s?\s*saint|saint\s*today|saint\s*of\s*day|who\s*is\s*today'?s?\s*saint|tell\s*me\s*about\s*(today'?s?\s*)?saint)\b/i.test(normalizedText) ||
+      /^(saint|saints|புனிதர்|இன்றைய புனிதர்)$/i.test(normalizedText) ||
       normalizedText.includes("saint of the day") ||
       normalizedText.includes("today's saint") ||
       normalizedText.includes("today saint") ||
@@ -1732,10 +1765,10 @@ Please select your preferred language for bot conversation:
       normalizedText.includes("who is today saint") ||
       normalizedText.includes("tell me about today's saint") ||
       normalizedText.includes("tell me about today saint") ||
-      /(இன்றைய புனிதர்|புனிதர் யார்|இன்றைய புனிதரைப் பற்றி)/.test(rawText);
+      /(இன்றைய புனிதர்|புனிதர் யார்|இன்றைய புனிதரைப் பற்றி|புனிதரைப் பற்றி)/.test(rawText);
 
     if (isSaintChoice) {
-      await sendTodaySaint(replyTarget, session, wa, isTamilQuery);
+      await sendTodaySaint(replyTarget, session, wa, isTamilQuery, rawText);
       return;
     }
 
@@ -1750,7 +1783,7 @@ Please select your preferred language for bot conversation:
       /(இன்றைய செபம்|கத்தோலிக்க செபங்கள்|பரலோக மந்திரம்|மங்கள வார்த்தை)/.test(rawText);
 
     if (isPrayersChoice) {
-      await sendTodayPrayer(replyTarget, session, wa, isTamilQuery);
+      await sendTodayPrayer(replyTarget, session, wa, isTamilQuery, rawText);
       return;
     }
 
@@ -2408,7 +2441,7 @@ Please bring parish family ID or relevant record dates when collecting certifica
         await session.save();
 
         if (ragResult.isSaintOfDayFlow) {
-          await sendTodaySaint(replyTarget, session, wa, isTamilQuery);
+          await sendTodaySaint(replyTarget, session, wa, isTamilQuery, rawText);
           return;
         }
 
