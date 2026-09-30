@@ -7,6 +7,7 @@ import jsPDF from 'jspdf';
 import api from '../../services/api';
 import { SectionLoader } from '../../components/common/common_loader';
 import churchLogo from '../../assets/church_extirior.png';
+import { getParishOfficePhone, getChurchEmail } from '../../config/contactConfig';
 
 const CATEGORY_NAMES = {
   general: 'General Offering',
@@ -522,8 +523,8 @@ export default function AdminDonations() {
                   {/* Contact Details */}
                   <div style={{ marginTop: '26px', textAlign: 'center', fontSize: '12px', lineHeight: '1.7', color: '#555' }}>
                     Contact Details :<br />
-                    Parish Office Phone : +91 96291 95484 <br />
-                    Parish Office Email : stjdbchurch@gmail.com <br />
+                    Parish Office Phone : {getParishOfficePhone() || 'Contact Parish Office'} <br />
+                    Parish Office Email : {getChurchEmail() || 'Contact Parish Office'} <br />
                     Parish Office Website : www.stjohnchurch.com
                   </div>
 

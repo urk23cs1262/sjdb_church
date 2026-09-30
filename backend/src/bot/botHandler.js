@@ -40,6 +40,7 @@ const { processIncomingMessage, isPhoneBlocked } = require('../services/userMode
 const { answerChurchQuestion } = require('./churchRAGService');
 const { notifyAdmin } = require('../services/adminNotificationService');
 const { SITE_ROUTES, EXTERNAL_LINKS, getSiteUrl, getBaseClientUrl } = require('../config/siteRoutes');
+const { getChurchPhone, getChurchEmail } = require('../config/contactConfig');
 const {
   getCachedDailyContent,
   getCachedPriests,
@@ -198,8 +199,8 @@ _காளையார்கோவில், சிவகங்கை மறை�
 
 🕒 *பங்கு அலுவலக நேரம்:*
 காலை 9:00 – 12:30 | மாலை 4:00 – 8:00
-📞 *தொலைபேசி:* +91 96556 39144
-📧 *மின்னஞ்சல்:* stjdbchurch@gmail.com
+📞 *தொலைபேசி:* ${getChurchPhone() || ''}
+📧 *மின்னஞ்சல்:* ${getChurchEmail() || ''}
 🌐 *இணையதளம்:* ${getSiteUrl(SITE_ROUTES.ABOUT)}
 
 👉 *திருப்பலி நேரங்களுக்கு '2', நிகழ்வுகளுக்கு '4', அல்லது 14 சேவைகளைக் காண 'Services' என அனுப்பவும்.*`;
@@ -221,8 +222,8 @@ St. John de Britto Church, Kalayarkoil, Sivagangai District, Tamil Nadu – 6305
 
 🕒 *Parish Office Hours:*
 9:00 AM – 12:30 PM | 4:00 PM – 8:00 PM
-📞 *Phone:* +91 96556 39144
-📧 *Email:* stjdbchurch@gmail.com
+📞 *Phone:* ${getChurchPhone() || ''}
+📧 *Email:* ${getChurchEmail() || ''}
 🌐 *Website Portal:* ${getSiteUrl(SITE_ROUTES.ABOUT)}
 
 👉 *Reply 2 for Mass Timings, 4 for Events, or type "Services" for the complete 14 Parish Help Desk services.*`;
@@ -252,7 +253,7 @@ _புனித அருளானந்தர் ஆலயம், காளை
 • "ஆலய அமைவிடம் எங்கு உள்ளது?"
 
 📞 *நேரடி உதவிக்கு:*
-பங்கு அலுவலகம்: +91 96556 39144
+பங்கு அலுவலகம்: ${getChurchPhone() || 'பங்கு அலுவலகம்'}
 🕰️ காலை 9:00 – 12:30 & மாலை 4:00 – 8:00
 🌐 *இணையதளம்:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`;
   }
@@ -276,7 +277,7 @@ _St. John de Britto Church, Kalayarkoil_
 • "Where is the church located?"
 
 📞 *Need Direct Assistance?*
-Parish Office: +91 96556 39144
+Parish Office: ${getChurchPhone() || 'Parish Office'}
 🕰️ 9:00 AM – 12:30 PM & 4:00 PM – 8:00 PM
 🌐 *Website:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`;
 }
@@ -585,7 +586,6 @@ Glory be to the Father, and to the Son, and to the Holy Spirit. As it was in the
  */
 async function sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery = false, rawText = '') {
   try {
-    const dailyContent = await getCachedDailyContent();
     const hasTamilScript = Boolean(rawText && /[\u0B80-\u0BFF]/.test(rawText));
     const userChosenContentLang = getUserDailyContentLanguage(session);
     const contentLang = hasTamilScript ? (userChosenContentLang === 'both' ? 'both' : 'ta') : userChosenContentLang;
@@ -594,7 +594,9 @@ async function sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery = fals
     session.lastBotReplyType = 'VERSE';
     session.pendingSubmenu = '';
     session.lastSentAt = new Date();
-    await session.save();
+    session.save().catch(() => {});
+
+    const dailyContent = await getCachedDailyContent();
 
     let sentImage = false;
     try {
@@ -625,7 +627,6 @@ async function sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery = fals
  */
 async function sendTodayMassReadings(replyTarget, session, wa, isTamilQuery = false, rawText = '') {
   try {
-    const dailyContent = await getCachedDailyContent();
     const hasTamilScript = Boolean(rawText && /[\u0B80-\u0BFF]/.test(rawText));
     const userChosenContentLang = getUserDailyContentLanguage(session);
     const contentLang = hasTamilScript ? (userChosenContentLang === 'both' ? 'both' : 'ta') : userChosenContentLang;
@@ -634,7 +635,9 @@ async function sendTodayMassReadings(replyTarget, session, wa, isTamilQuery = fa
     session.lastBotReplyType = 'READINGS';
     session.pendingSubmenu = '';
     session.lastSentAt = new Date();
-    await session.save();
+    session.save().catch(() => {});
+
+    const dailyContent = await getCachedDailyContent();
 
     const readingsMsg = generateDailyMassReadingsMessage({
       dailyContent,
@@ -652,7 +655,6 @@ async function sendTodayMassReadings(replyTarget, session, wa, isTamilQuery = fa
  */
 async function sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery = false, rawText = '') {
   try {
-    const dailyContent = await getCachedDailyContent();
     const hasTamilScript = Boolean(rawText && /[\u0B80-\u0BFF]/.test(rawText));
     const userChosenContentLang = getUserDailyContentLanguage(session);
     const contentLang = hasTamilScript ? (userChosenContentLang === 'both' ? 'both' : 'ta') : userChosenContentLang;
@@ -661,7 +663,9 @@ async function sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery =
     session.lastBotReplyType = 'REFLECTION';
     session.pendingSubmenu = '';
     session.lastSentAt = new Date();
-    await session.save();
+    session.save().catch(() => {});
+
+    const dailyContent = await getCachedDailyContent();
 
     const reflMsg = generateDailyReflectionMessage({
       dailyContent,
@@ -678,7 +682,6 @@ async function sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery =
  */
 async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false, rawText = '') {
   try {
-    let dailyContent = await getCachedDailyContent();
     const hasTamilScript = Boolean(rawText && /[\u0B80-\u0BFF]/.test(rawText));
     const userChosenContentLang = getUserDailyContentLanguage(session);
     const contentLang = hasTamilScript ? (userChosenContentLang === 'both' ? 'both' : 'ta') : userChosenContentLang;
@@ -687,29 +690,23 @@ async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false, ra
     session.lastBotReplyType = 'SAINT';
     session.pendingSubmenu = '';
     session.lastSentAt = new Date();
-    await session.save();
+    session.save().catch(() => {});
 
-    // Guarantee that saint data is populated even if Mongo readings query had an issue
-    if (!dailyContent?.saint || !dailyContent?.saint?.nameEn) {
-      try {
-        const { getDailySaint } = require('../services/saintService');
-        const sData = getDailySaint();
-        if (sData) {
-          if (!dailyContent) dailyContent = {};
-          dailyContent.saint = sData;
-          dailyContent.saintName = sData.nameEn || sData.name;
-          dailyContent.saintNameTa = sData.nameTa || sData.tamilName;
-          dailyContent.saintImage = sData.image;
-        }
-      } catch (e) {
-        console.warn('[BotHandler] Fallback getDailySaint error:', e.message);
-      }
-    }
+    // Fast 0ms in-memory saint retrieval from canonical saintService
+    const { getDailySaint } = require('../services/saintService');
+    const sData = getDailySaint();
+    const dailyContent = {
+      dateKey: sData.date || new Date().toISOString().slice(0, 10),
+      saint: sData,
+      saintName: sData.nameEn || sData.name,
+      saintNameTa: sData.nameTa || sData.tamilName,
+      saintImage: sData.image
+    };
 
-    const dateKey = dailyContent?.dateKey || new Date().toISOString().slice(0, 10);
-    const hasTa = Boolean(dailyContent?.saint?.descriptionTa && /[\u0B80-\u0BFF]/.test(dailyContent.saint.descriptionTa));
+    const dateKey = dailyContent.dateKey;
+    const hasTa = Boolean(sData?.descriptionTa && /[\u0B80-\u0BFF]/.test(sData.descriptionTa));
     console.log(`[SaintOfDay] Date: ${dateKey}`);
-    console.log(`[SaintOfDay] Source: ${dailyContent?.saint?.imageSource || 'Vatican News'}`);
+    console.log(`[SaintOfDay] Source: ${sData?.imageSource || 'Vatican News'}`);
     console.log(`[SaintOfDay] User chosen Daily Catholic Content language: ${contentLang}`);
     console.log(`[SaintOfDay] Tamil translation: ${hasTa ? 'available' : 'unavailable'}`);
     console.log(`[SaintOfDay] Sending ${contentLang === 'ta' ? 'Tamil' : contentLang === 'both' ? 'Bilingual' : 'English'} Saint content`);
@@ -719,7 +716,7 @@ async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false, ra
     if (saintImagePayload && typeof wa.sendWhatsAppMedia === 'function') {
       try {
         await wa.sendWhatsAppMedia(replyTarget, saintImagePayload);
-        await new Promise(r => setTimeout(r, 650));
+        await new Promise(r => setTimeout(r, 400));
       } catch (mediaErr) {
         console.warn('[BotHandler] Saint media send error:', mediaErr.message);
       }
@@ -741,7 +738,6 @@ async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false, ra
  */
 async function sendTodayPrayer(replyTarget, session, wa, isTamilQuery = false, rawText = '') {
   try {
-    const dailyContent = await getCachedDailyContent();
     const hasTamilScript = Boolean(rawText && /[\u0B80-\u0BFF]/.test(rawText));
     const userChosenContentLang = getUserDailyContentLanguage(session);
     const contentLang = hasTamilScript ? (userChosenContentLang === 'both' ? 'both' : 'ta') : userChosenContentLang;
@@ -750,7 +746,9 @@ async function sendTodayPrayer(replyTarget, session, wa, isTamilQuery = false, r
     session.lastBotReplyType = 'PRAYERS';
     session.pendingSubmenu = '';
     session.lastSentAt = new Date();
-    await session.save();
+    session.save().catch(() => {});
+
+    const dailyContent = await getCachedDailyContent();
 
     const isTa = contentLang === 'ta';
     const prayerMsg = formatDailyPrayerMessage(dailyContent, isTa);
@@ -803,7 +801,25 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
   const rawText = (body || '').trim();
   if (!rawText) return;
 
+  // ── STRICT ISOLATION GUARD: Channels and Newsletters are ONE-WAY broadcast streams ──
+  // Under NO circumstances should any channel post or newsletter activity enter the interactive bot!
+  const targetCheck = String(rawJid || fromNumber || '').toLowerCase().trim();
+  if (
+    targetCheck.includes('@newsletter') ||
+    targetCheck.includes('@broadcast') ||
+    targetCheck.includes('status@broadcast') ||
+    (process.env.WHATSAPP_CHANNEL_JID && targetCheck.includes(process.env.WHATSAPP_CHANNEL_JID.toLowerCase().trim()))
+  ) {
+    console.log(`🔇 [BotHandler Guard] Dropped channel/newsletter event (${targetCheck}) — Channels do not run the interactive bot.`);
+    return;
+  }
+
   const replyTarget = rawJid || fromNumber;
+  if (!replyTarget || replyTarget.includes('@newsletter') || replyTarget.includes('@broadcast')) {
+    console.warn(`🛑 [BotHandler Guard] Dropped invalid or channel reply target: ${replyTarget}`);
+    return;
+  }
+
   const phone = (fromNumber || '').replace('whatsapp:', '').replace(/\D/g, '');
   const sessionKey = (fromNumber && fromNumber.includes('@lid')) ? fromNumber : (phone || fromNumber);
   const wa = getWA();
@@ -814,17 +830,13 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
       console.log(`[INCOMING] Skipped duplicate WhatsApp message ID (cache): ${messageId}`);
       return;
     }
-
-    try {
-      await ProcessedMessage.create({ messageId, from: sessionKey, bodyPreview: rawText.slice(0, 100) });
-      markMessageIdProcessed(messageId);
-    } catch (pmErr) {
-      if (pmErr.code === 11000 || pmErr.message?.includes('duplicate key')) {
-        console.log(`[INCOMING] Skipped duplicate WhatsApp message ID (DB constraint): ${messageId}`);
-        markMessageIdProcessed(messageId);
-        return;
+    markMessageIdProcessed(messageId);
+    // Persist to DB in background without blocking the incoming reply
+    ProcessedMessage.create({ messageId, from: sessionKey, bodyPreview: rawText.slice(0, 100) }).catch(pmErr => {
+      if (pmErr.code !== 11000 && !pmErr.message?.includes('duplicate key')) {
+        console.warn('[INCOMING] ProcessedMessage save error:', pmErr.message);
       }
-    }
+    });
   }
 
   // 2. Concurrency lock to prevent simultaneous race conditions for the same user action
@@ -868,19 +880,21 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
     }
 
     // 4. AUTO-LINK REGISTERED PARISHIONER
-    // Link user ID for database context, but NEVER hijack an active onboarding step (bot_language, phone_verification, otp_verification, preferences, language)
+    // Link user ID for database context using indexed phone search, skip on repeated non-registered messages
     const phone10 = (session.providedPhone || phone || sessionKey || '').replace(/\D/g, '').slice(-10);
-    if (!session.linkedUserId && phone10 && phone10.length >= 10) {
+    if (!session.linkedUserId && phone10 && phone10.length >= 10 && !session.unregisteredChecked) {
       const registeredUser = await User.findOne({
-        phone: { $regex: phone10 + '$' },
+        phone: { $in: [phone10, `+91${phone10}`, `91${phone10}`, `0${phone10}`] },
         isActive: { $ne: false }
-      }).lean();
+      }).select('_id name phone isActive').lean();
 
       if (registeredUser) {
         console.log(`[BotHandler] Linking registered parishioner ${registeredUser.name} (${phone10}) to WhatsApp session.`);
         session.linkedUserId = registeredUser._id;
         if (!session.providedPhone) session.providedPhone = registeredUser.phone || phone10;
-        await session.save();
+        session.save().catch(() => {});
+      } else {
+        session.unregisteredChecked = true;
       }
     }
 
@@ -928,46 +942,48 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
 
     // ── First-Time User Admin Email Notification ────────────────────────────────
     if (!session.firstInteractionEmailSent) {
-      try {
-        const searchPhone = (phone || '').slice(-10);
-        let parishUser = null;
-        if (session.linkedUserId) {
-          parishUser = await User.findById(session.linkedUserId);
-        } else if (searchPhone) {
-          parishUser = await User.findOne({ phone: { $regex: searchPhone } });
-        }
+      session.firstInteractionEmailSent = true;
+      session.firstInteractionAt = new Date();
+      if (pushName) session.pushName = pushName;
+      session.save().catch(() => {});
 
-        const isRegistered = Boolean(parishUser);
-        const userName = isRegistered ? parishUser.name : (pushName || 'Unregistered WhatsApp User');
-        const userEmail = isRegistered ? (parishUser.email || 'None') : 'Unregistered (No Email)';
-        const userPhone = isRegistered ? (parishUser.phone || phone) : phone;
-
-        await notifyAdmin({
-          type: 'FIRST_BOT_INTERACTION',
-          user: parishUser,
-          extra: {
-            isRegistered,
-            name: userName,
-            phone: userPhone,
-            email: userEmail,
-            accountStatus: isRegistered ? `Registered Parishioner (${parishUser.isActive !== false ? 'Active' : 'Pending'})` : 'Unregistered User (No Website Account)',
-            memberId: parishUser?.parishMemberId || 'N/A',
-            familyId: parishUser?.familyId || 'N/A',
-            anbiyam: parishUser?.anbiyam || parishUser?.subStation || 'N/A',
-            language: session.language === 'en' ? 'English' : session.language === 'both' ? 'Tamil + English' : 'Tamil (தமிழ்)',
-            initialMessage: rawText || 'Hi',
-            pushName: pushName || ''
+      // Fire and forget in background so SMTP email never delays bot replies
+      (async () => {
+        try {
+          const searchPhone = (phone || '').slice(-10);
+          let parishUser = null;
+          if (session.linkedUserId) {
+            parishUser = await User.findById(session.linkedUserId);
+          } else if (searchPhone) {
+            parishUser = await User.findOne({ phone: { $regex: searchPhone } });
           }
-        });
 
-        session.firstInteractionEmailSent = true;
-        session.firstInteractionAt = new Date();
-        if (pushName) session.pushName = pushName;
-        if (parishUser && !session.linkedUserId) session.linkedUserId = parishUser._id;
-        await session.save();
-      } catch (notifErr) {
-        console.error('[BotHandler] Failed to dispatch first-time user admin email:', notifErr.message);
-      }
+          const isRegistered = Boolean(parishUser);
+          const userName = isRegistered ? parishUser.name : (pushName || 'Unregistered WhatsApp User');
+          const userEmail = isRegistered ? (parishUser.email || 'None') : 'Unregistered (No Email)';
+          const userPhone = isRegistered ? (parishUser.phone || phone) : phone;
+
+          notifyAdmin({
+            type: 'FIRST_BOT_INTERACTION',
+            user: parishUser,
+            extra: {
+              isRegistered,
+              name: userName,
+              phone: userPhone,
+              email: userEmail,
+              accountStatus: isRegistered ? `Registered Parishioner (${parishUser.isActive !== false ? 'Active' : 'Pending'})` : 'Unregistered User (No Website Account)',
+              memberId: parishUser?.parishMemberId || 'N/A',
+              familyId: parishUser?.familyId || 'N/A',
+              anbiyam: parishUser?.anbiyam || parishUser?.subStation || 'N/A',
+              language: session.language === 'en' ? 'English' : session.language === 'both' ? 'Tamil + English' : 'Tamil (தமிழ்)',
+              initialMessage: rawText || 'Hi',
+              pushName: pushName || ''
+            }
+          }).catch(e => console.warn('[BotHandler] notifyAdmin background error:', e.message));
+        } catch (notifErr) {
+          console.error('[BotHandler] Failed to dispatch first-time user admin email:', notifErr.message);
+        }
+      })();
     }
 
     const isStopCommand = rawText.toUpperCase() === 'STOP' || rawText.toUpperCase() === 'UNSUBSCRIBE';
@@ -1454,7 +1470,7 @@ _புனித அருளானந்தர் ஆலயம், காளை
 🌐 *இணையதளத்தில் முன்பதிவு செய்ய:*
 ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}
 
-📞 *பங்கு அலுவலகத்தை அழைக்க:* +91 96556 39144
+📞 *பங்கு அலுவலகத்தை அழைக்க:* ${getChurchPhone() || 'பங்கு அலுவலகம்'}
 🕒 *அலுவலக நேரம்:* காலை 9:00 – 12:30 & மாலை 4:00 – 8:00
 
 நேரிலும் பங்கு அலுவலகத்திற்கு வந்து திருப்பலி கருத்துக்களைப் பதிவு செய்யலாம். இறை ஆசீர்! 🙏`
@@ -1466,7 +1482,7 @@ To offer Holy Mass for birthdays, wedding anniversaries, thanksgiving, or the re
 🌐 *Book Online via Website:*
 ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}
 
-📞 *Parish Office Contact:* +91 96556 39144
+📞 *Parish Office Contact:* ${getChurchPhone() || 'Parish Office'}
 🕒 *Office Hours:* 9:00 AM – 12:30 PM & 4:00 PM – 8:00 PM
 
 You are also welcome to visit the parish office directly during office hours. God bless! 🙏`;
@@ -1571,7 +1587,7 @@ _புனித அருளானந்தர் ஆலயம், காளை
 ஞானஸ்நானம், முதல் நற்கருணை மற்றும் திருமண சான்றிதழ்களைப் பெற:
 
 🌐 *இணையதளத்தில் விண்ணப்பிக்க:* ${getSiteUrl(SITE_ROUTES.CERTIFICATES)}
-📞 *பங்கு அலுவலகம்:* +91 96556 39144
+📞 *பங்கு அலுவலகம்:* ${getChurchPhone() || 'பங்கு அலுவலகம்'}
 🕒 *அலுவலக நேரம்:* காலை 9:00 – 12:30 & மாலை 4:00 – 8:00
 
 அலுவலகத்தில் சான்றிதழ்களைப் பெற குடும்ப அட்டை / பழைய பதிவேடு விபரங்களை உடன் கொண்டுவரவும். 🙏`
@@ -1581,7 +1597,7 @@ _St. John de Britto Church, Kalayarkoil_
 To apply for Baptism, First Holy Communion, Confirmation, or Marriage Certificates:
 
 🌐 *Apply Online via Website:* ${getSiteUrl(SITE_ROUTES.CERTIFICATES)}
-📞 *Parish Office:* +91 96556 39144
+📞 *Parish Office:* ${getChurchPhone() || 'Parish Office'}
 🕒 *Office Hours:* 9:00 AM – 12:30 PM & 4:00 PM – 8:00 PM
 
 Please bring parish family ID or relevant record dates when collecting certificates in person. God bless! 🙏`;
@@ -1886,7 +1902,7 @@ _புனித அருளானந்தர் ஆலயம், காளை
 • தவக்காலம் மற்றும் திருவருகைக் கால சிறப்பு ஒப்புரவு வழிபாடுகள்
 • அவசர மற்றும் தனிப்பட்ட தேவைகளுக்கு பங்குத்தந்தையை எந்நேரமும் அணுகலாம்.
 
-📞 *அருட்தந்தையரைத் தொடர்பு கொள்ள:* +91 96556 39144
+📞 *அருட்தந்தையரைத் தொடர்பு கொள்ள:* ${getChurchPhone() || 'பங்கு அலுவலகம்'}
 
 🌐 *திருவருட்சாதன விபரம்:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`
         : `🕊️ *Sacrament of Reconciliation (Confession Timings)*
@@ -1905,7 +1921,7 @@ _St. John de Britto Church, Kalayarkoil_
 • Anytime by appointment with the Parish Priest.
 
 📞 *Need to meet a priest?*
-Call Parish Office: +91 96556 39144
+Call Parish Office: ${getChurchPhone() || 'Parish Office'}
 
 🌐 *Sacraments Info:* ${getSiteUrl(SITE_ROUTES.ABOUT)}`;
 
@@ -2237,9 +2253,10 @@ _St. John de Britto Church, Kalayarkoil_
         if (priests && priests.length > 0) {
           pList = priests.map(p => `• *${p.designation || (isTamilQuery ? 'அருட்பணியாளர்' : 'Priest')}:* Rev. Fr. ${p.name} ${p.phone ? `(Ph: ${p.phone})` : ''}`).join('\n');
         } else {
+          const fallbackPhone = getChurchPhone() ? ` (Ph: ${getChurchPhone()})` : '';
           pList = isTamilQuery
-            ? `• *பங்குத்தந்தை:* Rev. Fr. Parish Priest (Ph: +91 96556 39144)`
-            : `• *Parish Priest:* Rev. Fr. Parish Priest (Ph: +91 96556 39144)`;
+            ? `• *பங்குத்தந்தை:* Rev. Fr. Parish Priest${fallbackPhone}`
+            : `• *Parish Priest:* Rev. Fr. Parish Priest${fallbackPhone}`;
         }
 
         const pMsg = isTamilQuery
@@ -2330,8 +2347,8 @@ _புனித அருளானந்தர் ஆலயம், காளை
 ஆலய சாலை, காளையார்கோவில் — 630551,
 சிவகங்கை மாவட்டம், தமிழ்நாடு, இந்தியா.
 
-📱 *தொலைபேசி:* +91 96556 39144
-📧 *மின்னஞ்சல்:* stjdbchurch@gmail.com
+📱 *தொலைபேசி:* ${getChurchPhone() || ''}
+📧 *மின்னஞ்சல்:* ${getChurchEmail() || ''}
 🕒 *அலுவலக நேரம்:* Monday – Saturday: 9:00 AM – 12:30 PM & 4.00 PM - 8.00 PM\n Sunday: 10.00 AM - 12.00 PM & 5.00 PM - 8.00 PM
 
 📍 *கூகுள் மேப் (Google Maps) இணைப்பு:*
@@ -2346,8 +2363,8 @@ St. John de Britto Church,
 Church Road, Kalayarkoil — 630551,
 Sivagangai District, Tamil Nadu, India.
 
-📱 *Phone:* +91 96556 39144
-📧 *Email:* stjdbchurch@gmail.com
+📱 *Phone:* ${getChurchPhone() || ''}
+📧 *Email:* ${getChurchEmail() || ''}
 🕒 *Office Hours:* Monday – Saturday: 9:00 AM – 12:30 PM & 4.00 PM - 8.00 PM\n Sunday: 10.00 AM - 12.00 PM & 5.00 PM - 8.00 PM
 
 📍 *Google Maps Location Link:*
@@ -2377,7 +2394,7 @@ _புனித அருளானந்தர் ஆலயம், காளை
 ✝️ *1. திருப்பலி கருத்து & முன்பதிவு (Mass Intentions):*
 நன்றித் திருப்பலி, பிறந்தநாள், திருமண நாள், நலம் வேண்டி அல்லது ஆன்ம இளைப்பாற்றி திருப்பலி வைக்க:
 🌐 *முன்பதிவு செய்ய:* ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}
-📞 *பங்கு அலுவலகம்:* +91 96556 39144
+📞 *பங்கு அலுவலகம்:* ${getChurchPhone() || 'பங்கு அலுவலகம்'}
 
 📜 *2. ஆலய சான்றிதழ்கள் (Church Certificates):*
 ஞானஸ்நானம், முதல் நற்கருணை, உறுதிப்பூசுதல், திருமண சான்றிதழ்களைப் பெற:
@@ -2391,7 +2408,7 @@ _St. John de Britto Church, Kalayarkoil_
 ✝️ *1. Holy Mass Intentions & Booking:*
 To offer Holy Mass for Thanksgiving, Birthdays, Wedding Anniversaries, Healing, or Souls of the Faithful Departed:
 🌐 *Book Online:* ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}
-📞 *Parish Office:* +91 96556 39144
+📞 *Parish Office:* ${getChurchPhone() || 'Parish Office'}
 
 📜 *2. Parish Certificates & Sacramental Records:*
 To apply for Baptism, First Holy Communion, Confirmation, or Marriage Certificates:
@@ -2468,9 +2485,11 @@ Please bring parish family ID or relevant record dates when collecting certifica
         ? `💡 வழிகாட்டல்: 1 முதல் 8 வரையிலான எண்ணைத் தேர்ந்தெடுக்கவும் (எ.கா: *1* விவிலிய வசனம், *2* திருப்பலி நேரம், *3* பங்கு சேவைகள்), அல்லது முதன்மை மெனுவைக் காண *Menu* என தட்டச்சு செய்யவும்.`
         : `💡 Guidance: Please reply with a number from 1 to 8 (e.g. *1* for Daily Bible, *2* for Mass Timings, *3* for Services), or type *Menu* to see the Main Menu.`;
     } else {
+      const officePhone = getChurchPhone() || 'பங்கு அலுவலகம்';
+      const officePhoneEn = getChurchPhone() || 'our parish office';
       invalidReply = isTamilQuery
-        ? `ℹ️ உதவி வேண்டுமா? வழிகாட்டலைக் காண *Help* என அனுப்பவும், அல்லது எங்கள் பங்கு அலுவலகத்தை +91 96556 39144 இல் தொடர்பு கொள்ளவும்.`
-        : `ℹ️ Need assistance? Type *Help* for usage guidance, or contact our parish office at +91 96556 39144.`;
+        ? `ℹ️ உதவி வேண்டுமா? வழிகாட்டலைக் காண *Help* என அனுப்பவும், அல்லது எங்கள் பங்கு அலுவலகத்தை ${officePhone} இல் தொடர்பு கொள்ளவும்.`
+        : `ℹ️ Need assistance? Type *Help* for usage guidance, or contact ${officePhoneEn}.`;
     }
 
     await wa.sendWhatsAppMessage(replyTarget, invalidReply);

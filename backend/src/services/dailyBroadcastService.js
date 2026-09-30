@@ -24,7 +24,7 @@ May God fill your life with joy, peace, and abundant blessings today and always!
 
 With love & prayers,
 ⛪ *St. John de Britto Church*
-_SJDB Connect — Connecting Faith & Community_`;
+_SJDB Connect — "Come; Listen; and you will find life"_`;
 }
 
 // ─── Manual Trigger (for admin API) ─────────────────────────────────────────

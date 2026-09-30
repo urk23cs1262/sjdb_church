@@ -6,6 +6,7 @@ import { GiChurch, GiCrucifix, GiDove } from 'react-icons/gi';
 import { FiFacebook, FiYoutube, FiInstagram, FiMapPin, FiPhone, FiMail, FiClock, FiShield, FiFileText, FiLock } from 'react-icons/fi';
 import churchLogo from '../../assets/church_extirior.png';
 import PolicyModal from './common_policy_modal';
+import { getChurchPhone, getChurchEmail } from '../../config/contactConfig';
 
 const quickLinks = [
   { label: 'nav.home', name: 'Home', path: '/' },
@@ -77,14 +78,22 @@ export default function Footer() {
                 <FiMapPin className="text-gold-400 mt-0.5 text-sm shrink-0" />
                 <span>Kalayarkoil, Sivagangai District, Tamil Nadu - 630551</span>
               </div>
-              <div className="flex items-center gap-2">
-                <FiPhone className="text-gold-400 text-sm shrink-0" />
-                <a href="tel:+919443412345" className="hover:text-gold-300 transition-colors">+91 9xxxxxx</a>
-              </div>
-              <div className="flex items-center gap-2">
-                <FiMail className="text-gold-400 text-sm shrink-0" />
-                <a href="mailto:stjdbchurch@gmail.com" className="hover:text-gold-300 transition-colors">stjdbchurch@gmail.com</a>
-              </div>
+              {getChurchPhone() && (
+                <div className="flex items-center gap-2">
+                  <FiPhone className="text-gold-400 text-sm shrink-0" />
+                  <a href={`tel:${getChurchPhone().replace(/\D/g, '') ? `+${getChurchPhone().replace(/\D/g, '')}` : getChurchPhone()}`} className="hover:text-gold-300 transition-colors">
+                    {getChurchPhone()}
+                  </a>
+                </div>
+              )}
+              {getChurchEmail() && (
+                <div className="flex items-center gap-2">
+                  <FiMail className="text-gold-400 text-sm shrink-0" />
+                  <a href={`mailto:${getChurchEmail()}`} className="hover:text-gold-300 transition-colors">
+                    {getChurchEmail()}
+                  </a>
+                </div>
+              )}
               <div className="flex items-start gap-2">
                 <FiClock className="text-gold-400 mt-0.5 text-sm shrink-0" />
                 <span>Wednesday - Saturday {'->'} 5:00 PM | Sunday {'->'} 6:30 AM & 8:30 AM</span>

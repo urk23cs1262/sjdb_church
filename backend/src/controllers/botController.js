@@ -35,14 +35,17 @@ function sendWA(phone, text) {
   return require('../bot/whatsapp').sendWhatsAppMessage(phone, text);
 }
 
-// GET /api/bot/status — Connection status
+// GET /api/bot/status — Connection status & WhatsApp Channel status
 const getStatus = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   try {
     const { getConnectionStatus } = require('../bot/whatsapp');
-    res.json({ success: true, ...getConnectionStatus() });
-  } catch {
-    res.json({ success: true, connected: false, sock: false, status: 'disconnected' });
+    const { getChannelStatus } = require('../services/whatsappChannelService');
+    const conn = getConnectionStatus();
+    const channel = await getChannelStatus().catch(() => null);
+    res.json({ success: true, ...conn, channel });
+  } catch (err) {
+    res.json({ success: true, connected: false, sock: false, status: 'disconnected', error: err.message });
   }
 };
 
@@ -511,7 +514,7 @@ const testBotMessage = async (req, res) => {
     const normalizedForTrigger = rawText.toLowerCase().replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
     const isStartTrigger = /^(hi|hello|hey|start|reset|menu|வணக்கம்)$/i.test(normalizedForTrigger) ||
       normalizedForTrigger.includes('sjdb connect') ||
-      normalizedForTrigger.includes('connecting faith & community') ||
+      normalizedForTrigger.includes('"Come; Listen; and you will find life"') ||
       normalizedForTrigger.includes('connecting faith and community') ||
       (normalizedForTrigger.includes('hi') && normalizedForTrigger.includes('sjdb'));
 
@@ -746,6 +749,93 @@ const deleteSubscriber = async (req, res) => {
   }
 };
 
+// ─── WhatsApp Channel Controllers ──────────────────────────────────────────
+
+// GET /api/bot/channel/status
+const getChannelStatus = async (req, res) => {
+  try {
+    const { getChannelStatus } = require('../services/whatsappChannelService');
+    const status = await getChannelStatus();
+    res.json({ success: true, ...status });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/bot/channel/test
+const sendTestChannelUpdate = async (req, res) => {
+  try {
+    const { sendTestChannelUpdate } = require('../services/whatsappChannelService');
+    const result = await sendTestChannelUpdate(req.user);
+    res.json({ success: true, message: 'Test message successfully published to WhatsApp Channel!', result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/bot/channel/publish-daily
+const publishChannelDailyContent = async (req, res) => {
+  try {
+    const { publishChannelDailyContent } = require('../services/whatsappChannelService');
+    const result = await publishChannelDailyContent(new Date(), {
+      force: true,
+      source: 'admin_manual',
+      triggerType: 'admin_button',
+      adminUserId: req.user?._id
+    });
+    res.json({ success: true, message: 'Daily Catholic Content published to WhatsApp Channel!', result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/bot/channel/settings
+const updateChannelSettings = async (req, res) => {
+  try {
+    const { channelJid, channelUrl } = req.body;
+    const { updateChannelSettings } = require('../services/whatsappChannelService');
+    const updated = await updateChannelSettings({ channelJid, channelUrl });
+    res.json({ success: true, message: 'WhatsApp Channel settings updated successfully!', channel: updated });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+// GET /api/bot/channel/logs
+const getChannelLogs = async (req, res) => {
+  try {
+    const WhatsappChannelPublication = require('../models/WhatsappChannelPublication');
+    const { limit = 25, page = 1 } = req.query;
+    const total = await WhatsappChannelPublication.countDocuments();
+    const logs = await WhatsappChannelPublication.find()
+      .sort({ createdAt: -1 })
+      .skip((Number(page) - 1) * Number(limit))
+      .limit(Number(limit))
+      .lean();
+    res.json({ success: true, total, logs });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/bot/channel/announcement
+const publishAnnouncementToChannel = async (req, res) => {
+  try {
+    const { announcementId } = req.body;
+    if (!announcementId) {
+      return res.status(400).json({ success: false, message: 'Announcement ID is required' });
+    }
+    const { publishChannelAnnouncement } = require('../services/whatsappChannelService');
+    const result = await publishChannelAnnouncement(announcementId, {
+      adminUserId: req.user?._id,
+      source: 'admin_manual'
+    });
+    res.json({ success: true, message: 'Announcement published to WhatsApp Channel!', result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   getStatus,
   reconnect,
@@ -762,5 +852,11 @@ module.exports = {
   triggerBroadcast,
   sendCustomMessage,
   testDirectMessage,
-  testBotMessage
+  testBotMessage,
+  getChannelStatus,
+  sendTestChannelUpdate,
+  publishChannelDailyContent,
+  updateChannelSettings,
+  getChannelLogs,
+  publishAnnouncementToChannel
 };

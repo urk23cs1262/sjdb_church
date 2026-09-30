@@ -12,6 +12,7 @@ import api from '../../services/api';
 import { useAuth } from '../../context/context_auth_context';
 import PageHero from '../../components/common/common_page_hero';
 import churchLogo from '../../assets/church_extirior.png';
+import { getParishOfficePhone, getChurchEmail } from '../../config/contactConfig';
 
 const DONATION_TYPES = [
   { id: 'general', label: 'General Offering', icon: <GiDove />, desc: 'Support parish ministries, maintenance & church services' },
@@ -676,7 +677,7 @@ export default function Donate() {
                         Thank you for your generous contribution<br />towards the ministry and mission of<br /><strong>St. John de Britto Church.</strong><br /><br />May God bless you abundantly.
                       </div>
                       <div style={{ marginTop: '45px', textAlign: 'center', fontSize: '14px', lineHeight: '1.8', color: '#555' }}>
-                        Contact Details :<br />Parish Office Phone : +91 96291 95484 <br />Parish Office Email : stjdbchurch@gmail.com <br />Parish Office Website : www.stjohnchurch.com
+                        Contact Details :<br />Parish Office Phone : {getParishOfficePhone() || 'Contact Parish Office'} <br />Parish Office Email : {getChurchEmail() || 'Contact Parish Office'} <br />Parish Office Website : www.stjohnchurch.com
                       </div>
                       <div style={{ marginTop: '40px', textAlign: 'center', fontSize: '24px', fontWeight: 'bold' }}>
                         Computer Generated Receipt. <span style={{ color: 'red' }}>SIGNATURE NOT REQUIRED</span>

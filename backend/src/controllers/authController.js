@@ -335,11 +335,12 @@ const login = async (req, res) => {
     const now = new Date();
 
     // Check if Administrator / Priest / Tech Team
+    const { isAdminEmail, isAdminPhone } = require('../config/contactConfig');
     const isStaffOrAdmin = user.role === 'admin' || 
                            user.role === 'priest' || 
                            user.isTechnicalTeam || 
-                           (user.email || '').toLowerCase() === 'stjdbchurch@gmail.com' ||
-                           (user.email || '').toLowerCase() === 'arndas777@gmail.com';
+                           isAdminEmail(user.email) ||
+                           isAdminPhone(user.phone);
 
     if (isStaffOrAdmin) {
       if (user.isActive === false || user.isSuspended || user.isLockedUntil) {

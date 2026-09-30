@@ -18,9 +18,31 @@ const {
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+const { getChurchEmail } = require('../config/contactConfig');
 const QRCode = require('qrcode');
 const { handleIncomingMessage } = require('./botHandler');
 const { useMongoDBAuthState, clearMongoDBAuthState } = require('./mongoAuthState');
+
+// ─── Destination Types (Enforces Architectural Separation) ───────────────────
+const DESTINATION = Object.freeze({
+  BOT_PRIVATE: 'BOT_PRIVATE', // Interactive 1-on-1 private bot conversation
+  CHANNEL: 'CHANNEL',         // Official 1-way public church WhatsApp Channel (@newsletter)
+  GROUP: 'GROUP'              // Group broadcast
+});
+
+/**
+ * Strict Channel / Newsletter JID Detection Helper
+ * Returns true if the JID belongs to a WhatsApp Channel / Newsletter or Broadcast stream.
+ */
+function isChannelJid(jid) {
+  if (!jid || typeof jid !== 'string') return false;
+  const clean = jid.toLowerCase().trim();
+  if (clean.includes('@newsletter') || clean.endsWith('@newsletter')) return true;
+  if (clean.includes('@broadcast') || clean.endsWith('@broadcast')) return true;
+  const configuredJid = (process.env.WHATSAPP_CHANNEL_JID || '').toLowerCase().trim();
+  if (configuredJid && (clean === configuredJid || clean.includes(configuredJid))) return true;
+  return false;
+}
 
 let sock = null; // Active socket instance
 let isConnected = false;
@@ -150,7 +172,39 @@ async function connectToWhatsApp() {
       if (type !== 'notify') return;
 
       for (const msg of messages) {
-        if (msg.key.remoteJid === 'status@broadcast') continue;
+        if (!msg.key || !msg.key.remoteJid) continue;
+
+        const remoteJid = String(msg.key.remoteJid || '').trim();
+        const participant = String(msg.key.participant || msg.participant || '').trim();
+
+        // ── ROUTE 1: WHATSAPP CHANNEL / NEWSLETTER & BROADCAST ──────────────
+        // Absolute Separation Rule: WhatsApp Channels use the '@newsletter' server.
+        // Channels are read-only public broadcasts. They MUST NEVER trigger the interactive SJDB Connect bot!
+        if (
+          isChannelJid(remoteJid) ||
+          isChannelJid(participant) ||
+          msg.broadcast === true ||
+          remoteJid === 'status@broadcast' ||
+          msg.message?.newsletterAdminInviteMessage
+        ) {
+          if (isChannelJid(remoteJid)) {
+            console.log(`📢 [WhatsApp Channel] Channel activity detected on JID: ${remoteJid} (Dropped from bot processing)`);
+            try {
+              const { recordDiscoveredChannelJid } = require('../services/whatsappChannelService');
+              recordDiscoveredChannelJid(remoteJid);
+            } catch (e) {
+              console.warn('[WhatsApp Channel] Error auto-recording channel JID:', e.message);
+            }
+          }
+          // Absolute separation rule: DO NOT process channel posts as user bot messages!
+          continue;
+        }
+
+        // ── ROUTE 2: WHATSAPP GROUP ─────────────────────────────────────────
+        if (remoteJid.endsWith('@g.us')) {
+          // Ignore group messages for private bot onboarding
+          continue;
+        }
 
         if (msg.key.fromMe) {
           const myJid = sock?.user?.id ? sock.user.id.split(':')[0].replace(/\D/g, '') : '';
@@ -193,9 +247,16 @@ async function connectToWhatsApp() {
         const messageTimestamp = msg.messageTimestamp || null;
 
         try {
+          if (sock && from) {
+            sock.sendPresenceUpdate('composing', from).catch(() => {});
+          }
           await handleIncomingMessage(phone, body, from, msg.pushName, messageId, messageTimestamp);
         } catch (err) {
           console.error('❌ Bot handler error:', err.message);
+        } finally {
+          if (sock && from) {
+            sock.sendPresenceUpdate('paused', from).catch(() => {});
+          }
         }
       }
     });
@@ -253,8 +314,17 @@ async function sendWhatsAppMessage(phone, text) {
     return false;
   }
 
+  // Strict Destination Guard: Private helper must NEVER send to WhatsApp Channel
+  if (isChannelJid(phone)) {
+    console.error(`🚨 [CRITICAL ROUTING BLOCKED] Blocked attempt to call private sendWhatsAppMessage with Channel JID (${phone})!`);
+    return false;
+  }
+
   const jid = formatJid(phone);
-  if (!jid) return false;
+  if (!jid || isChannelJid(jid)) {
+    console.error(`🚨 [CRITICAL ROUTING BLOCKED] Blocked attempt to call private sendWhatsAppMessage with Channel JID (${jid})!`);
+    return false;
+  }
 
   if (isDuplicateOutgoing(jid, text)) {
     console.log(`⚡ [WhatsApp] Suppressed duplicate outgoing message to ${jid}`);
@@ -281,8 +351,17 @@ async function sendWhatsAppMedia(phone, mediaArg, optionalCaption) {
     return false;
   }
 
+  // Strict Destination Guard: Private helper must NEVER send to WhatsApp Channel
+  if (isChannelJid(phone)) {
+    console.error(`🚨 [CRITICAL ROUTING BLOCKED] Blocked attempt to call private sendWhatsAppMedia with Channel JID (${phone})!`);
+    return false;
+  }
+
   const jid = formatJid(phone);
-  if (!jid) return false;
+  if (!jid || isChannelJid(jid)) {
+    console.error(`🚨 [CRITICAL ROUTING BLOCKED] Blocked attempt to call private sendWhatsAppMedia with Channel JID (${jid})!`);
+    return false;
+  }
 
   let url, caption, mimetype, fileName, buffer;
   if (typeof mediaArg === 'object' && mediaArg !== null) {
@@ -320,7 +399,7 @@ async function sendWhatsAppMedia(phone, mediaArg, optionalCaption) {
           responseType: 'arraybuffer',
           timeout: 10000,
           headers: {
-            'User-Agent': 'SJDBChurchApp/1.0 (Catholic Parish Management; contact: stjdbchurch@gmail.com)',
+            'User-Agent': `SJDBChurchApp/1.0 (Catholic Parish Management; contact: ${getChurchEmail() || 'office@example.com'})`,
             'Accept': '*/*'
           }
         });
@@ -382,6 +461,10 @@ async function sendWhatsAppMedia(phone, mediaArg, optionalCaption) {
 }
 
 async function sendWhatsAppDocument(phone, docOptions) {
+  if (isChannelJid(phone)) {
+    console.error(`🚨 [CRITICAL ROUTING BLOCKED] Blocked attempt to send document to Channel JID (${phone})!`);
+    return false;
+  }
   if (typeof docOptions === 'string') {
     return sendWhatsAppMedia(phone, { url: docOptions, mimetype: 'application/pdf' });
   }
@@ -419,8 +502,8 @@ async function sendWhatsAppToUser(userObjOrId, text) {
       }
     }
 
-    if (!targetJid) {
-      console.warn(`⚠️ No WhatsApp number or session found for user ${user.name}`);
+    if (!targetJid || isChannelJid(targetJid)) {
+      console.warn(`⚠️ Invalid target number or Channel JID (${targetJid}) for user ${user.name}`);
       return false;
     }
 
@@ -438,7 +521,7 @@ async function requestPairingCode(phoneNumber) {
     throw new Error('WhatsApp is already connected!');
   }
 
-  // Format clean digits only: e.g. 919655639144
+  // Format clean digits only: e.g. 919876543210
   let cleanNumber = String(phoneNumber || '').replace(/\D/g, '');
   while (cleanNumber.startsWith('0')) cleanNumber = cleanNumber.substring(1);
   if (!cleanNumber.startsWith('91') && cleanNumber.length === 10) {
@@ -446,7 +529,7 @@ async function requestPairingCode(phoneNumber) {
   }
 
   if (!cleanNumber || cleanNumber.length < 10) {
-    throw new Error('Please enter a valid WhatsApp phone number with country code (e.g. 919655639144)');
+    throw new Error('Please enter a valid WhatsApp phone number with country code (e.g. 919876543210)');
   }
 
   // Return existing valid pairing code if requested within 45 seconds for the same phone
@@ -537,7 +620,104 @@ function getQR() {
   return currentQr;
 }
 
+function getSocket() {
+  return sock;
+}
+
+/**
+ * Strict Outgoing Message Router
+ * Enforces destination separation:
+ * - DESTINATION.BOT_PRIVATE: Only '@s.whatsapp.net' or valid phone numbers. Never channels!
+ * - DESTINATION.CHANNEL: Only '@newsletter'. Never private users!
+ * - DESTINATION.GROUP: Only '@g.us'.
+ */
+async function sendWhatsAppRouted({ destination, recipient, message, media }) {
+  if (!destination) {
+    throw new Error('Destination is required. Use DESTINATION.BOT_PRIVATE, DESTINATION.CHANNEL, or DESTINATION.GROUP.');
+  }
+
+  // Strict Destination Type Checking
+  if (destination === DESTINATION.BOT_PRIVATE) {
+    if (recipient && recipient.endsWith('@newsletter')) {
+      throw new Error(`CRITICAL ROUTING VIOLATION: Cannot send BOT_PRIVATE message to WhatsApp Channel (${recipient})!`);
+    }
+    const jid = formatJid(recipient);
+    if (!jid || jid.endsWith('@newsletter')) {
+      throw new Error(`Invalid private recipient JID: ${recipient}`);
+    }
+
+    if (!sock || !isConnected) {
+      throw new Error('WhatsApp is not currently connected.');
+    }
+    if (media) {
+      return sendWhatsAppMedia(jid, media, message);
+    }
+    return sendWhatsAppMessage(jid, message);
+  }
+
+  if (destination === DESTINATION.CHANNEL) {
+    if (!recipient || !recipient.endsWith('@newsletter')) {
+      throw new Error(`CRITICAL ROUTING VIOLATION: Cannot send CHANNEL message to non-channel recipient (${recipient})! Channel JID must end with @newsletter.`);
+    }
+
+    if (!sock || !isConnected) {
+      throw new Error('WhatsApp is not currently connected.');
+    }
+
+    const dedupText = message || (media?.caption || 'media');
+    if (isDuplicateOutgoing(recipient, dedupText)) {
+      console.log(`⚡ [WhatsApp Channel] Suppressed duplicate outgoing message to ${recipient}`);
+      return true;
+    }
+
+    try {
+      if (media) {
+        let mediaPayload = null;
+        if (media.buffer) {
+          mediaPayload = media.buffer;
+        } else if (media.url) {
+          mediaPayload = { url: media.url };
+        }
+
+        const caption = message || media.caption || '';
+        const isPdf = media.mimetype === 'application/pdf' || media.fileName?.endsWith('.pdf');
+        const isVideo = media.mimetype?.startsWith('video');
+
+        if (isVideo) {
+          await sock.sendMessage(recipient, { video: mediaPayload, caption });
+        } else if (isPdf) {
+          await sock.sendMessage(recipient, { document: mediaPayload, mimetype: 'application/pdf', fileName: media.fileName || 'document.pdf', caption });
+        } else {
+          // Default to image
+          await sock.sendMessage(recipient, { image: mediaPayload, caption });
+        }
+      } else {
+        await sock.sendMessage(recipient, { text: message });
+      }
+      console.log(`📢 [WhatsApp Channel] Successfully sent update to channel ${recipient}`);
+      return true;
+    } catch (err) {
+      console.error(`❌ [WhatsApp Channel] Error sending to channel ${recipient}:`, err.message);
+      throw err;
+    }
+  }
+
+  if (destination === DESTINATION.GROUP) {
+    if (!recipient || !recipient.endsWith('@g.us')) {
+      throw new Error(`Invalid group recipient JID: ${recipient}`);
+    }
+    if (media) {
+      return sendWhatsAppMedia(recipient, media, message);
+    }
+    return sendWhatsAppMessage(recipient, message);
+  }
+
+  throw new Error(`Unknown destination type: ${destination}`);
+}
+
 module.exports = {
+  DESTINATION,
+  isChannelJid,
   connectToWhatsApp,
   reconnectWhatsApp,
   resetWhatsAppSession,
@@ -546,6 +726,8 @@ module.exports = {
   sendWhatsAppMedia,
   sendWhatsAppDocument,
   sendWhatsAppToUser,
+  sendWhatsAppRouted,
   getConnectionStatus,
-  getQR
+  getQR,
+  getSocket
 };

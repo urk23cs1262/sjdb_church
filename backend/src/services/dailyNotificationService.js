@@ -488,6 +488,19 @@ async function sendDailyChurchNotifications({
 
     console.log(`[Daily Notification Service] 4:00 AM IST Multi-Channel Daily Broadcast started for ${dailyContent.dateKey}...`);
 
+    // ── 0. PUBLIC WHATSAPP CHANNEL BROADCAST (Zero Contamination with Private Bot) ──
+    try {
+      const { publishChannelDailyContent } = require('./whatsappChannelService');
+      await publishChannelDailyContent(targetDate, {
+        force: force || manualTest,
+        source: manualTest ? 'admin_manual' : 'scheduled_cron',
+        triggerType: '4_am_daily'
+      });
+    } catch (chanErr) {
+      console.warn('⚠️ [Daily Notification Service] WhatsApp Channel daily publish notice:', chanErr.message);
+      // Independent failure isolation: Continue with private user broadcast even if channel fails!
+    }
+
     // Fetch all currently blocked phone numbers and user IDs to strictly exclude restricted users
     const UserModeration = require('../models/UserModeration');
     const blockedRecords = await UserModeration.find({ status: 'blocked' }).lean();

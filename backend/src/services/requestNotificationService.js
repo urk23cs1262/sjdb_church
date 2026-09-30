@@ -7,13 +7,14 @@ const Notification = require('../models/Notification');
 const User = require('../models/User');
 const SiteSettings = require('../models/SiteSettings');
 const { getSiteUrl } = require('../config/siteRoutes');
+const { getAdminPhones, getAdminEmails, getAdminEmail, getWhatsAppAdminNumber, getChurchEmail } = require('../config/contactConfig');
 
 class RequestEventEmitter extends EventEmitter {}
 const requestEvents = new RequestEventEmitter();
 
 /**
  * Normalizes any raw phone number string into clean digits with country code.
- * e.g. "07639520006" -> "917639520006", "9655639144" -> "919655639144"
+ * e.g. "09876543210" -> "919876543210", "9876543210" -> "919876543210"
  */
 const normalizePhoneNumber = (raw) => {
   if (!raw) return null;
@@ -76,9 +77,13 @@ const getAllAdminPhoneNumbers = async () => {
     console.warn('[RequestNotification] Error fetching admin phone numbers from DB:', err.message);
   }
 
-  // Fallback if none found
+  // Fallback to configured admin phones if none found in DB
   if (phones.size === 0) {
-    phones.add('919655639144');
+    const defaultAdminPhones = getAdminPhones();
+    for (const p of defaultAdminPhones) {
+      const np = normalizePhoneNumber(p);
+      if (np) phones.add(np);
+    }
   }
 
   return Array.from(phones);
@@ -101,9 +106,15 @@ const getAllAdminEmailRecipients = async () => {
     }
   };
 
-  // 1. Primary admin email from environment
-  const primaryAdminEmail = process.env.ADMIN_EMAIL || 'stjdbchurch@gmail.com';
-  addEmail(primaryAdminEmail, 'St. John de Britto Church Admin');
+  // 1. Primary admin emails from environment / contactConfig
+  const configuredAdminEmails = getAdminEmails();
+  for (const admEmail of configuredAdminEmails) {
+    addEmail(admEmail, 'St. John de Britto Church Admin');
+  }
+  if (configuredAdminEmails.length === 0) {
+    const fallbackChurch = getChurchEmail();
+    if (fallbackChurch) addEmail(fallbackChurch, 'St. John de Britto Church');
+  }
 
   // 2. Site settings
   try {
@@ -138,8 +149,13 @@ const getAllAdminEmailRecipients = async () => {
  * Centrally resolves the primary Church Admin's WhatsApp phone number (backward-compatible).
  */
 const getAdminWhatsAppNumber = async () => {
+  const configured = getWhatsAppAdminNumber();
+  if (configured) {
+    const norm = normalizePhoneNumber(configured);
+    if (norm) return norm;
+  }
   const allPhones = await getAllAdminPhoneNumbers();
-  return allPhones[0] || '919655639144';
+  return allPhones[0] || '';
 };
 
 /**

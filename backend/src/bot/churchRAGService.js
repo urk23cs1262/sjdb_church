@@ -19,12 +19,16 @@ const Priest = require('../models/Priest');
 const Event = require('../models/Event');
 const Announcement = require('../models/Announcement');
 const { SITE_ROUTES, EXTERNAL_LINKS, getSiteUrl } = require('../config/siteRoutes');
+const { getChurchPhone, getChurchEmail } = require('../config/contactConfig');
 const {
   getCachedDailyContent,
+  getDailyContentSync,
   getCachedPriests,
   getCachedEvents,
-  getCachedAnnouncements
+  getCachedAnnouncements,
+  cache
 } = require('./churchDataCache');
+const { getDailySaint } = require('../services/saintService');
 const { normalizeContentLanguage } = require('../utils/userLanguageHelper');
 
 /**
@@ -315,18 +319,19 @@ function extractQueryIntents(rawText) {
 // Saint of the Day Section
 function buildSaintSection(dailyContent, isTamil, contentLang = null) {
   const lang = contentLang ? normalizeContentLanguage(contentLang) : (isTamil ? 'ta' : 'en');
-  const saintNameEn = dailyContent?.saint?.nameEn || dailyContent?.saint?.nameEnglish || dailyContent?.saintOfTheDay?.english?.name || dailyContent?.saintName || 'Saint of the Day';
-  const saintNameTa = dailyContent?.saint?.nameTa || dailyContent?.saint?.nameTamil || dailyContent?.saintOfTheDay?.tamil?.name || dailyContent?.saintNameTa || saintNameEn;
-  const descEn = (dailyContent?.saint?.descriptionEn || dailyContent?.saint?.description || dailyContent?.saint?.descriptionEnglish || dailyContent?.saintOfTheDay?.english?.description || dailyContent?.saintDescription || '').trim();
-  const descTaRaw = (dailyContent?.saint?.descriptionTa || dailyContent?.saint?.descriptionTamil || dailyContent?.saintOfTheDay?.tamil?.description || dailyContent?.saintDescriptionTa || '').trim();
+  const saintData = dailyContent?.saint || dailyContent?.saintOfTheDay || getDailySaint(new Date());
+  const saintNameEn = saintData?.nameEn || saintData?.nameEnglish || saintData?.name || dailyContent?.saintName || 'Saint of the Day';
+  const saintNameTa = saintData?.nameTa || saintData?.nameTamil || saintData?.tamilName || dailyContent?.saintNameTa || saintNameEn;
+  const descEn = (saintData?.descriptionEn || saintData?.description || saintData?.descriptionEnglish || dailyContent?.saintDescription || '').trim();
+  const descTaRaw = (saintData?.descriptionTa || saintData?.descriptionTamil || dailyContent?.saintDescriptionTa || '').trim();
   const hasTamil = Boolean(descTaRaw && /[\u0B80-\u0BFF]/.test(descTaRaw));
   const descTa = hasTamil ? descTaRaw : '';
-  const feastDayEn = dailyContent?.saint?.feastDayEn || dailyContent?.saint?.feastDay || dailyContent?.saintOfTheDay?.english?.feastDay || dailyContent?.formattedDate || '';
-  const feastDayTa = dailyContent?.saint?.feastDayTa || dailyContent?.formattedDateTa || feastDayEn;
-  const saintImageUrl = dailyContent?.saintImage || dailyContent?.saint?.image || dailyContent?.saintOfTheDay?.english?.imageUrl;
+  const feastDayEn = saintData?.feastDayEn || saintData?.feastDay || dailyContent?.formattedDate || '';
+  const feastDayTa = saintData?.feastDayTa || dailyContent?.formattedDateTa || feastDayEn;
+  const saintImageUrl = dailyContent?.saintImage || saintData?.image || saintData?.imageUrl;
 
-  const titleEn = dailyContent?.saint?.titleEn || dailyContent?.saint?.feastTitle;
-  const titleTa = dailyContent?.saint?.titleTa || dailyContent?.saint?.feastTitleTa;
+  const titleEn = saintData?.titleEn || saintData?.feastTitle;
+  const titleTa = saintData?.titleTa || saintData?.feastTitleTa;
 
   if (lang === 'en') {
     let body = `👑 *${saintNameEn}*\n\n`;
@@ -770,17 +775,19 @@ ${EXTERNAL_LINKS.GOOGLE_MAPS}\n`;
 
 // Contact & Office Hours Section
 function buildContactSection(isTamil) {
+  const phone = getChurchPhone() || 'Contact Parish Office';
+  const email = getChurchEmail() || 'Contact Parish Office';
   const body = isTamil
     ? `• *பங்கு அலுவலகம்:* சர்ச் ரோடு, காளையார்கோவில் - 630551
-• *தொலைபேசி:* +91 96556 39144 / பங்கு அலுவலகம்
-• *மின்னஞ்சல்:* stjdbchurch@gmail.com
+• *தொலைபேசி:* ${phone} / பங்கு அலுவலகம்
+• *மின்னஞ்சல்:* ${email}
 • *அலுவலக நேரம்:* திங்கள் முதல் சனி வரை: காலை 9:00 – பிற்பகல் 1:00 & மாலை 4:00 – 7:00 (ஞாயிறு திருப்பலிக்குப் பின் விடுமுறை)
 
 📍 *கூகுள் மேப் (Google Maps):*
 ${EXTERNAL_LINKS.GOOGLE_MAPS}\n`
     : `• *Parish Office:* Church Road, Kalayarkoil - 630551
-• *Phone:* +91 96556 39144 / Parish Office
-• *Email:* stjdbchurch@gmail.com
+• *Phone:* ${phone} / Parish Office
+• *Email:* ${email}
 • *Office Hours:* Monday – Saturday: 9:00 AM – 1:00 PM & 4:00 PM – 7:00 PM (Closed Sunday afternoons)
 
 📍 *Google Maps Location:*
@@ -1121,8 +1128,16 @@ async function answerChurchQuestion(rawText, userPreferredLang = null, userAuthC
   const isTamil = queryLang === 'ta';
 
   const intents = extractQueryIntents(rawText);
-  const dailyContent = await getCachedDailyContent();
-  const dynamicContext = await getDynamicParishContext();
+  const needsDailyContent = intents.some(i => ['saint_of_the_day', 'verse', 'readings', 'reflection'].includes(i)) ||
+    (intents.length === 0 && [CHURCH_CATEGORIES.SAINTS, CHURCH_CATEGORIES.DAILY_READINGS].includes(classification.category));
+
+  const needsDynamicContext = intents.some(i => ['priests', 'events', 'announcements'].includes(i)) ||
+    (intents.length === 0 && [CHURCH_CATEGORIES.PRIESTS, CHURCH_CATEGORIES.EVENTS, CHURCH_CATEGORIES.ANNOUNCEMENTS].includes(classification.category));
+
+  const [dailyContent, dynamicContext] = await Promise.all([
+    needsDailyContent ? getCachedDailyContent() : Promise.resolve(getDailyContentSync() || {}),
+    needsDynamicContext ? getDynamicParishContext() : Promise.resolve({ priests: [], upcomingEvents: [], announcements: [] })
+  ]);
 
   const sections = [];
 

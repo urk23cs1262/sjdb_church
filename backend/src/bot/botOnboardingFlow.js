@@ -25,7 +25,7 @@ const { SITE_ROUTES, getSiteUrl } = require('../config/siteRoutes');
 function getStep1BotLanguageMessage() {
   return `👋 *Welcome to SJDB Connect!*
 ⛪ *St. John de Britto Church, Kalayarkoil*
-_Connecting Faith & Community_
+_"Come; Listen; and you will find life"_
 
 🌐 *1️⃣ Bot Language / பாட் மொழி*
 

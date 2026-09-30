@@ -650,7 +650,7 @@ export default function MaintenanceAdmin() {
                     value={settings.contactEmail || ''}
                     onChange={(e) => setSettings({ ...settings, contactEmail: e.target.value })}
                     className="church-input"
-                    placeholder="stjdbchurch@gmail.com"
+                    placeholder="parish.office@example.com"
                   />
                 </div>
               </div>

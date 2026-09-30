@@ -15,6 +15,7 @@ import { FaWhatsapp } from 'react-icons/fa';
 import api, { getMediaUrl } from '../../services/api';
 import PageHero from '../../components/common/common_page_hero';
 import { SectionLoader } from '../../components/common/common_loader';
+import { getChurchEmail, getChurchPhone } from '../../config/contactConfig';
 
 // Core Council Responsibilities
 const RESPONSIBILITIES = [
@@ -752,14 +753,14 @@ export default function ParishCouncil() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                   <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200">
                     <p className="text-gray-500 font-medium">Official Council Email:</p>
-                    <a href="mailto:stjdbchurch@gmail.com" className="font-bold text-church-royal-blue text-sm mt-0.5 block hover:underline">
-                      stjdbchurch@gmail.com
+                    <a href={`mailto:${getChurchEmail() || ''}`} className="font-bold text-church-royal-blue text-sm mt-0.5 block hover:underline">
+                      {getChurchEmail() || 'Parish Office'}
                     </a>
                   </div>
                   <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200">
                     <p className="text-gray-500 font-medium">Council Desk Phone:</p>
-                    <a href="tel:+919876543210" className="font-bold text-church-royal-blue text-sm mt-0.5 block hover:underline">
-                      +91 98765 43210
+                    <a href={`tel:${getChurchPhone().replace(/\D/g, '') ? `+${getChurchPhone().replace(/\D/g, '')}` : getChurchPhone()}`} className="font-bold text-church-royal-blue text-sm mt-0.5 block hover:underline">
+                      {getChurchPhone() || 'Parish Office'}
                     </a>
                   </div>
                   <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200">

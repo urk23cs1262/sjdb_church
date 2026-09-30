@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const { isAdminEmail, isAdminPhone } = require('../config/contactConfig');
 
 const protect = async (req, res, next) => {
   let token;
@@ -28,8 +29,8 @@ const protect = async (req, res, next) => {
     const isStaffOrAdmin = req.user.role === 'admin' || 
                            req.user.role === 'priest' || 
                            req.user.isTechnicalTeam || 
-                           (req.user.email || '').toLowerCase() === 'stjdbchurch@gmail.com' ||
-                           (req.user.email || '').toLowerCase() === 'arndas777@gmail.com';
+                           isAdminEmail(req.user.email) ||
+                           isAdminPhone(req.user.phone);
 
     // Administrator and staff accounts must NEVER be locked out by deactivation flags
     if (isStaffOrAdmin) {

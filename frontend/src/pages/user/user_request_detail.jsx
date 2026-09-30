@@ -28,6 +28,7 @@ import api, { getMediaUrl } from '../../services/api';
 import { useAuth } from '../../context/context_auth_context';
 import { SectionLoader } from '../../components/common/common_loader';
 import churchLogo from '../../assets/church_extirior.png';
+import { getChurchPhone, getParishOfficePhone, getChurchEmail, getWhatsAppNumber } from '../../config/contactConfig';
 
 const MASS_BOOKING_CONFIG = {
   title: 'Mass Intention Booking',
@@ -902,18 +903,18 @@ export default function UserRequestDetail({ module: moduleProp }) {
               </p>
               <div className="space-y-2 text-xs">
                 <a
-                  href="https://wa.me/919655639144"
+                  href={`https://wa.me/${getWhatsAppNumber() || ''}`}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 font-semibold hover:bg-emerald-100 transition-colors"
                 >
-                  <FiPhone /> WhatsApp Parish (+91 96556 39144)
+                  <FiPhone /> WhatsApp Parish ({getChurchPhone() || 'Parish Office'})
                 </a>
                 <a
-                  href="mailto:stjdbchurch@gmail.com"
+                  href={`mailto:${getChurchEmail() || ''}`}
                   className="flex items-center gap-2 p-2.5 rounded-xl bg-blue-50 text-blue-800 border border-blue-200 font-semibold hover:bg-blue-100 transition-colors"
                 >
-                  <FiMail /> stjdbchurch@gmail.com
+                  <FiMail /> {getChurchEmail() || 'Contact Parish Office'}
                 </a>
               </div>
             </div>
@@ -966,7 +967,7 @@ export default function UserRequestDetail({ module: moduleProp }) {
                   Murthi Nagar, Kalayarkoil, Sivagangai District, Tamil Nadu 630551, India.
                 </p>
                 <p style={{ margin: '2px 0 0', fontSize: '11px', color: '#6b7280' }}>
-                  Parish Office: +91 96556 39144 • Email: stjdbchurch@gmail.com
+                  Parish Office: {getChurchPhone() || 'Contact Parish Office'} • Email: {getChurchEmail() || 'Contact Parish Office'}
                 </p>
               </div>
             </div>
@@ -1147,7 +1148,7 @@ export default function UserRequestDetail({ module: moduleProp }) {
           {/* Office Contact Info */}
           <div style={{ marginTop: '26px', borderTop: '1px dashed #d1d5db', paddingTop: '14px', textAlign: 'center', fontSize: '11px', color: '#6b7280', lineHeight: '1.6' }}>
             <div>Parish Office: Murthi Nagar, Kalayarkoil, Sivagangai Dist, Tamil Nadu 630551</div>
-            <div>Phone: +91 96556 39144 / +91 96291 95484 • Email: stjdbchurch@gmail.com • Web: www.stjohnchurch.com</div>
+            <div>Phone: {[getChurchPhone(), getParishOfficePhone()].filter(Boolean).join(' / ') || 'Parish Office'} • Email: {getChurchEmail() || 'Parish Office'} • Web: www.stjohnchurch.com</div>
           </div>
 
           {/* Footer Statement */}

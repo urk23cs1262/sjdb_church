@@ -3,12 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 import { FaWhatsapp } from 'react-icons/fa';
 import api from '../../services/api';
+import { getWhatsAppNumber } from '../../config/contactConfig';
 
-const WHATSAPP_MESSAGE = encodeURIComponent('HI\n\n SJDB Connect\nConnecting Faith & Community');
+const WHATSAPP_MESSAGE = encodeURIComponent('HI\n\n SJDB Connect');
 
 export default function WhatsAppWidget({ videoAdOpen = false }) {
   const location = useLocation();
-  const [whatsappNumber, setWhatsappNumber] = useState('919655639144');
+  const [whatsappNumber, setWhatsappNumber] = useState(() => getWhatsAppNumber() || '');
 
   useEffect(() => {
     api.get('/settings')

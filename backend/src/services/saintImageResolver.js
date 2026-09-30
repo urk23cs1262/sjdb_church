@@ -2,6 +2,7 @@ const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 const { getSaintForDate } = require('../data/catholic_saints_calendar');
+const { getChurchEmail } = require('../config/contactConfig');
 
 /**
  * Universal Saint Image Resolver
@@ -14,7 +15,9 @@ const { getSaintForDate } = require('../data/catholic_saints_calendar');
  */
 
 const HTTP_HEADERS = {
-  'User-Agent': 'SJDBChurchApp/1.0 (Catholic Parish Management; contact: stjdbchurch@gmail.com)',
+  get 'User-Agent'() {
+    return `SJDBChurchApp/1.0 (Catholic Parish Management; contact: ${getChurchEmail() || 'office@example.com'})`;
+  },
   'Accept': 'application/json, text/html, */*'
 };
 
@@ -67,9 +70,7 @@ async function cacheSaintImageFile(remoteUrl, baseName = 'saint') {
     const response = await axios.get(remoteUrl, {
       responseType: 'arraybuffer',
       timeout: 10000,
-      headers: {
-        'User-Agent': 'SJDBChurchApp/1.0 (Catholic Parish Management; contact: stjdbchurch@gmail.com)'
-      }
+      headers: HTTP_HEADERS
     });
 
     if (response.status === 200 && response.data && response.data.length > 500) {

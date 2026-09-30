@@ -1,6 +1,7 @@
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const { getChurchEmail } = require('../config/contactConfig');
 const { fetchDailyVerse } = require('./bibleVerseService');
 const { getDailySaint, fetchDailySaint } = require('./saintService');
 const { 
@@ -45,7 +46,7 @@ async function fetchImageBuffer(imageUrl) {
       const response = await axios.get(imageUrl, {
         responseType: 'arraybuffer',
         headers: {
-          'User-Agent': 'SJDBChurchApp/1.0 (Catholic Parish Management; contact: stjdbchurch@gmail.com)',
+          'User-Agent': `SJDBChurchApp/1.0 (Catholic Parish Management; contact: ${getChurchEmail() || 'office@example.com'})`,
           'Accept': '*/*'
         },
         timeout: 10000

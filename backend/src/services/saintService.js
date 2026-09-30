@@ -1,6 +1,7 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
 const cron = require('node-cron');
+const { getChurchEmail } = require('../config/contactConfig');
 const { getSaintForDate } = require('../data/catholic_saints_calendar');
 const { 
   resolveSaintImage, 
@@ -363,9 +364,10 @@ async function fetchWikipediaBio(saintName) {
   // 1. Direct candidate slugs via MediaWiki extracts API
   for (const slug of slugs) {
     try {
+      const wikiUserAgent = `SJDBChurchApp/1.0 (Catholic Parish Management; contact: ${getChurchEmail() || 'office@example.com'})`;
       const url = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=true&explaintext=true&titles=${encodeURIComponent(slug)}&format=json`;
       const res = await axios.get(url, {
-        headers: { 'User-Agent': 'SJDBChurchApp/1.0 (Catholic Parish Management; contact: stjdbchurch@gmail.com)' },
+        headers: { 'User-Agent': wikiUserAgent },
         timeout: 6000
       });
       const pages = res.data?.query?.pages || {};
@@ -386,9 +388,10 @@ async function fetchWikipediaBio(saintName) {
 
   // 2. Search fallback via Wikipedia search API
   try {
+    const wikiUserAgent = `SJDBChurchApp/1.0 (Catholic Parish Management; contact: ${getChurchEmail() || 'office@example.com'})`;
     const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent('Saint ' + cleanName)}&format=json&origin=*`;
     const searchRes = await axios.get(searchUrl, {
-      headers: { 'User-Agent': 'SJDBChurchApp/1.0 (Catholic Parish Management; contact: stjdbchurch@gmail.com)' },
+      headers: { 'User-Agent': wikiUserAgent },
       timeout: 6000
     });
     const hits = searchRes.data?.query?.search || [];
@@ -396,7 +399,7 @@ async function fetchWikipediaBio(saintName) {
       if (/disambiguation|list of|church|basilica|cathedral|parish|shrine|order of|congregation of/i.test(h.title)) continue;
       const extractUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=true&explaintext=true&titles=${encodeURIComponent(h.title)}&format=json`;
       const exRes = await axios.get(extractUrl, {
-        headers: { 'User-Agent': 'SJDBChurchApp/1.0 (Catholic Parish Management; contact: stjdbchurch@gmail.com)' },
+        headers: { 'User-Agent': wikiUserAgent },
         timeout: 6000
       });
       const pages = exRes.data?.query?.pages || {};

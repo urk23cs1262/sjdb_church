@@ -1,6 +1,7 @@
 const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
+const { getParishOfficePhone, getChurchEmail } = require('../config/contactConfig');
 
 const DONATION_LABELS = {
   general: 'General Offering',
@@ -151,8 +152,8 @@ const generateDonationReceipt = async (donation, user) => {
       const contactY = blessingY + 85;
       doc.fontSize(9).fillColor('#555555').font('Helvetica');
       doc.text("Contact Details :", 40, contactY, { align: 'center', width: 515 });
-      doc.text("Parish Office Phone : +91 96291 95484", 40, contactY + 14, { align: 'center', width: 515 });
-      doc.text("Parish Office Email : stjdbchurch@gmail.com", 40, contactY + 26, { align: 'center', width: 515 });
+      doc.text(`Parish Office Phone : ${getParishOfficePhone() || 'Contact Parish Office'}`, 40, contactY + 14, { align: 'center', width: 515 });
+      doc.text(`Parish Office Email : ${getChurchEmail() || 'Contact Parish Office'}`, 40, contactY + 26, { align: 'center', width: 515 });
       doc.text("Parish Office Website : www.stjohnchurch.com", 40, contactY + 38, { align: 'center', width: 515 });
 
       // ─── 8. Bottom Statement (Properly Centered Without Overlap) ───────────

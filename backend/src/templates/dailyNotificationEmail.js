@@ -328,7 +328,7 @@ function generateDailyNotificationHtml({
           <tr>
             <td style="padding: 24px 28px; background-color: #F8FAFC; border-top: 1px solid #E2E8F0; text-align: center; color: #64748B; font-size: 13px; line-height: 1.5;">
               <p style="margin: 0 0 8px 0; color: #0F172A; font-weight: 600; font-size: 14px;">May God bless you and have a blessed day.</p>
-              <p style="margin: 0 0 6px 0;">St. John de Britto Church • Connecting Faith & Community</p>
+              <p style="margin: 0 0 6px 0;">St. John de Britto Church • "Come; Listen; and you will find life"</p>
               <p style="margin: 0; font-size: 11px; color: #94A3B8;">You received this daily reflection because you are a registered member of SJDB Church. To update notification settings, visit your Profile Settings on the church portal.</p>
             </td>
           </tr>

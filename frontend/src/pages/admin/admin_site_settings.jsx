@@ -99,7 +99,7 @@ const SETTING_CARDS = [
     icon: <FiTool className="text-2xl" />,
     color: 'bg-emerald-600',
     type: 'text',
-    placeholder: 'e.g. 919655639144',
+    placeholder: 'e.g. Enter the Whatsapp BOT Number',
     hint: 'Environment fallback: WHATSAPP_BOT_PHONE_NUMBER'
   },
 ];

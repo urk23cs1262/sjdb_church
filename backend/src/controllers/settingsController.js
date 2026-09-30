@@ -1,5 +1,13 @@
 const SiteSettings = require('../models/SiteSettings');
 const { uploadToGridFS, deleteFromGridFS } = require('../services/gridfsService');
+const {
+  getChurchEmail,
+  getChurchPhone,
+  getParishOfficePhone,
+  getWhatsAppBotNumber,
+  getWhatsAppChannelUrl,
+  getWhatsAppChannelJid
+} = require('../config/contactConfig');
 
 // In-memory cache for ultra-fast response
 let cachedMap = null;
@@ -19,10 +27,21 @@ const getSettings = async (req, res) => {
     const map = {
       videoAdId: 'wQ49o-0L1Gk',
       donationUpiId: process.env.DONATION_UPI_ID || '112520120',
-      whatsappBotPhoneNumber: process.env.WHATSAPP_BOT_PHONE_NUMBER || '919655639144',
+      whatsappBotPhoneNumber: getWhatsAppBotNumber(),
+      whatsappChannelUrl: getWhatsAppChannelUrl(),
+      whatsappChannelJid: getWhatsAppChannelJid(),
+      churchEmail: getChurchEmail(),
+      contactEmail: getChurchEmail(),
+      churchPhone: getChurchPhone(),
+      contactPhone: getChurchPhone(),
+      parishOfficePhone: getParishOfficePhone(),
       merchantName: process.env.MERCHANT_NAME || "St. John de Britto Church"
     };
     settings.forEach(s => { map[s.key] = s.value; });
+    if (map.whatsapp_channel_url && !map.whatsappChannelUrl) map.whatsappChannelUrl = map.whatsapp_channel_url;
+    if (map.whatsapp_channel_jid && !map.whatsappChannelJid) map.whatsappChannelJid = map.whatsapp_channel_jid;
+    if (map.contact_email && !map.churchEmail) map.churchEmail = map.contact_email;
+    if (map.contact_phone && !map.churchPhone) map.churchPhone = map.contact_phone;
     cachedMap = map;
     cacheTime = now;
     res.json({ success: true, settings: map });
@@ -40,7 +59,10 @@ const getSetting = async (req, res) => {
     if (!value) {
       if (req.params.key === 'videoAdId') value = 'wQ49o-0L1Gk';
       else if (req.params.key === 'donationUpiId' || req.params.key === 'donation_upi_id') value = process.env.DONATION_UPI_ID || '112520120';
-      else if (req.params.key === 'whatsappBotPhoneNumber' || req.params.key === 'whatsapp_bot_phone_number') value = process.env.WHATSAPP_BOT_PHONE_NUMBER || '919655639144';
+      else if (req.params.key === 'whatsappBotPhoneNumber' || req.params.key === 'whatsapp_bot_phone_number') value = getWhatsAppBotNumber();
+      else if (req.params.key === 'churchEmail' || req.params.key === 'contactEmail') value = getChurchEmail();
+      else if (req.params.key === 'churchPhone' || req.params.key === 'contactPhone') value = getChurchPhone();
+      else if (req.params.key === 'parishOfficePhone') value = getParishOfficePhone();
       else if (req.params.key === 'merchantName' || req.params.key === 'merchant_name') value = process.env.MERCHANT_NAME || "St. John de Britto Church";
     }
     res.json({ success: true, value });

@@ -10,6 +10,7 @@ import churchLogo from '../../assets/church_extirior.png';
 import constructionImg from '../../assets/construction.png';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { getChurchPhone, getChurchEmail } from '../../config/contactConfig';
 
 export default function Maintenance({ isPreview = false }) {
   const navigate = useNavigate();
@@ -276,14 +277,18 @@ export default function Maintenance({ isPreview = false }) {
         {/* Contact info */}
         <div className="flex flex-wrap items-center justify-center md:justify-start gap-4">
           <span className="font-bold text-church-royal-blue">Need Assistance?</span>
-          <a href={`tel:${status?.contactPhone || '+919443100000'}`} className="inline-flex items-center gap-1.5 hover:text-amber-700 font-semibold transition-colors">
-            <FiPhone className="text-amber-600" />
-            <span>{status?.contactPhone || '+91 94431 00000'}</span>
-          </a>
-          <a href={`mailto:${status?.contactEmail || 'stjdbchurch@gmail.com'}`} className="inline-flex items-center gap-1.5 hover:text-amber-700 font-semibold transition-colors">
-            <FiMail className="text-amber-600" />
-            <span>{status?.contactEmail || 'stjdbchurch@gmail.com'}</span>
-          </a>
+          {(status?.contactPhone || getChurchPhone()) && (
+            <a href={`tel:${(status?.contactPhone || getChurchPhone()).replace(/\D/g, '') ? `+${(status?.contactPhone || getChurchPhone()).replace(/\D/g, '')}` : (status?.contactPhone || getChurchPhone())}`} className="inline-flex items-center gap-1.5 hover:text-amber-700 font-semibold transition-colors">
+              <FiPhone className="text-amber-600" />
+              <span>{status?.contactPhone || getChurchPhone()}</span>
+            </a>
+          )}
+          {(status?.contactEmail || getChurchEmail()) && (
+            <a href={`mailto:${status?.contactEmail || getChurchEmail()}`} className="inline-flex items-center gap-1.5 hover:text-amber-700 font-semibold transition-colors">
+              <FiMail className="text-amber-600" />
+              <span>{status?.contactEmail || getChurchEmail()}</span>
+            </a>
+          )}
         </div>
 
         {/* Social Links */}

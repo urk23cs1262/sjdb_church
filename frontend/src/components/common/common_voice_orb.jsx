@@ -210,8 +210,6 @@ export default function VoiceOrb({
             const raw = u.name || u.fullName || u.displayName || u.username || '';
             if (raw && !/^(parish\s*(admin|administrator)|admin|administrator|user|guest)$/i.test(raw.trim())) {
               nameClean = toPronounceableName(raw);
-            } else if ((u.email || '').toLowerCase() === 'arndas777@gmail.com') {
-              nameClean = 'Nivesh Arn';
             }
           }
         }

@@ -37,6 +37,7 @@ import {
 } from 'react-icons/fi';
 import api from '../../services/api';
 import toast from 'react-hot-toast';
+import { getWhatsAppNumber } from '../../config/contactConfig';
 
 const PREF_LABELS = {
   verse: 'Daily Bible Verse',
@@ -120,6 +121,18 @@ export default function AdminWhatsApp() {
   const [subscriberSearch, setSubscriberSearch] = useState('');
   const [subscriberFilter, setSubscriberFilter] = useState('all'); // 'all' | 'website' | 'bot' | 'active'
 
+  // Official WhatsApp Channel States (Strictly separated from private bot)
+  const [channelStatus, setChannelStatus] = useState(null);
+  const [channelLogs, setChannelLogs] = useState([]);
+  const [loadingChannel, setLoadingChannel] = useState(false);
+  const [channelJidInput, setChannelJidInput] = useState('');
+  const [channelUrlInput, setChannelUrlInput] = useState('');
+  const [savingChannelSettings, setSavingChannelSettings] = useState(false);
+  const [sendingChannelTest, setSendingChannelTest] = useState(false);
+  const [publishingChannelDaily, setPublishingChannelDaily] = useState(false);
+  const [confirmTestOpen, setConfirmTestOpen] = useState(false);
+  const [confirmDailyOpen, setConfirmDailyOpen] = useState(false);
+
   // Test Playground States
   const [chatHistory, setChatHistory] = useState([
     {
@@ -171,7 +184,14 @@ export default function AdminWhatsApp() {
 
       if (statsRes.data?.stats) setStats(statsRes.data.stats);
       if (subsRes.data?.subscribers) setSubscribers(subsRes.data.subscribers);
-      if (statusRes.data) setWaStatus(statusRes.data);
+      if (statusRes.data) {
+        setWaStatus(statusRes.data);
+        if (statusRes.data.channel) {
+          setChannelStatus(statusRes.data.channel);
+          if (statusRes.data.channel.channelJid) setChannelJidInput(statusRes.data.channel.channelJid);
+          if (statusRes.data.channel.channelUrl) setChannelUrlInput(statusRes.data.channel.channelUrl);
+        }
+      }
       if (qrRes.data?.qr) setQrCode(qrRes.data.qr);
       else if (statusRes.data?.connected) setQrCode(null);
       if (previewRes.data?.success) setTodayPreview(previewRes.data);
@@ -183,6 +203,86 @@ export default function AdminWhatsApp() {
       setRefreshing(false);
     }
   };
+
+  // Channel Data Fetcher
+  const fetchChannelData = async () => {
+    try {
+      setLoadingChannel(true);
+      const [statusRes, logsRes] = await Promise.all([
+        api.get('/bot/channel/status').catch(() => null),
+        api.get('/bot/channel/logs?limit=30').catch(() => null)
+      ]);
+      if (statusRes?.data?.success) {
+        setChannelStatus(statusRes.data);
+        if (statusRes.data.channelJid) setChannelJidInput(statusRes.data.channelJid);
+        if (statusRes.data.channelUrl) setChannelUrlInput(statusRes.data.channelUrl);
+      }
+      if (logsRes?.data?.success) {
+        setChannelLogs(logsRes.data.logs || []);
+      }
+    } catch (e) {
+      console.warn('Channel data fetch notice:', e.message);
+    } finally {
+      setLoadingChannel(false);
+    }
+  };
+
+  const handleSaveChannelSettings = async (e) => {
+    e?.preventDefault();
+    try {
+      setSavingChannelSettings(true);
+      const res = await api.post('/bot/channel/settings', {
+        channelJid: channelJidInput.trim(),
+        channelUrl: channelUrlInput.trim()
+      });
+      if (res.data?.success) {
+        toast.success(res.data.message || 'WhatsApp Channel configuration saved!');
+        fetchChannelData();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to update Channel settings');
+    } finally {
+      setSavingChannelSettings(false);
+    }
+  };
+
+  const handleSendTestChannelUpdate = async () => {
+    try {
+      setSendingChannelTest(true);
+      const res = await api.post('/bot/channel/test');
+      if (res.data?.success) {
+        toast.success('Test update published to WhatsApp Channel!');
+        setConfirmTestOpen(false);
+        fetchChannelData();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to send test message');
+    } finally {
+      setSendingChannelTest(false);
+    }
+  };
+
+  const handlePublishChannelDaily = async () => {
+    try {
+      setPublishingChannelDaily(true);
+      const res = await api.post('/bot/channel/publish-daily');
+      if (res.data?.success) {
+        toast.success('Daily Catholic Content published to WhatsApp Channel!');
+        setConfirmDailyOpen(false);
+        fetchChannelData();
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Failed to publish daily content');
+    } finally {
+      setPublishingChannelDaily(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'channel') {
+      fetchChannelData();
+    }
+  }, [activeTab]);
 
   // Initial mount load
   useEffect(() => {
@@ -723,6 +823,7 @@ export default function AdminWhatsApp() {
       <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-2 mb-6 scrollbar-none">
         {[
           { id: 'overview', label: 'Overview & Device', icon: <FiGrid /> },
+          { id: 'channel', label: 'WhatsApp Channel', icon: <SiWhatsapp className="text-emerald-500" /> },
           { id: 'subscribers', label: `Subscribers (${subscribers.length})`, icon: <FiUsers /> },
           { id: 'broadcast', label: 'Broadcast & Send', icon: <FiSend /> },
           { id: 'test-bot', label: 'Playground & Test', icon: <FiPlay /> },
@@ -1420,9 +1521,13 @@ export default function AdminWhatsApp() {
 
               <div className="flex items-center gap-2 w-full sm:w-auto">
                 <button
-                  onClick={() => window.open('https://wa.me/919655639144?text=Hi', '_blank', 'noopener,noreferrer')}
+                  onClick={() => {
+                    const num = getWhatsAppNumber();
+                    const url = num ? `https://wa.me/${num}?text=Hi` : 'https://wa.me/?text=Hi';
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                  }}
                   className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors flex-1 sm:flex-initial cursor-pointer"
-                  title="Open WhatsApp chat with Bot number (+91 96556 39144)"
+                  title="Open WhatsApp chat with Bot"
                 >
                   <SiWhatsapp className="text-xs" /> Real Test
                 </button>
@@ -1983,6 +2088,323 @@ export default function AdminWhatsApp() {
         </div>
       )}
 
+      {/* ─── TAB: OFFICIAL WHATSAPP CHANNEL MANAGEMENT ─────────────────────────── */}
+      {activeTab === 'channel' && (
+        <div className="space-y-6">
+          {/* Architectural Separation Banner */}
+          <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white rounded-3xl p-5 sm:p-6 shadow-xl border border-blue-800/40 relative overflow-hidden">
+            <div className="relative z-10">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  Official Church Public Broadcast Channel
+                </span>
+                <span className="text-xs text-blue-200/80 font-mono">
+                  Engine: Baileys v7 Newsletter Protocol
+                </span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                <SiWhatsapp className="text-emerald-400" /> St. John de Britto Church Kkl.
+              </h2>
+              <p className="text-xs sm:text-sm text-blue-100/90 mt-1 max-w-3xl leading-relaxed">
+                Dedicated one-way parish broadcast channel for public liturgy, Daily Catholic Content (Bible verse, Saint of the Day, readings, reflection), and parish announcements.
+              </p>
+
+              {/* Strict Isolation Notice */}
+              <div className="mt-4 p-3.5 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 text-xs text-blue-100 flex items-start gap-2.5">
+                <FiShield className="text-amber-300 text-base shrink-0 mt-0.5" />
+                <div>
+                  <strong className="text-white block font-bold">🔒 Strict Architectural Separation Active</strong>
+                  Bot conversations (onboarding, language selection, reply numbers, user requests, OTPs) NEVER publish to this Channel. Channel posts never trigger bot replies.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Channel Diagnostics Bar */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="glass-card p-4 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
+              <span className="text-xs font-semibold text-gray-500">Channel Status</span>
+              <div className="mt-2 flex items-center gap-2">
+                <span className={`w-3 h-3 rounded-full ${channelStatus?.connected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+                <span className="text-sm sm:text-base font-bold text-church-royal-blue">
+                  {channelStatus?.connected ? 'Connected' : 'Offline'}
+                </span>
+              </div>
+              <span className="text-[11px] text-gray-400 mt-1">
+                {channelStatus?.configured ? 'JID Verified' : 'Needs JID Configuration'}
+              </span>
+            </div>
+
+            <div className="glass-card p-4 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
+              <span className="text-xs font-semibold text-gray-500">Channel Followers</span>
+              <div className="mt-2 text-xl sm:text-2xl font-black text-emerald-600">
+                {channelStatus?.subscribers ?? 0}
+              </div>
+              <span className="text-[11px] text-gray-400 mt-1">Live from WhatsApp API</span>
+            </div>
+
+            <div className="glass-card p-4 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
+              <span className="text-xs font-semibold text-gray-500">Today's Daily Post</span>
+              <div className="mt-2">
+                {channelStatus?.todayDailyPublished ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    <FiCheckCircle /> Published
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                    <FiClock /> Scheduled 4 AM IST
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] text-gray-400 mt-1">Bilingual + Saint Portrait</span>
+            </div>
+
+            <div className="glass-card p-4 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-between">
+              <span className="text-xs font-semibold text-gray-500">Channel JID</span>
+              <div className="mt-2 font-mono text-[11px] text-gray-800 truncate" title={channelStatus?.channelJid || 'Not configured'}>
+                {channelStatus?.channelJid || 'Auto-detection Pending'}
+              </div>
+              <span className="text-[11px] text-gray-400 mt-1">@newsletter server</span>
+            </div>
+          </div>
+
+          {/* Quick Action Controls */}
+          <div className="glass-card p-5 sm:p-6 rounded-3xl border border-gray-100 shadow-sm space-y-4">
+            <h3 className="text-base font-bold text-church-royal-blue flex items-center gap-2">
+              <FiZap className="text-amber-500" /> Channel Broadcast Controls
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {/* Send Test Channel Update */}
+              <div className="p-4 rounded-2xl border border-gray-100 bg-slate-50/50 flex flex-col justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                    <SiWhatsapp className="text-emerald-600" /> Send Test Channel Update
+                  </h4>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Publishes a test message strictly to the Channel. Will NEVER be sent to private users.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfirmTestOpen(true)}
+                  disabled={sendingChannelTest || !channelStatus?.connected}
+                  className="mt-4 w-full py-2.5 px-4 rounded-xl bg-church-royal-blue hover:bg-blue-900 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <FiSend />
+                  <span>{sendingChannelTest ? 'Sending...' : 'Send Test Channel Update'}</span>
+                </button>
+              </div>
+
+              {/* Publish Daily Catholic Content Now */}
+              <div className="p-4 rounded-2xl border border-gray-100 bg-slate-50/50 flex flex-col justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                    📖 Publish Daily Liturgy Now
+                  </h4>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Instantly broadcast today's Bilingual Bible Verse, Saint portrait, and reflection to the Channel.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDailyOpen(true)}
+                  disabled={publishingChannelDaily || !channelStatus?.connected}
+                  className="mt-4 w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <FiRadio />
+                  <span>{publishingChannelDaily ? 'Publishing...' : 'Publish Daily Content Now'}</span>
+                </button>
+              </div>
+
+              {/* Refresh Channel Diagnostics */}
+              <div className="p-4 rounded-2xl border border-gray-100 bg-slate-50/50 flex flex-col justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                    <FiRefreshCw className="text-blue-600" /> Refresh Channel Info
+                  </h4>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Re-query WhatsApp server for live subscriber count, metadata, and status.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={fetchChannelData}
+                  disabled={loadingChannel}
+                  className="mt-4 w-full py-2.5 px-4 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <FiRefreshCw className={loadingChannel ? 'animate-spin' : ''} />
+                  <span>{loadingChannel ? 'Refreshing...' : 'Refresh Status & Logs'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Channel Configuration Form */}
+          <div className="glass-card p-5 sm:p-6 rounded-3xl border border-gray-100 shadow-sm">
+            <h3 className="text-base font-bold text-church-royal-blue flex items-center gap-2 mb-1">
+              <FiSliders className="text-church-royal-blue" /> WhatsApp Channel Link & Configuration
+            </h3>
+            <p className="text-xs text-gray-500 mb-4">
+              Enter your official WhatsApp Channel invite link or channel JID. The system will automatically resolve metadata and lock the newsletter identifier.
+            </p>
+
+            <form onSubmit={handleSaveChannelSettings} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1">
+                    Official Channel Invite Link / URL
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://whatsapp.com/channel/0029VaXXXXX"
+                    value={channelUrlInput}
+                    onChange={(e) => setChannelUrlInput(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:border-church-royal-blue font-mono"
+                  />
+                  <span className="text-[11px] text-gray-400 mt-1 block">
+                    Shareable channel link shown to parishioners on website and Contact page.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-gray-700 block mb-1">
+                    Channel JID (Newsletter Identifier)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="120363xxxxxxxxxx@newsletter"
+                    value={channelJidInput}
+                    onChange={(e) => setChannelJidInput(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:border-church-royal-blue font-mono"
+                  />
+                  <span className="text-[11px] text-gray-400 mt-1 block">
+                    Must end with <code className="text-rose-600">@newsletter</code>. Auto-detected when posting to channel.
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={savingChannelSettings}
+                  className="px-5 py-2.5 rounded-xl bg-church-royal-blue hover:bg-blue-900 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                >
+                  <FiCheck />
+                  <span>{savingChannelSettings ? 'Saving Settings...' : 'Save Channel Configuration'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Publication Logs & Audit Trail */}
+          <div className="glass-card p-5 sm:p-6 rounded-3xl border border-gray-100 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-church-royal-blue flex items-center gap-2">
+                  <FiFileText className="text-emerald-600" /> Channel Publication History & Audit Trail
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Logs all broadcasts sent to the public WhatsApp Channel with cryptographic SHA-256 deduplication hashes.
+                </p>
+              </div>
+              <span className="text-xs font-mono font-bold text-gray-400">
+                {channelLogs.length} logged publications
+              </span>
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl border border-gray-100">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-gray-50/80 border-b border-gray-100 text-[11px] uppercase tracking-wider text-gray-500 font-bold">
+                    <th className="py-3 px-4">Publication ID & Date</th>
+                    <th className="py-3 px-4">Type & Title</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Trigger / Source</th>
+                    <th className="py-3 px-4">Content Hash</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 text-xs">
+                  {loadingChannel ? (
+                    <tr>
+                      <td colSpan={5} className="py-10 text-center text-gray-400">
+                        <FiRefreshCw className="animate-spin text-xl inline mb-2" />
+                        <p>Loading publication logs...</p>
+                      </td>
+                    </tr>
+                  ) : channelLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-10 text-center text-gray-400">
+                        <FiCheckCircle className="text-3xl text-gray-300 inline mb-2" />
+                        <p className="font-semibold text-gray-600">No channel publications yet</p>
+                        <p className="text-[11px] mt-0.5">When 4:00 AM content or manual updates are published, they will be logged here.</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    channelLogs.map((log) => (
+                      <tr key={log._id || log.publicationId} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="py-3 px-4">
+                          <p className="font-mono font-bold text-gray-800 text-[11px]">
+                            {log.publicationId}
+                          </p>
+                          <p className="text-[10px] text-gray-400">
+                            {new Date(log.createdAt).toLocaleString('en-IN')}
+                          </p>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <p className="font-bold text-church-royal-blue">
+                            {log.title || log.contentType}
+                          </p>
+                          <p className="text-[11px] text-gray-500 truncate max-w-xs">
+                            {log.summary || 'Public Church Broadcast'}
+                          </p>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          {log.status === 'published' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">
+                              <FiCheckCircle /> Published
+                            </span>
+                          ) : log.status === 'pending' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800">
+                              <FiClock /> Pending
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800">
+                              <FiAlertTriangle /> Failed
+                            </span>
+                          )}
+                          {log.errorMessage && (
+                            <p className="text-[10px] text-rose-600 mt-0.5 max-w-xs truncate">{log.errorMessage}</p>
+                          )}
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 font-mono text-[10px] font-bold">
+                            {log.source || 'scheduled_cron'}
+                          </span>
+                          <span className="text-[10px] text-gray-400 block mt-0.5">
+                            {log.triggerType || '4_am_daily'}
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <span className="font-mono text-[10px] text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-200/60" title={log.contentHash}>
+                            {log.contentHash ? log.contentHash.slice(0, 12) + '...' : '—'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── MODAL: VIOLATION AUDIT TRAIL ─────────────────────────────────────── */}
       <AnimatePresence>
         {auditModalOpen && selectedUserAudit && (
@@ -2471,6 +2893,132 @@ export default function AdminWhatsApp() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── MODAL: CONFIRM TEST CHANNEL UPDATE ─────────────────────────────── */}
+      <AnimatePresence>
+        {confirmTestOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl border border-gray-100"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-church-royal-blue flex items-center justify-center text-2xl mb-4 border border-blue-100">
+                <SiWhatsapp className="text-emerald-600" />
+              </div>
+
+              <h3 className="font-bold text-gray-900 text-base sm:text-lg mb-2">
+                Send Test Channel Update?
+              </h3>
+
+              <p className="text-xs sm:text-sm text-gray-600 mb-3 leading-relaxed">
+                This will publish a verified test message to the official parish WhatsApp Channel:
+                <br />
+                <strong className="text-church-royal-blue text-sm">"St. John de Britto Church Kkl."</strong>
+              </p>
+
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs mb-6 flex items-start gap-2">
+                <FiShield className="text-amber-600 text-sm shrink-0 mt-0.5" />
+                <span>
+                  <strong>Strict Separation Guarantee:</strong> This test goes <strong>ONLY to the public WhatsApp Channel</strong>. It will NOT be sent to private users or individual bot subscribers.
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmTestOpen(false)}
+                  disabled={sendingChannelTest}
+                  className="flex-1 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs cursor-pointer disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSendTestChannelUpdate}
+                  disabled={sendingChannelTest}
+                  className="flex-1 py-2.5 rounded-xl bg-church-royal-blue hover:bg-blue-900 text-white font-bold text-xs shadow-md transition-colors cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
+                >
+                  {sendingChannelTest ? (
+                    <>
+                      <FiRefreshCw className="animate-spin text-xs" />
+                      <span>Sending Test...</span>
+                    </>
+                  ) : (
+                    <span>Publish Test Update</span>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── MODAL: CONFIRM PUBLISH DAILY CATHOLIC CONTENT TO CHANNEL ───────── */}
+      <AnimatePresence>
+        {confirmDailyOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-5 sm:p-6 max-w-md w-full shadow-2xl border border-gray-100"
+            >
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center text-2xl mb-4 border border-emerald-100">
+                <FiRadio className="text-emerald-600" />
+              </div>
+
+              <h3 className="font-bold text-gray-900 text-base sm:text-lg mb-2">
+                Publish Daily Liturgy to Channel?
+              </h3>
+
+              <p className="text-xs sm:text-sm text-gray-600 mb-3 leading-relaxed">
+                This will immediately broadcast today's <strong>Daily Catholic Content</strong> to the WhatsApp Channel:
+                <br />
+                • Bilingual Bible Verse (English + Tamil)
+                <br />
+                • Saint of the Day portrait & feast details
+                <br />
+                • Daily Mass readings & spiritual reflection
+              </p>
+
+              <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs mb-6 flex items-start gap-2">
+                <FiCheckCircle className="text-blue-600 text-sm shrink-0 mt-0.5" />
+                <span>
+                  <strong>Duplicate Protected:</strong> Contains cryptographic SHA-256 deduplication. Will publish strictly to the Channel without polluting bot conversations.
+                </span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDailyOpen(false)}
+                  disabled={publishingChannelDaily}
+                  className="flex-1 py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold text-xs cursor-pointer disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePublishChannelDaily}
+                  disabled={publishingChannelDaily}
+                  className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-colors cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-60"
+                >
+                  {publishingChannelDaily ? (
+                    <>
+                      <FiRefreshCw className="animate-spin text-xs" />
+                      <span>Publishing...</span>
+                    </>
+                  ) : (
+                    <span>Publish Daily Liturgy</span>
+                  )}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

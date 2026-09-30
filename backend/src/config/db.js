@@ -19,11 +19,15 @@ const connectDB = async () => {
       .catch(console.error);
 
     // Auto-restore any administrator, priest, or technical accounts to active status
+    const { getAdminEmails, getAdminPhones } = require('./contactConfig');
+    const adminEmails = getAdminEmails();
+    const emailConditions = adminEmails.length > 0 ? [{ email: { $in: adminEmails } }] : [];
+
     User.updateMany(
       { 
         $or: [
           { role: { $in: ['admin', 'priest', 'technical_team', 'staff'] } },
-          { email: { $in: ['stjdbchurch@gmail.com', 'arndas777@gmail.com'] } },
+          ...emailConditions,
           { isTechnicalTeam: true }
         ] 
       },
@@ -46,11 +50,24 @@ const connectDB = async () => {
 
     // Auto-unblock admin phone numbers in UserModeration
     const UserModeration = require('../models/UserModeration');
+    const adminPhones = getAdminPhones();
+    const phoneVariants = [];
+    adminPhones.forEach(p => {
+      phoneVariants.push(p);
+      if (p.length === 10) {
+        phoneVariants.push('91' + p, '+91' + p, '0' + p);
+      } else if (p.startsWith('91') && p.length === 12) {
+        const raw10 = p.slice(2);
+        phoneVariants.push(raw10, '+' + p, '0' + raw10);
+      }
+    });
+    const phoneConditions = phoneVariants.length > 0 ? [{ phoneNumber: { $in: phoneVariants } }] : [];
+
     UserModeration.updateMany(
       { 
         $or: [
-          { phoneNumber: { $in: ['07639520006', '917639520006', '+917639520006', '7639520006', '9655639144', '919655639144', '+919655639144', '9443123456', '919443123456'] } },
-          { whatsappDisplayName: { $regex: /nivesh/i } }
+          ...phoneConditions,
+          { role: { $in: ['admin', 'priest', 'staff'] } }
         ] 
       },
       { 

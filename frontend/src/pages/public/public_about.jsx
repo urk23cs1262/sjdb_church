@@ -223,7 +223,7 @@ export default function About() {
                     </div>
                     <div className="flex justify-between border-b border-amber-200/40 pb-2">
                       <span className="text-gray-600 font-medium">Martyrdom:</span>
-                      <span className="font-bold text-church-royal-blue">February 4, 1693 (Oriur, Tamil Nadu)</span>
+                      <span className="font-bold text-church-royal-blue">February 4, 1693 (Oriur, Tamil Nadu, India)</span>
                     </div>
                     <div className="flex justify-between border-b border-amber-200/40 pb-2">
                       <span className="text-gray-600 font-medium">Canonization:</span>

@@ -88,7 +88,7 @@ function isSamePhoneIdentity(phoneA, phoneB, defaultCountry = '91') {
 }
 
 /**
- * Format phone number for clean human presentation (e.g. "+91 76395 20006").
+ * Format phone number for clean human presentation (e.g. "+91 98765 43210").
  */
 function formatPhoneDisplay(phone, defaultCountry = '91') {
   const e164 = normalizeToE164(phone, defaultCountry);

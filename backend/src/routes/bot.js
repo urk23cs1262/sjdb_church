@@ -16,7 +16,13 @@ const {
   triggerBroadcast,
   sendCustomMessage,
   testDirectMessage,
-  testBotMessage
+  testBotMessage,
+  getChannelStatus,
+  sendTestChannelUpdate,
+  publishChannelDailyContent,
+  updateChannelSettings,
+  getChannelLogs,
+  publishAnnouncementToChannel
 } = require('../controllers/botController');
 const { protect, adminOnly } = require('../middleware/auth');
 
@@ -39,5 +45,13 @@ router.post('/broadcast/now', protect, adminOnly, triggerBroadcast);
 router.post('/send', protect, adminOnly, sendCustomMessage);
 router.post('/test-direct', protect, adminOnly, testDirectMessage);
 router.post('/test-message', protect, adminOnly, testBotMessage);
+
+// WhatsApp Channel Management (Strictly separated from private bot)
+router.get('/channel/status', protect, adminOnly, getChannelStatus);
+router.post('/channel/test', protect, adminOnly, sendTestChannelUpdate);
+router.post('/channel/publish-daily', protect, adminOnly, publishChannelDailyContent);
+router.post('/channel/settings', protect, adminOnly, updateChannelSettings);
+router.get('/channel/logs', protect, adminOnly, getChannelLogs);
+router.post('/channel/announcement', protect, adminOnly, publishAnnouncementToChannel);
 
 module.exports = router;

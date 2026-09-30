@@ -197,14 +197,13 @@
     "title": "Contact",
     "faqTitle": "Have a Quick Question?",
     "faqDesc": "Check our Frequently Asked Questions (FAQ) for instant answers.",
-    "chatWhatsapp": "Chat with us on WhatsApp",
     "chatSjdbConnect": "Chat with SJDB Connect"
   },
   "footer": {
     "churchName": "St. John de Britto Church",
     "address": "Murthi Nagar, Kalayarkoil,\nTamil Nadu 630551, India",
     "phone": "+91 04577 XXXXXX",
-    "email": "stjdbchurch@gmail.com",
+    "email": "",
     "office": "Office Hours",
     "officeTiming": "Mon–Sat: 9:00 AM – 5:00 PM",
     "quickLinks": "Quick Links",

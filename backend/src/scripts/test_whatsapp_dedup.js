@@ -266,7 +266,7 @@ async function runTests() {
     // Invalid input 3
     await handleIncomingMessage(testPhone, 'third_bad_command', null, 'Test Parishioner', `MSG_INV_3_${Date.now()}`);
     const invReply3 = outboundMessages[outboundMessages.length - 1]?.text || '';
-    assert(invReply3.includes('+91 96556 39144') || invReply3.includes('Help'), 'Invalid input 3 provided office help contact and capped repetition');
+    assert(invReply3.includes('Help') || invReply3.includes('office') || invReply3.includes('அலுவலக'), 'Invalid input 3 provided office help contact and capped repetition');
 
     // Valid command resets streak
     await handleIncomingMessage(testPhone, '2', null, 'Test Parishioner', `MSG_VALID_RESET_${Date.now()}`);

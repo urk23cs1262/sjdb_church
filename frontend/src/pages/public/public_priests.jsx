@@ -8,10 +8,11 @@ import { FaWhatsapp } from 'react-icons/fa';
 import api, { UPLOADS_URL, getMediaUrl } from '../../services/api';
 import { SectionLoader } from '../../components/common/common_loader';
 import PageHero from '../../components/common/common_page_hero';
+import { getChurchEmail } from '../../config/contactConfig';
 
-const PLACEHOLDER_PRIESTS = [
-  { _id: '1', name: 'Rev. Fr. A. Arockiaraj', designation: 'Parish Priest', isCurrent: true, order: 1, phone: '+91 98765 XXXXX', email: 'stjdbchurch@gmail.com', bio: 'Currently serving as the Parish Priest of St. John de Britto\'s Church, Kalayarkoil. Dedicated to pastoral ministry and community service.' },
-  { _id: '2', name: 'Rev. Fr. S. Raj Kumar', designation: 'Assistant Priest', isCurrent: true, order: 2, phone: '+91 87654 XXXXX', email: 'stjdbchurch@gmail.com', bio: 'Assisting the parish priest in all sacramental and pastoral activities of the parish.' },
+const getPlaceholderPriests = () => [
+  { _id: '1', name: 'Rev. Fr. A. Arockiaraj', designation: 'Parish Priest', isCurrent: true, order: 1, phone: '+91 98765 XXXXX', email: getChurchEmail() || '', bio: 'Currently serving as the Parish Priest of St. John de Britto\'s Church, Kalayarkoil. Dedicated to pastoral ministry and community service.' },
+  { _id: '2', name: 'Rev. Fr. S. Raj Kumar', designation: 'Assistant Priest', isCurrent: true, order: 2, phone: '+91 87654 XXXXX', email: getChurchEmail() || '', bio: 'Assisting the parish priest in all sacramental and pastoral activities of the parish.' },
   { _id: '3', name: 'Rev. Fr. M. Xavier', designation: 'Former Parish Priest', isCurrent: false, order: 3, startDate: '2010-01-01', endDate: '2018-12-31', bio: 'Served the parish faithfully for 8 years with great devotion and love.' },
   { _id: '4', name: 'Rev. Fr. P. Antony', designation: 'Former Parish Priest', isCurrent: false, order: 4, startDate: '2002-01-01', endDate: '2009-12-31', bio: 'Led the parish during a period of significant growth and community development.' },
 ];
@@ -95,7 +96,8 @@ export default function Priests() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get(`/priests?_t=${Date.now()}`).then(r => setPriests(r.data.priests?.length ? r.data.priests : PLACEHOLDER_PRIESTS)).catch(() => setPriests(PLACEHOLDER_PRIESTS)).finally(() => setLoading(false));
+    const fallback = getPlaceholderPriests();
+    api.get(`/priests?_t=${Date.now()}`).then(r => setPriests(r.data.priests?.length ? r.data.priests : fallback)).catch(() => setPriests(fallback)).finally(() => setLoading(false));
   }, []);
 
   const current = priests.filter(p => p.isCurrent);

@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node -e \"require('kill-port')(5000).then(() => console.log('Port 5000 cleared')).catch(() => {})\" && nodemon",
-    "seed": "node src/utils/seed.js"
+    "seed": "node src/utils/seed.js",
+    "audit:contact": "node scripts/audit_contact_security.js"
   },
   "keywords": [
     "church",

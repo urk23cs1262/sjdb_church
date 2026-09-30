@@ -11,6 +11,7 @@
  * Includes cache warm-up on server boot and TTL invalidation.
  */
 
+const mongoose = require('mongoose');
 const Event = require('../models/Event');
 const Announcement = require('../models/Announcement');
 const Priest = require('../models/Priest');
@@ -66,6 +67,12 @@ async function warmUpCache() {
   }
 }
 
+let pendingDailyContentPromise = null;
+
+function getDailyContentSync() {
+  return cache.dailyContent;
+}
+
 /**
  * Get cached today's daily Catholic content (Verse, Readings, Reflection, Saint)
  */
@@ -76,16 +83,27 @@ async function getCachedDailyContent() {
     return cache.dailyContent;
   }
 
-  cache.stats.misses++;
-  try {
-    const data = await getTodayDailyContent(new Date());
-    cache.dailyContent = data;
-    cache.dailyContentDateKey = todayKey;
-    return data;
-  } catch (err) {
-    console.error('[ChurchDataCache] Failed fetching daily content:', err.message);
-    return cache.dailyContent || {};
+  // Deduplicate concurrent in-flight fetches so multiple incoming queries don't trigger simultaneous fetches
+  if (pendingDailyContentPromise) {
+    return pendingDailyContentPromise;
   }
+
+  cache.stats.misses++;
+  pendingDailyContentPromise = (async () => {
+    try {
+      const data = await getTodayDailyContent(new Date());
+      cache.dailyContent = data;
+      cache.dailyContentDateKey = todayKey;
+      return data;
+    } catch (err) {
+      console.error('[ChurchDataCache] Failed fetching daily content:', err.message);
+      return cache.dailyContent || {};
+    } finally {
+      pendingDailyContentPromise = null;
+    }
+  })();
+
+  return pendingDailyContentPromise;
 }
 
 /**
@@ -99,8 +117,14 @@ async function getCachedPriests() {
   }
 
   cache.stats.misses++;
+  if (mongoose.connection.readyState !== 1) {
+    return cache.priests || [];
+  }
   try {
-    const priests = await Priest.find({ isActive: { $ne: false } }).sort({ order: 1, createdAt: 1 }).lean();
+    const priests = await Priest.find({ isActive: { $ne: false } })
+      .maxTimeMS(2500)
+      .sort({ order: 1, createdAt: 1 })
+      .lean();
     cache.priests = priests;
     cache.priestsExpiry = now + TTL.PRIESTS;
     return priests;
@@ -120,6 +144,9 @@ async function getCachedEvents() {
   }
 
   cache.stats.misses++;
+  if (mongoose.connection.readyState !== 1) {
+    return cache.events || [];
+  }
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -128,6 +155,7 @@ async function getCachedEvents() {
       isPublished: { $ne: false },
       date: { $gte: today }
     })
+    .maxTimeMS(2500)
     .sort({ date: 1 })
     .limit(10)
     .lean();
@@ -151,6 +179,9 @@ async function getCachedAnnouncements() {
   }
 
   cache.stats.misses++;
+  if (mongoose.connection.readyState !== 1) {
+    return cache.announcements || [];
+  }
   try {
     const nowDate = new Date();
     const announcements = await Announcement.find({
@@ -161,6 +192,7 @@ async function getCachedAnnouncements() {
         { expiresAt: { $exists: false } }
       ]
     })
+    .maxTimeMS(2500)
     .sort({ priority: -1, createdAt: -1 })
     .limit(10)
     .lean();
@@ -204,9 +236,11 @@ function getCacheDiagnostics() {
 module.exports = {
   warmUpCache,
   getCachedDailyContent,
+  getDailyContentSync,
   getCachedPriests,
   getCachedEvents,
   getCachedAnnouncements,
   invalidateCache,
-  getCacheDiagnostics
+  getCacheDiagnostics,
+  cache
 };

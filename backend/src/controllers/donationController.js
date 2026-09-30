@@ -7,6 +7,7 @@ const User = require('../models/User');
 const { createAdminNotification, createUserNotification } = require('../services/requestNotificationService');
 const { generateDonationReceipt } = require('../services/pdfService');
 const { sendMail } = require('../config/mailer');
+const { getParishOfficePhone, getChurchEmail, getAdminEmail } = require('../config/contactConfig');
 
 const DONATION_TYPES = [
   { id: 'general', label: 'General Offering' },
@@ -211,8 +212,8 @@ const sendDonationReceiptEmails = async (donation, { force = false } = {}) => {
     <tr>
       <td align="center" style="padding:10px 20px 14px;text-align:center;font-size:11px;color:#666666;line-height:18px;">
         <p style="margin:0;font-weight:bold;color:#444444;">Contact Details :</p>
-        <p style="margin:0;">Parish Office Phone : +91 96291 95484</p>
-        <p style="margin:0;">Parish Office Email : stjdbchurch@gmail.com</p>
+        <p style="margin:0;">Parish Office Phone : ${getParishOfficePhone() || 'Contact Church Office'}</p>
+        <p style="margin:0;">Parish Office Email : ${getChurchEmail() || 'Contact Church Office'}</p>
         <p style="margin:0;">Parish Office Website : www.stjohnchurch.com</p>
       </td>
     </tr>
@@ -262,7 +263,7 @@ const sendDonationReceiptEmails = async (donation, { force = false } = {}) => {
       }
     } catch (admEmailErr) {
       console.warn('[Donation] Error resolving admin email recipients:', admEmailErr.message);
-      const fallbackAdminEmail = process.env.ADMIN_EMAIL || process.env.SMTP_FROM || 'stjdbchurch@gmail.com';
+      const fallbackAdminEmail = getAdminEmail() || process.env.SMTP_FROM || null;
       if (fallbackAdminEmail && fallbackAdminEmail.toLowerCase() !== donorEmail?.toLowerCase()) {
         emailJobs.push(
           sendMail({

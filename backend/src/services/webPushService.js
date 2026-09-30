@@ -1,10 +1,14 @@
 const webpush = require('web-push');
 const PushSubscription = require('../models/PushSubscription');
 const User = require('../models/User');
+const { getChurchEmail } = require('../config/contactConfig');
 
 let activeVapidPublicKey = process.env.VAPID_PUBLIC_KEY;
 let activeVapidPrivateKey = process.env.VAPID_PRIVATE_KEY;
-const vapidEmail = process.env.VAPID_EMAIL || 'mailto:stjdbchurch@gmail.com';
+const configuredVapidEmail = process.env.VAPID_EMAIL || getChurchEmail();
+const vapidEmail = configuredVapidEmail 
+  ? (configuredVapidEmail.startsWith('mailto:') ? configuredVapidEmail : `mailto:${configuredVapidEmail}`)
+  : 'mailto:webpush@example.com';
 
 if (activeVapidPublicKey && activeVapidPrivateKey) {
   try {

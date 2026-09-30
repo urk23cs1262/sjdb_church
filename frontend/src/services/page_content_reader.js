@@ -16,6 +16,8 @@
  * - Duplicate mobile/desktop elements
  */
 
+import { getChurchPhone, getChurchEmail } from '../config/contactConfig';
+
 /**
  * Wait until a DOM element exists and contains actual rendered content (not loading skeleton)
  * @param {string} selector CSS selector
@@ -288,8 +290,8 @@ export async function extractContactInfo(isTamil = false) {
   await waitForContent('.section-title', 3000);
 
   const address = 'Murthi Nagar, Kalayarkoil, Sivaganga District, Tamil Nadu 630551';
-  const phone = '+91 04577 241222';
-  const email = 'stjdbchurch@gmail.com';
+  const phone = getChurchPhone() || '';
+  const email = getChurchEmail() || '';
   const officeHours = 'Monday to Saturday, 9:00 AM to 5:00 PM. Closed on Sundays and public holidays.';
 
   if (isTamil) {

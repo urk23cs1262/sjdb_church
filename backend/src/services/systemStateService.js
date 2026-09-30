@@ -3,6 +3,7 @@ const MaintenanceEvent = require('../models/MaintenanceEvent');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { sendMail } = require('../config/mailer');
+const { getChurchPhone, getChurchEmail } = require('../config/contactConfig');
 
 // Fast In-Memory State Cache for Sub-millisecond Checks
 let stateCache = {
@@ -17,8 +18,8 @@ let stateCache = {
   allowAdminLogin: true,
   allowTechTeam: true,
   allowContentEditors: false,
-  contactPhone: '+91 94431 00000',
-  contactEmail: 'stjdbchurch@gmail.com',
+  contactPhone: getChurchPhone() || '',
+  contactEmail: getChurchEmail() || '',
   noticeBanner: null,
   scheduler: null,
   activeEventId: null,
@@ -45,8 +46,8 @@ async function getOrCreateSettings() {
         allowTechTeam: true,
         allowContentEditors: false,
         allowPublic: false,
-        contactPhone: '+91 94431 00000',
-        contactEmail: 'stjdbchurch@gmail.com',
+        contactPhone: getChurchPhone() || '',
+        contactEmail: getChurchEmail() || '',
         mediaUrl: '',
         mediaType: 'none',
         accessAttemptsCount: 0
@@ -78,8 +79,8 @@ function updateCacheFromSettings(settings) {
     allowAdminLogin: settings.allowAdminLogin !== false,
     allowTechTeam: settings.allowTechTeam !== false,
     allowContentEditors: Boolean(settings.allowContentEditors),
-    contactPhone: settings.contactPhone || '+91 94431 00000',
-    contactEmail: settings.contactEmail || 'stjdbchurch@gmail.com',
+    contactPhone: settings.contactPhone || getChurchPhone() || '',
+    contactEmail: settings.contactEmail || getChurchEmail() || '',
     noticeBanner: settings.noticeBanner || null,
     scheduler: settings.scheduler || null,
     activeEventId: settings.activeEventId,

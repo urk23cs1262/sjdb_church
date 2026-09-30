@@ -103,9 +103,14 @@ const SITE_ROUTES = {
   ADMIN_NOTIFICATIONS: '/admin/notifications'
 };
 
+const { getWhatsAppBotNumber } = require('./contactConfig');
+
 const EXTERNAL_LINKS = {
   GOOGLE_MAPS: 'https://maps.google.com/?q=St.+John+de+Britto+Church+Kalayarkoil+Tamil+Nadu+630551',
-  WHATSAPP_BOT: 'https://wa.me/919655639144?text=Hi'
+  get WHATSAPP_BOT() {
+    const num = getWhatsAppBotNumber();
+    return num ? `https://wa.me/${num}?text=Hi` : 'https://wa.me/?text=Hi';
+  }
 };
 
 /**

@@ -50,6 +50,10 @@ if (!process.env.JWT_SECRET) {
   process.exit(1);
 }
 
+// Startup validation of contact and security environment variables
+const { validateContactConfig } = require('./config/contactConfig');
+validateContactConfig();
+
 // Connect DB
 connectDB();
 
@@ -225,10 +229,27 @@ const { warmUpCache, getCacheDiagnostics } = require('./bot/churchDataCache');
 
 app.get(['/health', '/api/health', '/api/bot/health'], async (req, res) => {
   const mongooseState = ['disconnected', 'connected', 'connecting', 'disconnecting'][require('mongoose').connection.readyState] || 'unknown';
-  let waConnected = false;
+  let waStatus = { connected: false, bot: { status: 'offline' }, channel: { configured: false, supported: true } };
   try {
     const wa = require('./bot/whatsapp');
-    waConnected = wa.getConnectionStatus?.()?.isConnected || false;
+    const { getChannelStatus } = require('./services/whatsappChannelService');
+    const conn = wa.getConnectionStatus?.();
+    const chan = await getChannelStatus?.().catch(() => null);
+    waStatus = {
+      connected: !!conn?.connected,
+      bot: {
+        status: conn?.connected ? 'active' : conn?.status || 'disconnected',
+        hasQr: !!conn?.hasQr
+      },
+      channel: {
+        configured: !!chan?.configured,
+        supported: true,
+        connected: !!conn?.connected,
+        name: chan?.name || 'St. John de Britto Church Kkl.',
+        subscribers: chan?.subscribers || 0,
+        todayDailyPublished: !!chan?.todayDailyPublished
+      }
+    };
   } catch (e) { }
 
   let birthdayTelemetry = null;
@@ -257,8 +278,9 @@ app.get(['/health', '/api/health', '/api/bot/health'], async (req, res) => {
     status: 'healthy',
     service: "SJDB Connect — St. John de Britto Church 24/7 Platform",
     database: mongooseState,
+    whatsapp: waStatus,
     whatsappBot: {
-      isLive: waConnected,
+      isLive: waStatus.connected,
       mode: '24/7 Always-On Daemon'
     },
     backgroundWorkers: {

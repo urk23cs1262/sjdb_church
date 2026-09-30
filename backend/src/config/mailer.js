@@ -33,6 +33,7 @@ const path = require('path');
 const fs = require('fs');
 const { injectFreshBibleVerseIntoHtml } = require('../services/emailVerseService');
 const { injectSaintCardIntoHtml } = require('../services/emailSaintService');
+const { getEmailFrom, getEmailReplyTo } = require('./contactConfig');
 
 const stripHtml = (html) => {
   return html
@@ -49,7 +50,8 @@ const sendMail = async ({ to, subject, html, attachments = [] }) => {
     return { success: false, error: 'SMTP not configured' };
   }
   try {
-    const fromEmail = process.env.SMTP_FROM || 'stjdbchurch@gmail.com';
+    const fromEmail = getEmailFrom();
+    const replyToEmail = getEmailReplyTo();
     const emailAttachments = [...attachments];
 
     // 1. Automatically inject Saint of the Day card into outgoing emails (before scripture)
@@ -82,6 +84,7 @@ const sendMail = async ({ to, subject, html, attachments = [] }) => {
 
     const info = await transporter.sendMail({
       from: `"St. John de Britto Church" <${fromEmail}>`,
+      replyTo: replyToEmail,
       to,
       subject,
       html: processedHtml,

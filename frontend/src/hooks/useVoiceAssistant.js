@@ -256,7 +256,6 @@ export default function useVoiceAssistant() {
     const raw = u.name || u.fullName || u.displayName || u.username || '';
     // Ignore generic placeholder roles (e.g. "Parish Admin", "Admin", "Administrator", "User", "Guest")
     if (!raw || /^(parish\s*(admin|administrator)|admin|administrator|user|guest)$/i.test(raw.trim())) {
-      if ((u.email || '').toLowerCase() === 'arndas777@gmail.com') return 'Nivesh Arn';
       return '';
     }
     return toPronounceableName(raw);

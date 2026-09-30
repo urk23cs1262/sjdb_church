@@ -16,6 +16,7 @@ import html2canvas from 'html2canvas';
 import toast from 'react-hot-toast';
 import churchLogo from '../../assets/church_extirior.png';
 import PendingApprovalModal from '../../components/user/PendingApprovalModal';
+import { getParishOfficePhone, getChurchEmail } from '../../config/contactConfig';
 
 const DONATION_TYPES = [
   { id: 'general', label: 'General Offering' },
@@ -770,8 +771,8 @@ export default function UserDashboard() {
               {/* Footer */}
               <div style={{ marginTop: '45px', textAlign: 'center', fontSize: '14px', lineHeight: '1.8', color: '#555' }}>
                 Contact Details :<br />
-                Parish Office Phone : +91 96291 95484 <br />
-                Parish Office Email : stjdbchurch@gmail.com <br />
+                Parish Office Phone : {getParishOfficePhone() || 'Contact Parish Office'} <br />
+                Parish Office Email : {getChurchEmail() || 'Contact Parish Office'} <br />
                 Parish Office Website : www.stjohnchurch.com
               </div>
 

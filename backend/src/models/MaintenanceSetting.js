@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { getChurchPhone, getChurchEmail } = require('../config/contactConfig');
 
 const auditLogSchema = new mongoose.Schema({
   enabledBy: { type: String, default: 'System Admin' },
@@ -46,8 +47,8 @@ const maintenanceSettingSchema = new mongoose.Schema({
   allowPublic: { type: Boolean, default: false },
 
   // Contact & Social Details
-  contactPhone: { type: String, default: '+91 94431 00000' },
-  contactEmail: { type: String, default: 'stjdbchurch@gmail.com' },
+  contactPhone: { type: String, default: () => (getChurchPhone() || '') },
+  contactEmail: { type: String, default: () => (getChurchEmail() || '') },
   socialLinks: {
     facebook: { type: String, default: 'https://facebook.com' },
     instagram: { type: String, default: 'https://instagram.com' },

@@ -2,6 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const { sendMail } = require('../config/mailer');
 const { sendSMS, sendWhatsApp } = require('../config/twilio');
+const { getAdminEmail } = require('../config/contactConfig');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
 const { generateUserReportPdf } = require('./userReportPdfService');
@@ -332,8 +333,8 @@ const notifyAdmin = async (event) => {
         isActive: { $ne: false }
       }).select('email phone name');
       const adminList = [...admins];
-      const primaryAdminEmail = process.env.ADMIN_EMAIL || 'stjdbchurch@gmail.com';
-      if (!adminList.some(a => (a.email || '').toLowerCase() === primaryAdminEmail.toLowerCase())) {
+      const primaryAdminEmail = getAdminEmail();
+      if (primaryAdminEmail && !adminList.some(a => (a.email || '').toLowerCase() === primaryAdminEmail.toLowerCase())) {
         adminList.push({ email: primaryAdminEmail, name: 'Parish Administrator' });
       }
       const attachments = [];

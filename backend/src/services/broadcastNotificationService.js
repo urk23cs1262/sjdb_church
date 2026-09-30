@@ -486,7 +486,7 @@ _SJDB Connect_`;
       });
     }
 
-    // 4. WhatsApp Bot Broadcast
+    // 4. WhatsApp Bot Broadcast (Private individual messages)
     const waRecipients = await getEligibleWhatsAppRecipients('announcements');
     if (waRecipients.length > 0) {
       const wa = getWA();
@@ -498,6 +498,14 @@ _SJDB Connect_`;
         }
       });
     }
+
+    // 5. Official WhatsApp Channel Broadcast (Public Parish Broadcast)
+    try {
+      const { publishChannelAnnouncement } = require('./whatsappChannelService');
+      publishChannelAnnouncement(announcement._id, { source: 'admin_manual' }).catch(err => {
+        console.warn('⚠️ [BroadcastNotificationService] WhatsApp Channel announcement notice:', err.message);
+      });
+    } catch (_) { }
 
     return true;
   } catch (err) {

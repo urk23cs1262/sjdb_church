@@ -10,11 +10,15 @@ import { FiMapPin, FiPhone, FiMail, FiClock, FiSend, FiHelpCircle, FiArrowRight 
 import { FaWhatsapp } from 'react-icons/fa';
 import { GiChurch } from 'react-icons/gi';
 import PageHero from '../../components/common/common_page_hero';
+import { getChurchPhone, getChurchEmail, getWhatsAppNumber, getWhatsAppChannelUrl } from '../../config/contactConfig';
 
 export default function Contact() {
   const { t } = useTranslation();
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm();
-  const [whatsappNumber, setWhatsappNumber] = useState('919655639144');
+  const [whatsappNumber, setWhatsappNumber] = useState(() => getWhatsAppNumber() || '');
+  const [whatsappChannelUrl, setWhatsappChannelUrl] = useState(() => getWhatsAppChannelUrl() || '');
+  const churchPhone = getChurchPhone() || '';
+  const churchEmail = getChurchEmail() || '';
 
   useEffect(() => {
     api.get('/settings')
@@ -22,6 +26,10 @@ export default function Contact() {
         const num = res.data?.settings?.whatsappBotPhoneNumber || res.data?.settings?.whatsapp_bot_phone_number;
         if (num) {
           setWhatsappNumber(String(num).replace(/\D/g, ''));
+        }
+        const chanUrl = res.data?.settings?.whatsappChannelUrl || res.data?.settings?.whatsapp_channel_url;
+        if (chanUrl) {
+          setWhatsappChannelUrl(chanUrl);
         }
       })
       .catch(() => { });
@@ -58,8 +66,8 @@ export default function Contact() {
               <div className="space-y-5 mb-8">
                 {[
                   { icon: <FiMapPin />, title: 'Address', content: 'RJWM+XQ4, Murthi Nagar, Kalayarkoil, Tamil Nadu 630551, India' },
-                  { icon: <FiPhone />, title: 'Phone', content: '+91 04577 XXXXXX', link: 'tel:+9104577' },
-                  { icon: <FiMail />, title: 'Email', content: 'stjdbchurch@gmail.com', link: 'mailto:stjdbchurch@gmail.com' },
+                  ...(churchPhone ? [{ icon: <FiPhone />, title: 'Phone', content: churchPhone, link: `tel:${churchPhone.replace(/\D/g, '') ? `+${churchPhone.replace(/\D/g, '')}` : churchPhone}` }] : []),
+                  ...(churchEmail ? [{ icon: <FiMail />, title: 'Email', content: churchEmail, link: `mailto:${churchEmail}` }] : []),
                   { icon: <FiClock />, title: 'Office Hours', content: 'Monday – Saturday: 9:00 AM – 12:30 PM & 4.00 PM - 8.00 PM\n Sunday: 10.00 AM - 12.00 PM & 5.00 PM - 8.00 PM' },
                 ].map((item, i) => (
                   <div key={i} className="flex items-start gap-4">
@@ -98,7 +106,7 @@ export default function Contact() {
               </Link>
 
               {/* WhatsApp & SJDB Connect Action Buttons */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                 <a
                   href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent("Hello St. John de Britto Church")}`}
                   target="_blank"
@@ -109,7 +117,7 @@ export default function Contact() {
                 </a>
 
                 <a
-                  href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent("HI\n\n SJDB Connect\nConnecting Faith & Community")}`}
+                  href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent("HI\n\n SJDB Connect")}`}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center justify-center gap-2.5 bg-church-royal-blue hover:bg-blue-900 text-white border-2 border-church-gold px-4 py-3.5 rounded-2xl transition-all shadow-lg font-bold text-xs sm:text-sm text-center"
@@ -117,6 +125,20 @@ export default function Contact() {
                   <GiChurch className="text-xl text-church-gold flex-shrink-0" /> <span className="truncate">{t('contact.chatSjdbConnect', 'Chat with SJDB Connect')}</span>
                 </a>
               </div>
+
+              {whatsappChannelUrl && (
+                <div className="mb-6">
+                  <a
+                    href={whatsappChannelUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-center gap-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white px-4 py-3.5 rounded-2xl transition-all shadow-lg font-bold text-xs sm:text-sm text-center border border-emerald-400/30"
+                  >
+                    <FaWhatsapp className="text-xl text-emerald-200 flex-shrink-0" />
+                    <span className="truncate">{t('contact.followChannel', 'Follow Official WhatsApp Channel (Updates & Daily Liturgy)')}</span>
+                  </a>
+                </div>
+              )}
 
               {/* Google Maps */}
               <div className="rounded-2xl overflow-hidden shadow-card border border-gray-100 ">
