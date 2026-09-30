@@ -292,7 +292,7 @@ export async function extractContactInfo(isTamil = false) {
   const address = 'Murthi Nagar, Kalayarkoil, Sivaganga District, Tamil Nadu 630551';
   const phone = getChurchPhone() || '';
   const email = getChurchEmail() || '';
-  const officeHours = 'Monday to Saturday, 9:00 AM to 5:00 PM. Closed on Sundays and public holidays.';
+  const officeHours = 'Monday – Saturday: 9:00 AM – 12:30 PM & 4.00 PM - 8.00 PM, Sunday: 10.00 AM - 12.00 PM & 5.00 PM - 8.00 PM';
 
   if (isTamil) {
     return cleanForSpeech(
