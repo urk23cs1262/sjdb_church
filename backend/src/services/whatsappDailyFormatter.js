@@ -1001,15 +1001,36 @@ _காளையார்கோவில்_`;
  */
 function generateSaintInfoMessage({ dailyContent, language = 'ta' }) {
   const isTamil = language === 'ta';
-  const saintNameEn = dailyContent?.saint?.nameEnglish || dailyContent?.saintOfTheDay?.english?.name || dailyContent?.saintName || 'Saint of the Day';
-  const saintNameTa = dailyContent?.saint?.nameTamil || dailyContent?.saintOfTheDay?.tamil?.name || dailyContent?.saintNameTa || saintNameEn;
+  const isBoth = language === 'both';
+  const saintNameEn = dailyContent?.saint?.nameEnglish || dailyContent?.saint?.nameEn || dailyContent?.saintOfTheDay?.english?.name || dailyContent?.saintName || 'Saint of the Day';
+  const saintNameTa = dailyContent?.saint?.nameTamil || dailyContent?.saint?.nameTa || dailyContent?.saintOfTheDay?.tamil?.name || dailyContent?.saintNameTa || saintNameEn;
   const feastDay = dailyContent?.saint?.feastDay || dailyContent?.saintOfTheDay?.english?.feastDay || dailyContent?.formattedDate || '';
   const descEn = dailyContent?.saint?.description || dailyContent?.saint?.descriptionEnglish || dailyContent?.saintOfTheDay?.english?.description || dailyContent?.saintDescription || '';
   const descTa = dailyContent?.saint?.descriptionTamil || dailyContent?.saint?.descriptionTa || dailyContent?.saintOfTheDay?.tamil?.description || descEn;
+  const saintLink = getSiteUrl(SITE_ROUTES.SAINT_OF_THE_DAY);
+
+  if (isBoth) {
+    let msg = `✝️ *Saint of the Day • இன்றைய புனிதர்*\n\n`;
+    msg += `👑 *${saintNameEn}* (${saintNameTa})\n\n`;
+    if (feastDay) {
+      msg += `📅 *Feast Day / திருவிழா:* ${feastDay}\n\n`;
+    }
+    if (dailyContent?.saint?.feastTitle) {
+      msg += `🎉 *Feast / திருவிழா:* ${dailyContent.saint.feastTitle}\n\n`;
+    }
+    if (descTa && descTa !== descEn) {
+      msg += `🇮🇳 *தமிழ் (Tamil):*\n${descTa}\n\n`;
+    }
+    if (descEn) {
+      msg += `🇬🇧 *English:*\n${descEn}\n\n`;
+    }
+    msg += `🔗 *மேலும் வாசிக்க / Read More:*\n${saintLink}\n\n`;
+    msg += `— *St. John de Britto Church, Kalayarkoil*\n_புனித ஜான் டி பிரிட்டோ திருத்தலம்_\n_SJDB Connect_`;
+    return msg;
+  }
 
   const name = isTamil ? saintNameTa : saintNameEn;
   const desc = isTamil ? (descTa || descEn) : (descEn || descTa);
-  const saintLink = getSiteUrl(SITE_ROUTES.SAINT_OF_THE_DAY);
 
   let msg = isTamil ? `✝️ *இன்றைய புனிதர் (Saint of the Day)*\n\n👑 *${name}*\n\n` : `✝️ *Saint of the Day*\n\n👑 *${name}*\n\n`;
 
