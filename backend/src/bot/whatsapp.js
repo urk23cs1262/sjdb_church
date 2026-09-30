@@ -17,6 +17,7 @@ const {
 } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const path = require('path');
+const axios = require('axios');
 const QRCode = require('qrcode');
 const { handleIncomingMessage } = require('./botHandler');
 const { useMongoDBAuthState, clearMongoDBAuthState } = require('./mongoAuthState');
@@ -301,12 +302,30 @@ async function sendWhatsAppMedia(phone, mediaArg, optionalCaption) {
   // If url is a local file path and no buffer is passed, read into Buffer for 100% reliable Baileys transfer
   if (!buffer && url && typeof url === 'string') {
     try {
-      if (fs.existsSync(url)) {
-        buffer = fs.readFileSync(url);
-        if (!fileName) fileName = path.basename(url);
+      let resolvedPath = url;
+      if (url.startsWith('/uploads/')) {
+        const p1 = path.join(__dirname, '../../', url);
+        if (fs.existsSync(p1)) {
+          resolvedPath = p1;
+        } else {
+          const p2 = path.join(process.cwd(), url);
+          if (fs.existsSync(p2)) resolvedPath = p2;
+        }
+      }
+      if (fs.existsSync(resolvedPath)) {
+        buffer = fs.readFileSync(resolvedPath);
+        if (!fileName) fileName = path.basename(resolvedPath);
+      } else if (url.startsWith('http://') || url.startsWith('https://')) {
+        const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 7000 });
+        if (resp.status === 200 && resp.data && resp.data.length > 200) {
+          buffer = Buffer.from(resp.data);
+          if (!fileName) {
+            try { fileName = path.basename(new URL(url).pathname); } catch (e) {}
+          }
+        }
       }
     } catch (e) {
-      console.warn('[WhatsApp] Could not read local file buffer:', e.message);
+      console.warn('[WhatsApp] Could not read local/remote media buffer:', e.message);
     }
   }
 

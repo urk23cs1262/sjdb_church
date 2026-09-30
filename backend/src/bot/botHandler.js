@@ -686,7 +686,7 @@ async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false) {
     console.log(`[SaintOfDay] Sending ${contentLang === 'ta' ? 'Tamil' : contentLang === 'both' ? 'Bilingual' : 'English'} Saint content`);
 
     // 1. Saint of the Day Image (separate message)
-    const saintImagePayload = getDailySaintImagePayload({ dailyContent });
+    const saintImagePayload = getDailySaintImagePayload({ dailyContent, language: contentLang });
     if (saintImagePayload && typeof wa.sendWhatsAppMedia === 'function') {
       try {
         await wa.sendWhatsAppMedia(replyTarget, saintImagePayload);
@@ -1724,11 +1724,15 @@ Please select your preferred language for bot conversation:
     // 7️⃣ 🌟 Saint of the Day
     // - Services Menu: Option 5 | Main Menu: Option 7
     const isSaintChoice = isSaintNum ||
-      /^(today'?s saint|today saint|saint of the day|saint|saints|who is today saint|who is the saint today|இன்றைய புனிதர்|புனிதர் யார்|புனிதர்)$/i.test(normalizedText) ||
+      /^(today'?s saint|today saint|saint of the day|saint|saints|who is today'?s? saint|tell me about today'?s? saint|tell me about the saint|இன்றைய புனிதர்|இன்றைய புனிதர் யார்\??|இன்றைய புனிதரைப் பற்றி சொல்லுங்கள்|புனிதர் யார்|புனிதர்)$/i.test(normalizedText) ||
       normalizedText.includes("saint of the day") ||
       normalizedText.includes("today's saint") ||
       normalizedText.includes("today saint") ||
-      /(இன்றைய புனிதர்|புனிதர் யார்)/.test(rawText);
+      normalizedText.includes("who is today's saint") ||
+      normalizedText.includes("who is today saint") ||
+      normalizedText.includes("tell me about today's saint") ||
+      normalizedText.includes("tell me about today saint") ||
+      /(இன்றைய புனிதர்|புனிதர் யார்|இன்றைய புனிதரைப் பற்றி)/.test(rawText);
 
     if (isSaintChoice) {
       await sendTodaySaint(replyTarget, session, wa, isTamilQuery);
@@ -2403,18 +2407,12 @@ Please bring parish family ID or relevant record dates when collecting certifica
         session.lastSentAt = new Date();
         await session.save();
 
-        let sentMedia = false;
-        if (ragResult.isSaintOfDayFlow && ragResult.imageUrl && typeof wa.sendWhatsAppMedia === 'function') {
-          try {
-            sentMedia = await wa.sendWhatsAppMedia(replyTarget, { url: ragResult.imageUrl, caption: ragResult.reply, mimetype: 'image/jpeg' });
-          } catch (mErr) {
-            console.warn('[BotHandler] RAG Saint media send fallback:', mErr.message);
-            sentMedia = false;
-          }
+        if (ragResult.isSaintOfDayFlow) {
+          await sendTodaySaint(replyTarget, session, wa, isTamilQuery);
+          return;
         }
-        if (!sentMedia) {
-          await wa.sendWhatsAppMessage(replyTarget, ragResult.reply);
-        }
+
+        await wa.sendWhatsAppMessage(replyTarget, ragResult.reply);
         return;
       }
     } catch (ragErr) {

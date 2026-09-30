@@ -85,6 +85,7 @@ export async function showNativeNotification({
   title,
   body,
   icon = '/favicon.png',
+  image = null,
   url = '/notifications',
   notificationId = null,
   tag = null
@@ -108,6 +109,10 @@ export async function showNativeNotification({
       renotify: true,
       vibrate: [100, 50, 100]
     };
+
+    if (image) {
+      options.image = image;
+    }
 
     if ('serviceWorker' in navigator) {
       const reg = await navigator.serviceWorker.ready;

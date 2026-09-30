@@ -22,7 +22,16 @@ async function fetchImageBuffer(imageUrl) {
   try {
     // If it's a local file path
     if (imageUrl.startsWith('/') || imageUrl.startsWith('file:') || fs.existsSync(imageUrl)) {
-      const cleanPath = imageUrl.replace(/^file:\/\//, '');
+      let cleanPath = imageUrl.replace(/^file:\/\//, '');
+      if (cleanPath.startsWith('/uploads/')) {
+        const potential = path.join(__dirname, '../../', cleanPath);
+        if (fs.existsSync(potential)) {
+          cleanPath = potential;
+        } else {
+          const pot2 = path.join(process.cwd(), cleanPath);
+          if (fs.existsSync(pot2)) cleanPath = pot2;
+        }
+      }
       if (fs.existsSync(cleanPath)) {
         const buffer = fs.readFileSync(cleanPath);
         const ext = path.extname(cleanPath).toLowerCase();
@@ -247,8 +256,14 @@ async function getTodayDailyContent(targetDate = new Date()) {
     }
   }
 
-  const saintImageUrl = saintData?.image || null;
-  const saintImgBuffer = saintImageUrl ? await fetchImageBuffer(saintImageUrl) : null;
+  const saintImageUrl = saintData?.remoteUrl || saintData?.imageUrl || saintData?.image || null;
+  const saintImgBuffer = saintImageUrl ? await fetchImageBuffer(saintData?.localPath || saintData?.localUrl || saintImageUrl) : null;
+  const saintAttachment = saintData?.imageAttachment || (saintImgBuffer ? {
+    filename: 'saint_of_the_day.jpg',
+    content: saintImgBuffer.buffer,
+    cid: 'saintOfTheDayImage',
+    contentType: saintImgBuffer.contentType || 'image/jpeg'
+  } : null);
 
   const saint = {
     date: saintData?.date || dateKey,
@@ -273,8 +288,12 @@ async function getTodayDailyContent(targetDate = new Date()) {
     hasFeastInfo: Boolean(saintData?.hasFeastInfo),
     image: saintImageUrl,
     imageUrl: saintImageUrl,
-    imageSource: saintData?.imageSource || 'Vatican News',
-    sourceUrl: saintData?.sourceUrl || saintData?.link || 'https://www.vaticannews.va/en/saints.html',
+    remoteUrl: saintData?.remoteUrl || saintImageUrl,
+    localUrl: saintData?.localUrl || null,
+    localPath: saintData?.localPath || null,
+    imageAttachment: saintAttachment,
+    imageSource: saintData?.imageSource || 'Catholic Readings',
+    sourceUrl: saintData?.sourceUrl || saintData?.link || 'https://catholicreadings.org/catholic-saint-of-the-day/',
     saints: saintData?.saints || []
   };
 

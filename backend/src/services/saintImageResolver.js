@@ -21,11 +21,12 @@ const HTTP_HEADERS = {
 const DIGNIFIED_FALLBACK_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons/b/bf/St._John_De_Britto.jpg';
 
 /**
- * Downloads and stores saint image locally in backend /uploads/saints/ directory
+ * Downloads and stores saint image locally in backend /uploads/saints/ directory.
+ * Returns { localUrl, localPath, remoteUrl, buffer }
  */
-async function cacheImageLocally(remoteUrl, baseName = 'saint') {
+async function cacheSaintImageFile(remoteUrl, baseName = 'saint') {
   if (!remoteUrl || typeof remoteUrl !== 'string' || !remoteUrl.startsWith('http')) {
-    return remoteUrl;
+    return { localUrl: remoteUrl, localPath: null, remoteUrl, buffer: null };
   }
   try {
     const uploadsDir = path.join(__dirname, '../../uploads/saints');
@@ -51,12 +52,15 @@ async function cacheImageLocally(remoteUrl, baseName = 'saint') {
 
     const filename = `${safeName || 'saint'}${ext}`;
     const filePath = path.join(uploadsDir, filename);
+    const localUrl = `/uploads/saints/${filename}`;
 
     // If file already exists and is non-empty, use existing cached file
     if (fs.existsSync(filePath)) {
       const stats = fs.statSync(filePath);
       if (stats.size > 1000) {
-        return `/uploads/saints/${filename}`;
+        let buffer = null;
+        try { buffer = fs.readFileSync(filePath); } catch (e) {}
+        return { localUrl, localPath: filePath, remoteUrl, buffer };
       }
     }
 
@@ -69,14 +73,23 @@ async function cacheImageLocally(remoteUrl, baseName = 'saint') {
     });
 
     if (response.status === 200 && response.data && response.data.length > 500) {
-      fs.writeFileSync(filePath, response.data);
-      console.log(`[Saint Image Resolver] Cached image locally: /uploads/saints/${filename} (${response.data.length} bytes)`);
-      return `/uploads/saints/${filename}`;
+      const buffer = Buffer.from(response.data);
+      fs.writeFileSync(filePath, buffer);
+      console.log(`[Saint Image Resolver] Cached image locally: ${localUrl} (${buffer.length} bytes)`);
+      return { localUrl, localPath: filePath, remoteUrl, buffer };
     }
   } catch (err) {
     console.warn(`[Saint Image Resolver] Local cache notice for ${baseName}: ${err.message}. Using remote URL.`);
   }
-  return remoteUrl;
+  return { localUrl: remoteUrl, localPath: null, remoteUrl, buffer: null };
+}
+
+/**
+ * Backward compatible wrapper returning string URL
+ */
+async function cacheImageLocally(remoteUrl, baseName = 'saint') {
+  const result = await cacheSaintImageFile(remoteUrl, baseName);
+  return result.localUrl || remoteUrl;
 }
 
 const CHRISTIAN_SAINT_KEYWORDS = [
@@ -315,10 +328,14 @@ async function searchWikipediaSaintImage(rawSaintName) {
         const imageUrl = extractWikipediaImageUrl(data);
         if (imageUrl) {
           console.log(`[Saint Image Resolver] Found direct Wikipedia image for "${rawSaintName}" -> "${data.title}": ${imageUrl}`);
-          const localUrl = await cacheImageLocally(imageUrl, rawSaintName);
+          const cached = await cacheSaintImageFile(imageUrl, rawSaintName);
           return {
-            url: localUrl,
+            url: imageUrl, // Public HTTPS URL
+            imageUrl: imageUrl,
             remoteUrl: imageUrl,
+            localUrl: cached.localUrl,
+            localPath: cached.localPath,
+            buffer: cached.buffer,
             source: 'wikipedia',
             sourceUrl: data.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(slug)}`,
             fallback: false
@@ -374,10 +391,14 @@ async function searchWikipediaSaintImage(rawSaintName) {
         const imageUrl = extractWikipediaImageUrl(data);
         if (imageUrl) {
           console.log(`[Saint Image Resolver] Found verified Wikipedia portrait for "${rawSaintName}" -> "${data.title}" (${data.description}): ${imageUrl}`);
-          const localUrl = await cacheImageLocally(imageUrl, rawSaintName);
+          const cached = await cacheSaintImageFile(imageUrl, rawSaintName);
           return {
-            url: localUrl,
+            url: imageUrl, // Public HTTPS URL
+            imageUrl: imageUrl,
             remoteUrl: imageUrl,
+            localUrl: cached.localUrl,
+            localPath: cached.localPath,
+            buffer: cached.buffer,
             source: 'wikipedia',
             sourceUrl: data.content_urls?.desktop?.page || `https://en.wikipedia.org/wiki/${encodeURIComponent(hit.title)}`,
             fallback: false
@@ -393,9 +414,30 @@ async function searchWikipediaSaintImage(rawSaintName) {
 }
 
 /**
+ * Validates, downloads, and caches remote image URL from Catholic Readings or another source
+ */
+async function resolveAndCacheRemoteSaintImage(remoteUrl, saintName, sourceName = 'catholic_readings', sourceUrl = '') {
+  if (!remoteUrl || isBlacklistedImage(remoteUrl)) {
+    return null;
+  }
+  const cached = await cacheSaintImageFile(remoteUrl, saintName);
+  return {
+    url: remoteUrl, // Public HTTPS URL
+    imageUrl: remoteUrl,
+    remoteUrl: remoteUrl,
+    localUrl: cached.localUrl,
+    localPath: cached.localPath,
+    buffer: cached.buffer,
+    source: sourceName,
+    sourceUrl: sourceUrl || remoteUrl,
+    fallback: false
+  };
+}
+
+/**
  * Master Saint Image Resolver
  * Executes strict priority pipeline:
- * 1. Vatican News Official Saint Image ("Original Website")
+ * 1. Catholic Readings Image (if available and valid)
  * 2. Wikipedia Official Canonical Saint Portrait (by Saint Name)
  * 3. Catholic Liturgical Calendar Curated Preset
  * 4. Guaranteed Authentic Catholic Sacred Art (St. John de Britto)
@@ -406,7 +448,18 @@ async function resolveSaintImage(saintName, vaticanUrl, $, todayDate = new Date(
     const vaticanResult = getVaticanSaintImage($, vaticanUrl, sectionEl);
     if (vaticanResult && vaticanResult.url && !isBlacklistedImage(vaticanResult.url)) {
       console.log(` Saint Image Resolver: Using authentic Vatican News image for "${saintName}": ${vaticanResult.url}`);
-      return vaticanResult;
+      const cached = await cacheSaintImageFile(vaticanResult.url, saintName);
+      return {
+        url: vaticanResult.url,
+        imageUrl: vaticanResult.url,
+        remoteUrl: vaticanResult.url,
+        localUrl: cached.localUrl,
+        localPath: cached.localPath,
+        buffer: cached.buffer,
+        source: 'vatican',
+        sourceUrl: vaticanResult.sourceUrl,
+        fallback: false
+      };
     }
   }
 
@@ -430,8 +483,14 @@ async function resolveSaintImage(saintName, vaticanUrl, $, todayDate = new Date(
   if (calendarSaint && calendarSaint.image && (cleanTarget === cleanCal || cleanTarget.includes(cleanCal) || cleanCal.includes(cleanTarget))) {
     if (!isBlacklistedImage(calendarSaint.image)) {
       console.log(` Saint Image Resolver: Using Catholic Liturgical Calendar preset image for "${saintName}"`);
+      const cached = await cacheSaintImageFile(calendarSaint.image, saintName);
       return {
         url: calendarSaint.image,
+        imageUrl: calendarSaint.image,
+        remoteUrl: calendarSaint.image,
+        localUrl: cached.localUrl,
+        localPath: cached.localPath,
+        buffer: cached.buffer,
         source: 'liturgical_calendar',
         sourceUrl: calendarSaint.link || vaticanUrl,
         fallback: false
@@ -440,8 +499,14 @@ async function resolveSaintImage(saintName, vaticanUrl, $, todayDate = new Date(
   }
 
   // 4. Default Dignified Catholic Sacred Art (St. John de Britto)
+  const cachedFallback = await cacheSaintImageFile(DIGNIFIED_FALLBACK_IMAGE, 'st_john_de_britto');
   return {
     url: DIGNIFIED_FALLBACK_IMAGE,
+    imageUrl: DIGNIFIED_FALLBACK_IMAGE,
+    remoteUrl: DIGNIFIED_FALLBACK_IMAGE,
+    localUrl: cachedFallback.localUrl,
+    localPath: cachedFallback.localPath,
+    buffer: cachedFallback.buffer,
     source: 'liturgical_fallback',
     sourceUrl: vaticanUrl || 'https://www.vaticannews.va/en/saints.html',
     fallback: true
@@ -452,7 +517,9 @@ module.exports = {
   resolveSaintImage,
   getVaticanSaintImage,
   searchWikipediaSaintImage,
+  resolveAndCacheRemoteSaintImage,
   cacheImageLocally,
+  cacheSaintImageFile,
   cleanSaintName,
   DIGNIFIED_FALLBACK_IMAGE
 };

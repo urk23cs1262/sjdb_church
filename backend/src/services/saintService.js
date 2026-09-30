@@ -6,16 +6,25 @@ const {
   resolveSaintImage, 
   getVaticanSaintImage, 
   searchWikipediaSaintImage, 
+  resolveAndCacheRemoteSaintImage,
+  cacheSaintImageFile,
   searchSaintFallback, 
   cleanSaintName, 
   verifyImageUrl 
 } = require('./saintImageResolver');
 
 // ─── SOURCE CONFIGURATION ────────────────────────────────────────────────────
-// Primary source: Vatican News — dynamic month/day URL structure (no year),
-// so it automatically works for 2026, 2027, 2028, and all future years.
+// Primary source: Catholic Readings (https://catholicreadings.org/catholic-saint-of-the-day/)
+// Secondary source: Vatican News — dynamic month/day URL structure
+const CATHOLIC_READINGS_BASE = "https://catholicreadings.org";
+const CATHOLIC_READINGS_URL = "https://catholicreadings.org/catholic-saint-of-the-day/";
 const VATICAN_NEWS_BASE = "https://www.vaticannews.va";
 const VATICAN_SAINTS_BASE_URL = "https://www.vaticannews.va/en/saints";
+
+const MONTH_NAMES = [
+  'january', 'february', 'march', 'april', 'may', 'june',
+  'july', 'august', 'september', 'october', 'november', 'december'
+];
 
 let dailySaint = null;
 let retryTimeout = null;
@@ -711,6 +720,94 @@ const FETCH_HEADERS = {
  *   sourceUrl
  * } or null
  */
+async function fetchFromCatholicReadings(month, day, year = new Date().getFullYear()) {
+  const mIdx = parseInt(month, 10) - 1;
+  const monthName = MONTH_NAMES[mIdx] || 'september';
+  const dayNum = parseInt(day, 10);
+  const directDayUrl = `${CATHOLIC_READINGS_BASE}/saint-of-the-day-for-${monthName}-${dayNum}/`;
+  console.log(`[Saint Service] Fetching Catholic Readings Saint of the Day: ${directDayUrl}`);
+
+  try {
+    let dayRes = null;
+    try {
+      dayRes = await axios.get(directDayUrl, { headers: FETCH_HEADERS, timeout: 8000 });
+    } catch (e) {
+      console.warn(`[Saint Service] Direct day URL failed (${directDayUrl}), trying main page...`);
+      dayRes = await axios.get(CATHOLIC_READINGS_URL, { headers: FETCH_HEADERS, timeout: 8000 });
+    }
+
+    if (!dayRes || !dayRes.data) return null;
+
+    const $ = cheerio.load(dayRes.data);
+    let saintArticleUrl = null;
+    let saintNameCandidate = null;
+
+    $('article a, .entry-content a').each((i, el) => {
+      const href = $(el).attr('href') || '';
+      const text = $(el).text().trim();
+      if (
+        !href.includes('whatsapp') && 
+        !href.includes('category') && 
+        !href.includes('tag') &&
+        !href.includes('daily-readings') &&
+        !href.includes('saint-of-the-day-for-') &&
+        text.length > 2 &&
+        !saintArticleUrl
+      ) {
+        saintArticleUrl = href;
+        saintNameCandidate = text.replace(/^[👉\s*]+/, '').trim();
+      }
+    });
+
+    if (!saintArticleUrl) {
+      console.warn(`[Saint Service] Could not find saint article link on Catholic Readings for ${monthName} ${dayNum}`);
+      return null;
+    }
+
+    console.log(`[Saint Service] Found Catholic Readings Saint article: "${saintNameCandidate}" -> ${saintArticleUrl}`);
+    const articleRes = await axios.get(saintArticleUrl, { headers: FETCH_HEADERS, timeout: 8000 });
+    const $art = cheerio.load(articleRes.data);
+
+    let pageTitle = $art('h1.entry-title, .entry-title, h1').first().text().trim();
+    if (!pageTitle) pageTitle = saintNameCandidate;
+    
+    let cleanName = pageTitle
+      .replace(/\s*[-–—|]\s*Feast Day.*$/i, '')
+      .replace(/\s*[-–—|]\s*Today.*$/i, '')
+      .replace(/\s+\d{4}\s*$/g, '')
+      .trim();
+    if (!cleanName) cleanName = saintNameCandidate;
+
+    let rawImageUrl = null;
+    $art('article img, .entry-content img').each((i, el) => {
+      const src = $art(el).attr('src') || $art(el).attr('data-src') || '';
+      if (src.includes('/uploads/') && !src.includes('Whatsapp') && !src.includes('50x50') && !src.includes('avatar') && !rawImageUrl) {
+        rawImageUrl = src;
+      }
+    });
+
+    let paragraphs = [];
+    $art('.entry-content p, article p').each((i, el) => {
+      const p = $art(el).text().trim();
+      if (p.length > 30 && !p.includes('Follow the Catholic Daily Readings') && !p.includes('WhatsApp Channel') && !p.includes('Today’s Catholic Saint of the Day')) {
+        paragraphs.push(p);
+      }
+    });
+    let bioText = paragraphs.slice(0, 5).join('\n\n');
+
+    return {
+      name: cleanName,
+      description: bioText,
+      imageUrl: rawImageUrl,
+      sourceUrl: saintArticleUrl,
+      source: 'Catholic Readings'
+    };
+  } catch (err) {
+    console.warn(`[Saint Service] Catholic Readings fetch error:`, err.message);
+    return null;
+  }
+}
+
 async function fetchFromVaticanNews(month, day, year = new Date().getFullYear()) {
   const vaticanUrl = buildVaticanNewsUrl(month, day);
   console.log(`[Saint Service] Fetching Vatican News Saint of the Day: ${vaticanUrl}`);
@@ -1003,135 +1100,148 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
   let cheerioDoc = null;
   let feastInfo = null;
 
-  // ── PRIMARY FETCH: Vatican News ──────────────────────────────────────────
-  console.log(`[Saint Service] Fetching Saint of the Day for ${dateKey} (IST) from Vatican News...`);
-  const vaticanResult = await fetchFromVaticanNews(month, day, year);
+  // ── 1. PRIMARY FETCH: Catholic Readings ──────────────────────────────────────────
+  console.log(`[Saint Service] Fetching Saint of the Day for ${dateKey} (IST) from Catholic Readings...`);
+  let crResult = null;
+  try {
+    crResult = await fetchFromCatholicReadings(month, day, year);
+  } catch (crErr) {
+    console.warn('[Saint Service] Catholic Readings fetch error:', crErr.message);
+  }
 
-  if (vaticanResult && vaticanResult.primarySaint) {
-    usedVatican = true;
-    const prim = vaticanResult.primarySaint;
-    feastInfo = vaticanResult.feastInfo;
+  let vaticanResult = null;
+  let imageResult = null;
 
-    // Use full/clean feast saint name if feast saint was prioritized (e.g. "Blessed Virgin Mary of the Mercy" instead of "B. V. Mary of the Mercy")
-    saintName = (feastInfo?.hasFeastInfo && feastInfo?.feastSaintName)
-      ? feastInfo.feastSaintName
-      : prim.name;
+  if (crResult && crResult.name && (crResult.description || crResult.imageUrl)) {
+    saintName = crResult.name;
+    description = crResult.description || '';
+    detailUrl = crResult.sourceUrl;
+    usedSource = "Catholic Readings";
+    usedSourceUrl = crResult.sourceUrl;
+    allSaintsList = [{ name: saintName, description, imageUrl: crResult.imageUrl }];
+    console.log(`[SaintOfDay] Source: Catholic Readings -> "${saintName}"`);
 
-    detailUrl = prim.detailUrl || vaticanResult.sourceUrl;
-    usedSourceUrl = detailUrl;
-    // Ensure the primary selected saint (e.g. prioritized with Vatican News image) is first in allSaintsList
-    const listCopy = [...(vaticanResult.allSaints || [])];
-    const primIdx = listCopy.findIndex(s => s.name === prim.name || (s.imageUrl && s.imageUrl === prim.imageUrl));
-    if (primIdx > 0) {
-      const [foundPrim] = listCopy.splice(primIdx, 1);
-      listCopy.unshift(foundPrim);
+    // Supplement bio from Wikipedia if bio is brief
+    if (!isSufficientBio(description)) {
+      const wikiBio = await fetchWikipediaBio(saintName);
+      if (wikiBio && isSufficientBio(wikiBio.text)) {
+        description = wikiBio.text;
+      }
     }
-    allSaintsList = listCopy;
-    primarySectionEl = prim.sectionEl;
-    cheerioDoc = vaticanResult.$;
 
-    // Priority 1: Vatican News — check if sufficient biography is present
-    if (isSufficientBio(prim.description)) {
-      description = prim.description;
-      usedSource = "Vatican News";
+    // Resolve Image:
+    // 1. Try Catholic Readings image
+    if (crResult.imageUrl) {
+      console.log(`[Saint Service] Resolving Catholic Readings image for "${saintName}": ${crResult.imageUrl}`);
+      imageResult = await resolveAndCacheRemoteSaintImage(crResult.imageUrl, saintName, 'catholic_readings', crResult.sourceUrl);
+    }
+
+    // 2. If no valid image from Catholic Readings, search Wikipedia
+    if (!imageResult || !imageResult.url) {
+      console.log(`[Saint Service] Image not on Catholic Readings, searching Wikipedia for verified portrait of "${saintName}"...`);
+      imageResult = await searchWikipediaSaintImage(saintName);
+    }
+  } else {
+    // ── 2. SECONDARY FETCH: Vatican News ──────────────────────────────────────────
+    console.log(`[Saint Service] Catholic Readings unavailable → trying Vatican News for ${dateKey}...`);
+    vaticanResult = await fetchFromVaticanNews(month, day, year);
+
+    if (vaticanResult && vaticanResult.primarySaint) {
+      usedVatican = true;
+      const prim = vaticanResult.primarySaint;
+      feastInfo = vaticanResult.feastInfo;
+
+      saintName = (feastInfo?.hasFeastInfo && feastInfo?.feastSaintName)
+        ? feastInfo.feastSaintName
+        : prim.name;
+
+      detailUrl = prim.detailUrl || vaticanResult.sourceUrl;
       usedSourceUrl = detailUrl;
-      console.log(`[SaintOfDay] Source: Vatican News`);
+      const listCopy = [...(vaticanResult.allSaints || [])];
+      const primIdx = listCopy.findIndex(s => s.name === prim.name || (s.imageUrl && s.imageUrl === prim.imageUrl));
+      if (primIdx > 0) {
+        const [foundPrim] = listCopy.splice(primIdx, 1);
+        listCopy.unshift(foundPrim);
+      }
+      allSaintsList = listCopy;
+      primarySectionEl = prim.sectionEl;
+      cheerioDoc = vaticanResult.$;
+
+      if (isSufficientBio(prim.description)) {
+        description = prim.description;
+        usedSource = "Vatican News";
+        usedSourceUrl = detailUrl;
+        console.log(`[SaintOfDay] Source: Vatican News`);
+      } else {
+        console.log(`[SaintOfDay] Vatican News insufficient → Source: Wikipedia`);
+        const wikiBio = await fetchWikipediaBio(saintName);
+        if (wikiBio && isSufficientBio(wikiBio.text)) {
+          description = wikiBio.text;
+          usedSource = "Wikipedia";
+          usedSourceUrl = wikiBio.url;
+          console.log(`[SaintOfDay] Wikipedia biography successfully applied for "${saintName}" (${description.length} chars)`);
+        } else {
+          console.log(`[SaintOfDay] Vatican News and Wikipedia insufficient → Source: Catholic Liturgical Calendar`);
+          description = fallbackSaint?.description || prim.description || '';
+          usedSource = "Catholic Liturgical Calendar";
+          usedSourceUrl = fallbackSaint?.link || detailUrl;
+        }
+      }
+
+      if (prim.imageUrl) {
+        console.log(`[Saint Service] Using authentic Vatican News image for "${saintName}": ${prim.imageUrl}`);
+        const cached = await cacheSaintImageFile(prim.imageUrl, saintName);
+        imageResult = {
+          url: prim.imageUrl,
+          imageUrl: prim.imageUrl,
+          remoteUrl: prim.imageUrl,
+          localUrl: cached.localUrl,
+          localPath: cached.localPath,
+          buffer: cached.buffer,
+          source: 'vatican',
+          sourceUrl: detailUrl,
+          fallback: false
+        };
+      }
     } else {
-      console.log(`[SaintOfDay] Vatican News insufficient → Source: Wikipedia`);
-      // Priority 2: Wikipedia Fallback dynamically based on saint name
+      // ── 3. TERTIARY FALLBACK: Wikipedia / Liturgical Calendar ─────────────────
+      console.log(`[Saint Service] Vatican News unavailable for ${dateKey} → trying Wikipedia`);
+      saintName = fallbackSaint.name;
       const wikiBio = await fetchWikipediaBio(saintName);
       if (wikiBio && isSufficientBio(wikiBio.text)) {
         description = wikiBio.text;
         usedSource = "Wikipedia";
         usedSourceUrl = wikiBio.url;
-        console.log(`[SaintOfDay] Wikipedia biography successfully applied for "${saintName}" (${description.length} chars)`);
+        console.log(`[SaintOfDay] Source: Wikipedia (${description.length} chars)`);
       } else {
-        // Priority 3: Curated Catholic Liturgical Calendar Fallback
-        console.log(`[SaintOfDay] Vatican News and Wikipedia insufficient → Source: Catholic Liturgical Calendar`);
-        description = fallbackSaint?.description || prim.description || '';
+        console.log(`[SaintOfDay] Vatican News and Wikipedia unavailable → Source: Catholic Liturgical Calendar`);
+        description = fallbackSaint.description;
         usedSource = "Catholic Liturgical Calendar";
-        usedSourceUrl = fallbackSaint?.link || detailUrl;
+        usedSourceUrl = fallbackSaint.link || VATICAN_SAINTS_BASE_URL;
       }
-    }
-  } else {
-    // ── FALLBACK: Vatican News unavailable ─────────────────────────────────
-    console.log(`[Saint Service] Vatican News unavailable for ${dateKey} → trying Wikipedia`);
-    saintName = fallbackSaint.name;
-    const wikiBio = await fetchWikipediaBio(saintName);
-    if (wikiBio && isSufficientBio(wikiBio.text)) {
-      description = wikiBio.text;
-      usedSource = "Wikipedia";
-      usedSourceUrl = wikiBio.url;
-      console.log(`[SaintOfDay] Source: Wikipedia (${description.length} chars)`);
-    } else {
-      console.log(`[SaintOfDay] Vatican News and Wikipedia unavailable → Source: Catholic Liturgical Calendar`);
-      description = fallbackSaint.description;
-      usedSource = "Catholic Liturgical Calendar";
-      usedSourceUrl = fallbackSaint.link || VATICAN_SAINTS_BASE_URL;
-    }
-    tamilName = fallbackSaint.nameTa;
-    descriptionTa = fallbackSaint.descriptionTa;
-    detailUrl = usedSourceUrl;
-    allSaintsList = [{ name: fallbackSaint.name, description, imageUrl: fallbackSaint.image }];
-    feastInfo = extractFeastInfo(null, allSaintsList, month, day, dateKey);
-  }
-
-  // Ensure feast info is extracted if not already
-  if (!feastInfo) {
-    feastInfo = extractFeastInfo(cheerioDoc, allSaintsList, month, day, dateKey);
-  }
-
-  // If feastInfo was not found on page, check if calendar entry has feast info
-  if (!feastInfo?.hasFeastInfo && fallbackSaint?.hasFeastInfo) {
-    const cleanFetched = cleanSaintName(saintName).toLowerCase();
-    const cleanFallback = cleanSaintName(fallbackSaint.name).toLowerCase();
-    if (cleanFetched.includes(cleanFallback) || cleanFallback.includes(cleanFetched) || cleanFetched.includes('cosmas')) {
-      feastInfo = {
-        feastTitle: fallbackSaint.feastTitle,
-        feastTitleTa: fallbackSaint.feastTitleTa,
-        feastType: fallbackSaint.feastType,
-        feastTypeTa: fallbackSaint.feastTypeTa,
-        hasFeastInfo: true,
-        feastSaintName: saintName
-      };
+      tamilName = fallbackSaint.nameTa;
+      descriptionTa = fallbackSaint.descriptionTa;
+      detailUrl = usedSourceUrl;
+      allSaintsList = [{ name: fallbackSaint.name, description, imageUrl: fallbackSaint.image }];
+      feastInfo = extractFeastInfo(null, allSaintsList, month, day, dateKey);
     }
   }
 
-  if (feastInfo && feastInfo.hasFeastInfo) {
-    if (!feastInfo.feastTitleTa) {
-      if (KNOWN_FEAST_TRANSLATIONS[feastInfo.feastTitle]) {
-        feastInfo.feastTitleTa = KNOWN_FEAST_TRANSLATIONS[feastInfo.feastTitle];
-      } else {
-        const trans = await translateText(feastInfo.feastTitle);
-        feastInfo.feastTitleTa = trans || feastInfo.feastTitle;
-      }
-    }
-  }
-
-  // ── IMAGE RESOLUTION ─────────────────────────────────────────────────────
-  // Pipeline: 
-  // 1. Vatican News official saint image (from primarySaint)
-  // 2. Wikipedia exact canonical saint portrait (identity validated & cached locally in /uploads/saints/)
-  // 3. Liturgical calendar fallback
-  // 4. Online image search (Google / Web)
-  // 5. Dignified sacred art (St. John de Britto)
-  let imageResult = null;
-  if (vaticanResult?.primarySaint?.imageUrl) {
-    console.log(`[Saint Service] Using authentic Vatican News image for "${saintName}": ${vaticanResult.primarySaint.imageUrl}`);
-    imageResult = {
-      url: vaticanResult.primarySaint.imageUrl,
-      source: 'vatican',
-      sourceUrl: detailUrl,
-      fallback: false
-    };
-  } else {
+  // Final image fallback if still not resolved
+  if (!imageResult || !imageResult.url) {
     imageResult = await resolveSaintImage(saintName, detailUrl, cheerioDoc, dt, primarySectionEl);
     if ((!imageResult || imageResult.fallback) && fallbackSaint?.image) {
       const cleanFetched = cleanSaintName(saintName).toLowerCase();
       const cleanFallback = cleanSaintName(fallbackSaint.name).toLowerCase();
       if (cleanFetched.includes(cleanFallback) || cleanFallback.includes(cleanFetched) || cleanFetched.includes('cosmas')) {
+        const cached = await cacheSaintImageFile(fallbackSaint.image, saintName);
         imageResult = {
           url: fallbackSaint.image,
+          imageUrl: fallbackSaint.image,
+          remoteUrl: fallbackSaint.image,
+          localUrl: cached.localUrl,
+          localPath: cached.localPath,
+          buffer: cached.buffer,
           source: 'liturgical_calendar',
           sourceUrl: fallbackSaint.link || detailUrl,
           fallback: false
@@ -1304,6 +1414,19 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
     titleTa = tamilName || saintName;
   }
 
+  let imageBuffer = imageResult?.buffer || null;
+  if (!imageBuffer && imageResult?.localPath && fs.existsSync(imageResult.localPath)) {
+    try { imageBuffer = fs.readFileSync(imageResult.localPath); } catch (e) {}
+  }
+  const imageAttachment = imageBuffer ? {
+    filename: 'saint_of_the_day.jpg',
+    content: imageBuffer,
+    cid: 'saintOfTheDayImage',
+    contentType: 'image/jpeg'
+  } : null;
+
+  const resolvedImageUrl = imageResult?.remoteUrl || imageResult?.url || DIGNIFIED_FALLBACK_IMAGE;
+
   const saintPayload = {
     date: dateKey,
     source: usedSource,
@@ -1315,11 +1438,15 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
     nameTa: tamilName || saintName,
     titleTa,
     descriptionTa: descriptionTa || '',
-    imageUrl: imageResult.url,
-    image: imageResult.url,
-    imageSource: imageResult.source,
-    imageSourceUrl: imageResult.sourceUrl,
-    imageFallback: imageResult.fallback,
+    imageUrl: resolvedImageUrl,
+    image: resolvedImageUrl,
+    remoteUrl: resolvedImageUrl,
+    localUrl: imageResult?.localUrl || null,
+    localPath: imageResult?.localPath || null,
+    imageAttachment,
+    imageSource: imageResult?.source || usedSource,
+    imageSourceUrl: imageResult?.sourceUrl || usedSourceUrl,
+    imageFallback: Boolean(imageResult?.fallback),
     saintName,
     englishName: saintName,
     tamilName: tamilName || saintName,
@@ -1405,37 +1532,39 @@ async function loadCachedSaint() {
       if (cacheSetting && cacheSetting.value) {
         const parsed = JSON.parse(cacheSetting.value);
         const isBrokenVirginMary = parsed.image && parsed.image.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato');
-        const isStaleCatholicReadings = (parsed.source && parsed.source.includes('Catholic Readings')) ||
-          (parsed.sourceUrl && parsed.sourceUrl.includes('catholicreadings.org')) ||
-          (parsed.link && parsed.link.includes('catholicreadings.org')) ||
-          (parsed.saintName && parsed.saintName.includes('Slomsek Our'));
         const isGarbageImage = parsed.image && (
           parsed.image.includes('imimg.com') ||
           parsed.image.includes('metroprin') ||
           parsed.image.includes('Superdome') ||
           parsed.image.includes('stadium')
         );
-        const isStaleNilusOnSep26 = todayStr.endsWith('-09-26') && (
-          (parsed.saintName && parsed.saintName.includes('Nilus')) ||
-          (parsed.name && parsed.name.includes('Nilus')) ||
-          (parsed.englishName && parsed.englishName.includes('Nilus'))
-        );
-        const isStaleSep28WithoutVaticanImg = todayStr.endsWith('-09-28') && (
-          !parsed.image || !parsed.image.includes('vaticannews.va') || (parsed.saintName && parsed.saintName.includes('Wenceslaus'))
-        );
 
         const hasShortBio = !parsed.description || parsed.description.length < 250;
 
-        // Valid cache: matches today's date AND has a valid image AND is not from obsolete Catholic Readings source AND not obsolete secondary saint AND has substantial bio
-        if (parsed && parsed.date === todayStr && (parsed.saintName || parsed.name) && parsed.image && !isBrokenVirginMary && !isStaleCatholicReadings && !isGarbageImage && !isStaleNilusOnSep26 && !isStaleSep28WithoutVaticanImg && !hasShortBio) {
+        // Valid cache: matches today's date AND has a valid image AND has substantial bio
+        if (parsed && parsed.date === todayStr && (parsed.saintName || parsed.name) && parsed.image && !isBrokenVirginMary && !isGarbageImage && !hasShortBio) {
+          if (!parsed.imageAttachment && parsed.localPath) {
+            try {
+              const fs = require('fs');
+              if (fs.existsSync(parsed.localPath)) {
+                parsed.imageAttachment = {
+                  filename: 'saint_of_the_day.jpg',
+                  content: fs.readFileSync(parsed.localPath),
+                  cid: 'saintOfTheDayImage',
+                  contentType: 'image/jpeg'
+                };
+              }
+            } catch (e) {}
+          }
+
           dailySaint = parsed;
           if (dailySaint.lastSynced) {
             dailySaint.lastSynced = new Date(dailySaint.lastSynced);
           }
           console.log(" Loaded today's daily saint from database cache:", dailySaint.saintName || dailySaint.name);
           return;
-        } else if (isStaleCatholicReadings || isGarbageImage || isStaleNilusOnSep26 || isStaleSep28WithoutVaticanImg) {
-          console.warn("⚠️ Discarding obsolete/stale cache from database (Nilus/Sep28/Catholic Readings/Invalid image). Fresh Vatican News fetch will run immediately.");
+        } else if (isGarbageImage) {
+          console.warn("⚠️ Discarding obsolete/stale cache from database with invalid image. Fresh fetch will run immediately.");
         }
       }
     }
@@ -1501,11 +1630,11 @@ try {
 // Server-side schedulers explicitly configured with Asia/Kolkata timezone
 cron.schedule('0 0 * * *', async () => {
   const { dateKey } = getISTDateParts();
-  console.log(`🔄 [CRON 12:00 AM IST] Updating Saint of the Day for ${dateKey} from Vatican News...`);
+  console.log(`🔄 [CRON 12:00 AM IST] Updating Saint of the Day for ${dateKey} from Catholic Readings / Wikipedia...`);
   dailySaint = null; // Invalidate previous day in memory immediately
   try {
     await fetchDailySaint();
-    console.log(`✅ [CRON 12:00 AM IST] Saint of the Day successfully synchronized from Vatican News for ${dateKey}`);
+    console.log(`✅ [CRON 12:00 AM IST] Saint of the Day successfully synchronized from Catholic Readings for ${dateKey}`);
   } catch (err) {
     console.error(`❌ [CRON 12:00 AM IST] Saint sync failed for ${dateKey}:`, err.message);
   }

@@ -74,6 +74,15 @@ const notificationSchema = new mongoose.Schema({
   relatedId: { type: mongoose.Schema.Types.ObjectId },
   relatedModel: { type: String },
   fileUrl: { type: String },
+
+  // Saint of the Day integration
+  imageUrl: { type: String },
+  saintName: { type: String },
+  saintNameTa: { type: String },
+  saintImage: { type: String },
+  saintFeastDay: { type: String },
+  saintDescription: { type: String },
+  saintUrl: { type: String },
 }, { timestamps: true });
 
 // Auto-sync actionUrl and redirectUrl, and channels.website

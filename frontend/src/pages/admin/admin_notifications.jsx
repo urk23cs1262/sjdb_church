@@ -191,6 +191,48 @@ function AdminNotifCard({ notif, onMarkRead, onDelete, onTogglePin, onAction }) 
           </p>
         ) : null}
 
+        {/* Saint of the Day Compact Card */}
+        {(notif.saintImage || notif.saintName || notif.imageUrl) && (
+          <div className="mt-2.5 p-2.5 rounded-xl bg-gradient-to-r from-amber-50/70 via-blue-50/40 to-slate-50 border border-amber-200/80 flex items-start gap-2.5 shadow-2xs">
+            {(notif.saintImage || notif.imageUrl) && (
+              <div className="w-12 h-14 rounded-lg overflow-hidden flex-shrink-0 border border-amber-300 shadow-xs bg-white">
+                <img
+                  src={notif.saintImage || notif.imageUrl}
+                  alt={notif.saintName || 'Saint of the Day'}
+                  className="w-full h-full object-cover"
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[9px] font-extrabold uppercase tracking-wide text-church-royal-blue bg-blue-100/70 px-1.5 py-0.5 rounded">
+                  🕊️ Saint of the Day
+                </span>
+                {notif.saintFeastDay && (
+                  <span className="text-[9px] font-semibold text-amber-800">
+                    • Feast: {notif.saintFeastDay}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs font-bold text-gray-900 mt-0.5 line-clamp-1">
+                {notif.saintName || "Today's Saint"}
+                {notif.saintNameTa && notif.saintNameTa !== notif.saintName && (
+                  <span className="text-amber-800 font-medium ml-1">({notif.saintNameTa})</span>
+                )}
+              </p>
+              <div className="mt-1">
+                <Link
+                  to="/catholic-content"
+                  className="inline-flex items-center gap-1 text-[10px] font-bold text-church-royal-blue hover:text-amber-700 transition-colors"
+                >
+                  View Saint of the Day →
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-3 mt-2 flex-wrap">
           <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${CATEGORY_COLORS[cat] || CATEGORY_COLORS.general
             }`}>

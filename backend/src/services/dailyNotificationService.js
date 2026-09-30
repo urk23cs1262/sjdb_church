@@ -235,7 +235,7 @@ async function sendDailyWhatsAppSequence({
 
   // ── 4. 🖼️ Saint of the Day image message ──────────────────────────────────
   if (!messagesSent.includes('saint_image')) {
-    const saintImagePayload = getDailySaintImagePayload({ dailyContent });
+    const saintImagePayload = getDailySaintImagePayload({ dailyContent, language: userLang });
     if (saintImagePayload && typeof waService.sendWhatsAppMedia === 'function') {
       try {
         const imgOk = await waService.sendWhatsAppMedia(phone, saintImagePayload);

@@ -220,6 +220,53 @@ function NotifCard({ notif, onMarkRead, onDelete, onTogglePin, onAction, isHighl
 
         <p className="text-gray-600 text-xs mt-2 leading-relaxed whitespace-pre-line">{notif.message}</p>
 
+        {/* Saint of the Day Compact Card */}
+        {(notif.saintImage || notif.saintName || notif.imageUrl) && (
+          <div className="mt-3 p-3 rounded-xl bg-gradient-to-r from-amber-50/70 via-blue-50/40 to-slate-50 border border-amber-200/80 flex items-start gap-3 shadow-2xs">
+            {(notif.saintImage || notif.imageUrl) && (
+              <div className="w-14 h-16 sm:w-16 sm:h-20 rounded-lg overflow-hidden flex-shrink-0 border border-amber-300 shadow-xs bg-white">
+                <img
+                  src={notif.saintImage || notif.imageUrl}
+                  alt={notif.saintName || 'Saint of the Day'}
+                  className="w-full h-full object-cover"
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] font-extrabold uppercase tracking-wide text-church-royal-blue bg-blue-100/70 px-1.5 py-0.5 rounded">
+                  🕊️ Saint of the Day
+                </span>
+                {notif.saintFeastDay && (
+                  <span className="text-[10px] font-semibold text-amber-800">
+                    • Feast: {notif.saintFeastDay}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs font-bold text-gray-900 mt-1 line-clamp-1">
+                {notif.saintName || "Today's Saint"}
+                {notif.saintNameTa && notif.saintNameTa !== notif.saintName && (
+                  <span className="text-amber-800 font-medium ml-1.5">({notif.saintNameTa})</span>
+                )}
+              </p>
+              {notif.saintDescription && (
+                <p className="text-[11px] text-gray-600 line-clamp-2 mt-0.5 leading-snug">
+                  {notif.saintDescription}
+                </p>
+              )}
+              <div className="mt-2">
+                <Link
+                  to="/catholic-content"
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-church-royal-blue hover:text-amber-700 transition-colors"
+                >
+                  View Saint of the Day →
+                </Link>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-3 mt-3 pt-2 border-t border-gray-100 flex-wrap">
           <div className="flex items-center gap-2">
             <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${

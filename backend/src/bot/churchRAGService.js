@@ -178,9 +178,9 @@ function extractQueryIntents(rawText) {
   }
 
   // 4. Saint of the Day (Entity: Today's Saint)
-  const isSaintOfDay = (/\b(today.*saint|saint.*today|who is.*saint|saint of the day|todays saint)\b/i.test(norm) ||
+  const isSaintOfDay = (/\b(today.*saint|saint.*today|who is.*saint|tell me about.*saint|saint of the day|todays saint)\b/i.test(norm) ||
     norm === 'saint' ||
-    /(இன்றைய புனிதர்|புனிதர் யார்)/.test(rawText)) && !intents.includes('saint_history');
+    /(இன்றைய புனிதர்|புனிதர் யார்|இன்றைய புனிதரைப் பற்றி|புனிதரைப் பற்றி)/.test(rawText)) && !intents.includes('saint_history');
   if (isSaintOfDay) {
     intents.push('saint_of_the_day');
   }

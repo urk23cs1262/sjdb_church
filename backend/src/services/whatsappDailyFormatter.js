@@ -1,4 +1,6 @@
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 const { SITE_ROUTES, EXTERNAL_LINKS, getSiteUrl, getBaseClientUrl } = require('../config/siteRoutes');
 const { normalizeContentLanguage } = require('../utils/userLanguageHelper');
 
@@ -375,34 +377,101 @@ _SJDB Connect_`;
 }
 
 /**
+/**
+ * Generate concise, informative caption for the Saint image message
+ */
+function generateSaintImageCaption({ dailyContent, language = 'ta' }) {
+  const lang = normalizeContentLanguage(language);
+  const saintNameEn = dailyContent?.saint?.nameEn || dailyContent?.saint?.nameEnglish || dailyContent?.saint?.name || dailyContent?.saintName || 'Saint of the Day';
+  const saintNameTa = dailyContent?.saint?.nameTa || dailyContent?.saint?.nameTamil || dailyContent?.saintNameTa || saintNameEn;
+  const feastDayEn = dailyContent?.saint?.feastDayEn || dailyContent?.saint?.feastDay || dailyContent?.formattedDate || 'Today';
+  const feastDayTa = dailyContent?.saint?.feastDayTa || dailyContent?.formattedDateTa || feastDayEn;
+  const titleEn = dailyContent?.saint?.titleEn || dailyContent?.saint?.feastTitle || '';
+  const titleTa = dailyContent?.saint?.titleTa || dailyContent?.saint?.feastTitleTa || '';
+
+  if (lang === 'ta') {
+    let caption = `✨ *இன்றைய புனிதர்: ${saintNameTa}*\n📅 *திருவிழா நாள்:* ${feastDayTa}`;
+    if (titleTa && titleTa !== saintNameTa) {
+      caption += `\n👑 ${titleTa}`;
+    }
+    return caption;
+  }
+
+  if (lang === 'both') {
+    let caption = `✨ *Saint of the Day • இன்றைய புனிதர்*\n👑 *${saintNameEn}*`;
+    if (saintNameTa && saintNameTa !== saintNameEn) {
+      caption += ` (${saintNameTa})`;
+    }
+    caption += `\n📅 *Feast Day / திருவிழா:* ${feastDayEn}`;
+    return caption;
+  }
+
+  // English default
+  let caption = `✨ *Saint of the Day: ${saintNameEn}*\n📅 *Feast Day:* ${feastDayEn}`;
+  if (titleEn && titleEn !== saintNameEn) {
+    caption += `\n👑 ${titleEn}`;
+  }
+  return caption;
+}
+
+/**
  * MESSAGE 4 — SAINT IMAGE PAYLOAD
  *
  * Prepares image buffer or URL for Baileys sendWhatsAppMedia.
- * Caption is kept clean and minimal without combining the entire bio.
+ * Includes saint's name and concise summary in the caption.
  */
-function getDailySaintImagePayload({ dailyContent }) {
-  const saintImageUrl = dailyContent?.saintImage || 
+function getDailySaintImagePayload({ dailyContent, language = 'ta' }) {
+  let saintImageBuffer = dailyContent?.saint?.imageAttachment?.content || null;
+  const saintImageUrl = dailyContent?.saint?.remoteUrl ||
+                        dailyContent?.saintImage || 
                         dailyContent?.saint?.image || 
                         dailyContent?.saintOfTheDay?.english?.imageUrl ||
                         null;
-  const saintImageBuffer = dailyContent?.saint?.imageAttachment?.content || null;
+  const localPath = dailyContent?.saint?.localPath || null;
+  const localUrl = dailyContent?.saint?.localUrl || null;
+
+  // If buffer is missing, try reading local file if available
+  if (!saintImageBuffer) {
+    const candidates = [localPath, localUrl, saintImageUrl].filter(Boolean);
+    for (const c of candidates) {
+      let resolved = c;
+      if (typeof c === 'string' && c.startsWith('/uploads/')) {
+        const p1 = path.join(__dirname, '../../', c);
+        if (fs.existsSync(p1)) resolved = p1;
+        else {
+          const p2 = path.join(process.cwd(), c);
+          if (fs.existsSync(p2)) resolved = p2;
+        }
+      }
+      if (typeof resolved === 'string' && fs.existsSync(resolved)) {
+        try {
+          saintImageBuffer = fs.readFileSync(resolved);
+          break;
+        } catch (e) {}
+      }
+    }
+  }
 
   if (!saintImageBuffer && !saintImageUrl) {
     return null;
   }
 
+  const caption = generateSaintImageCaption({ dailyContent, language });
+
   if (saintImageBuffer) {
     return {
       buffer: saintImageBuffer,
       mimetype: 'image/jpeg',
-      caption: ''
+      caption,
+      fileName: 'saint_of_the_day.jpg'
     };
   }
 
   return {
     url: saintImageUrl,
     mimetype: 'image/jpeg',
-    caption: ''
+    caption,
+    fileName: 'saint_of_the_day.jpg'
   };
 }
 

@@ -23,6 +23,21 @@ const createNotification = async ({ userId, isBroadcast, title, message, type, c
       }
     }
 
+    // Retrieve today's saint for notification enhancement
+    let saint = null;
+    try {
+      const { getDailySaint } = require('./saintService');
+      saint = getDailySaint();
+    } catch (_) {}
+
+    const isSecurityNotif = ['auth', 'security', 'password_reset', 'lockout', 'otp'].includes(String(category || type || '').toLowerCase());
+    const saintImage = (!isSecurityNotif && saint) ? (saint.remoteUrl || saint.imageUrl || saint.image || null) : null;
+    const saintName = (!isSecurityNotif && saint) ? (saint.nameEnglish || saint.nameEn || saint.name || null) : null;
+    const saintNameTa = (!isSecurityNotif && saint) ? (saint.nameTamil || saint.nameTa || null) : null;
+    const saintFeastDay = (!isSecurityNotif && saint) ? (saint.feastDay || saint.feastDayEn || null) : null;
+    const saintDescription = (!isSecurityNotif && saint) ? (saint.descriptionEnglish || saint.descriptionEn || saint.description || null) : null;
+    const saintUrl = (!isSecurityNotif && saint) ? '/catholic-content' : null;
+
     const notif = await Notification.create({
       userId,
       isBroadcast: isBroadcast || false,
@@ -36,7 +51,14 @@ const createNotification = async ({ userId, isBroadcast, title, message, type, c
       relatedId,
       relatedModel,
       fileUrl,
-      sentVia: channels
+      sentVia: channels,
+      imageUrl: saintImage,
+      saintName,
+      saintNameTa,
+      saintImage,
+      saintFeastDay,
+      saintDescription,
+      saintUrl
     });
 
     // ── Unified Push Notification Channel ─────────────────────────────────────
@@ -47,11 +69,15 @@ const createNotification = async ({ userId, isBroadcast, title, message, type, c
         title: title || "St. John de Britto Church",
         body: (message || '').replace(/\n+/g, ' ').slice(0, 140),
         notificationId: notif._id.toString(),
-        url: `/notifications?notification=${notif._id.toString()}`,
-        icon: '/favicon.png',
+        url: (type === 'daily_content' || category === 'daily_content') ? '/catholic-content' : `/notifications?notification=${notif._id.toString()}`,
+        icon: saintImage || '/favicon.png',
         badge: '/favicon.png',
         tag: `sjdb-notif-${notif._id.toString()}`
       };
+
+      if (saintImage) {
+        pushPayload.image = saintImage;
+      }
 
       if (isBroadcast || (recipient === 'user' && !userId)) {
         sendPushBroadcast(pushPayload).catch(err => console.warn('[NotificationService] Push broadcast error:', err.message));
