@@ -4,7 +4,7 @@ import { FiInstagram, FiYoutube, FiFacebook, FiExternalLink, FiCheckCircle, FiSh
 import { FaWhatsapp, FaBullhorn } from 'react-icons/fa';
 import PageHero from '../../components/common/common_page_hero';
 import churchLogo from '../../assets/church_extirior.png';
-import sjdbProfilePic from '../../assets/sjdb_image_round_1.png';
+import sjdbProfilePic from '../../assets/sjdb_image_round_2.png';
 import { getWhatsAppNumber, getWhatsAppChannelUrl } from '../../config/contactConfig';
 
 export default function SocialMedia() {
