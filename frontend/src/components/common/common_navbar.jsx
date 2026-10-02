@@ -29,7 +29,7 @@ const MORE_LINKS = [
   { key: 'priests', path: '/priests', label: 'Priests' },
   { key: 'anbiyams', path: '/anbiyams', label: 'Anbiyams' },
   { key: 'gallery', path: '/gallery', label: 'Gallery' },
-  { key: 'live', path: '/live', label: 'Live Stream' },
+  { key: 'live', path: '/live', label: 'Social Media', labelTa: 'சமூக ஊடகங்கள்' },
   { key: 'nearby_parishes', path: '/nearby-parishes', label: 'Nearby Shrines' },
   { key: 'team', path: '/team', label: 'Our Team' },
 ];

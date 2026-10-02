@@ -20,7 +20,7 @@ const Priests = lazy(() => import('./pages/public/public_priests'));
 const MassTimings = lazy(() => import('./pages/public/public_mass_timings'));
 const Events = lazy(() => import('./pages/public/public_events'));
 const Gallery = lazy(() => import('./pages/public/public_gallery'));
-const LiveStream = lazy(() => import('./pages/public/public_live_stream'));
+const SocialMedia = lazy(() => import('./pages/public/public_social_media'));
 const Contact = lazy(() => import('./pages/public/public_contact'));
 const Donate = lazy(() => import('./pages/public/public_donate'));
 const DailyCatholicContent = lazy(() => import('./pages/public/public_daily_catholic_content'));
@@ -126,7 +126,8 @@ function AppRoutes() {
               <Route path="/mass" element={<MassTimings />} />
               <Route path="/events" element={<Events />} />
               <Route path="/gallery" element={<Gallery />} />
-              <Route path="/live" element={<LiveStream />} />
+              <Route path="/live" element={<SocialMedia />} />
+              <Route path="/social-media" element={<SocialMedia />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/donate" element={<Donate />} />
               <Route path="/bible-verse" element={<DailyCatholicContent />} />

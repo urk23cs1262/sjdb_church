@@ -29,7 +29,7 @@ const serviceLinks = [
   { label: 'nav.prayers', name: 'Prayer Requests', path: '/prayers' },
   { label: 'nav.announcements', name: 'Announcements', path: '/announcements' },
   { label: 'nav.donate', name: 'Donate', path: '/donate' },
-  { label: 'nav.live', name: 'Live Stream', path: '/live' },
+  { label: 'nav.live', name: 'Social Media', path: '/live' },
   { label: 'nav.rosary', name: 'Rosary', path: '/rosary' },
   { label: 'nav.calendar', name: 'Catholic Calendar', path: '/calendar' },
   { label: 'nav.bibleVerse', name: 'Daily Bible Verse', path: '/bible-verse' },
@@ -102,15 +102,15 @@ export default function Footer() {
 
             {/* Social Icons with Gold Hover Glow */}
             <div className="flex items-center gap-3.5 pt-2">
-              <a href="https://facebook.com" target="_blank" rel="noreferrer"
+              <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Visit Facebook"
                 className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-church-gold hover:text-church-dark hover:scale-110 hover:shadow-gold-lg transition-all duration-300 shadow-md">
                 <FiFacebook className="text-xl" />
               </a>
-              <a href="https://youtube.com" target="_blank" rel="noreferrer"
+              <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" aria-label="Visit YouTube"
                 className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-red-600 hover:text-white hover:scale-110 hover:shadow-red-600/50 transition-all duration-300 shadow-md">
                 <FiYoutube className="text-xl" />
               </a>
-              <a href="https://instagram.com" target="_blank" rel="noreferrer"
+              <a href="https://www.instagram.com/sjdb_church?stkn=MW82ZXpsbW4xMTRyeQ==" target="_blank" rel="noopener noreferrer" aria-label="Visit Instagram"
                 className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center hover:bg-pink-600 hover:text-white hover:scale-110 hover:shadow-pink-600/50 transition-all duration-300 shadow-md">
                 <FiInstagram className="text-xl" />
               </a>

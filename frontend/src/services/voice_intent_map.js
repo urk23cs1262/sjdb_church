@@ -614,17 +614,17 @@ export const INTENT_MAP = [
     ],
   },
 
-  // 33. Live Stream
+  // 33. Social Media
   {
     id: INTENT_IDS.LIVE_STREAM,
     route: '/live',
-    labelEn: 'Live Stream',
-    labelTa: 'நேரடி ஒளிபரப்பு',
-    confirmEn: 'Opening Live Stream.',
-    confirmTa: 'நேரடி ஒளிபரப்பு பக்கத்தை திறக்கிறேன்.',
+    labelEn: 'Social Media',
+    labelTa: 'சமூக ஊடகங்கள்',
+    confirmEn: 'Opening Social Media.',
+    confirmTa: 'சமூக ஊடகங்கள் பக்கத்தை திறக்கிறேன்.',
     patterns: [
-      /\b(live.*stream|watch.*online|online.*mass|live.*mass)\b/i,
-      /(நேரடி.*ஒளிபரப்பு|நேரடி)/i,
+      /\b(social.*media|instagram|youtube|facebook|whatsapp.*channel|social.*page|socials?|live.*stream|watch.*online|online.*mass|live.*mass)\b/i,
+      /(சமூக.*ஊடகங்கள்|இன்ஸ்டாகிராம்|பேஸ்புக்|யூடியூப்|நேரடி.*ஒளிபரப்பு|நேரடி)/i,
     ],
   },
 

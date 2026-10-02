@@ -206,6 +206,7 @@ app.get('/api/daily-verse', require('./controllers/dailyVerseController').getTod
 app.post('/api/daily-verse/change', require('./middleware/auth').protect, require('./middleware/auth').adminOnly, require('./controllers/dailyVerseController').changeTodayVerse);
 app.use('/api/bot', require('./routes/bot'));
 app.use('/api/moderation', require('./routes/moderationRoutes'));
+app.use('/api/daily-reflection', require('./routes/dailyReflection'));
 
 // Background Services
 require('./services/saintService'); // 12:00 AM IST Daily Saint of the Day automated Vatican News sync

@@ -70,7 +70,9 @@ function LiturgicalParagraph({ text, index, total, heading }) {
   const lower = trimmed.toLowerCase();
   const lowerHeading = (heading || '').toLowerCase();
 
-  // 1. Ending Liturgical Proclamations & Responses (Only exact short ending lines)
+  // 1. Ending Liturgical Proclamations & Responses
+  const isGospelSection = lowerHeading.includes('gospel') || (lowerHeading.includes('நற்செய்தி') && !lowerHeading.includes('முன்'));
+
   const isWordOfLord = (
     trimmed === 'ஆண்டவரின் அருள்வாக்கு.' ||
     trimmed === 'ஆண்டவரின் அருள்வாக்கு' ||
@@ -84,20 +86,6 @@ function LiturgicalParagraph({ text, index, total, heading }) {
     lower === 'thanks be to god' ||
     (index === total - 1 && (lower.startsWith('the word of the lord') || trimmed.startsWith('ஆண்டவரின் அருள்வாக்கு')))
   );
-
-  if (isWordOfLord) {
-    const isTa = trimmed.includes('ஆண்டவரின்') || trimmed.includes('இறைவா');
-    return (
-      <div className="mt-4 pt-3 border-t border-gray-200/70 space-y-1">
-        <p className="font-bold text-church-royal-blue text-sm md:text-base">
-          {isTa ? 'ஆண்டவரின் அருள்வாக்கு.' : 'The word of the Lord.'}
-        </p>
-        <p className="font-bold text-amber-900 text-sm md:text-base">
-          {isTa ? '— இறைவா உமக்கு நன்றி.' : '— Thanks be to God.'}
-        </p>
-      </div>
-    );
-  }
 
   const isGospelEnding = (
     trimmed === 'இது கிறிஸ்து வழங்கும் நற்செய்தி.' ||
@@ -116,15 +104,32 @@ function LiturgicalParagraph({ text, index, total, heading }) {
     (index === total - 1 && (lower.startsWith('the gospel of the lord') || lower.startsWith('this is the gospel') || trimmed.includes('கிறிஸ்து வழங்கும் நற்செய்தி')))
   );
 
-  if (isGospelEnding) {
-    const isTa = trimmed.includes('கிறிஸ்து');
+  if (isGospelEnding || (isGospelSection && isWordOfLord)) {
+    const isTa = trimmed.includes('கிறிஸ்து') || trimmed.includes('ஆண்டவரின்');
+    const proclamation = (trimmed.includes('ஆண்டவரின்') || lower.includes('word of the lord'))
+      ? (isTa ? 'ஆண்டவரின் அருள்வாக்கு.' : 'The Gospel of the Lord.')
+      : (isTa ? 'இது கிறிஸ்து வழங்கும் நற்செய்தி.' : 'The Gospel of the Lord.');
     return (
       <div className="mt-4 pt-3 border-t border-gray-200/70 space-y-1">
         <p className="font-bold text-church-royal-blue text-sm md:text-base">
-          {isTa ? 'இது கிறிஸ்து வழங்கும் நற்செய்தி.' : 'The Gospel of the Lord.'}
+          {proclamation}
         </p>
         <p className="font-bold text-church-maroon text-sm md:text-base">
           {isTa ? '— கிறிஸ்துவே உமக்கு புகழ்.' : '— Praise to you, Lord Jesus Christ.'}
+        </p>
+      </div>
+    );
+  }
+
+  if (isWordOfLord) {
+    const isTa = trimmed.includes('ஆண்டவரின்') || trimmed.includes('இறைவா');
+    return (
+      <div className="mt-4 pt-3 border-t border-gray-200/70 space-y-1">
+        <p className="font-bold text-church-royal-blue text-sm md:text-base">
+          {isTa ? 'ஆண்டவரின் அருள்வாக்கு.' : 'The word of the Lord.'}
+        </p>
+        <p className="font-bold text-amber-900 text-sm md:text-base">
+          {isTa ? '— இறைவா உமக்கு நன்றி.' : '— Thanks be to God.'}
         </p>
       </div>
     );
@@ -913,22 +918,73 @@ export default function DailyCatholicContent() {
                           </div>
                         )}
 
-                        {/* Verse / reading paragraphs with global liturgical formatting */}
-                        {cleanSectionParagraphs(section.paragraphs)?.length > 0 ? (
-                          <div className="space-y-3.5 pl-0 sm:pl-11">
-                            {cleanSectionParagraphs(section.paragraphs).map((p, j, arr) => (
-                              <LiturgicalParagraph
-                                key={j}
-                                text={p}
-                                index={j}
-                                total={arr.length}
-                                heading={formatLiturgicalHeading(section.heading, displayLang)}
-                              />
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-gray-400 text-sm pl-0 sm:pl-11 italic">No text content available for this section.</p>
-                        )}
+                        {/* Specialized Responsorial Psalm Layout or Global Liturgical Formatting */}
+                        {(() => {
+                          const isPsalm = section.heading?.includes('பதிலுரை') || section.heading?.toLowerCase().includes('psalm') || formatLiturgicalHeading(section.heading, displayLang) === 'Responsorial Psalm';
+                          const psalmVerses = (section.verses && section.verses.length > 0) ? section.verses : (isPsalm && displayLang === 'ta' && reading.responsorialPsalm?.verses?.length > 0) ? reading.responsorialPsalm.verses : null;
+                          const psalmRef = section.reference || (isPsalm ? reading.responsorialPsalm?.reference : '');
+                          const psalmRefrain = section.refrain || (isPsalm ? (reading.responsorialPsalm?.refrain || reading.responsorialPsalm?.response?.replace(/^பல்லவி:\s*/, '')) : '');
+
+                          if (isPsalm && psalmVerses && psalmVerses.length > 0) {
+                            return (
+                              <div className="space-y-4 pl-0 sm:pl-11">
+                                {/* Psalm Reference */}
+                                {psalmRef && (
+                                  <p className="font-bold text-purple-900 text-sm md:text-base">
+                                    {psalmRef}
+                                  </p>
+                                )}
+
+                                {/* Main Response / Refrain Callout */}
+                                {psalmRefrain && (
+                                  <div className="font-bold text-amber-950 bg-amber-50/90 p-3.5 rounded-xl border border-amber-200/80 text-sm md:text-base my-2.5 shadow-2xs">
+                                    {displayLang === 'ta' ? 'பல்லவி:' : 'Response:'} {psalmRefrain}
+                                  </div>
+                                )}
+
+                                {/* Individual Verse Groups with Refrain after each group */}
+                                <div className="space-y-4 pt-1">
+                                  {psalmVerses.map((verseGroup, vIdx) => (
+                                    <div key={vIdx} className="p-3.5 sm:p-4 rounded-xl bg-purple-50/40 border border-purple-100/80 space-y-2.5 shadow-2xs transition-all hover:bg-purple-50/60">
+                                      <div className="flex items-start gap-2.5">
+                                        {verseGroup.numbers && (
+                                          <span className="inline-block px-2.5 py-0.5 bg-purple-200 text-purple-950 text-xs sm:text-sm font-bold rounded-md flex-shrink-0 mt-0.5">
+                                            {verseGroup.numbers}
+                                          </span>
+                                        )}
+                                        <p className="font-normal text-gray-800 leading-relaxed text-sm md:text-base">
+                                          {verseGroup.text}
+                                        </p>
+                                      </div>
+                                      {psalmRefrain && (
+                                        <div className="pt-2 pl-0 sm:pl-2 border-t border-purple-100/60 flex items-center gap-1.5 text-xs sm:text-sm font-bold text-amber-900">
+                                          <span className="text-church-gold">✦</span>
+                                          <span>{displayLang === 'ta' ? 'பல்லவி' : 'Response'}: {psalmRefrain}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          return cleanSectionParagraphs(section.paragraphs)?.length > 0 ? (
+                            <div className="space-y-3.5 pl-0 sm:pl-11">
+                              {cleanSectionParagraphs(section.paragraphs).map((p, j, arr) => (
+                                <LiturgicalParagraph
+                                  key={j}
+                                  text={p}
+                                  index={j}
+                                  total={arr.length}
+                                  heading={formatLiturgicalHeading(section.heading, displayLang)}
+                                />
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-400 text-sm pl-0 sm:pl-11 italic">No text content available for this section.</p>
+                          );
+                        })()}
 
                         {/* Source Attribution Link at the end of Gospel */}
                         {i === reading.sections.length - 1 && (
@@ -970,12 +1026,21 @@ export default function DailyCatholicContent() {
                               <span className="text-[11px] uppercase tracking-widest font-bold text-emerald-700 bg-emerald-100/70 px-2.5 py-0.5 rounded-full inline-block mb-1">
                                 {reading.reflection.heading || (displayLang === 'ta' ? 'இன்றைய சிந்தனை' : 'Daily Reflection')}
                               </span>
-                              <h3 className="font-bold text-church-royal-blue text-lg md:text-xl font-display leading-tight">
-                                {reading.reflection.title}
+                              <h3 className="font-bold text-church-royal-blue text-base md:text-lg font-display leading-snug">
+                                {displayLang === 'ta' ? 'இன்றைய சிந்தனை & நற்செய்தி தியானம்' : 'Today’s Reflection & Gospel Meditation'}
                               </h3>
                             </div>
                           </div>
                         </div>
+
+                        {/* Scripture Quotation & Reference */}
+                        {(reading.reflection.scriptureQuote || reading.reflection.title) && (
+                          <div className="p-4 bg-emerald-50/80 border-l-4 border-emerald-600 rounded-r-xl shadow-xs">
+                            <p className="font-medium text-emerald-950 text-base md:text-lg italic leading-relaxed whitespace-pre-line">
+                              {reading.reflection.scriptureQuote || reading.reflection.title}
+                            </p>
+                          </div>
+                        )}
 
                         {/* Reflection Content Paragraphs */}
                         <div className="space-y-3.5 pl-0 sm:pl-2 text-gray-800 leading-relaxed text-sm md:text-base">
@@ -1010,11 +1075,11 @@ export default function DailyCatholicContent() {
                               {displayLang === 'ta' ? 'Source:' : 'Source:'}
                             </span>
                             <a
-                              href="https://www.tamilcatholicdaily.com/dailyverse"
+                              href={reading.reflection.sourceUrl || "https://www.tamilcatholicdaily.com/dailyverse"}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-emerald-700 hover:text-emerald-800 hover:underline font-semibold inline-flex items-center gap-1"
-                              title="https://www.tamilcatholicdaily.com/dailyverse"
+                              title={reading.reflection.sourceUrl || "https://www.tamilcatholicdaily.com/dailyverse"}
                             >
                               <span>{displayLang === 'ta' ? 'Tamil Catholic Daily' : 'Tamil Catholic Daily'}</span>
                               <FiExternalLink className="text-[11px]" />

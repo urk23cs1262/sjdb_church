@@ -202,19 +202,33 @@ async function getTodayDailyContent(targetDate = new Date()) {
     }
   };
 
+  // 2b. Daily Reflection from authoritative DailyReflection model / cache
+  const { getTodayReflection } = require('./dailyReflectionService');
+  let dailyRefDoc = null;
+  try {
+    dailyRefDoc = await getTodayReflection(dateKey);
+  } catch (err) {
+    console.warn('[DailyContentService] Could not retrieve daily reflection:', err.message);
+  }
+
   // Format Tamil reflection text
   let tamilReflectionText = '';
-  if (massReadingDoc?.reflection) {
-    const r = massReadingDoc.reflection;
+  const refSource = dailyRefDoc || massReadingDoc?.reflection;
+  if (refSource) {
     const parts = [];
-    if (r.title && r.title.trim()) parts.push(`${r.title.trim()}`);
-    if (r.paragraphs && r.paragraphs.length > 0) {
-      parts.push(r.paragraphs.map(p => cleanCatholicContent(p.trim())).filter(Boolean).join('\n\n'));
-    } else if (r.content && r.content.trim()) {
-      parts.push(cleanCatholicContent(r.content.trim()));
+    if (refSource.scriptureQuote && refSource.scriptureQuote.trim()) {
+      parts.push(refSource.scriptureQuote.trim());
+    } else if (refSource.title && refSource.title.trim()) {
+      parts.push(refSource.title.trim());
     }
-    if (r.prayer && r.prayer.trim()) {
-      parts.push(`மன்றாட்டு:\n${cleanCatholicContent(r.prayer.trim())}`);
+    if (refSource.paragraphs && refSource.paragraphs.length > 0) {
+      parts.push(refSource.paragraphs.map(p => cleanCatholicContent(p.trim())).filter(Boolean).join('\n\n'));
+    } else if ((refSource.reflection || refSource.content) && (refSource.reflection || refSource.content).trim()) {
+      parts.push(cleanCatholicContent((refSource.reflection || refSource.content).trim()));
+    }
+    if (refSource.prayer && refSource.prayer.trim()) {
+      const cleanPrayer = refSource.prayer.replace(/^மன்றாட்டு\s*:\s*/, '').trim();
+      parts.push(`மன்றாட்டு:\n${cleanCatholicContent(cleanPrayer)}`);
     }
     tamilReflectionText = parts.join('\n\n');
   }
@@ -244,7 +258,12 @@ async function getTodayDailyContent(targetDate = new Date()) {
 
   const reflection = {
     tamil: tamilReflectionText,
-    english: englishReflectionText
+    english: englishReflectionText,
+    title: refSource?.title || '',
+    scriptureQuote: refSource?.scriptureQuote || '',
+    paragraphs: refSource?.paragraphs || [],
+    prayer: refSource?.prayer || '',
+    sourceUrl: refSource?.sourceUrl || 'https://www.tamilcatholicdaily.com/dailyverse'
   };
 
   // 3. Saint of the Day

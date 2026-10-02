@@ -11,6 +11,7 @@ export const SITE_ROUTES = {
   EVENTS: '/events',
   GALLERY: '/gallery',
   LIVE: '/live',
+  SOCIAL_MEDIA: '/live',
   CONTACT: '/contact',
   DONATE: '/donate',
 
