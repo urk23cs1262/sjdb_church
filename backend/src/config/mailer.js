@@ -32,7 +32,6 @@ if (process.env.SMTP_USER && process.env.SMTP_PASS) {
 const path = require('path');
 const fs = require('fs');
 const { injectFreshBibleVerseIntoHtml } = require('../services/emailVerseService');
-const { injectSaintCardIntoHtml } = require('../services/emailSaintService');
 const { getEmailFrom, getEmailReplyTo } = require('./contactConfig');
 
 const stripHtml = (html) => {
@@ -54,15 +53,9 @@ const sendMail = async ({ to, subject, html, attachments = [] }) => {
     const replyToEmail = getEmailReplyTo();
     const emailAttachments = [...attachments];
 
-    // 1. Automatically inject Saint of the Day card into outgoing emails (before scripture)
     let processedHtml = html;
-    try {
-      processedHtml = await injectSaintCardIntoHtml(processedHtml, { subject });
-    } catch (sErr) {
-      console.warn('[Mailer] Saint card injection error (using original html):', sErr.message);
-    }
 
-    // 2. Automatically inject a fresh, dynamic bilingual Bible verse at the very bottom (before footer)
+    // Automatically inject a fresh, dynamic bilingual Bible verse at the very bottom (keep only HOLY SCRIPTURE before footer)
     try {
       processedHtml = await injectFreshBibleVerseIntoHtml(processedHtml);
     } catch (vErr) {
