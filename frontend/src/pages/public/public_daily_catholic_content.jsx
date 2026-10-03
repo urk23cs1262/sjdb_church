@@ -1248,32 +1248,43 @@ export default function DailyCatholicContent() {
                         </div>
 
                         <div className="pt-4 border-t border-gray-100 flex items-center gap-3 flex-wrap">
-                          {activeSourceUrl && (
-                            <a
-                              href={activeSourceUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="btn-royal text-xs sm:text-sm py-2 px-4 rounded-xl flex items-center gap-1.5 shadow-sm hover:shadow-md"
-                            >
-                              <FiExternalLink />
-                              <span>
-                                {(() => {
-                                  let siteName = 'Vatican News';
-                                  if (activeSourceUrl && activeSourceUrl.includes('wikipedia.org')) {
-                                    siteName = 'Wikipedia';
-                                  } else if (activeSaint.contentSource) {
-                                    siteName = activeSaint.contentSource;
-                                  } else {
-                                    const rawSite = saintData?.source || '';
-                                    siteName = (!rawSite || rawSite.includes('Catholic Readings'))
-                                      ? 'Vatican News'
-                                      : rawSite.split('/')[0].trim();
-                                  }
-                                  return isTamil ? `${siteName}-ல் வாசிக்க` : `Read full story on ${siteName}`;
-                                })()}
-                              </span>
-                            </a>
-                          )}
+                          {(() => {
+                            const isWiki = Boolean(
+                              (activeSourceUrl && activeSourceUrl.includes('wikipedia.org')) ||
+                              (activeSaint.contentSource && activeSaint.contentSource.toLowerCase().includes('wiki')) ||
+                              (activeSaint.imageSource && activeSaint.imageSource.toLowerCase().includes('wiki')) ||
+                              (activeSaint.source && activeSaint.source.toLowerCase().includes('wiki')) ||
+                              (saintData?.source && saintData.source.toLowerCase().includes('wiki')) ||
+                              (activeImage && (activeImage.includes('wikipedia.org') || activeImage.includes('wikimedia.org') || activeImage.includes('upload.wikimedia')))
+                            );
+
+                            const siteName = isWiki ? 'Wikipedia' : 'Vatican News';
+                            const cleanSaint = (activeSaint.englishName || activeSaint.name || saintData?.saintName || '').replace(/^(Saint|St\.?)\s+/i, '').trim();
+
+                            const targetUrl = isWiki
+                              ? ((activeSourceUrl && activeSourceUrl.includes('wikipedia.org'))
+                                  ? activeSourceUrl
+                                  : `https://en.wikipedia.org/wiki/${encodeURIComponent(cleanSaint || 'Saint')}`)
+                              : ((activeSourceUrl && activeSourceUrl.includes('vaticannews.va'))
+                                  ? activeSourceUrl
+                                  : (saintData?.sourceUrl && saintData.sourceUrl.includes('vaticannews.va'))
+                                    ? saintData.sourceUrl
+                                    : 'https://www.vaticannews.va/en/saints.html');
+
+                            return (
+                              <a
+                                href={targetUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="btn-royal text-xs sm:text-sm py-2 px-4 rounded-xl flex items-center gap-1.5 shadow-sm hover:shadow-md"
+                              >
+                                <FiExternalLink />
+                                <span>
+                                  {isTamil ? `${siteName}-ல் வாசிக்க` : `Read full story on ${siteName}`}
+                                </span>
+                              </a>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>

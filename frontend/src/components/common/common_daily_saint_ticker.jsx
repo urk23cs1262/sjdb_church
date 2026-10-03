@@ -459,59 +459,66 @@ export default function DailySaintTicker() {
                               </div>
                             </div>
 
-                            {/* Link to Original Website Page */}
+                            {/* Link to Original Website Page — Strictly Wikipedia or Vatican News only */}
                             <div className="pt-4 mt-4 border-t border-gray-100 flex-shrink-0">
-                              {mSourceUrl && (
-                                <a
-                                  href={
-                                    mSourceUrl && !mSourceUrl.includes('catholicreadings.org')
+                              {(() => {
+                                const isWiki = Boolean(
+                                  (mSourceUrl && mSourceUrl.includes('wikipedia.org')) ||
+                                  (activeModalSaint.contentSource && activeModalSaint.contentSource.toLowerCase().includes('wiki')) ||
+                                  (activeModalSaint.imageSource && activeModalSaint.imageSource.toLowerCase().includes('wiki')) ||
+                                  (activeModalSaint.source && activeModalSaint.source.toLowerCase().includes('wiki')) ||
+                                  (saintOfDay.source && saintOfDay.source.toLowerCase().includes('wiki')) ||
+                                  (mImage && (mImage.includes('wikipedia.org') || mImage.includes('wikimedia.org') || mImage.includes('upload.wikimedia')))
+                                );
+
+                                const siteName = isWiki ? 'Wikipedia' : 'Vatican News';
+                                const cleanSaint = (activeModalSaint.englishName || activeModalSaint.name || saintOfDay.saintName || '').replace(/^(Saint|St\.?)\s+/i, '').trim();
+
+                                const targetUrl = isWiki
+                                  ? ((mSourceUrl && mSourceUrl.includes('wikipedia.org'))
                                       ? mSourceUrl
-                                      : 'https://www.vaticannews.va/en/saints.html'
-                                  }
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="
-                                    flex
-                                    items-center
-                                    justify-center
-                                    gap-2.5
-                                    py-3
-                                    px-6
-                                    rounded-xl
-                                    bg-gradient-to-r
-                                    from-church-royal-blue
-                                    to-indigo-900
-                                    hover:from-blue-900
-                                    hover:to-indigo-950
-                                    text-white
-                                    font-bold
-                                    text-sm
-                                    shadow-md
-                                    hover:shadow-lg
-                                    transition-all
-                                    cursor-pointer
-                                    active:scale-98
-                                  "
-                                >
-                                  <FiExternalLink className="text-base" />
-                                  <span>
-                                    {(() => {
-                                      let siteName = 'Vatican News';
-                                      if (mSourceUrl && mSourceUrl.includes('wikipedia.org')) {
-                                        siteName = 'Wikipedia';
-                                      } else if (activeModalSaint.contentSource) {
-                                        siteName = activeModalSaint.contentSource;
-                                      } else {
-                                        const rawSite = saintOfDay.source || '';
-                                        siteName = (!rawSite || rawSite.includes('Catholic Readings'))
-                                          ? 'Vatican News'
-                                          : rawSite.split('/')[0].trim();
-                                      }
-                                      return isTamil ? `${siteName}-ல் வாசிக்க` : `Read full story on ${siteName}`;
-                                    })()}
-                                  </span>
-                                </a>
-                              )}
+                                      : `https://en.wikipedia.org/wiki/${encodeURIComponent(cleanSaint || 'Saint')}`)
+                                  : ((mSourceUrl && mSourceUrl.includes('vaticannews.va'))
+                                      ? mSourceUrl
+                                      : (saintOfDay.sourceUrl && saintOfDay.sourceUrl.includes('vaticannews.va'))
+                                        ? saintOfDay.sourceUrl
+                                        : 'https://www.vaticannews.va/en/saints.html');
+
+                                return (
+                                  <a
+                                    href={targetUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="
+                                      flex
+                                      items-center
+                                      justify-center
+                                      gap-2.5
+                                      py-3
+                                      px-6
+                                      rounded-xl
+                                      bg-gradient-to-r
+                                      from-church-royal-blue
+                                      to-indigo-900
+                                      hover:from-blue-900
+                                      hover:to-indigo-950
+                                      text-white
+                                      font-bold
+                                      text-sm
+                                      shadow-md
+                                      hover:shadow-lg
+                                      transition-all
+                                      cursor-pointer
+                                      active:scale-98
+                                    "
+                                  >
+                                    <FiExternalLink className="text-base" />
+                                    <span>
+                                      {isTamil ? `${siteName}-ல் வாசிக்க` : `Read full story on ${siteName}`}
+                                    </span>
+                                  </a>
+                                );
+                              })()}
                             </div>
 
                           </div>

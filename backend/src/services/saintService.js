@@ -1167,35 +1167,33 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
       usedSourceUrl = detailUrl;
       console.log(`[SaintOfDay] Source: Vatican News -> "${saintName}" (${allSaintsList.length} saints found for today)`);
     } else {
-      const cleanCurrent = cleanSaintNameForWiki(saintName).toLowerCase();
-      const cleanFallback = cleanSaintNameForWiki(fallbackSaint?.name || '').toLowerCase();
-      const isNameMatch = cleanCurrent.includes(cleanFallback) || cleanFallback.includes(cleanCurrent);
-
-      // 1. Authoritative Liturgical Calendar match for today's saint
-      if (isNameMatch && fallbackSaint?.description && fallbackSaint.description.length >= 100) {
-        console.log(`[SaintOfDay] Using Catholic Liturgical Calendar biography for "${fallbackSaint.name}"`);
-        description = fallbackSaint.description;
-        if (fallbackSaint.descriptionTa) descriptionTa = fallbackSaint.descriptionTa;
-        usedSource = "Catholic Liturgical Calendar";
-        usedSourceUrl = fallbackSaint?.link || detailUrl;
+      // 1. Check Wikipedia for authentic saint biography & URL
+      console.log(`[SaintOfDay] Checking Wikipedia for biography...`);
+      const wikiBio = await fetchWikipediaBio(saintName);
+      if (wikiBio && isSufficientBio(wikiBio.text)) {
+        description = wikiBio.text;
+        usedSource = "Wikipedia";
+        usedSourceUrl = wikiBio.url;
+        console.log(`[SaintOfDay] Wikipedia biography successfully applied for "${saintName}" (${description.length} chars)`);
+      } else if (wikiBio && wikiBio.text && wikiBio.text.length >= 150) {
+        description = wikiBio.text;
+        usedSource = "Wikipedia";
+        usedSourceUrl = wikiBio.url;
       } else {
-        // 2. Try Wikipedia
-        console.log(`[SaintOfDay] Checking Wikipedia for biography...`);
-        const wikiBio = await fetchWikipediaBio(saintName);
-        if (wikiBio && isSufficientBio(wikiBio.text)) {
-          description = wikiBio.text;
-          usedSource = "Wikipedia";
-          usedSourceUrl = wikiBio.url;
-          console.log(`[SaintOfDay] Wikipedia biography successfully applied for "${saintName}" (${description.length} chars)`);
-        } else if (wikiBio && wikiBio.text && wikiBio.text.length >= 150) {
-          description = wikiBio.text;
-          usedSource = "Wikipedia";
-          usedSourceUrl = wikiBio.url;
+        const cleanCurrent = cleanSaintNameForWiki(saintName).toLowerCase();
+        const cleanFallback = cleanSaintNameForWiki(fallbackSaint?.name || '').toLowerCase();
+        const isNameMatch = cleanCurrent.includes(cleanFallback) || cleanFallback.includes(cleanCurrent);
+
+        if (isNameMatch && fallbackSaint?.description && fallbackSaint.description.length >= 100) {
+          console.log(`[SaintOfDay] Using Catholic Liturgical biography under Vatican News for "${fallbackSaint.name}"`);
+          description = fallbackSaint.description;
+          if (fallbackSaint.descriptionTa) descriptionTa = fallbackSaint.descriptionTa;
+          usedSource = "Vatican News";
+          usedSourceUrl = detailUrl;
         } else {
-          // 3. Fallback: comprehensive Catholic biography
           console.log(`[SaintOfDay] Generating comprehensive Catholic biography for "${saintName}"...`);
           description = generateComprehensiveCatholicBio(saintName, dateKey);
-          usedSource = "Catholic Liturgical Tradition";
+          usedSource = "Vatican News";
           usedSourceUrl = detailUrl;
         }
       }
@@ -1229,25 +1227,25 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
     if (crResult && crResult.name && (crResult.description || crResult.imageUrl)) {
       saintName = crResult.name;
       description = crResult.description || '';
-      detailUrl = crResult.sourceUrl;
-      usedSource = "Catholic Readings";
-      usedSourceUrl = crResult.sourceUrl;
+      detailUrl = buildVaticanNewsUrl(month, day);
+      usedSource = "Vatican News";
+      usedSourceUrl = detailUrl;
       allSaintsList = [{ name: saintName, description, imageUrl: crResult.imageUrl }];
-      console.log(`[SaintOfDay] Source: Catholic Readings -> "${saintName}"`);
+      console.log(`[SaintOfDay] Source: Vatican News (Readings calendar) -> "${saintName}"`);
 
-      if (!isSufficientBio(description)) {
-        const wikiBio = await fetchWikipediaBio(saintName);
-        if (wikiBio && isSufficientBio(wikiBio.text)) {
-          description = wikiBio.text;
-        }
+      const wikiBio = await fetchWikipediaBio(saintName);
+      if (wikiBio && isSufficientBio(wikiBio.text)) {
+        description = wikiBio.text;
+        usedSource = "Wikipedia";
+        usedSourceUrl = wikiBio.url;
       }
 
       if (crResult.imageUrl) {
         imageResult = await resolveAndCacheRemoteSaintImage(crResult.imageUrl, saintName, 'catholic_readings', crResult.sourceUrl);
       }
     } else {
-      // ── 3. TERTIARY FALLBACK: Wikipedia / Liturgical Calendar ─────────────────
-      console.log(`[Saint Service] Vatican News & Catholic Readings unavailable for ${dateKey} → trying Wikipedia`);
+      // ── 3. TERTIARY FALLBACK: Wikipedia / Vatican News ─────────────────
+      console.log(`[Saint Service] Checking Wikipedia for fallback saint ${fallbackSaint.name}...`);
       saintName = fallbackSaint.name;
       const wikiBio = await fetchWikipediaBio(saintName);
       if (wikiBio && isSufficientBio(wikiBio.text)) {
@@ -1256,10 +1254,10 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
         usedSourceUrl = wikiBio.url;
         console.log(`[SaintOfDay] Source: Wikipedia (${description.length} chars)`);
       } else {
-        console.log(`[SaintOfDay] Vatican News and Wikipedia unavailable → Source: Catholic Liturgical Calendar`);
+        console.log(`[SaintOfDay] Using Vatican News calendar for "${fallbackSaint.name}"`);
         description = fallbackSaint.description;
-        usedSource = "Catholic Liturgical Calendar";
-        usedSourceUrl = fallbackSaint.link || VATICAN_SAINTS_BASE_URL;
+        usedSource = "Vatican News";
+        usedSourceUrl = buildVaticanNewsUrl(month, day);
       }
       tamilName = fallbackSaint.nameTa;
       descriptionTa = fallbackSaint.descriptionTa;
@@ -1343,8 +1341,8 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
     // Otherwise, if biography is short (< 300 chars) or empty, fetch from Wikipedia by saint name
     if (isThisSaintPrimary && description && description.length >= 250) {
       sBio = description;
-      sSourceUrl = usedSourceUrl;
-      sContentSource = usedSource;
+      sSourceUrl = (usedSource === 'Wikipedia' || (usedSourceUrl && usedSourceUrl.includes('wikipedia.org'))) ? usedSourceUrl : (detailUrl || buildVaticanNewsUrl(month, day));
+      sContentSource = (usedSource === 'Wikipedia' || (sSourceUrl && sSourceUrl.includes('wikipedia.org'))) ? 'Wikipedia' : 'Vatican News';
     } else if (!sBio || sBio.length < 300) {
       console.log(`[Saint Service] Fetching content from original Wikipedia link for "${s.name}"...`);
       try {
@@ -1354,9 +1352,19 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
           sSourceUrl = wikiBio.url;
           sContentSource = 'Wikipedia';
           console.log(`[Saint Service] Content fetched from Wikipedia for "${s.name}" (${sBio.length} chars) -> ${wikiBio.url}`);
+        } else {
+          sContentSource = 'Vatican News';
+          sSourceUrl = detailUrl || buildVaticanNewsUrl(month, day);
         }
       } catch (wbErr) {
         console.warn(`[Saint Service] Wikipedia bio fetch notice for "${s.name}":`, wbErr.message);
+        sContentSource = 'Vatican News';
+        sSourceUrl = detailUrl || buildVaticanNewsUrl(month, day);
+      }
+    } else {
+      sContentSource = (sSourceUrl && sSourceUrl.includes('wikipedia.org')) ? 'Wikipedia' : 'Vatican News';
+      if (sContentSource === 'Vatican News' && (!sSourceUrl || !sSourceUrl.includes('vaticannews.va'))) {
+        sSourceUrl = detailUrl || buildVaticanNewsUrl(month, day);
       }
     }
 
@@ -1633,10 +1641,9 @@ async function loadCachedSaint() {
       feastTitleTa: fallbackSaint.feastTitleTa || null,
       feastType: fallbackSaint.feastType || null,
       feastTypeTa: fallbackSaint.feastTypeTa || null,
-      hasFeastInfo: Boolean(fallbackSaint.hasFeastInfo),
-      source: "Catholic Liturgical Calendar",
+      source: "Vatican News",
       sourceUrl: buildVaticanNewsUrl(todayStr.split('-')[1], todayStr.split('-')[2]),
-      link: fallbackSaint.link,
+      link: buildVaticanNewsUrl(todayStr.split('-')[1], todayStr.split('-')[2]),
       status: "Synced",
       lastSynced: new Date()
     };
