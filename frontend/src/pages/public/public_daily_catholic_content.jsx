@@ -1249,27 +1249,37 @@ export default function DailyCatholicContent() {
 
                         <div className="pt-4 border-t border-gray-100 flex items-center gap-3 flex-wrap">
                           {(() => {
-                            const isWiki = Boolean(
-                              (activeSourceUrl && activeSourceUrl.includes('wikipedia.org')) ||
-                              (activeSaint.contentSource && activeSaint.contentSource.toLowerCase().includes('wiki')) ||
-                              (activeSaint.imageSource && activeSaint.imageSource.toLowerCase().includes('wiki')) ||
-                              (activeSaint.source && activeSaint.source.toLowerCase().includes('wiki')) ||
-                              (saintData?.source && saintData.source.toLowerCase().includes('wiki')) ||
-                              (activeImage && (activeImage.includes('wikipedia.org') || activeImage.includes('wikimedia.org') || activeImage.includes('upload.wikimedia')))
+                            // Content is ONLY from Wikipedia if the content was fetched with a confirmed, valid Wikipedia article URL.
+                            const hasVerifiedWikiUrl = Boolean(
+                              activeSourceUrl &&
+                              activeSourceUrl.includes('wikipedia.org/wiki/') &&
+                              !activeSourceUrl.includes('Candida%2C') &&
+                              !activeSourceUrl.includes('Candida,')
                             );
 
-                            const siteName = isWiki ? 'Wikipedia' : 'Vatican News';
-                            const cleanSaint = (activeSaint.englishName || activeSaint.name || saintData?.saintName || '').replace(/^(Saint|St\.?)\s+/i, '').trim();
+                            const isContentFromWiki = Boolean(
+                              hasVerifiedWikiUrl && (
+                                (activeSaint.contentSource && activeSaint.contentSource.toLowerCase() === 'wikipedia') ||
+                                (saintData?.contentSource && saintData.contentSource.toLowerCase() === 'wikipedia') ||
+                                (activeSaint.source && activeSaint.source.toLowerCase() === 'wikipedia') ||
+                                (saintData?.source && saintData.source.toLowerCase() === 'wikipedia')
+                              )
+                            );
 
-                            const targetUrl = isWiki
-                              ? ((activeSourceUrl && activeSourceUrl.includes('wikipedia.org'))
-                                  ? activeSourceUrl
-                                  : `https://en.wikipedia.org/wiki/${encodeURIComponent(cleanSaint || 'Saint')}`)
+                            const siteName = isContentFromWiki ? 'Wikipedia' : 'Vatican News';
+
+                            const now = new Date();
+                            const monthNum = String(now.getMonth() + 1).padStart(2, '0');
+                            const dayNum = String(now.getDate()).padStart(2, '0');
+                            const defaultVaticanUrl = `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`;
+
+                            const targetUrl = isContentFromWiki
+                              ? activeSourceUrl
                               : ((activeSourceUrl && activeSourceUrl.includes('vaticannews.va'))
                                   ? activeSourceUrl
                                   : (saintData?.sourceUrl && saintData.sourceUrl.includes('vaticannews.va'))
                                     ? saintData.sourceUrl
-                                    : 'https://www.vaticannews.va/en/saints.html');
+                                    : defaultVaticanUrl);
 
                             return (
                               <a

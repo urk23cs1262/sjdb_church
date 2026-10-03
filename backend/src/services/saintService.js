@@ -247,6 +247,10 @@ async function translateText(text, targetLang = 'ta') {
 function cleanSaintNameForWiki(rawName) {
   if (!rawName) return '';
   const lowerRaw = rawName.toLowerCase();
+  if (lowerRaw.includes('candida') && (lowerRaw.includes('portuense') || lowerRaw.includes('martyr') || lowerRaw.includes('rome'))) {
+    // Candida, Martyr on the Via Portuense does not have a standalone Wikipedia page.
+    return '';
+  }
   if (lowerRaw.includes('eustachius') && (lowerRaw.includes('paula') || lowerRaw.includes('virgin'))) {
     return 'Eustochium';
   }
@@ -278,6 +282,10 @@ function validateWikiMatch(displayedSaintName, wikiTitle) {
   if (!displayedSaintName || !wikiTitle) return false;
   const cleanDisplay = cleanSaintNameForWiki(displayedSaintName).toLowerCase();
   const cleanWiki = cleanSaintNameForWiki(wikiTitle).toLowerCase();
+
+  if (cleanDisplay.includes('candida') && (cleanWiki.includes('elder') || cleanWiki.includes('vecchia') || cleanWiki.includes('carthage') || cleanWiki.includes('film'))) {
+    return false;
+  }
 
   if (cleanDisplay.includes(cleanWiki) || cleanWiki.includes(cleanDisplay)) return true;
   if (cleanDisplay.includes('vincent') && cleanWiki.includes('vincent')) return true;

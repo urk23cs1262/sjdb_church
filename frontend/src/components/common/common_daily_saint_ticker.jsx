@@ -462,27 +462,38 @@ export default function DailySaintTicker() {
                             {/* Link to Original Website Page — Strictly Wikipedia or Vatican News only */}
                             <div className="pt-4 mt-4 border-t border-gray-100 flex-shrink-0">
                               {(() => {
-                                const isWiki = Boolean(
-                                  (mSourceUrl && mSourceUrl.includes('wikipedia.org')) ||
-                                  (activeModalSaint.contentSource && activeModalSaint.contentSource.toLowerCase().includes('wiki')) ||
-                                  (activeModalSaint.imageSource && activeModalSaint.imageSource.toLowerCase().includes('wiki')) ||
-                                  (activeModalSaint.source && activeModalSaint.source.toLowerCase().includes('wiki')) ||
-                                  (saintOfDay.source && saintOfDay.source.toLowerCase().includes('wiki')) ||
-                                  (mImage && (mImage.includes('wikipedia.org') || mImage.includes('wikimedia.org') || mImage.includes('upload.wikimedia')))
+                                // Content is ONLY from Wikipedia if the content was fetched with a confirmed, valid Wikipedia article URL.
+                                // Exclude invalid strings or unverified titles to avoid Wikipedia 404 pages.
+                                const hasVerifiedWikiUrl = Boolean(
+                                  mSourceUrl &&
+                                  mSourceUrl.includes('wikipedia.org/wiki/') &&
+                                  !mSourceUrl.includes('Candida%2C') &&
+                                  !mSourceUrl.includes('Candida,')
                                 );
 
-                                const siteName = isWiki ? 'Wikipedia' : 'Vatican News';
-                                const cleanSaint = (activeModalSaint.englishName || activeModalSaint.name || saintOfDay.saintName || '').replace(/^(Saint|St\.?)\s+/i, '').trim();
+                                const isContentFromWiki = Boolean(
+                                  hasVerifiedWikiUrl && (
+                                    (activeModalSaint.contentSource && activeModalSaint.contentSource.toLowerCase() === 'wikipedia') ||
+                                    (saintOfDay.contentSource && saintOfDay.contentSource.toLowerCase() === 'wikipedia') ||
+                                    (activeModalSaint.source && activeModalSaint.source.toLowerCase() === 'wikipedia') ||
+                                    (saintOfDay.source && saintOfDay.source.toLowerCase() === 'wikipedia')
+                                  )
+                                );
 
-                                const targetUrl = isWiki
-                                  ? ((mSourceUrl && mSourceUrl.includes('wikipedia.org'))
-                                      ? mSourceUrl
-                                      : `https://en.wikipedia.org/wiki/${encodeURIComponent(cleanSaint || 'Saint')}`)
+                                const siteName = isContentFromWiki ? 'Wikipedia' : 'Vatican News';
+
+                                const now = new Date();
+                                const monthNum = String(now.getMonth() + 1).padStart(2, '0');
+                                const dayNum = String(now.getDate()).padStart(2, '0');
+                                const defaultVaticanUrl = `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`;
+
+                                const targetUrl = isContentFromWiki
+                                  ? mSourceUrl
                                   : ((mSourceUrl && mSourceUrl.includes('vaticannews.va'))
                                       ? mSourceUrl
                                       : (saintOfDay.sourceUrl && saintOfDay.sourceUrl.includes('vaticannews.va'))
                                         ? saintOfDay.sourceUrl
-                                        : 'https://www.vaticannews.va/en/saints.html');
+                                        : defaultVaticanUrl);
 
                                 return (
                                   <a
