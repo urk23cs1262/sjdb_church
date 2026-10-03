@@ -158,7 +158,13 @@ async function getTodayDailyContent(targetDate = new Date()) {
   if (massReadingDoc?.sections && massReadingDoc.sections.length > 0) {
     tamilReadingsList = massReadingDoc.sections.map(s => ({
       type: s.heading || 'வாசகம்',
+      heading: s.heading || 'வாசகம்',
       reference: s.reference || '',
+      subtitle: s.subtitle || '',
+      refrain: s.refrain || '',
+      response: s.response || '',
+      verses: s.verses || null,
+      paragraphs: s.paragraphs || [],
       text: cleanCatholicContent((s.paragraphs && s.paragraphs.length > 0)
         ? s.paragraphs.join('\n\n')
         : (s.text || ''))
@@ -171,7 +177,13 @@ async function getTodayDailyContent(targetDate = new Date()) {
   if (englishDoc?.sections && englishDoc.sections.length > 0) {
     englishReadingsList = englishDoc.sections.map(s => ({
       type: s.heading || 'Reading',
+      heading: s.heading || 'Reading',
       reference: s.reference || '',
+      subtitle: s.subtitle || '',
+      refrain: s.refrain || '',
+      response: s.response || '',
+      verses: s.verses || null,
+      paragraphs: s.paragraphs || [],
       text: cleanCatholicContent((s.paragraphs && s.paragraphs.length > 0)
         ? s.paragraphs.join('\n\n')
         : (s.text || ''))
@@ -192,12 +204,28 @@ async function getTodayDailyContent(targetDate = new Date()) {
   const massReadings = {
     tamil: {
       title: tamilTitle,
+      liturgicalDay: massReadingDoc?.liturgicalDay || massReadingDoc?.celebration || '',
+      celebration: massReadingDoc?.celebration || '',
       readings: tamilReadingsList,
+      sections: massReadingDoc?.sections || tamilReadingsList,
+      firstReading: massReadingDoc?.firstReading,
+      responsorialPsalm: massReadingDoc?.responsorialPsalm,
+      secondReading: massReadingDoc?.secondReading,
+      gospelAcclamation: massReadingDoc?.gospelAcclamation,
+      gospel: massReadingDoc?.gospel,
       fullText: tamilReadingsList.map(r => `${r.type} ${r.reference ? `(${r.reference})` : ''}\n${cleanCatholicContent(r.text)}`).join('\n\n')
     },
     english: {
       title: englishTitle,
+      liturgicalDay: englishDoc?.liturgicalDay || englishDoc?.celebration || '',
+      celebration: englishDoc?.celebration || '',
       readings: englishReadingsList,
+      sections: englishDoc?.sections || englishReadingsList,
+      firstReading: englishDoc?.firstReading,
+      responsorialPsalm: englishDoc?.responsorialPsalm,
+      secondReading: englishDoc?.secondReading,
+      gospelAcclamation: englishDoc?.gospelAcclamation,
+      gospel: englishDoc?.gospel,
       fullText: englishReadingsList.map(r => `${r.type} ${r.reference ? `(${r.reference})` : ''}\n${cleanCatholicContent(r.text)}`).join('\n\n')
     }
   };
@@ -263,7 +291,9 @@ async function getTodayDailyContent(targetDate = new Date()) {
     scriptureQuote: refSource?.scriptureQuote || '',
     paragraphs: refSource?.paragraphs || [],
     prayer: refSource?.prayer || '',
-    sourceUrl: refSource?.sourceUrl || 'https://www.tamilcatholicdaily.com/dailyverse'
+    sourceUrl: refSource?.sourceUrl || 'https://www.tamilcatholicdaily.com/dailyverse',
+    tamilStructured: refSource || null,
+    englishStructured: englishDoc?.reflection || null
   };
 
   // 3. Saint of the Day

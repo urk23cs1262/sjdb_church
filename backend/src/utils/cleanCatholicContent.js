@@ -47,24 +47,26 @@ function cleanCatholicContent(text) {
   cleaned = cleaned.replace(/English Mass Readings[^\n]*/gi, '');
   cleaned = cleaned.replace(/Tamil Mass Readings[^\n]*/gi, '');
 
-  // 6. Clean line by line: discard any line with CSS syntax or garbage
-  return cleaned
-    .split('\n')
-    .map(line => line.trim())
-    .filter(line => {
-      if (!line) return false;
-      if (line === 'New:' || line === 'Android &' || line === 'iOS' || line === 'Android') return false;
-      // Filter any line that is CSS selector or rule
-      if (/^[.#][a-zA-Z0-9_-]+\s*\{/.test(line)) return false;
-      if (/^[{}\s;]+$/.test(line)) return false;
-      if (line.includes('cgAd') || line.includes('cgWrap') || line.includes('@media') || line.includes('!important')) return false;
-      if (/^(width|height|min-height|max-height|position|display|margin|padding|text-align)\s*:/i.test(line)) return false;
-      if (/calc\([^)]+\)/i.test(line)) return false;
-      return true;
-    })
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  // 6. Clean line by line: discard any line with CSS syntax or garbage, but preserve paragraph breaks
+  const rawLines = cleaned.split('\n').map(line => line.trim());
+  const keptLines = [];
+  for (const line of rawLines) {
+    if (!line) {
+      if (keptLines.length > 0 && keptLines[keptLines.length - 1] !== '') {
+        keptLines.push('');
+      }
+      continue;
+    }
+    if (line === 'New:' || line === 'Android &' || line === 'iOS' || line === 'Android') continue;
+    // Filter any line that is CSS selector or rule
+    if (/^[.#][a-zA-Z0-9_-]+\s*\{/.test(line)) continue;
+    if (/^[{}\s;]+$/.test(line)) continue;
+    if (line.includes('cgAd') || line.includes('cgWrap') || line.includes('@media') || line.includes('!important')) continue;
+    if (/^(width|height|min-height|max-height|position|display|margin|padding|text-align)\s*:/i.test(line)) continue;
+    if (/calc\([^)]+\)/i.test(line)) continue;
+    keptLines.push(line);
+  }
+  return keptLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /**

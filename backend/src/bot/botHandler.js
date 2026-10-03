@@ -582,13 +582,36 @@ Glory be to the Father, and to the Son, and to the Holy Spirit. As it was in the
 }
 
 /**
+ * Resolves the Daily Catholic Content language for a user interaction.
+ * Strictly respects the user's configured daily catholic content language preference (session.language),
+ * allowing temporary overrides ONLY if the user explicitly requested a specific language in their text command
+ * (e.g. "in english", "in tamil", "தமிழில்").
+ */
+function resolveUserContentLanguage(session, rawText = '') {
+  const userChosenContentLang = getUserDailyContentLanguage(session);
+  const text = String(rawText || '').trim().toLowerCase();
+
+  // Explicit user requests for a particular language
+  if (/\b(in\s*english|only\s*english|english\s*only)\b/i.test(text) || text === 'english' || text === 'en') {
+    return 'en';
+  }
+  if (/\b(in\s*tamil|only\s*tamil|tamil\s*only|தமிழில்)\b/i.test(text) || text === 'tamil' || text === 'தமிழ்' || text === 'ta') {
+    return 'ta';
+  }
+  if (/\b(in\s*both|both\s*languages?|இரு\s*மொழிகளிலும்)\b/i.test(text) || text === 'both') {
+    return 'both';
+  }
+
+  // Strictly respect user's saved daily catholic content preference
+  return userChosenContentLang;
+}
+
+/**
  * Individual Dispatcher: Send Today's Bible Verse as an Image ONLY
  */
 async function sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery = false, rawText = '') {
   try {
-    const hasTamilScript = Boolean(rawText && /[\u0B80-\u0BFF]/.test(rawText));
-    const userChosenContentLang = getUserDailyContentLanguage(session);
-    const contentLang = hasTamilScript ? (userChosenContentLang === 'both' ? 'both' : 'ta') : userChosenContentLang;
+    const contentLang = resolveUserContentLanguage(session, rawText);
 
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'VERSE';
@@ -627,9 +650,7 @@ async function sendTodayBibleVerse(replyTarget, session, wa, isTamilQuery = fals
  */
 async function sendTodayMassReadings(replyTarget, session, wa, isTamilQuery = false, rawText = '') {
   try {
-    const hasTamilScript = Boolean(rawText && /[\u0B80-\u0BFF]/.test(rawText));
-    const userChosenContentLang = getUserDailyContentLanguage(session);
-    const contentLang = hasTamilScript ? (userChosenContentLang === 'both' ? 'both' : 'ta') : userChosenContentLang;
+    const contentLang = resolveUserContentLanguage(session, rawText);
 
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'READINGS';
@@ -655,9 +676,7 @@ async function sendTodayMassReadings(replyTarget, session, wa, isTamilQuery = fa
  */
 async function sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery = false, rawText = '') {
   try {
-    const hasTamilScript = Boolean(rawText && /[\u0B80-\u0BFF]/.test(rawText));
-    const userChosenContentLang = getUserDailyContentLanguage(session);
-    const contentLang = hasTamilScript ? (userChosenContentLang === 'both' ? 'both' : 'ta') : userChosenContentLang;
+    const contentLang = resolveUserContentLanguage(session, rawText);
 
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'REFLECTION';
@@ -682,9 +701,7 @@ async function sendTodayDailyReflection(replyTarget, session, wa, isTamilQuery =
  */
 async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false, rawText = '') {
   try {
-    const hasTamilScript = Boolean(rawText && /[\u0B80-\u0BFF]/.test(rawText));
-    const userChosenContentLang = getUserDailyContentLanguage(session);
-    const contentLang = hasTamilScript ? (userChosenContentLang === 'both' ? 'both' : 'ta') : userChosenContentLang;
+    const contentLang = resolveUserContentLanguage(session, rawText);
 
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'SAINT';
@@ -738,9 +755,7 @@ async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false, ra
  */
 async function sendTodayPrayer(replyTarget, session, wa, isTamilQuery = false, rawText = '') {
   try {
-    const hasTamilScript = Boolean(rawText && /[\u0B80-\u0BFF]/.test(rawText));
-    const userChosenContentLang = getUserDailyContentLanguage(session);
-    const contentLang = hasTamilScript ? (userChosenContentLang === 'both' ? 'both' : 'ta') : userChosenContentLang;
+    const contentLang = resolveUserContentLanguage(session, rawText);
 
     session.invalidInputStreak = 0;
     session.lastBotReplyType = 'PRAYERS';

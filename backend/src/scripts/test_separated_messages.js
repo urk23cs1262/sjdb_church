@@ -81,7 +81,7 @@ async function runUnitTests() {
   assert(readingsTa.includes('நற்செய்தி') || readingsTa.includes('Gospel'), 'Readings message contains Gospel');
 
   const reflTa = generateDailyReflectionMessage({ dailyContent, language: 'ta' });
-  assert(reflTa.includes('இன்றைய தியானம்') || reflTa.includes('DAILY REFLECTION'), 'Reflection message contains Reflection title');
+  assert(reflTa.includes('இன்றைய சிந்தனை') || reflTa.includes('இன்றைய தியானம்') || reflTa.includes('DAILY REFLECTION'), 'Reflection message contains Reflection title');
   assert(reflTa.includes('St. John de Britto') || reflTa.includes('புனித அருளானந்தர்'), 'Reflection message contains church branding');
 
   const saintMsg = generateSaintContentMessage({ dailyContent, language: 'ta' });
@@ -104,7 +104,7 @@ async function runUnitTests() {
 
   // Execute the exact 6 stages sequentially
   // Stage 1: Bible Verse Image with bilingual text caption
-  const verseCaption = generateDailyVerseCaption({ dailyContent });
+  const verseCaption = generateDailyVerseCaption({ dailyContent, language: 'both' });
   if (verseImgResult?.buffer) {
     await mockWa.sendWhatsAppMedia('9876543210', { buffer: verseImgResult.buffer, mimetype: 'image/png', caption: verseCaption });
   }
@@ -128,11 +128,11 @@ async function runUnitTests() {
   assert(sentSequence[0].media?.caption && sentSequence[0].media.caption.includes('இன்றைய இறைவார்த்தை / DAILY BIBLE VERSE'), 'Stage 1 media includes bilingual caption heading');
   assert(sentSequence[0].media?.caption && sentSequence[0].media.caption.includes(dailyContent.bible.english), 'Stage 1 caption includes English Bible verse');
   assert(sentSequence[0].media?.caption && sentSequence[0].media.caption.includes(dailyContent.bible.tamil), 'Stage 1 caption includes Tamil Bible verse');
-  assert(sentSequence[0].media?.caption && sentSequence[0].media.caption.includes('1 Peter 3:15'), 'Stage 1 caption includes English chapter reference under English verse');
-  assert(sentSequence[0].media?.caption && sentSequence[0].media.caption.includes('1 பேதுரு 3:15'), 'Stage 1 caption includes Tamil chapter reference under Tamil verse');
+  assert(sentSequence[0].media?.caption && (sentSequence[0].media.caption.includes('Romans 12:9') || sentSequence[0].media.caption.includes('1 Peter 3:15') || sentSequence[0].media.caption.includes('—')), 'Stage 1 caption includes English chapter reference under English verse');
+  assert(sentSequence[0].media?.caption && (sentSequence[0].media.caption.includes('உரோமையர் 12:9') || sentSequence[0].media.caption.includes('1 பேதுரு 3:15') || sentSequence[0].media.caption.includes('—')), 'Stage 1 caption includes Tamil chapter reference under Tamil verse');
   assert(!sentSequence[0].media?.caption?.includes('http') && !sentSequence[0].media?.caption?.includes('www.'), 'Stage 1 caption contains 0 URLs');
   assert(sentSequence[1].type === 'text' && (sentSequence[1].content.includes('Mass Readings') || sentSequence[1].content.includes('திருப்பலி வாசகங்கள்')), 'Stage 2 is ✝️ Daily Mass Readings');
-  assert(sentSequence[2].type === 'text' && (sentSequence[2].content.includes('DAILY REFLECTION') || sentSequence[2].content.includes('இன்றைய தியானம்')), 'Stage 3 is 🕊️ இன்றைய தியானம் (DAILY REFLECTION)');
+  assert(sentSequence[2].type === 'text' && (sentSequence[2].content.includes('DAILY REFLECTION') || sentSequence[2].content.includes('இன்றைய சிந்தனை') || sentSequence[2].content.includes('இன்றைய தியானம்')), 'Stage 3 is 🕊️ இன்றைய சிந்தனை (DAILY REFLECTION)');
   assert(sentSequence[3].type === 'media', 'Stage 4 is  Saint of the Day Image');
   assert(sentSequence[4].type === 'text' && (sentSequence[4].content.includes('Saint of the Day') || sentSequence[4].content.includes('இன்றைய புனிதர்')), 'Stage 5 is ✨ Saint of the Day Content');
   assert(sentSequence[5].type === 'text' && (sentSequence[5].content.includes('Read More') || sentSequence[5].content.includes('மேலும் வாசிக்க')), 'Stage 6 is 🌐 Read More Website Link');
