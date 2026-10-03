@@ -217,7 +217,7 @@ export default function AdminRegistrations() {
                 <div className={`flex items-center justify-between mt-2 text-xs ${selectedEvent?._id === ev._id ? 'text-white/80' : 'text-gray-400'}`}>
                   <span>{new Date(ev.date).toLocaleDateString()}</span>
                   <span className="flex items-center gap-1">
-                    <FiUsers /> {ev.registrations?.length || 0} registered
+                    <FiUsers /> {ev.registrationCount !== undefined ? ev.registrationCount : (ev.registrations?.length || 0)} registered
                   </span>
                 </div>
               </button>
@@ -239,7 +239,7 @@ export default function AdminRegistrations() {
                 <div className="p-6 bg-church-gradient text-white flex justify-between items-center">
                   <div>
                     <h3 className="text-xl font-bold">{selectedEvent.title}</h3>
-                    <p className="text-white/70 text-sm">Total: {selectedEvent.registrations?.length || 0} participants</p>
+                    <p className="text-white/70 text-sm">Total: {selectedEvent.registrationCount !== undefined ? selectedEvent.registrationCount : (selectedEvent.registrations?.length || 0)} participants</p>
                   </div>
                   <div className="flex gap-2">
                     <button

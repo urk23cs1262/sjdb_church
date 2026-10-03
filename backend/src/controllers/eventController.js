@@ -3,6 +3,9 @@ const Event = require('../models/Event');
 const User = require('../models/User');
 const { sendSMS } = require('../config/twilio');
 const { createNotification } = require('../services/notificationService');
+const { registerUserForEvent, withdrawUserRegistration } = require('../services/eventRegistrationService');
+const { resolveBackendImageUrl } = require('../utils/imageUrlHelper');
+
 function sendWA(phone, text) {
   return require('../bot/whatsapp').sendWhatsAppMessage(phone, text).catch(() => { });
 }
@@ -16,18 +19,63 @@ const getAll = async (req, res) => {
     if (upcoming === 'true') query.date = { $gte: new Date() };
     if (featured === 'true') query.isFeatured = true;
     const total = await Event.countDocuments(query);
-    const events = await Event.find(query).sort({ date: 1 }).skip((page - 1) * limit).limit(Number(limit)).lean();
-    if (all !== 'true') {
-      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
+    const rawEvents = await Event.find(query).sort({ date: 1 }).skip((page - 1) * limit).limit(Number(limit)).lean();
+
+    const isAdmin = req.user && ['admin', 'priest'].includes(req.user.role);
+    const events = rawEvents.map(e => {
+      const isRegistered = Boolean(
+        req.user && (e.registrations || []).some(r => r.userId?.toString() === req.user._id.toString())
+      );
+      const registrationCount = e.registrationCount || (e.registrations || []).length;
+      const resolvedImage = resolveBackendImageUrl(e.image);
+
+      const sanitizedRegistrations = isAdmin
+        ? e.registrations
+        : (isRegistered ? (e.registrations || []).filter(r => r.userId?.toString() === req.user._id.toString()) : []);
+
+      return {
+        ...e,
+        image: resolvedImage,
+        isRegistered,
+        registrationCount,
+        registrations: sanitizedRegistrations
+      };
+    });
+
+    if (req.user) {
+      res.set('Cache-Control', 'private, no-cache, no-store, must-revalidate');
+    } else if (all !== 'true') {
+      res.set('Cache-Control', 'public, max-age=15, stale-while-revalidate=30');
     }
+
     res.json({ success: true, total, events });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
 const getOne = async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id).populate('createdBy', 'name').lean();
-    if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
+    const rawEvent = await Event.findById(req.params.id).populate('createdBy', 'name').lean();
+    if (!rawEvent) return res.status(404).json({ success: false, message: 'Event not found' });
+
+    const isRegistered = Boolean(
+      req.user && (rawEvent.registrations || []).some(r => r.userId?.toString() === req.user._id.toString())
+    );
+    const registrationCount = rawEvent.registrationCount || (rawEvent.registrations || []).length;
+    const resolvedImage = resolveBackendImageUrl(rawEvent.image);
+
+    const isAdmin = req.user && ['admin', 'priest'].includes(req.user.role);
+    const sanitizedRegistrations = isAdmin
+      ? rawEvent.registrations
+      : (isRegistered ? (rawEvent.registrations || []).filter(r => r.userId?.toString() === req.user._id.toString()) : []);
+
+    const event = {
+      ...rawEvent,
+      image: resolvedImage,
+      isRegistered,
+      registrationCount,
+      registrations: sanitizedRegistrations
+    };
+
     res.json({ success: true, event });
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
@@ -183,67 +231,37 @@ const remove = async (req, res) => {
 
 const registerForEvent = async (req, res) => {
   try {
-    const { name, phone, email, gender, comingFrom } = req.body;
-    const event = await Event.findById(req.params.id);
-    if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
-    const alreadyRegistered = event.registrations.some(r => r.userId?.toString() === req.user._id.toString());
-    if (alreadyRegistered) return res.status(400).json({ success: false, message: 'Already registered' });
-    event.registrations.push({
-      userId: req.user._id,
-      name: name || req.user.name,
-      phone: phone || req.user.phone,
-      email: email || req.user.email,
-      gender,
-      comingFrom,
-      registeredAt: new Date()
+    const result = await registerUserForEvent({
+      eventId: req.params.id,
+      user: req.user,
+      registrationData: req.body
     });
-    await event.save();
-
-    // In-app: confirm registration to user
-    createNotification({
-      userId: req.user._id,
-      recipient: 'user',
-      title: ` Event Registration Confirmed`,
-      message: `You have successfully registered for "${event.title}"${event.date ? ' on ' + new Date(event.date).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' }) : ''}.`,
-      type: 'event',
-      category: 'events',
-      priority: 'low',
-      actionUrl: '/events',
-      relatedId: event._id,
-      relatedModel: 'Event',
-      channels: []
-    }).catch(e => console.error('Event reg notification error:', e.message));
-
-    // Admin in-app notification
-    createNotification({
-      recipient: 'admin',
-      title: ` New Event Registration`,
-      message: `${req.user.name} has registered for "${event.title}". Total registrations: ${event.registrations.length}`,
-      type: 'event',
-      category: 'events',
-      priority: 'low',
-      actionUrl: '/admin/events',
-      relatedId: event._id,
-      relatedModel: 'Event',
-      channels: []
-    }).catch(e => console.error('Event reg admin notification error:', e.message));
-
-    res.json({ success: true, message: 'Registered successfully' });
-  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+    res.status(201).json(result);
+  } catch (err) {
+    const status = err.statusCode || (err.code === 'ALREADY_REGISTERED' ? 409 : 500);
+    res.status(status).json({
+      success: false,
+      code: err.code || 'REGISTRATION_FAILED',
+      message: err.message
+    });
+  }
 };
 
 const withdrawRegistration = async (req, res) => {
   try {
-    const event = await Event.findById(req.params.id);
-    if (!event) return res.status(404).json({ success: false, message: 'Event not found' });
-
-    const index = event.registrations.findIndex(r => r.userId?.toString() === req.user._id.toString());
-    if (index === -1) return res.status(400).json({ success: false, message: 'Not registered for this event' });
-
-    event.registrations.splice(index, 1);
-    await event.save();
-    res.json({ success: true, message: 'Registration withdrawn successfully' });
-  } catch (err) { res.status(500).json({ success: false, message: err.message }); }
+    const result = await withdrawUserRegistration({
+      eventId: req.params.id,
+      userId: req.user._id
+    });
+    res.json(result);
+  } catch (err) {
+    const status = err.statusCode || 500;
+    res.status(status).json({
+      success: false,
+      code: err.code || 'WITHDRAWAL_FAILED',
+      message: err.message
+    });
+  }
 };
 
 module.exports = { getAll, getOne, create, update, remove, registerForEvent, withdrawRegistration };

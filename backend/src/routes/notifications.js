@@ -15,7 +15,8 @@ const {
   getVapidKey,
   subscribePush,
   getActiveCelebrations,
-  acknowledgeCelebrationModal
+  acknowledgeCelebrationModal,
+  testTomorrowReminder
 } = require('../controllers/notificationController');
 const { protect, optionalAuth, adminOnly } = require('../middleware/auth');
 
@@ -42,5 +43,7 @@ router.get('/admin/unread-count', protect, adminOnly, getAdminUnreadCount);
 router.put('/admin/read-all', protect, adminOnly, markAllAdminRead);
 router.delete('/admin/clear-all', protect, adminOnly, deleteAllAdmin);
 router.post('/broadcast', protect, adminOnly, broadcast);
+router.post('/admin/test-tomorrow-reminder', protect, adminOnly, testTomorrowReminder);
+router.post('/test-tomorrow-reminder', protect, adminOnly, testTomorrowReminder);
 
 module.exports = router;

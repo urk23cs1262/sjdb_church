@@ -445,6 +445,25 @@ const acknowledgeCelebrationModal = async (req, res) => {
   }
 };
 
+// POST /api/notifications/admin/test-tomorrow-reminder
+const testTomorrowReminder = async (req, res) => {
+  try {
+    const { runTomorrowReminder } = require('../services/tomorrowReminderService');
+    const { targetDate, dryRun, testPhone, testEmail } = req.body || {};
+    const result = await runTomorrowReminder({
+      targetDate,
+      dryRun,
+      testPhone,
+      testEmail,
+      testUser: (!testPhone && !testEmail) ? req.user : null,
+      force: true
+    });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 module.exports = {
   getMyNotifications,
   getUnreadCount,
@@ -461,5 +480,6 @@ module.exports = {
   getVapidKey,
   subscribePush,
   getActiveCelebrations,
-  acknowledgeCelebrationModal
+  acknowledgeCelebrationModal,
+  testTomorrowReminder
 };

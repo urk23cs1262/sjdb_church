@@ -12,6 +12,8 @@ const eventSchema = new mongoose.Schema({
   category: { type: String, enum: ['feast', 'mass', 'meeting', 'youth', 'choir', 'catechism', 'community', 'other'], default: 'other' },
   image: { type: String },
   registrationRequired: { type: Boolean, default: false },
+  registrationLimit: { type: Number, default: 0 }, // 0 = unlimited
+  registrationCount: { type: Number, default: 0 },
   registrations: [{
     userId: mongoose.Schema.Types.ObjectId,
     name: String,

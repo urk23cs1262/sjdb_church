@@ -216,6 +216,7 @@ require('./services/maintenanceSchedulerService'); // Automated Maintenance star
 require('./services/bibleVerseService'); // 12:00 AM Daily Bible Verse automated rotation scheduler
 require('./services/dailyMassReadingService').initMidnightCron(); // 12:00 AM IST Daily Tamil Mass Readings automated sync scheduler
 require('./services/dailyNotificationService'); // 4:00 AM IST Daily Automated Catholic Content Multi-Channel Broadcast
+require('./services/tomorrowReminderService'); // 6:00 AM IST Daily Tomorrow's Events & Announcements Multi-Channel Reminder
 require('./services/accountVerificationService'); // 8:00 AM IST Daily Account Verification & Admin Alert System
 
 // Background Monitor: Scan for expired/abandoned unverified OTPs every 60s
@@ -286,6 +287,7 @@ app.get(['/health', '/api/health', '/api/bot/health'], async (req, res) => {
     backgroundWorkers: {
       dailySaintMidnight: 'Active (0 0 * * * Asia/Kolkata)',
       dailyBroadcast4AM: 'Active (0 4 * * * Asia/Kolkata)',
+      tomorrowContentReminder: 'Active (0 6 * * * Asia/Kolkata)',
       reminderScheduler: 'Active (4:00 AM, 12:00 PM, Hourly)',
       dailyMassSync: 'Active (0 0 * * * Asia/Kolkata)',
       dailyBibleVerseRotation: 'Active (0 0 * * * Asia/Kolkata)',

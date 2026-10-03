@@ -11,6 +11,7 @@ import api from '../../services/api';
 import { SectionLoader } from '../../components/common/common_loader';
 import { useAuth } from '../../context/context_auth_context';
 import PageHero from '../../components/common/common_page_hero';
+import { resolveEventImageUrl, handleImageError, FALLBACK_EVENT_IMAGE } from '../../utils/eventImageHelper';
 
 import LoginRequiredModal from '../../components/common/common_login_required_modal';
 
@@ -103,17 +104,52 @@ export default function Events() {
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
+    if (!registeringEvent) return;
+    const targetEventId = registeringEvent._id;
     setIsSubmitting(true);
     try {
-      await api.post(`/events/${registeringEvent._id}/register`, formData);
+      const res = await api.post(`/events/${targetEventId}/register`, formData);
+      const regData = res.data?.registration || {
+        userId: user?._id,
+        name: formData.name,
+        phone: formData.phone,
+        email: formData.email,
+        registeredAt: new Date().toISOString()
+      };
+      const updatedCount = res.data?.registrationCount;
+
+      // 1. Immediately update React state with zero refresh required
+      setEvents(prev => prev.map(ev => {
+        if (ev._id === targetEventId) {
+          const currentRegs = ev.registrations || [];
+          const updatedRegs = [...currentRegs, regData];
+          return {
+            ...ev,
+            isRegistered: true,
+            registrations: updatedRegs,
+            registrationCount: updatedCount !== undefined ? updatedCount : updatedRegs.length
+          };
+        }
+        return ev;
+      }));
+
       setIsSuccess(true);
-      fetchEvents(); // Update list instantly
+      toast.success(res.data?.message || 'Registration confirmed!');
+
+      // Close modal smoothly after brief celebration feedback
       setTimeout(() => {
         setRegisteringEvent(null);
         setIsSuccess(false);
-      }, 3000);
+      }, 1500);
     } catch (e) {
-      toast.error(e.response?.data?.message || 'Failed to register');
+      const code = e.response?.data?.code;
+      const msg = e.response?.data?.message || 'Failed to register';
+      if (code === 'ALREADY_REGISTERED') {
+        // Reflect registered state immediately
+        setEvents(prev => prev.map(ev => ev._id === targetEventId ? { ...ev, isRegistered: true } : ev));
+        setRegisteringEvent(null);
+      }
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -124,12 +160,31 @@ export default function Events() {
   };
 
   const confirmWithdraw = async () => {
+    if (!withdrawingEvent) return;
+    const targetEventId = withdrawingEvent._id;
     setIsSubmitting(true);
     try {
-      await api.delete(`/events/${withdrawingEvent._id}/register`);
-      toast.success('Registration withdrawn');
+      const res = await api.delete(`/events/${targetEventId}/register`);
+      const updatedCount = res.data?.registrationCount;
+
+      // 1. Immediately update React state with zero refresh required
+      setEvents(prev => prev.map(ev => {
+        if (ev._id === targetEventId) {
+          const updatedRegs = (ev.registrations || []).filter(
+            r => String(r.userId?._id || r.userId) !== String(user?._id)
+          );
+          return {
+            ...ev,
+            isRegistered: false,
+            registrations: updatedRegs,
+            registrationCount: updatedCount !== undefined ? updatedCount : Math.max(0, (ev.registrationCount || 1) - 1)
+          };
+        }
+        return ev;
+      }));
+
+      toast.success(res.data?.message || 'Registration withdrawn successfully');
       setWithdrawingEvent(null);
-      fetchEvents(); // Update list instantly
     } catch (e) {
       toast.error(e.response?.data?.message || 'Failed to withdraw');
     } finally {
@@ -170,59 +225,88 @@ export default function Events() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {events.map((ev, i) => (
-                <motion.div
-                  key={ev._id}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.06 }}
-                  className="church-card overflow-hidden group"
-                >
-                  {ev.image ? (
-                    <img src={ev.image} alt={ev.title} className="w-full h-44 object-cover rounded-xl mb-4 group-hover:scale-105 transition-transform duration-500" />
-                  ) : (
-                    <div className="w-full h-44 bg-church-gradient rounded-xl mb-4 flex items-center justify-center">
-                      <GiChurch className="text-white/30 text-6xl" />
-                    </div>
-                  )}
-                  <div className="flex items-start justify-between mb-2">
-                    <span className="badge badge-gold capitalize">{ev.category}</span>
-                    <div className="text-right">
-                      <p className="text-church-royal-blue  font-bold font-display text-xl">{new Date(ev.date).getDate()}</p>
-                      <p className="text-gray-400 text-xs">{new Date(ev.date).toLocaleString('default', { month: 'short', year: 'numeric' })}</p>
-                    </div>
-                  </div>
-                  <h3 className="font-semibold text-gray-800  text-lg mb-2 group-hover:text-church-gold transition-colors">{ev.title}</h3>
-                  {ev.description && <p className="text-gray-500 text-sm mb-3 line-clamp-2">{ev.description}</p>}
-                  <div className="space-y-1.5 text-xs text-gray-400 mb-4">
-                    {ev.time && <div className="flex items-center gap-1.5"><FiClock className="text-church-gold" />{ev.time}</div>}
-                    {ev.venue && <div className="flex items-center gap-1.5"><FiMapPin className="text-church-gold" />{ev.venue}</div>}
-                    {ev.organizer && <div className="flex items-center gap-1.5"><FiUser className="text-church-gold" />{ev.organizer}</div>}
-                  </div>
-                  {ev.registrationRequired && (
-                    <div className="space-y-2">
-                      {user && ev.registrations?.some(r => (r.userId === user._id || r.userId?._id === user._id)) ? (
-                        <div className="space-y-3">
-                          <div className="bg-green-50 text-green-700 text-sm py-2.5 px-4 rounded-xl font-semibold flex items-center gap-2 border border-green-100">
-                            <FiCheckCircle className="text-lg" /> You have already registered for this event
-                          </div>
-                          <button 
-                            onClick={() => handleWithdrawClick(ev)} 
-                            className="w-full bg-red-600 text-white py-2.5 rounded-xl text-sm font-bold shadow-md hover:bg-red-700 active:scale-95 transition-all flex items-center justify-center gap-2"
-                          >
-                            Withdraw my registration
-                          </button>
+              {events.map((ev, i) => {
+                const isUserRegistered = Boolean(
+                  ev.isRegistered || (user && (ev.registrations || []).some(r => String(r.userId?._id || r.userId) === String(user._id)))
+                );
+                const regCount = ev.registrationCount !== undefined ? ev.registrationCount : (ev.registrations?.length || 0);
+                const isFull = Boolean(ev.registrationLimit && ev.registrationLimit > 0 && regCount >= ev.registrationLimit && !isUserRegistered);
+
+                return (
+                  <motion.div
+                    key={ev._id}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.06 }}
+                    className="church-card overflow-hidden group flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="w-full h-48 rounded-xl mb-4 overflow-hidden bg-church-cream/50 relative">
+                        <img 
+                          src={resolveEventImageUrl(ev.image)} 
+                          alt={ev.title} 
+                          onError={(e) => handleImageError(e, churchLogo)}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                          loading="lazy"
+                        />
+                      </div>
+                      <div className="flex items-start justify-between mb-2">
+                        <span className="badge badge-gold capitalize">{ev.category}</span>
+                        <div className="text-right">
+                          <p className="text-church-royal-blue font-bold font-display text-xl">{new Date(ev.date).getDate()}</p>
+                          <p className="text-gray-400 text-xs">{new Date(ev.date).toLocaleString('default', { month: 'short', year: 'numeric' })}</p>
                         </div>
-                      ) : (
-                        <button onClick={() => handleRegisterClick(ev)} className="btn-gold w-full justify-center text-sm py-2.5">
-                          Register Now
-                        </button>
-                      )}
+                      </div>
+                      <h3 className="font-semibold text-gray-800 text-lg mb-2 group-hover:text-church-gold transition-colors">{ev.title}</h3>
+                      {ev.description && <p className="text-gray-500 text-sm mb-3 line-clamp-2">{ev.description}</p>}
+                      <div className="space-y-1.5 text-xs text-gray-400 mb-4">
+                        {ev.time && <div className="flex items-center gap-1.5"><FiClock className="text-church-gold" />{ev.time}</div>}
+                        {ev.venue && <div className="flex items-center gap-1.5"><FiMapPin className="text-church-gold" />{ev.venue}</div>}
+                        {ev.organizer && <div className="flex items-center gap-1.5"><FiUser className="text-church-gold" />{ev.organizer}</div>}
+                      </div>
                     </div>
-                  )}
-                </motion.div>
-              ))}
+
+                    {ev.registrationRequired && (
+                      <div className="space-y-2 pt-2 border-t border-gray-100">
+                        <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                          <span>Total Registrations</span>
+                          <span className="font-bold text-church-royal-blue">
+                            {regCount} {ev.registrationLimit > 0 ? `/ ${ev.registrationLimit}` : 'participants'}
+                          </span>
+                        </div>
+
+                        {isUserRegistered ? (
+                          <div className="space-y-2">
+                            <div className="bg-emerald-50 text-emerald-700 text-xs py-2 px-3 rounded-xl font-semibold flex items-center justify-center gap-1.5 border border-emerald-200">
+                              <FiCheckCircle className="text-sm shrink-0" /> Registration Confirmed
+                            </div>
+                            <button 
+                              onClick={() => handleWithdrawClick(ev)} 
+                              disabled={isSubmitting && withdrawingEvent?._id === ev._id}
+                              className="w-full bg-red-600 hover:bg-red-700 active:scale-95 text-white py-2.5 rounded-xl text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                            >
+                              {isSubmitting && withdrawingEvent?._id === ev._id ? 'Withdrawing...' : 'Withdraw Registration'}
+                            </button>
+                          </div>
+                        ) : isFull ? (
+                          <button disabled className="w-full bg-gray-200 text-gray-500 py-2.5 rounded-xl text-sm font-bold cursor-not-allowed">
+                            Registration Full
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={() => handleRegisterClick(ev)} 
+                            disabled={isSubmitting && registeringEvent?._id === ev._id}
+                            className="btn-gold w-full justify-center text-sm py-2.5 disabled:opacity-60"
+                          >
+                            {isSubmitting && registeringEvent?._id === ev._id ? 'Registering...' : 'Register Now'}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </motion.div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -382,14 +466,14 @@ export default function Events() {
                   onClick={confirmWithdraw}
                   className="w-full bg-red-600 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-red-700 transition-all active:scale-95 disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Withdrawing...' : 'Yes, Withdraw Registration'}
+                  {isSubmitting ? 'Withdrawing...' : 'Withdraw Registration'}
                 </button>
                 <button
                   disabled={isSubmitting}
                   onClick={() => setWithdrawingEvent(null)}
                   className="w-full bg-gray-100 text-gray-600 py-3 rounded-xl font-bold hover:bg-gray-200 transition-all"
                 >
-                  Keep My Registration
+                  Cancel
                 </button>
               </div>
             </motion.div>

@@ -45,28 +45,35 @@ const MEDIA_BASE_URL = import.meta.env.VITE_MEDIA_BASE_URL ||
 
 export const getMediaUrl = (path) => {
   if (!path) return null;
-  if (path.startsWith('data:') || path.startsWith('http://') || path.startsWith('https://')) return path;
+  if (path.startsWith('data:')) return path;
+
+  const backendHost = import.meta.env.VITE_MEDIA_BASE_URL ||
+    (import.meta.env.VITE_API_BASE_URL ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/?$/, '') : '') ||
+    (import.meta.env.PROD ? 'https://st-jb-church.onrender.com' : '');
+
+  // If already remote HTTP/HTTPS
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    if (import.meta.env.PROD && /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(path)) {
+      const pathPart = path.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i, '');
+      const cleanPath = pathPart.startsWith('/') ? pathPart : `/${pathPart}`;
+      return backendHost ? `${backendHost}${cleanPath}` : cleanPath;
+    }
+    return path;
+  }
   
   // Stream static devotional songs & Rosary audio from persistent media host in production
   if (path.startsWith('/devotional-songs/') || path.startsWith('devotional-songs/')) {
     const cleanPath = path.startsWith('/') ? path : `/${path}`;
-    return MEDIA_BASE_URL ? `${MEDIA_BASE_URL.replace(/\/+$/, '')}${cleanPath}` : cleanPath;
+    return backendHost ? `${backendHost}${cleanPath}` : cleanPath;
   }
-
-  const baseUrl = UPLOADS_URL.replace(/\/uploads\/?$/, '');
 
   // If path is a 24-character MongoDB GridFS ObjectId
   if (/^[a-fA-F0-9]{24}$/.test(path)) {
-    return `${baseUrl}/api/files/${path}`;
-  }
-
-  if (path.startsWith('/api/files/') || path.startsWith('api/files/')) {
-    const cleanPath = path.startsWith('/') ? path : `/${path}`;
-    return `${baseUrl}${cleanPath}`;
+    return backendHost ? `${backendHost}/api/files/${path}` : `/api/files/${path}`;
   }
 
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
-  return `${baseUrl}${cleanPath}`;
+  return backendHost ? `${backendHost}${cleanPath}` : cleanPath;
 };
 
 export const getFileUrl = getMediaUrl;

@@ -9,6 +9,7 @@ const announcementSchema = new mongoose.Schema({
   priority: { type: String, enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
   publishedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   isPublished: { type: Boolean, default: true },
+  date: { type: Date },
   expiresAt: { type: Date },
   attachment: { type: String },
 }, { timestamps: true });

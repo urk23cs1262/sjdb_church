@@ -215,11 +215,9 @@ export default function AdminCRUD({ resource, title, fields, hasImage, categorie
                         <div className="flex items-center gap-3">
                           {(hasImage && (item.imageUrl || item.photo || item.image)) && (
                             <img 
-                              src={(item.imageUrl || item.photo || item.image).startsWith('http') 
-                                ? (item.imageUrl || item.photo || item.image) 
-                                : `${UPLOADS_URL.replace('/uploads', '')}${(item.imageUrl || item.photo || item.image).startsWith('/') ? '' : '/'}${item.imageUrl || item.photo || item.image}`
-                              } 
+                              src={getMediaUrl(item.imageUrl || item.photo || item.image)} 
                               alt="" 
+                              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.style.display = 'none'; }}
                               className="w-10 h-10 rounded-lg object-cover" 
                             />
                           )}
