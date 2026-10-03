@@ -251,7 +251,7 @@ _(வணக்கம்! உங்களுக்கு எவ்வாறு �
 8️⃣ ❓ *Help* (உதவி)
 
 👉 *You can reply with a number or ask your question naturally.*
-➡️ *Type "Services" for the complete 14 Parish Help Desk services.*`;
+➡️ *Type "Services" for the complete 15 Parish Help Desk services.*`;
   }
 
   return `⛪ *Main Menu*
@@ -267,7 +267,7 @@ ${greeting}How can I help you today?
 8️⃣ ❓ *Help*
 
 👉 *You can reply with a number or ask your question naturally.*
-➡️ *Type "Services" for the complete 14 Parish Help Desk services.*`;
+➡️ *Type "Services" for the complete 15 Parish Help Desk services.*`;
 }
 
 function parseBotLanguage(rawText) {

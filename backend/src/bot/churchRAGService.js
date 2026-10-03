@@ -893,42 +893,44 @@ function buildPriestsSection(dynamicContext, isTamil) {
   };
 }
 
-// Dedicated 1-14 Services Menu Section
+// Dedicated 1-15 Services Menu Section
 function buildServicesMenuSection(isTamil) {
   const body = isTamil
     ? `1️⃣ ⛪ *திருப்பலி நேரங்கள்* (Mass Timings)
 2️⃣ 🕊️ *ஒப்புரவு அருட்சாதனம்* (Confession Timings)
 3️⃣ 📖 *தினசரி விவிலிய வசனம்* (Daily Bible Verse)
 4️⃣ 📜 *திருப்பலி வாசகங்கள்* (Daily Mass Readings)
-5️⃣ 🌟 *இன்றைய புனிதர்* (Saint of the Day)
-6️⃣ 🙏 *கத்தோலிக்க செபங்கள் & ஜெபமாலை* (Catholic Prayers)
-7️⃣ 📅 *பங்கு நிகழ்வுகள்* (Church Events)
-8️⃣ 📢 *பங்கு அறிவிப்புகள்* (Parish Announcements)
-9️⃣ 📍 *ஆலய அமைவிடம் & வரைபடம்* (Church Location & Map)
-1️⃣0️⃣ 👥 *பங்கு அமைப்புகள் & அன்பியங்கள்* (Parish Ministries & Anbiyams)
-1️⃣1️⃣ 👑 *பங்குத்தந்தையர்கள்* (Parish Priest & Clergy)
-1️⃣2️⃣ 🏛️ *ஆலய வரலாறு* (Church History)
-1️⃣3️⃣ 📞 *தொடர்பு விபரம்* (Contact Church)
-1️⃣4️⃣ 📜 *திருப்பலி கருத்து & சான்றிதழ்கள்* (Mass Intentions & Certificates)
+5️⃣ 💭 *இன்றைய சிந்தனை* (Daily Reflection)
+6️⃣ 🌟 *இன்றைய புனிதர்* (Saint of the Day)
+7️⃣ 🙏 *கத்தோலிக்க செபங்கள் & ஜெபமாலை* (Catholic Prayers)
+8️⃣ 📅 *பங்கு நிகழ்வுகள்* (Church Events)
+9️⃣ 📢 *பங்கு அறிவிப்புகள்* (Parish Announcements)
+🔟 📍 *ஆலய அமைவிடம் & வரைபடம்* (Church Location & Map)
+1️⃣1️⃣ 👥 *பங்கு அமைப்புகள் & அன்பியங்கள்* (Parish Ministries & Anbiyams)
+1️⃣2️⃣ 👑 *பங்குத்தந்தையர்கள்* (Parish Priest & Clergy)
+1️⃣3️⃣ 🏛️ *ஆலய வரலாறு* (Church History)
+1️⃣4️⃣ 📞 *தொடர்பு விபரம்* (Contact Church)
+1️⃣5️⃣ 📜 *திருப்பலி கருத்து & சான்றிதழ்கள்* (Mass Intentions & Certificates)
 
-👉 *1 முதல் 14 வரை உள்ள எண்ணை அழுத்தவும் அல்லது உங்கள் கேள்வியை நேரடியாகக் கேட்கவும்!*
+👉 *1 முதல் 15 வரை உள்ள எண்ணை அழுத்தவும் அல்லது உங்கள் கேள்வியை நேரடியாகக் கேட்கவும்!*
 _முதன்மை மெனுவிற்குத் திரும்ப "Menu" என அனுப்பவும்._\n`
     : `1️⃣ ⛪ *Mass Timings*
 2️⃣ 🕊️ *Confession Timings*
 3️⃣ 📖 *Daily Bible Verse*
 4️⃣ 📜 *Daily Mass Readings*
-5️⃣ 🌟 *Saint of the Day*
-6️⃣ 🙏 *Catholic Prayers & Rosary*
-7️⃣ 📅 *Church Events*
-8️⃣ 📢 *Parish Announcements*
-9️⃣ 📍 *Church Location & Map*
-1️⃣0️⃣ 👥 *Parish Ministries & Anbiyams*
-1️⃣1️⃣ 👑 *Parish Priest & Clergy*
-1️⃣2️⃣ 🏛️ *Church History*
-1️⃣3️⃣ 📞 *Contact Church*
-1️⃣4️⃣ 📜 *Mass Intentions & Certificates*
+5️⃣ 💭 *Daily Reflection (இன்றைய சிந்தனை)*
+6️⃣ 🌟 *Saint of the Day*
+7️⃣ 🙏 *Catholic Prayers & Rosary*
+8️⃣ 📅 *Church Events*
+9️⃣ 📢 *Parish Announcements*
+🔟 📍 *Church Location & Map*
+1️⃣1️⃣ 👥 *Parish Ministries & Anbiyams*
+1️⃣2️⃣ 👑 *Parish Priest & Clergy*
+1️⃣3️⃣ 🏛️ *Church History*
+1️⃣4️⃣ 📞 *Contact Church*
+1️⃣5️⃣ 📜 *Mass Intentions & Certificates*
 
-👉 *Reply with a number (1-14) or type your question naturally.*
+👉 *Reply with a number (1-15) or type your question naturally.*
 _Type "Menu" anytime to return to the Main Menu._\n`;
 
   return {
