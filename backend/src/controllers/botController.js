@@ -492,36 +492,51 @@ const testBotMessage = async (req, res) => {
       step = 'welcome',
       isVerified = false,
       providedPhone = '',
+      pendingPhone = '',
+      pendingOtp = '',
       preferences = [],
       language = 'en',
+      botLanguage = 'en',
       readingPreference = 'full',
       sendLinks = false
     } = sessionState;
 
     const rawText = (message || '').trim();
     const text = rawText.toUpperCase();
+    const isTamil = /[\u0B80-\u0BFF]/.test(rawText) || botLanguage === 'ta';
     const { SITE_ROUTES, EXTERNAL_LINKS, getSiteUrl } = require('../config/siteRoutes');
+    const { getChurchPhone, getChurchEmail } = require('../config/contactConfig');
+    const {
+      getServicesMenuMessage,
+      formatCatholicPrayersMessage,
+      extractMenuNumber
+    } = require('../bot/botHandler');
 
     let botReply = '';
     let nextStep = step;
     let newIsVerified = isVerified;
     let newProvidedPhone = providedPhone;
+    let newPendingPhone = pendingPhone;
+    let newPendingOtp = pendingOtp;
     let newPreferences = [...preferences];
     let newLanguage = language;
+    let newBotLanguage = botLanguage;
     let newReadingPreference = readingPreference;
     let newSendLinks = sendLinks;
 
     const normalizedForTrigger = rawText.toLowerCase().replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
-    const isStartTrigger = /^(hi|hello|hey|start|reset|menu|வணக்கம்)$/i.test(normalizedForTrigger) ||
+    const isStartTrigger = /^(hi|hello|hey|start|reset|restart|வணக்கம்)$/i.test(normalizedForTrigger) ||
       normalizedForTrigger.includes('sjdb connect') ||
-      normalizedForTrigger.includes('"Come; Listen; and you will find life"') ||
+      normalizedForTrigger.includes('"come; listen; and you will find life"') ||
       normalizedForTrigger.includes('connecting faith and community') ||
       (normalizedForTrigger.includes('hi') && normalizedForTrigger.includes('sjdb'));
+
+    const menuNum = extractMenuNumber(rawText);
 
     if (isStartTrigger) {
       if (newIsVerified && newProvidedPhone) {
         nextStep = 'done';
-        botReply = getStep8MainMenuMessage('Parishioner', session.botLanguage || 'en');
+        botReply = getStep8MainMenuMessage('Parishioner', newBotLanguage || 'en');
       } else {
         nextStep = 'bot_language';
         botReply = getStep1BotLanguageMessage();
@@ -529,7 +544,7 @@ const testBotMessage = async (req, res) => {
     } else if (step === 'welcome' || step === 'bot_language') {
       const chosenBotLang = parseBotLanguage(rawText);
       if (chosenBotLang) {
-        session.botLanguage = chosenBotLang;
+        newBotLanguage = chosenBotLang;
         nextStep = 'phone_verification';
         botReply = getStep2PhoneVerificationMessage(chosenBotLang);
       } else {
@@ -539,47 +554,53 @@ const testBotMessage = async (req, res) => {
     } else if (step === 'phone_verification' || step === 'ask_phone') {
       const clean10Digits = parsePhoneNumber(rawText);
       if (!clean10Digits) {
-        botReply = getStep2PhoneVerificationMessage(session.botLanguage || 'en');
+        botReply = getStep2PhoneVerificationMessage(newBotLanguage || 'en');
       } else {
-        session.pendingPhone = clean10Digits;
-        const otp = '123456';
-        session.pendingOtp = otp;
-        session.otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
+        newPendingPhone = clean10Digits;
+        newPendingOtp = '123456';
         nextStep = 'otp_verification';
-        botReply = getStep3OTPVerificationMessage(clean10Digits, otp, session.botLanguage || 'en');
+        botReply = getStep3OTPVerificationMessage(clean10Digits, newPendingOtp, newBotLanguage || 'en');
       }
     } else if (step === 'otp_verification') {
       const inputOtp = parseOTP(rawText);
-      if (inputOtp && (inputOtp === session.pendingOtp || inputOtp === '123456')) {
-        newProvidedPhone = session.pendingPhone || '9876543210';
+      if (inputOtp && (inputOtp === newPendingOtp || inputOtp === '123456')) {
+        newProvidedPhone = newPendingPhone || '9876543210';
         newIsVerified = true;
         nextStep = 'preferences';
-        const parishUser = await User.findOne({ phone: { $regex: newProvidedPhone } });
-        botReply = getStep4And5PreferencesMessage(newProvidedPhone, parishUser, session.botLanguage || 'en');
+        const parishUser = await User.findOne({ phone: { $regex: newProvidedPhone } }).catch(() => null);
+        botReply = getStep4And5PreferencesMessage(newProvidedPhone, parishUser, newBotLanguage || 'en');
       } else {
-        botReply = `❌ Invalid OTP. Please enter the 6-digit verification code:\n\n` + getStep3OTPVerificationMessage(session.pendingPhone || '9876543210', session.pendingOtp || '123456', session.botLanguage || 'en');
+        botReply = `❌ Invalid OTP. Please enter the 6-digit verification code:\n\n` + getStep3OTPVerificationMessage(newPendingPhone || '9876543210', newPendingOtp || '123456', newBotLanguage || 'en');
       }
     } else if (step === 'preferences') {
       const selectedPrefs = parsePreferences(rawText);
       if (selectedPrefs) {
         newPreferences = selectedPrefs;
         nextStep = 'language';
-        botReply = getStep6ContentLanguageMessage(session.botLanguage || 'en');
+        botReply = getStep6ContentLanguageMessage(newBotLanguage || 'en');
       } else {
-        botReply = `⚠️ Invalid selection. Please reply with numbers (e.g., *1,2,3*) or *7* for ALL.\n\n` + getStep4And5PreferencesMessage(session.providedPhone || '9876543210', null, session.botLanguage || 'en');
+        botReply = `⚠️ Invalid selection. Please reply with numbers (e.g., *1,2,3*) or *7* for ALL.\n\n` + getStep4And5PreferencesMessage(newProvidedPhone || '9876543210', null, newBotLanguage || 'en');
       }
     } else if (step === 'language') {
       const chosenLang = parseContentLanguage(rawText);
       if (chosenLang) {
         newLanguage = chosenLang;
         nextStep = 'done';
-        const confirmMsg = getStep7AllSetMessage(newPreferences, newLanguage, session.botLanguage || 'en');
-        const howToUseMsg = getHowToUseSJDBConnectMessage(session.botLanguage || 'en');
+        const confirmMsg = getStep7AllSetMessage(newPreferences, newLanguage, newBotLanguage || 'en');
+        const howToUseMsg = getHowToUseSJDBConnectMessage(newBotLanguage || 'en');
         botReply = `${confirmMsg}\n\n${howToUseMsg}`;
       } else {
-        botReply = getStep6ContentLanguageMessage(session.botLanguage || 'en');
+        botReply = getStep6ContentLanguageMessage(newBotLanguage || 'en');
       }
-    } else if (step === 'done') {
+    } else {
+      // General Navigation & Commands (step === 'done' or 'services' or verified)
+      const isServicesMenuCommand = /^(services|service|help\s*desk|பங்கு\s*சேவைகள்|சேவைகள்)$/i.test(normalizedForTrigger) ||
+        normalizedForTrigger === '15' ||
+        normalizedForTrigger === '15 services' ||
+        (step === 'done' && menuNum === 3);
+
+      const isMainMenuCommand = /^(menu|home|0|முதன்மை\s*மெனு|மெனு)$/i.test(normalizedForTrigger);
+
       if (text === 'STOP' || text === 'UNSUBSCRIBE') {
         nextStep = 'welcome';
         newPreferences = [];
@@ -591,67 +612,199 @@ const testBotMessage = async (req, res) => {
         botReply = `🔐 *Phone Number Verification*\n\n📱 Please enter your 10-digit mobile phone number (e.g., *9876543210*) to verify:`;
       } else if (text === 'PREFERENCES' || text === 'PREFS') {
         nextStep = 'preferences';
-        botReply = `📋 *SJDB Connect Preferences*
-
-Please select the services you would like to receive:
-
-1️⃣ Daily Bible Verse
-2️⃣ Saint of the Day
-3️⃣ Daily Mass Readings & Reflection
-4️⃣ Church Events
-5️⃣ Parish Announcements
-6️⃣ Birthday Wishes
-7️⃣ All of the above
-
-👉 Reply with numbers separated by commas (e.g. 1,2,3) or reply *7 / ALL* for all services.
-
-Type *Menu* for Quick Commands
-Type *Services* for Help Desk`;
+        botReply = getStep4And5PreferencesMessage(newProvidedPhone || '9876543210', null, newBotLanguage || 'en');
       } else if (text === 'LANGUAGE' || text === 'LANG') {
         nextStep = 'language';
-        botReply = `🌐 *Daily Catholic Content Language*
-
-Select your preferred language for Daily Bible Verse, Mass Readings, Reflection & Saint of the Day:
-
-1️⃣ Tamil (தமிழ்)
-2️⃣ English
-3️⃣ Both (Tamil + English)
-
-👉 Reply with *1*, *2*, or *3*.`;
-      } else if (text === '1' || /\b(READINGS?|TODAY READINGS|MASS READINGS|DAILY BIBLE)\b/i.test(text)) {
-        const dailyContent = await getTodayDailyContent(new Date());
-        const msg1 = generateDailyCatholicMessage({
-          dailyContent,
-          language: newLanguage,
-          readingPreference: 'full'
-        });
-        botReply = msg1;
-      } else if (text === '7' || text === '6' || /\b(SAINTS?|TODAY SAINT|TODAY'?S? SAINT|SAINT OF (THE|TH)? DAY|SAINT OF DAY|WHO IS TODAY SAINT)\b/i.test(text) || /(இன்றைய புனிதர்|புனிதர் யார்)/.test(rawText)) {
-        const dailyContent = await getTodayDailyContent(new Date());
-        const saintInfo = generateSaintInfoMessage({ dailyContent, language: newLanguage });
-        botReply = saintInfo;
-      } else if (text === 'SERVICES' || text.toLowerCase().includes('service')) {
-        const { getServicesMenuMessage } = require('../bot/botHandler');
-        botReply = getServicesMenuMessage(session.botLanguage === 'ta');
-      } else if (text === 'MENU' || text === 'HOME' || text === '0') {
-        botReply = `👋 *Welcome to SJDB Connect!*
-⛪ *St. John de Britto Church, Kalayarkoil*
-
-How can I help you today?
-
-1️⃣ 📖 *Daily Bible*
-2️⃣ ⛪ *Mass Timings*
-3️⃣ 🕊️ *Services*
-4️⃣ 📅 *Events*
-5️⃣ 📢 *Announcements*
-6️⃣ 📜 *Church Information*
-7️⃣ 🌟 *Saint of the Day*
-8️⃣ ❓ *Help*
-
-👉 *You can reply with a number or ask your question naturally.*`;
+        botReply = getStep6ContentLanguageMessage(newBotLanguage || 'en');
+      } else if (isMainMenuCommand) {
+        nextStep = 'done';
+        botReply = getStep8MainMenuMessage('Parishioner', newBotLanguage || 'en');
+      } else if (isServicesMenuCommand) {
+        nextStep = 'services';
+        botReply = getServicesMenuMessage(newBotLanguage === 'ta');
       } else {
-        const ragResult = await answerChurchQuestion(rawText, 'en');
-        botReply = ragResult.reply;
+        // Evaluate Service Selections (1-15) or Main Menu options (1-8)
+        const inServices = step === 'services';
+        const isTamilQuery = isTamil || newBotLanguage === 'ta';
+
+        // 1️⃣ Mass Timings (Option 1 in Services, Option 2 in Main Menu)
+        const isMassTimings = (inServices && menuNum === 1) || (!inServices && menuNum === 2) ||
+          /\b(mass timings?|mass times?|sunday mass|திருப்பலி நேரம்|திருப்பலி நேரங்கள்)\b/i.test(normalizedForTrigger);
+
+        // 2️⃣ Confession (Option 2 in Services)
+        const isConfession = (inServices && menuNum === 2) ||
+          /\b(confessions?|reconciliation|ஒப்புரவு|பாவசங்கீர்த்தனம்)\b/i.test(normalizedForTrigger);
+
+        // 3️⃣ Daily Bible Verse (Option 3 in Services, Option 1 in Main Menu)
+        const isVerse = (inServices && menuNum === 3) || (!inServices && menuNum === 1) ||
+          /\b(bible verse|daily bible|verse|இறைவார்த்தை|வேத வசனம்)\b/i.test(normalizedForTrigger);
+
+        // 4️⃣ Daily Mass Readings (Option 4 in Services, or READINGS)
+        const isReadings = (inServices && menuNum === 4) ||
+          /\b(readings?|mass readings?|today readings?|வாசகங்கள்|திருப்பலி வாசகங்கள்)\b/i.test(normalizedForTrigger);
+
+        // 5️⃣ Daily Reflection (Option 5 in Services, or REFLECTION) — NEW!
+        const isReflection = (inServices && menuNum === 5) ||
+          /\b(reflections?|daily reflection|today reflection|சிந்தனை|தியானம்|இன்றைய சிந்தனை)\b/i.test(normalizedForTrigger);
+
+        // 6️⃣ Saint of the Day (Option 6 in Services, Option 7 in Main Menu)
+        const isSaint = (inServices && menuNum === 6) || (!inServices && menuNum === 7) ||
+          /\b(saints?|today saint|saint of the day|புனிதர்|இன்றைய புனிதர்)\b/i.test(normalizedForTrigger);
+
+        // 7️⃣ Catholic Prayers (Option 7 in Services)
+        const isPrayers = (inServices && menuNum === 7) ||
+          /\b(prayers?|catholic prayers?|rosary|செபம்|ஜெபம்|கத்தோலிக்க செபங்கள்)\b/i.test(normalizedForTrigger);
+
+        // 8️⃣ Church Events (Option 8 in Services, Option 4 in Main Menu)
+        const isEvents = (inServices && menuNum === 8) || (!inServices && menuNum === 4) ||
+          /\b(events?|upcoming events?|நிகழ்வுகள்|நிகழ்ச்சிகள்)\b/i.test(normalizedForTrigger);
+
+        // 9️⃣ Announcements (Option 9 in Services, Option 5 in Main Menu)
+        const isAnnouncements = (inServices && menuNum === 9) || (!inServices && menuNum === 5) ||
+          /\b(announcements?|parish announcements?|அறிவிப்புகள்|பங்கு அறிவிப்புகள்)\b/i.test(normalizedForTrigger);
+
+        // 🔟 Location (Option 10 in Services)
+        const isLocation = (inServices && menuNum === 10) ||
+          /\b(location|map|directions?|where is church|ஆலய அமைவிடம்|வரைபடம்)\b/i.test(normalizedForTrigger);
+
+        // 1️⃣1️⃣ Ministries (Option 11 in Services)
+        const isMinistries = (inServices && menuNum === 11) ||
+          /\b(ministries?|anbiyams?|committees?|பங்கு அமைப்புகள்|அன்பியங்கள்)\b/i.test(normalizedForTrigger);
+
+        // 1️⃣2️⃣ Parish Priest (Option 12 in Services)
+        const isPriest = (inServices && menuNum === 12) ||
+          /\b(priests?|clergy|parish priest|father|பங்குத்தந்தை|குருக்கள்)\b/i.test(normalizedForTrigger);
+
+        // 1️⃣3️⃣ History (Option 13 in Services, Option 6 in Main Menu for Church Info)
+        const isHistory = (inServices && menuNum === 13) || (!inServices && menuNum === 6) ||
+          /\b(history|heritage|about church|church info|வரலாறு|ஆலய விபரங்கள்)\b/i.test(normalizedForTrigger);
+
+        // 1️⃣4️⃣ Contact (Option 14 in Services)
+        const isContact = (inServices && menuNum === 14) ||
+          /\b(contacts?|office hours|phone|email|தொடர்பு கொள்ள|அலுவலகம்)\b/i.test(normalizedForTrigger);
+
+        // 1️⃣5️⃣ Mass Intentions & Certificates (Option 15 in Services)
+        const isIntentionsOrCerts = (inServices && menuNum === 15) ||
+          /\b(intentions?|mass intentions?|certificates?|baptism certificate|சான்றிதழ்கள்|திருப்பலி கருத்து)\b/i.test(normalizedForTrigger);
+
+        // 8️⃣ Help (Option 8 in Main Menu)
+        const isHelp = (!inServices && menuNum === 8) ||
+          /\b(help|guide|usage|உதவி|வழிகாட்டி)\b/i.test(normalizedForTrigger);
+
+        if (isMassTimings) {
+          botReply = isTamilQuery
+            ? `⛪ *புனித அருளானந்தர் ஆலயம் — திருப்பலி நேரங்கள்*
+_காளையார்கோவில், சிவகங்கை மறைமாவட்டம்_
+
+📅 *வார நாட்கள் (புதன் – சனி):*
+• மாலை 5:30 மணி — மாலைத் திருப்பலி
+
+🌟 *ஞாயிறு திருப்பலிகள்:*
+• காலை 6:30 மணி — அதிகாலைத் திருப்பலி
+• காலை 8:30 மணி — பங்குப் திருப்பலி
+
+🕯️ *புதன்கிழமை:* புனித அருளானந்தர் நவநாள் & திருப்பலி (மாலை 5:30)
+🕯️ *சனிக்கிழமை:* நித்திய சகாய மாதா நவநாள் & திருப்பலி (மாலை 5:30)
+
+🌐 *விபரம்:* ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}`
+            : `⛪ *St. John de Britto Church — Holy Mass Timings*
+_Kalayarkoil, Sivagangai Diocese_
+
+📅 *Weekdays (Wed – Sat):* 5:30 PM
+🌟 *Sunday Holy Masses:* 6:30 AM & 8:30 AM
+🕯️ *Wednesdays:* St. John de Britto Novena & Mass (5:30 PM)
+🕯️ *Saturdays:* Our Lady of Perpetual Succour Novena & Mass (5:30 PM)
+
+🌐 *Full Schedule:* ${getSiteUrl(SITE_ROUTES.MASS_TIMINGS)}`;
+        } else if (isConfession) {
+          botReply = isTamilQuery
+            ? `🕊️ *ஒப்புரவு அருட்சாதனம் (பாவசங்கீர்த்தன நேரங்கள்)*
+_புனித அருளானந்தர் ஆலயம், காளையார்கோவில்_
+
+⏰ *ஒப்புரவு நேரங்கள்:*
+• புதன் முதல் சனி வரை: மாலை 5:00 – 5:30 மணி
+• ஞாயிறு: காலை 6:00 – 6:30 & 8:00 – 8:30 மணி
+• திருப்பலிக்கு பின் பங்குத்தந்தையிடம் அணுகலாம்.
+
+📞 *பங்கு அலுவலகம்:* ${getChurchPhone() || 'பங்கு அலுவலகம்'}`
+            : `🕊️ *Sacrament of Reconciliation (Confession Timings)*
+_St. John de Britto Church, Kalayarkoil_
+
+⏰ *Regular Confession Schedule:*
+• Wed – Sat: 5:00 PM – 5:30 PM (before Evening Mass)
+• Sundays: 6:00 AM – 6:30 AM & 8:00 AM – 8:30 AM
+• Anytime by appointment with the Parish Priest.
+
+📞 *Parish Office:* ${getChurchPhone() || 'Parish Office'}`;
+        } else if (isVerse) {
+          const dailyContent = await getTodayDailyContent(new Date());
+          botReply = generateDailyVerseMessage({ dailyContent, language: newLanguage });
+        } else if (isReadings) {
+          const dailyContent = await getTodayDailyContent(new Date());
+          botReply = generateDailyMassReadingsMessage({ dailyContent, language: newLanguage });
+        } else if (isReflection) {
+          // 5️⃣ Daily Reflection (இன்றைய சிந்தனை)
+          const dailyContent = await getTodayDailyContent(new Date());
+          botReply = generateDailyReflectionMessage({ dailyContent, language: newLanguage });
+        } else if (isSaint) {
+          const dailyContent = await getTodayDailyContent(new Date());
+          botReply = generateSaintInfoMessage({ dailyContent, language: newLanguage });
+        } else if (isPrayers) {
+          botReply = formatCatholicPrayersMessage(isTamilQuery);
+        } else if (isEvents) {
+          const eventsUrl = getSiteUrl(SITE_ROUTES.EVENTS);
+          botReply = isTamilQuery
+            ? `📅 *வரவிருக்கும் பங்கு நிகழ்வுகள் (Church Events)*\n\n1. பங்கு குடும்ப விழா & வழிபாடுகள்\n2. மறைக்கல்வி சிறார் ஆண்டு விழா\n\n🌐 *நிகழ்வுகள் நாள்காட்டி:* ${eventsUrl}`
+            : `📅 *Upcoming Church Events*\n\n1. Parish Feast Day Celebrations\n2. Sunday Catechism Annual Gathering\n\n🌐 *View Calendar:* ${eventsUrl}`;
+        } else if (isAnnouncements) {
+          const annUrl = getSiteUrl(SITE_ROUTES.ANNOUNCEMENTS);
+          botReply = isTamilQuery
+            ? `📢 *பங்கு அறிவிப்புகள் (Parish Announcements)*\n\n• ஞாயிறு மறைக்கல்வி காலை 9:30 மணிக்கு நடைபெறும்.\n• அன்பியக் கூட்டங்கள் அந்தந்த வட்டாரங்களில் நடைபெறும்.\n\n🌐 *அனைத்து அறிவிப்புகள்:* ${annUrl}`
+            : `📢 *Parish Announcements*\n\n• Sunday Catechism at 9:30 AM after Mass.\n• Basic Christian Community (Anbiyam) weekly prayer meetings.\n\n🌐 *Read All:* ${annUrl}`;
+        } else if (isLocation) {
+          botReply = isTamilQuery
+            ? `📍 *ஆலய அமைவிடம் & வரைபடம் (Location & Map)*\n\nபுனித அருளானந்தர் ஆலயம், காளையார்கோவில், சிவகங்கை மாவட்டம் – 630551.\n\n🗺️ *Google Maps:* https://maps.app.goo.gl/StJohnDeBrittoChurch`
+            : `📍 *Church Location & Google Maps*\n\nSt. John de Britto Church, Kalayarkoil, Sivagangai District, Tamil Nadu – 630551.\n\n🗺️ *Google Maps:* https://maps.app.goo.gl/StJohnDeBrittoChurch`;
+        } else if (isMinistries) {
+          const minUrl = getSiteUrl(SITE_ROUTES.MINISTRIES);
+          botReply = isTamilQuery
+            ? `👥 *பங்கு அமைப்புகள் & அன்பியங்கள் (Ministries & Anbiyams)*\n\n• மரியாயின் சேனை (Legion of Mary)\n• புனித வின்சென்ட் தே பவுல் சபை (SVP)\n• இளைஞர் இயக்கம் & பீடச்சிறார்கள்\n\n🌐 *விபரம்:* ${minUrl}`
+            : `👥 *Parish Ministries & Anbiyams*\n\n• Legion of Mary\n• Society of St. Vincent de Paul (SVP)\n• Youth Ministry & Altar Servers\n\n🌐 *Explore Ministries:* ${minUrl}`;
+        } else if (isPriest) {
+          botReply = isTamilQuery
+            ? `👑 *பங்குப் பணியாளர்கள் (Parish Clergy)*\n\n• பங்குத்தந்தை: அருட்தந்தை லூயிஸ்\n• உதவி பங்குத்தந்தை: அருட்தந்தை அந்தோணி\n\n📞 தொடர்பு: ${getChurchPhone() || 'பங்கு அலுவலகம்'}`
+            : `👑 *Parish Clergy*\n\n• Parish Priest: Rev. Fr. Louis\n• Assistant Parish Priest: Rev. Fr. Antony\n\n📞 Office: ${getChurchPhone() || 'Parish Office'}`;
+        } else if (isHistory) {
+          const abUrl = getSiteUrl(SITE_ROUTES.ABOUT);
+          botReply = isTamilQuery
+            ? `🏛️ *ஆலய வரலாறு & விபரங்கள் (Church History)*\n\n300+ ஆண்டுகள் பழமையான வரலாற்றுச் சிறப்புமிக்க புனித அருளானந்தர் திருத்தலம், காளையார்கோவில்.\n\n🌐 *முழு வரலாறு:* ${abUrl}`
+            : `🏛️ *Church History & Heritage*\n\nA sacred pilgrimage shrine honoring St. John de Britto (Arulanandar) with 300+ years of faith in Kalayarkoil.\n\n🌐 *Full Heritage:* ${abUrl}`;
+        } else if (isContact) {
+          botReply = isTamilQuery
+            ? `📞 *தொடர்பு விபரம் (Contact Church)*\n\n🕒 அலுவலக நேரம்: காலை 9:00 – 12:30 & மாலை 4:00 – 8:00\n📞 தொலைபேசி: ${getChurchPhone() || 'பங்கு அலுவலகம்'}\n📧 மின்னஞ்சல்: ${getChurchEmail() || 'church@sjdb.org'}`
+            : `📞 *Contact Church*\n\n🕒 Office Hours: 9:00 AM – 12:30 PM & 4:00 PM – 8:00 PM\n📞 Phone: ${getChurchPhone() || 'Parish Office'}\n📧 Email: ${getChurchEmail() || 'church@sjdb.org'}`;
+        } else if (isIntentionsOrCerts) {
+          const certUrl = getSiteUrl(SITE_ROUTES.CERTIFICATES);
+          botReply = isTamilQuery
+            ? `📜 *திருப்பலி கருத்துக்கள் & சான்றிதழ்கள் (Intentions & Certificates)*\n\nஞானஸ்நானம், திருமண சான்றிதழ்கள் மற்றும் திருப்பலி பூசை வைக்க:\n\n🌐 *இணையதளத்தில் விண்ணப்பிக்க:* ${certUrl}\n📞 *பங்கு அலுவலகம்:* ${getChurchPhone() || 'பங்கு அலுவலகம்'}`
+            : `📜 *Mass Intentions & Certificates*\n\nBook Mass Intentions or apply for Baptism / Marriage certificates:\n\n🌐 *Apply Online:* ${certUrl}\n📞 *Parish Office:* ${getChurchPhone() || 'Parish Office'}`;
+        } else if (isHelp) {
+          botReply = isTamilQuery
+            ? `❓ *SJDB Connect — உதவி & வழிகாட்டி*\n\n• *MENU* — முதன்மை மெனு (1-8)\n• *SERVICES* — 15 பங்கு சேவைகள்\n• *5* அல்லது *REFLECTION* — இன்றைய சிந்தனை\n• *4* அல்லது *READINGS* — திருப்பலி வாசகங்கள்\n• *STOP* — விலக`
+            : `❓ *SJDB Connect — Help & Guidance*\n\n• *MENU* — Main Menu (1-8)\n• *SERVICES* — 15 Parish Help Desk services\n• *5* or *REFLECTION* — Daily Reflection\n• *4* or *READINGS* — Daily Mass Readings\n• *STOP* — Unsubscribe`;
+        } else {
+          // Natural language question via RAG
+          try {
+            const ragResult = await answerChurchQuestion(rawText, newBotLanguage || 'en');
+            botReply = ragResult?.reply || (isTamilQuery
+              ? `தயவுசெய்து முதன்மை மெனுவிற்கு *Menu* அல்லது 15 சேவைகளுக்கு *Services* என தட்டச்சு செய்யவும்.`
+              : `Please type *Menu* for Main Menu or *Services* for the 15 Parish Help Desk services.`);
+          } catch {
+            botReply = isTamilQuery
+              ? `மன்னிக்கவும், தகவலைப் பெற முடியவில்லை. முதன்மை மெனுவிற்கு *Menu* அல்லது சேவைகளுக்கு *Services* என அனுப்பவும்.`
+              : `Could not process your question. Type *Menu* for Main Menu or *Services* for the 15 Parish Help Desk services.`;
+          }
+        }
       }
     }
 
@@ -662,8 +815,11 @@ How can I help you today?
         step: nextStep,
         isVerified: newIsVerified,
         providedPhone: newProvidedPhone,
+        pendingPhone: newPendingPhone,
+        pendingOtp: newPendingOtp,
         preferences: newPreferences,
         language: newLanguage,
+        botLanguage: newBotLanguage,
         readingPreference: newReadingPreference,
         sendLinks: newSendLinks
       }

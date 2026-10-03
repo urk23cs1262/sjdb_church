@@ -138,13 +138,14 @@ export default function AdminWhatsApp() {
     {
       id: 1,
       sender: 'bot',
-      text: '✨ *Welcome to SJDB Connect*\n_St. John de Britto\'s Church WhatsApp Bot Simulator_\n\nReply *HI* or pick a shortcut below to begin testing.',
+      text: '✨ *Welcome to SJDB Connect Simulator*\n_St. John de Britto Church, Kalayarkoil_\n\nReply *HI* to begin onboarding, *MENU* for Main Menu (1-8), or *SERVICES* for 15 Parish Help Desk services (including *5: Daily Reflection*).',
       timestamp: Date.now(),
     },
   ]);
   const [testInput, setTestInput] = useState('');
   const [isTestingBot, setIsTestingBot] = useState(false);
   const [sessionState, setSessionState] = useState({ step: 'welcome' });
+  const [playgroundFilter, setPlaygroundFilter] = useState('all'); // 'all' | 'onboarding' | 'navigation' | 'services'
   const [directTestPhone, setDirectTestPhone] = useState('');
   const [isSendingDirectTest, setIsSendingDirectTest] = useState(false);
   const [directTestOpen, setDirectTestOpen] = useState(false);
@@ -1515,7 +1516,7 @@ export default function AdminWhatsApp() {
                   <FiPlay className="text-church-gold" /> Interactive Bot Playground
                 </h2>
                 <p className="text-xs text-gray-500">
-                  Live state simulator — Test interactive replies, language choices, and scripture commands.
+                  Live state simulator — Test full onboarding, interactive menu (1-8), language switching, and all 15 Parish Help Desk services (including 5: Daily Reflection).
                 </p>
               </div>
 
@@ -1537,7 +1538,7 @@ export default function AdminWhatsApp() {
                       {
                         id: Date.now(),
                         sender: 'bot',
-                        text: '✨ *Welcome to SJDB Connect*\n_State reset._ Reply *HI* to begin again.',
+                        text: '✨ *Welcome to SJDB Connect Simulator*\n_St. John de Britto Church, Kalayarkoil_\n\nReply *HI* to begin onboarding, *MENU* for Main Menu (1-8), or *SERVICES* for the 15 services (including *5: Daily Reflection*).',
                         timestamp: Date.now(),
                       },
                     ]);
@@ -1550,26 +1551,94 @@ export default function AdminWhatsApp() {
               </div>
             </div>
 
+            {/* Live Session State Indicator */}
+            <div className="flex flex-wrap items-center gap-2 mb-3 px-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl text-[11px] text-gray-600 dark:text-gray-300 border border-gray-200/80 dark:border-slate-700">
+              <span className="font-bold text-church-royal-blue dark:text-church-gold flex items-center gap-1">
+                <FiSliders className="text-xs" /> Workflow State:
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 font-mono text-[10px]">
+                Step: <strong className="text-church-royal-blue dark:text-church-gold">{sessionState.step || 'welcome'}</strong>
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 text-[10px]">
+                Verified: <strong>{sessionState.isVerified ? '✅ Yes' : '⏳ No'}</strong>
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 text-[10px]">
+                Bot Lang: <strong>{sessionState.botLanguage === 'ta' ? 'தமிழ்' : 'English'}</strong>
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-white dark:bg-slate-700 border border-gray-200 dark:border-slate-600 text-[10px]">
+                Content: <strong>{sessionState.language === 'ta' ? 'Tamil' : sessionState.language === 'both' ? 'Tamil+English' : 'English'}</strong>
+              </span>
+            </div>
+
+            {/* Quick Trigger Category Filters */}
+            <div className="flex items-center gap-1.5 mb-2.5 overflow-x-auto pb-1 text-xs">
+              {[
+                { id: 'all', label: 'All Shortcuts' },
+                { id: 'onboarding', label: '1. Onboarding' },
+                { id: 'navigation', label: '2. Menus' },
+                { id: 'services', label: '3. 15 Services (Direct)' }
+              ].map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setPlaygroundFilter(cat.id)}
+                  className={`px-2.5 py-1 rounded-lg font-medium text-xs transition-colors cursor-pointer shrink-0 ${
+                    playgroundFilter === cat.id
+                      ? 'bg-church-royal-blue text-white shadow-xs'
+                      : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200'
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
             {/* Quick Trigger Chips */}
             <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-4">
               {[
-                { label: 'Send "HI"', text: 'HI', color: 'bg-green-50 text-green-700 border-green-200' },
-                { label: '1,2,3 (Prefs)', text: '1,2,3', color: 'bg-blue-50 text-blue-700 border-blue-200' },
-                { label: '1 (English)', text: '1', color: 'bg-purple-50 text-purple-700 border-purple-200' },
-                { label: '2 (Tamil)', text: '2', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
-                { label: '📖 READINGS', text: 'READINGS', color: 'bg-amber-50 text-amber-800 border-amber-300' },
-                { label: '📜 SHOW ALL', text: 'SHOW ALL', color: 'bg-teal-50 text-teal-700 border-teal-200' },
-                { label: '🛑 STOP', text: 'STOP', color: 'bg-rose-50 text-rose-700 border-rose-200' },
-              ].map((btn) => (
-                <button
-                  key={btn.text}
-                  onClick={() => handleSendSimulatorMessage(btn.text)}
-                  disabled={isTestingBot}
-                  className={`px-3 py-1 rounded-full text-xs font-bold border transition-colors cursor-pointer disabled:opacity-50 ${btn.color}`}
-                >
-                  {btn.label}
-                </button>
-              ))}
+                // Onboarding
+                { label: '👋 Send "HI"', text: 'HI', cat: 'onboarding', color: 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100' },
+                { label: '1️⃣ English (Bot)', text: '1', cat: 'onboarding', color: 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100' },
+                { label: '2️⃣ தமிழ் (Bot)', text: '2', cat: 'onboarding', color: 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100' },
+                { label: '📱 9876543210', text: '9876543210', cat: 'onboarding', color: 'bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100' },
+                { label: '🔑 123456 (OTP)', text: '123456', cat: 'onboarding', color: 'bg-violet-50 text-violet-800 border-violet-200 hover:bg-violet-100' },
+                { label: '1,2,3 (Prefs)', text: '1,2,3', cat: 'onboarding', color: 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100' },
+                { label: '7 (All Prefs)', text: '7', cat: 'onboarding', color: 'bg-fuchsia-50 text-fuchsia-800 border-fuchsia-200 hover:bg-fuchsia-100' },
+
+                // Menus & Navigation
+                { label: '🏠 MENU (1-8)', text: 'MENU', cat: 'navigation', color: 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100 font-bold' },
+                { label: '⛪ SERVICES (1-15)', text: 'SERVICES', cat: 'navigation', color: 'bg-yellow-50 text-yellow-900 border-yellow-300 hover:bg-yellow-100 font-bold' },
+
+                // 15 Services (Direct)
+                { label: '1️⃣ Mass Timings', text: '1', cat: 'services', color: 'bg-slate-100 text-slate-800 border-slate-300 hover:bg-slate-200' },
+                { label: '2️⃣ Confession', text: '2', cat: 'services', color: 'bg-slate-100 text-slate-800 border-slate-300 hover:bg-slate-200' },
+                { label: '3️⃣ Daily Verse', text: '3', cat: 'services', color: 'bg-teal-50 text-teal-800 border-teal-200 hover:bg-teal-100' },
+                { label: '4️⃣ 📜 Readings', text: 'READINGS', cat: 'services', color: 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100' },
+                { label: '5️⃣ 💭 Reflection (NEW)', text: 'REFLECTION', cat: 'services', color: 'bg-rose-100 text-rose-900 border-rose-400 hover:bg-rose-200 font-bold ring-1 ring-rose-400/60' },
+                { label: '6️⃣ 🕊️ Saint of Day', text: 'SAINT', cat: 'services', color: 'bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100' },
+                { label: '7️⃣ 🙏 Prayers', text: 'PRAYERS', cat: 'services', color: 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100' },
+                { label: '8️⃣ 📅 Events', text: 'EVENTS', cat: 'services', color: 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100' },
+                { label: '9️⃣ 📢 Announcements', text: 'ANNOUNCEMENTS', cat: 'services', color: 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100' },
+                { label: '🔟 📍 Location', text: '10', cat: 'services', color: 'bg-slate-100 text-slate-800 border-slate-300 hover:bg-slate-200' },
+                { label: '1️⃣1️⃣ 👥 Ministries', text: '11', cat: 'services', color: 'bg-slate-100 text-slate-800 border-slate-300 hover:bg-slate-200' },
+                { label: '1️⃣2️⃣ 👑 Priest', text: '12', cat: 'services', color: 'bg-slate-100 text-slate-800 border-slate-300 hover:bg-slate-200' },
+                { label: '1️⃣3️⃣ 🏛️ History', text: '13', cat: 'services', color: 'bg-slate-100 text-slate-800 border-slate-300 hover:bg-slate-200' },
+                { label: '1️⃣4️⃣ 📞 Contact', text: '14', cat: 'services', color: 'bg-slate-100 text-slate-800 border-slate-300 hover:bg-slate-200' },
+                { label: '1️⃣5️⃣ 📜 Intentions & Certs', text: '15', cat: 'services', color: 'bg-slate-100 text-slate-800 border-slate-300 hover:bg-slate-200' },
+
+                // System
+                { label: '🛑 STOP', text: 'STOP', cat: 'system', color: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100' },
+              ]
+                .filter((btn) => playgroundFilter === 'all' || btn.cat === playgroundFilter || btn.cat === 'system')
+                .map((btn) => (
+                  <button
+                    key={btn.label}
+                    onClick={() => handleSendSimulatorMessage(btn.text)}
+                    disabled={isTestingBot}
+                    className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer disabled:opacity-50 ${btn.color}`}
+                  >
+                    {btn.label}
+                  </button>
+                ))}
             </div>
 
             {/* Chat History Viewport */}
@@ -1623,7 +1692,7 @@ export default function AdminWhatsApp() {
                 type="text"
                 value={testInput}
                 onChange={(e) => setTestInput(e.target.value)}
-                placeholder="Type a test command (e.g. 'HI', 'READINGS', '1')..."
+                placeholder="Type a test command (e.g. 'HI', 'SERVICES', '5', 'READINGS', 'REFLECTION')..."
                 disabled={isTestingBot}
                 className="church-input flex-1 py-2.5 text-xs sm:text-sm min-w-0 bg-white"
               />
