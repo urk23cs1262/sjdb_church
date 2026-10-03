@@ -977,16 +977,64 @@ const getChannelLogs = async (req, res) => {
 // POST /api/bot/channel/announcement
 const publishAnnouncementToChannel = async (req, res) => {
   try {
-    const { announcementId } = req.body;
+    const { announcementId, action = 'created' } = req.body;
     if (!announcementId) {
       return res.status(400).json({ success: false, message: 'Announcement ID is required' });
     }
     const { publishChannelAnnouncement } = require('../services/whatsappChannelService');
     const result = await publishChannelAnnouncement(announcementId, {
       adminUserId: req.user?._id,
-      source: 'admin_manual'
+      source: 'admin_manual',
+      action
     });
     res.json({ success: true, message: 'Announcement published to WhatsApp Channel!', result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/bot/channel/event
+const publishEventToChannel = async (req, res) => {
+  try {
+    const { eventId, action = 'created' } = req.body;
+    if (!eventId) {
+      return res.status(400).json({ success: false, message: 'Event ID is required' });
+    }
+    const { publishChannelEvent } = require('../services/whatsappChannelService');
+    const result = await publishChannelEvent(eventId, {
+      adminUserId: req.user?._id,
+      source: 'admin_manual',
+      action
+    });
+    res.json({ success: true, message: 'Event published to WhatsApp Channel!', result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// POST /api/bot/channel/reminder
+const publishReminderToChannel = async (req, res) => {
+  try {
+    const { title, details, dateText, timeText, venueText, typeLabel, targetUrl, itemId } = req.body;
+    if (!title) {
+      return res.status(400).json({ success: false, message: 'Reminder title is required' });
+    }
+    const { publishChannelReminder } = require('../services/whatsappChannelService');
+    const result = await publishChannelReminder({
+      title,
+      details,
+      dateText,
+      timeText,
+      venueText,
+      typeLabel: typeLabel || 'Parish Reminder',
+      targetUrl: targetUrl || '/events',
+      itemId: itemId || null
+    }, {
+      adminUserId: req.user?._id,
+      source: 'admin_manual',
+      force: true
+    });
+    res.json({ success: true, message: 'Reminder published to WhatsApp Channel!', result });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -1014,5 +1062,7 @@ module.exports = {
   publishChannelDailyContent,
   updateChannelSettings,
   getChannelLogs,
-  publishAnnouncementToChannel
+  publishAnnouncementToChannel,
+  publishEventToChannel,
+  publishReminderToChannel
 };

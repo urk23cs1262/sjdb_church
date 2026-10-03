@@ -473,6 +473,25 @@ async function runTomorrowReminder(options = {}) {
     }
   }
 
+  // 5b. Publish Consolidated Tomorrow Schedule to WhatsApp Channel
+  if (!isDryRun && !testPhone && !testUser && (events.length > 0 || announcements.length > 0)) {
+    try {
+      const { publishChannelTomorrowReminder } = require('./whatsappChannelService');
+      const bilingual = buildReminderContent({ events, announcements, targetDateStr, lang: 'both' });
+      await publishChannelTomorrowReminder({
+        targetDateStr,
+        events,
+        announcements,
+        waText: bilingual.waText
+      });
+      stats.channelPublished = true;
+      console.log(`📢 [TOMORROW REMINDER] Successfully published tomorrow's schedule to WhatsApp Channel!`);
+    } catch (chErr) {
+      console.warn('⚠️ [TOMORROW REMINDER] WhatsApp Channel reminder publication notice:', chErr.message);
+      stats.channelPublished = false;
+    }
+  }
+
   // 6. Complete job record
   if (jobRecord) {
     await NotificationJobLog.findByIdAndUpdate(jobRecord._id, {

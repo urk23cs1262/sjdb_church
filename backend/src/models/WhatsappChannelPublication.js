@@ -28,6 +28,8 @@ const whatsappChannelPublicationSchema = new mongoose.Schema({
       'daily_reflection',
       'announcement',
       'event',
+      'reminder',
+      'tomorrow_reminder',
       'emergency_notice',
       'test_update',
       'custom_message'

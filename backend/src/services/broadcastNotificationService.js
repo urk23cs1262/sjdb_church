@@ -71,7 +71,9 @@ async function getEligibleWhatsAppRecipients(preferenceType = 'events') {
           return;
         }
       }
-      const clean = (u.phone || '').replace(/\D/g, '');
+      let clean = (u.phone || '').replace(/\D/g, '');
+      while (clean.startsWith('0')) clean = clean.substring(1);
+      if (clean.length === 10) clean = '91' + clean;
       if (clean && clean.length >= 10) recipientSet.add(clean);
     });
 
@@ -81,7 +83,9 @@ async function getEligibleWhatsAppRecipients(preferenceType = 'events') {
           return;
         }
       }
-      const clean = (s.phoneNumber || '').replace(/\D/g, '');
+      let clean = (s.phoneNumber || '').replace(/\D/g, '');
+      while (clean.startsWith('0')) clean = clean.substring(1);
+      if (clean.length === 10) clean = '91' + clean;
       if (clean && clean.length >= 10) recipientSet.add(clean);
       else if (s.phoneNumber && s.phoneNumber.includes('@')) recipientSet.add(s.phoneNumber);
     });
@@ -335,12 +339,27 @@ _SJDB Connect_`;
       const wa = getWA();
       setImmediate(async () => {
         console.log(`[BroadcastNotificationService] Broadcasting event "${cleanTitle}" (${action}) to ${waRecipients.length} WhatsApp subscribers...`);
+        const eventImg = event.image || event.bannerUrl;
         for (const phone of waRecipients) {
-          wa.sendWhatsAppMessage(phone, waMessage).catch(() => { });
+          if (eventImg && action !== 'cancelled' && typeof wa.sendWhatsAppMedia === 'function') {
+            wa.sendWhatsAppMedia(phone, { url: eventImg, caption: waMessage }).catch(() => {
+              wa.sendWhatsAppMessage(phone, waMessage).catch(() => { });
+            });
+          } else {
+            wa.sendWhatsAppMessage(phone, waMessage).catch(() => { });
+          }
           await new Promise(r => setTimeout(r, 70));
         }
       });
     }
+
+    // 6. Official WhatsApp Channel Broadcast (Public Parish Broadcast)
+    try {
+      const { publishChannelEvent } = require('./whatsappChannelService');
+      publishChannelEvent(event, { source: 'admin_manual', action }).catch(err => {
+        console.warn('⚠️ [BroadcastNotificationService] WhatsApp Channel event notice:', err.message);
+      });
+    } catch (_) { }
 
     return true;
   } catch (err) {
@@ -496,8 +515,15 @@ _SJDB Connect_`;
       const wa = getWA();
       setImmediate(async () => {
         console.log(`[BroadcastNotificationService] Broadcasting announcement "${cleanTitle}" (${action}) to ${waRecipients.length} WhatsApp subscribers...`);
+        const annImg = announcement.attachment || announcement.image;
         for (const phone of waRecipients) {
-          wa.sendWhatsAppMessage(phone, waMessage).catch(() => { });
+          if (annImg && typeof wa.sendWhatsAppMedia === 'function') {
+            wa.sendWhatsAppMedia(phone, { url: annImg, caption: waMessage }).catch(() => {
+              wa.sendWhatsAppMessage(phone, waMessage).catch(() => { });
+            });
+          } else {
+            wa.sendWhatsAppMessage(phone, waMessage).catch(() => { });
+          }
           await new Promise(r => setTimeout(r, 70));
         }
       });
@@ -506,7 +532,7 @@ _SJDB Connect_`;
     // 5. Official WhatsApp Channel Broadcast (Public Parish Broadcast)
     try {
       const { publishChannelAnnouncement } = require('./whatsappChannelService');
-      publishChannelAnnouncement(announcement._id, { source: 'admin_manual' }).catch(err => {
+      publishChannelAnnouncement(announcement, { source: 'admin_manual', action }).catch(err => {
         console.warn('⚠️ [BroadcastNotificationService] WhatsApp Channel announcement notice:', err.message);
       });
     } catch (_) { }

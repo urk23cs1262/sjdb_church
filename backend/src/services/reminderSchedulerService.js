@@ -209,6 +209,24 @@ ${fullLink}
       channels: []
     }).catch(e => console.warn('Reminder in-app notification error:', e.message));
 
+    // Send to Official WhatsApp Channel
+    try {
+      const { publishChannelReminder } = require('./whatsappChannelService');
+      publishChannelReminder({
+        itemId,
+        itemModel,
+        title,
+        details,
+        dateText,
+        timeText,
+        venueText,
+        typeLabel,
+        targetUrl
+      }).catch(err => {
+        console.warn('⚠️ [ReminderScheduler] WhatsApp Channel reminder notice:', err.message);
+      });
+    } catch (_) { }
+
     // Save Log to MongoDB for idempotency
     await ReminderLog.create({
       itemId,

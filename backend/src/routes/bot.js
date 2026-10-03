@@ -22,7 +22,9 @@ const {
   publishChannelDailyContent,
   updateChannelSettings,
   getChannelLogs,
-  publishAnnouncementToChannel
+  publishAnnouncementToChannel,
+  publishEventToChannel,
+  publishReminderToChannel
 } = require('../controllers/botController');
 const { protect, adminOnly } = require('../middleware/auth');
 
@@ -53,5 +55,7 @@ router.post('/channel/publish-daily', protect, adminOnly, publishChannelDailyCon
 router.post('/channel/settings', protect, adminOnly, updateChannelSettings);
 router.get('/channel/logs', protect, adminOnly, getChannelLogs);
 router.post('/channel/announcement', protect, adminOnly, publishAnnouncementToChannel);
+router.post('/channel/event', protect, adminOnly, publishEventToChannel);
+router.post('/channel/reminder', protect, adminOnly, publishReminderToChannel);
 
 module.exports = router;

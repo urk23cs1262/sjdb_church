@@ -328,6 +328,86 @@ const broadcast = async (req, res) => {
       tag: `sjdb-notif-${notif._id.toString()}`
     }).catch(e => console.warn('[Broadcast] Push dispatch error:', e.message));
 
+    // WhatsApp Bot & Channel Broadcaster for Announcements, Events & Reminders
+    if (relatedModel === 'Announcement' && relatedId) {
+      try {
+        const { broadcastAnnouncementPublished } = require('../services/broadcastNotificationService');
+        const ann = await Announcement.findById(relatedId);
+        if (ann) {
+          broadcastAnnouncementPublished({ announcement: ann, action: 'created' }).catch(err => {
+            console.warn('[NotificationController] broadcastAnnouncementPublished warning:', err.message);
+          });
+        }
+      } catch (e) {
+        console.warn('[NotificationController] Announcement broadcast notice:', e.message);
+      }
+    } else if (relatedModel === 'Event' && relatedId) {
+      try {
+        const { broadcastEventPublished } = require('../services/broadcastNotificationService');
+        const ev = await require('../models/Event').findById(relatedId);
+        if (ev) {
+          broadcastEventPublished({ event: ev, action: 'created' }).catch(err => {
+            console.warn('[NotificationController] broadcastEventPublished warning:', err.message);
+          });
+        }
+      } catch (e) {
+        console.warn('[NotificationController] Event broadcast notice:', e.message);
+      }
+    } else {
+      // General Notice / Reminder Broadcast
+      // 1. WhatsApp Bot broadcast to eligible subscribers
+      try {
+        const { getEligibleWhatsAppRecipients } = require('../services/broadcastNotificationService');
+        const waRecipients = await getEligibleWhatsAppRecipients(selectedCategory);
+        if (waRecipients.length > 0) {
+          const wa = require('../bot/whatsapp');
+          const cleanTitle = (title || 'Church Notice').trim();
+          const cleanBody = (message || '').trim();
+          const clientBase = process.env.CLIENT_URL || 'https://sjdbchurch.in';
+          const waMsg = `🔔 *PARISH NOTIFICATION • திருத்தல அறிவிப்பு*
+⛪ *St. John de Britto Church, Kalayarkoil*
+
+📌 *${cleanTitle}*
+
+${cleanBody}
+
+🌐 *Visit Website:*
+${targetActionUrl ? `${clientBase}${targetActionUrl}` : clientBase}
+
+— *Parish Office, St. John de Britto Church*
+_SJDB Connect_`;
+
+          setImmediate(async () => {
+            for (const phone of waRecipients) {
+              wa.sendWhatsAppMessage(phone, waMsg).catch(() => { });
+              await new Promise(r => setTimeout(r, 70));
+            }
+          });
+        }
+      } catch (waErr) {
+        console.warn('[NotificationController] WhatsApp bot dispatch error:', waErr.message);
+      }
+
+      // 2. WhatsApp Channel Broadcast
+      try {
+        const { publishChannelReminder } = require('../services/whatsappChannelService');
+        const cleanTitle = (title || 'Church Notice').trim();
+        const cleanBody = (message || '').trim();
+        publishChannelReminder({
+          itemId: notif._id,
+          itemModel: 'Notification',
+          title: cleanTitle,
+          details: cleanBody,
+          typeLabel: selectedCategory.toUpperCase(),
+          targetUrl: targetActionUrl || '/notifications'
+        }).catch(chErr => {
+          console.warn('[NotificationController] WhatsApp Channel notice warning:', chErr.message);
+        });
+      } catch (chErr) {
+        console.warn('[NotificationController] WhatsApp Channel broadcast error:', chErr.message);
+      }
+    }
+
     res.status(201).json({ success: true, notification: notif });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

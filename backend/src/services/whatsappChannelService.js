@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const WhatsappChannelPublication = require('../models/WhatsappChannelPublication');
 const SiteSettings = require('../models/SiteSettings');
 const Announcement = require('../models/Announcement');
+const Event = require('../models/Event');
 const { getTodayDailyContent } = require('./dailyContentService');
 const { getDailySaint } = require('./saintService');
 const { getDailySaintImagePayload } = require('./whatsappDailyFormatter');
@@ -238,6 +239,9 @@ async function getChannelStatus() {
  * Core primitive: Send update to Channel with strict destination verification
  */
 async function sendToChannelDirect(payload, maxRetries = 3) {
+  if (!cachedChannelJid) {
+    await initializeChannelConfig();
+  }
   if (!cachedChannelJid) {
     throw new Error('WhatsApp Channel JID is not configured. Please set WHATSAPP_CHANNEL_JID or configure via Admin Dashboard.');
   }
@@ -545,24 +549,38 @@ async function publishChannelDailyContent(targetDate = new Date(), options = {})
 /**
  * Publish an official Parish Announcement to the WhatsApp Channel
  */
-async function publishChannelAnnouncement(announcementId, options = {}) {
-  const announcement = await Announcement.findById(announcementId);
+async function publishChannelAnnouncement(announcementOrId, options = {}) {
+  let announcement = announcementOrId;
+  if (!announcement || typeof announcement === 'string' || (announcement.constructor && announcement.constructor.name === 'ObjectId')) {
+    announcement = await Announcement.findById(announcementOrId);
+  }
   if (!announcement) {
     throw new Error('Announcement not found');
   }
 
   const dateKey = new Date().toISOString().slice(0, 10);
-  const publicationId = `announcement_${announcement._id}_${Date.now()}`;
-  const title = announcement.title || 'Parish Announcement';
-  const bodyText = announcement.content || announcement.description || '';
+  const action = options.action || 'created'; // 'created' | 'updated'
+  const publicationId = `announcement_${announcement._id}_${action}_${Date.now()}`;
+  const title = (announcement.title || 'Parish Announcement').trim();
+  const titleTa = (announcement.titleTa || '').trim();
+  const bodyText = (announcement.content || announcement.description || '').trim();
+  const bodyTextTa = (announcement.contentTa || '').trim();
   const websiteUrl = getSiteUrl(SITE_ROUTES.ANNOUNCEMENTS);
 
-  const formattedMsg = `📢 *PARISH ANNOUNCEMENT • பங்கு அறிவிப்பு*
+  let headerEmoji = '📢';
+  let headerText = 'PARISH ANNOUNCEMENT • பங்கு அறிவிப்பு';
+  if (action === 'updated') {
+    headerEmoji = '🔄';
+    headerText = 'UPDATED PARISH ANNOUNCEMENT • பங்கு அறிவிப்பு (மாற்றம்)';
+  }
+
+  const formattedMsg = `${headerEmoji} *${headerText}*
 ⛪ *St. John de Britto Church, Kalayarkoil*
 
 📌 *${title}*
-
+${titleTa && titleTa !== title ? `📌 *${titleTa}*\n` : ''}
 ${bodyText}
+${bodyTextTa && bodyTextTa !== bodyText ? `\n\n🇮🇳 *தமிழ் குறிப்பு:*\n${bodyTextTa}` : ''}
 
 🌐 *Read More on Parish Website:*
 ${websiteUrl}
@@ -572,6 +590,13 @@ _SJDB Public Church Broadcast_`;
 
   const contentHash = computeContentHash(formattedMsg);
 
+  // Duplicate Check
+  const existing = await WhatsappChannelPublication.findOne({ contentHash, status: 'published' });
+  if (existing && !options.force) {
+    console.log(`⚡ [WhatsApp Channel] Suppressed duplicate announcement publication (${contentHash.slice(0, 10)})`);
+    return { success: true, duplicate: true, publicationId: existing.publicationId };
+  }
+
   const record = await WhatsappChannelPublication.create({
     publicationId,
     date: dateKey,
@@ -580,19 +605,20 @@ _SJDB Public Church Broadcast_`;
     channelJid: cachedChannelJid,
     status: 'pending',
     source: options.source || 'admin_manual',
-    triggerType: 'announcement_publish',
+    triggerType: options.triggerType || `announcement_${action}`,
     title: `Announcement: ${title}`,
     summary: bodyText.slice(0, 140),
     adminUserId: options.adminUserId || null,
-    metadata: { announcementId: announcement._id }
+    metadata: { announcementId: announcement._id, action }
   });
 
+  const mediaUrl = announcement.attachment || announcement.image;
   try {
-    if (announcement.image) {
+    if (mediaUrl) {
       record.mediaAttached = true;
       record.mediaType = 'image';
       await sendToChannelDirect({
-        media: { url: announcement.image },
+        media: { url: mediaUrl },
         caption: formattedMsg
       });
     } else {
@@ -603,7 +629,286 @@ _SJDB Public Church Broadcast_`;
     record.publishedAt = new Date();
     await record.save();
 
-    console.log(`✅ [WhatsApp Channel] Published announcement "${title}" to Channel!`);
+    console.log(`✅ [WhatsApp Channel] Published announcement "${title}" (${action}) to Channel!`);
+    return { success: true, publicationId };
+  } catch (err) {
+    record.status = 'failed';
+    record.errorMessage = err.message;
+    await record.save();
+    throw err;
+  }
+}
+
+/**
+ * Publish an official Parish Event to the WhatsApp Channel
+ * Supports created, updated, and cancelled actions.
+ */
+async function publishChannelEvent(eventOrId, options = {}) {
+  let event = eventOrId;
+  if (!event || typeof event === 'string' || (event.constructor && event.constructor.name === 'ObjectId')) {
+    event = await Event.findById(eventOrId);
+  }
+  if (!event) {
+    throw new Error('Event not found');
+  }
+
+  const dateKey = new Date().toISOString().slice(0, 10);
+  const action = options.action || 'created'; // 'created' | 'updated' | 'cancelled'
+  const publicationId = `event_${event._id}_${action}_${Date.now()}`;
+  const title = (event.title || 'Parish Event').trim();
+  const titleTa = (event.titleTa || '').trim();
+  const desc = (event.description || '').trim();
+  const descTa = (event.descriptionTa || '').trim();
+  const websiteUrl = getSiteUrl(SITE_ROUTES.EVENTS);
+
+  let dateFormatted = '';
+  if (event.date) {
+    try {
+      const d = new Date(event.date);
+      dateFormatted = d.toLocaleDateString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      });
+    } catch (_) {
+      dateFormatted = String(event.date);
+    }
+  }
+
+  const timeVal = (event.time || '').trim();
+  const venueVal = (event.venue || event.location || '').trim();
+  const organizerVal = (event.organizer || '').trim();
+
+  let headerEmoji = '📅';
+  let headerText = 'PARISH EVENT • திருத்தல நிகழ்வு';
+  if (action === 'updated') {
+    headerEmoji = '🔄';
+    headerText = 'UPDATED EVENT DETAILS • நிகழ்வு விவரங்கள் (மாற்றம்)';
+  } else if (action === 'cancelled') {
+    headerEmoji = '⚠️';
+    headerText = 'EVENT CANCELLED • நிகழ்வு ரத்து செய்யப்பட்டுள்ளது';
+  }
+
+  const details = [];
+  if (dateFormatted) details.push(`📅 *Date / தேதி:* ${dateFormatted}`);
+  if (timeVal) details.push(`⏰ *Time / நேரம்:* ${timeVal}`);
+  if (venueVal) details.push(`📍 *Venue / இடம்:* ${venueVal}`);
+  if (organizerVal) details.push(`👤 *Organized By:* ${organizerVal}`);
+
+  let formattedMsg = `${headerEmoji} *${headerText}*
+⛪ *St. John de Britto Church, Kalayarkoil*
+
+✨ *${title}*
+${titleTa && titleTa !== title ? `✨ *${titleTa}*\n` : ''}
+${desc ? `${desc}\n\n` : ''}${descTa && descTa !== desc ? `🇮🇳 *தமிழ் குறிப்பு:*\n${descTa}\n\n` : ''}${details.length > 0 ? `${details.join('\n')}\n\n` : ''}${action === 'cancelled' ? 'Please note that this scheduled church event has been cancelled. For further details, please contact the Parish Office.\n\n' : (event.registrationRequired ? '📝 *Registration is required for this event.*\n\n' : 'All parishioners and families are welcome to participate.\n\n')}🌐 *View Event Details on Parish Website:*
+${websiteUrl}
+
+— *Parish Office, St. John de Britto Church*
+_SJDB Public Church Broadcast_`;
+
+  const contentHash = computeContentHash(formattedMsg);
+
+  const existing = await WhatsappChannelPublication.findOne({ contentHash, status: 'published' });
+  if (existing && !options.force) {
+    console.log(`⚡ [WhatsApp Channel] Suppressed duplicate event publication (${contentHash.slice(0, 10)})`);
+    return { success: true, duplicate: true, publicationId: existing.publicationId };
+  }
+
+  const record = await WhatsappChannelPublication.create({
+    publicationId,
+    date: dateKey,
+    contentType: 'event',
+    contentHash,
+    channelJid: cachedChannelJid,
+    status: 'pending',
+    source: options.source || 'admin_manual',
+    triggerType: options.triggerType || `event_${action}`,
+    title: `Event: ${title}`,
+    summary: desc.slice(0, 140) || title,
+    adminUserId: options.adminUserId || null,
+    metadata: { eventId: event._id, action }
+  });
+
+  const mediaUrl = event.image || event.bannerUrl;
+  try {
+    if (mediaUrl && action !== 'cancelled') {
+      record.mediaAttached = true;
+      record.mediaType = 'image';
+      await sendToChannelDirect({
+        media: { url: mediaUrl },
+        caption: formattedMsg
+      });
+    } else {
+      await sendToChannelDirect({ text: formattedMsg });
+    }
+
+    record.status = 'published';
+    record.publishedAt = new Date();
+    await record.save();
+
+    console.log(`✅ [WhatsApp Channel] Published event "${title}" (${action}) to Channel!`);
+    return { success: true, publicationId };
+  } catch (err) {
+    record.status = 'failed';
+    record.errorMessage = err.message;
+    await record.save();
+    throw err;
+  }
+}
+
+/**
+ * Publish an Event/Announcement reminder to the WhatsApp Channel
+ */
+async function publishChannelReminder(reminderData = {}, options = {}) {
+  const {
+    itemId,
+    itemModel = 'Event',
+    title = 'Parish Reminder',
+    details = '',
+    dateText = '',
+    timeText = '',
+    venueText = '',
+    typeLabel = 'Upcoming Reminder',
+    targetUrl = '/events'
+  } = reminderData;
+
+  const dateKey = new Date().toISOString().slice(0, 10);
+  const publicationId = `reminder_${itemId || 'rem'}_${Date.now()}`;
+  const fullLink = getSiteUrl(targetUrl);
+
+  const infoLines = [];
+  if (dateText) infoLines.push(`📅 *Date:* ${dateText}`);
+  if (timeText) infoLines.push(`⏰ *Time:* ${timeText}`);
+  if (venueText) infoLines.push(`📍 *Venue:* ${venueText}`);
+
+  const formattedMsg = `🔔 *PARISH REMINDER • பங்கு நினைவூட்டல்*
+⛪ *St. John de Britto Church, Kalayarkoil*
+📌 *${(typeLabel || 'Upcoming').toUpperCase()}*
+
+✨ *${title}*
+
+${infoLines.length > 0 ? `${infoLines.join('\n')}\n\n` : ''}${details ? `_${details.slice(0, 200)}_\n\n` : ''}🌐 *View Full Details on Parish Website:*
+${fullLink}
+
+— *Parish Office, St. John de Britto Church*
+_SJDB Public Church Broadcast_`;
+
+  const contentHash = computeContentHash(formattedMsg);
+
+  const existing = await WhatsappChannelPublication.findOne({ contentHash, status: 'published' });
+  if (existing && !options.force) {
+    console.log(`⚡ [WhatsApp Channel] Suppressed duplicate reminder publication (${contentHash.slice(0, 10)})`);
+    return { success: true, duplicate: true, publicationId: existing.publicationId };
+  }
+
+  const record = await WhatsappChannelPublication.create({
+    publicationId,
+    date: dateKey,
+    contentType: 'reminder',
+    contentHash,
+    channelJid: cachedChannelJid,
+    status: 'pending',
+    source: options.source || 'scheduled_cron',
+    triggerType: options.triggerType || 'reminder_alert',
+    title: `Reminder: ${title}`,
+    summary: (details || title).slice(0, 140),
+    adminUserId: options.adminUserId || null,
+    metadata: { itemId, itemModel }
+  });
+
+  try {
+    await sendToChannelDirect({ text: formattedMsg });
+    record.status = 'published';
+    record.publishedAt = new Date();
+    await record.save();
+
+    console.log(`✅ [WhatsApp Channel] Published reminder "${title}" to Channel!`);
+    return { success: true, publicationId };
+  } catch (err) {
+    record.status = 'failed';
+    record.errorMessage = err.message;
+    await record.save();
+    throw err;
+  }
+}
+
+/**
+ * Publish Tomorrow's Consolidated Schedule to WhatsApp Channel
+ */
+async function publishChannelTomorrowReminder(reminderPayload = {}, options = {}) {
+  const { targetDateStr, events = [], announcements = [], waText } = reminderPayload;
+  const dateKey = targetDateStr || new Date().toISOString().slice(0, 10);
+  const publicationId = `tomorrow_reminder_${dateKey}`;
+
+  let bodyContent = waText;
+  if (!bodyContent) {
+    const lines = [];
+    if (events.length > 0) {
+      lines.push('*📅 UPCOMING EVENTS / நிகழ்வுகள்:*');
+      events.forEach((ev, i) => {
+        lines.push(`${i + 1}. *${ev.title}*${ev.time ? ` (⏰ ${ev.time})` : ''}${ev.venue ? ` — 📍 ${ev.venue}` : ''}`);
+      });
+      lines.push('');
+    }
+    if (announcements.length > 0) {
+      lines.push('*📢 ANNOUNCEMENTS / அறிவிப்புகள்:*');
+      announcements.forEach((ann, i) => {
+        lines.push(`${i + 1}. *${ann.title}*`);
+      });
+      lines.push('');
+    }
+    bodyContent = lines.join('\n');
+  }
+
+  const websiteUrl = getSiteUrl(SITE_ROUTES.EVENTS);
+
+  const formattedMsg = `🔔 *TOMORROW AT SJDB CHURCH • நாளைய நிகழ்வுகள் & அறிவிப்புகள்*
+⛪ *St. John de Britto Church, Kalayarkoil*
+📅 *${dateKey}*
+
+${bodyContent}
+
+🌐 *View Details on Parish Website:*
+${websiteUrl}
+
+— *St. John de Britto Church, Kalayarkoil*
+_SJDB Public Church Broadcast_`;
+
+  const contentHash = computeContentHash(formattedMsg);
+
+  const existing = await WhatsappChannelPublication.findOne({
+    date: dateKey,
+    contentType: 'tomorrow_reminder',
+    status: 'published'
+  });
+  if (existing && !options.force) {
+    console.log(`⚡ [WhatsApp Channel] Tomorrow reminder already published for ${dateKey}. Skipping duplicate.`);
+    return { success: true, duplicate: true, publicationId: existing.publicationId };
+  }
+
+  const record = await WhatsappChannelPublication.create({
+    publicationId,
+    date: dateKey,
+    contentType: 'tomorrow_reminder',
+    contentHash,
+    channelJid: cachedChannelJid,
+    status: 'pending',
+    source: options.source || 'scheduled_cron',
+    triggerType: 'tomorrow_morning_reminder',
+    title: `Tomorrow's Schedule — ${dateKey}`,
+    summary: `Events: ${events.length}, Announcements: ${announcements.length}`,
+    adminUserId: options.adminUserId || null
+  });
+
+  try {
+    await sendToChannelDirect({ text: formattedMsg });
+    record.status = 'published';
+    record.publishedAt = new Date();
+    await record.save();
+
+    console.log(`✅ [WhatsApp Channel] Published tomorrow's consolidated reminder (${dateKey}) to Channel!`);
     return { success: true, publicationId };
   } catch (err) {
     record.status = 'failed';
@@ -690,6 +995,9 @@ module.exports = {
   publishChannelImage,
   publishChannelDailyContent,
   publishChannelAnnouncement,
+  publishChannelEvent,
+  publishChannelReminder,
+  publishChannelTomorrowReminder,
   sendTestChannelUpdate,
   updateChannelSettings,
   formatChannelDailyContent
