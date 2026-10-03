@@ -447,7 +447,7 @@ async function checkAndSendMonthlyVerificationReminders({ forceAll = false, trig
       jobLog.status = 'failed';
       jobLog.completedAt = new Date();
       jobLog.error = err.message;
-      await jobLog.save().catch(() => {});
+      await jobLog.save().catch(() => { });
     }
     return { success: false, error: err.message };
   }

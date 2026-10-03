@@ -502,10 +502,18 @@ const CATHOLIC_SAINTS_CALENDAR = {
   "10-02": {
     name: "The Holy Guardian Angels",
     nameTa: "காவல் தூதர்கள் திருவிழா",
-    description: "Memorial celebrating the loving celestial protectors appointed by God to watch over every human soul.",
-    descriptionTa: "ஒவ்வொரு மனிதரையும் வழிநடத்தவும் பாதுகாக்கவும் கடவுளால் நியமிக்கப்பட்ட காவல் தூதர்கள் திருவிழா.",
+    description: "The Memorial of the Holy Guardian Angels celebrates the loving celestial protectors appointed by God to watch over, guide, and illuminate every human soul. Rooted in Sacred Scripture, Catholic tradition affirms that each person is entrusted to the personal care of an angelic guardian from conception to eternity. These heavenly messengers intercede before God, guard us against spiritual dangers, and guide our hearts toward virtue and Christ.",
+    descriptionTa: "ஒவ்வொரு மனித ஆன்மாவையும் வழிநடத்தவும், பாதுகாக்கவும் கடவுளால் நியமிக்கப்பட்ட அன்பான பரலோக பாதுகாவலர்களைக் கொண்டாடும் திருவிழா. மனிதர் ஒவ்வொருவரையும் வழிநடத்த இறைவனால் தனித்தனியாக நியமிக்கப்பட்ட காவல் தூதர்கள் உள்ளனர் என்று திருச்சபை கற்பிக்கிறது. இத்தூதர்கள் ஆபத்துகளில் இருந்து நம்மைக் காத்து, நமது ஜெபங்களை இறைவனின் திருமுன் சமர்ப்பித்து நம்மை விசுவாச வழியில் நடத்துகின்றனர்.",
     image: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Guardian_Angel_by_Pietro_da_Cortona.jpg/500px-Guardian_Angel_by_Pietro_da_Cortona.jpg",
     link: "https://www.catholic.org/saints/saint.php?saint_id=251"
+  },
+  "10-03": {
+    name: "St. Candida, Martyr on the Via Portuense",
+    nameTa: "புனித காண்டிடா (மறைசாட்சி)",
+    description: "Saint Candida was an early Christian martyr of Rome who laid down her life for Christ along the ancient Via Portuense during the imperial persecutions.\n\nSteadfast in her devotion despite immense trials, she bore heroic witness to the Gospel before the Roman authorities, choosing suffering and martyrdom over renouncing her Lord.\n\nThe early Christian faithful venerated her tomb outside Rome as a sacred sanctuary of holiness and perseverance. In the ninth century, Pope Paschal I solemnly translated her holy relics to the Basilica of Saint Praxedes in Rome, where her memory continues to inspire the faithful with her luminous example of courage, purity, and enduring faith in Jesus Christ.",
+    descriptionTa: "புனித காண்டிடா, உரோமை நகரின் போர்த்துவென்சே வழியில் கிறிஸ்துவுக்காக மறைசாட்சியாய் உயிர்நீத்த ஆதித் திருச்சபையின் புனித பெண்மணி ஆவார்.\n\nஉரோமைப் பேரரசின் கொடிய துன்புறுத்தல்களுக்கு மத்தியிலும் தனது கிறிஸ்தவ விசுவாசத்தில் இறுதிவரை உறுதியாய் நின்று தன் இன்னுயிரைத் தியாகம் செய்தார்.\n\nஇவரது புனித திருப்பண்டங்கள் திருத்தந்தை பாஸ்கல் அவர்களால் புனித பிராக்சேதே பேராலயத்தில் வணக்கத்திற்காக வைக்கப்பட்டன. இவர் விசுவாச உறுதிக்கும், தூய்மைக்கும், இறையன்பிற்கும் சிறந்த முன்மாதிரியாக விளங்குகிறார்.",
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/6/65/Luca_Giordano_Protector_saints_of_Naples.jpg/500px-Luca_Giordano_Protector_saints_of_Naples.jpg",
+    link: "https://www.catholic.org/saints/sofd.php"
   },
   "10-04": {
     name: "St. Francis of Assisi",
