@@ -36,22 +36,40 @@ async function testAll() {
 
   const processedDaily = await injectFreshBibleVerseIntoHtml(dailyHtml);
 
-  // Check positions
+  // Check positions in order:
+  // 1. Daily Bible verse (image + text)
+  // 2. Daily Mass readings
+  // 3. Today's reflection
+  // 4. Saint of the day (image of the saint and about the saint)
+  // 5. Button says Read on SJDB
+  // 6. Holy Scripture
   const headerIdx = processedDaily.indexOf('ST. JOHN DE Britto CHURCH');
+  const verseTopIdx = processedDaily.indexOf('DAILY BIBLE VERSE / இன்றைய இறைவார்த்தை');
   const readingsIdx = processedDaily.indexOf('DAILY MASS READINGS');
-  const ctaBtnIdx = processedDaily.indexOf('VIEW DAILY MASS READINGS');
+  const reflectionIdx = processedDaily.indexOf('இன்றைய சிந்தனை');
+  const saintIdx = processedDaily.indexOf('SAINT OF THE DAY / இன்றைய புனிதர்');
+  const ctaBtnIdx = processedDaily.indexOf('Read on SJDB');
   const scriptureIdx = processedDaily.indexOf('HOLY SCRIPTURE • Daily Scripture • Prayer');
   const footerIdx = processedDaily.indexOf('May God bless you and have a blessed day');
 
   console.log('Positions in Daily Email:');
   console.log('Header index:', headerIdx);
+  console.log('Daily Bible Verse (top) index:', verseTopIdx);
   console.log('Readings index:', readingsIdx);
-  console.log('CTA Button index:', ctaBtnIdx);
-  console.log('Scripture index:', scriptureIdx);
+  console.log('Reflection index:', reflectionIdx);
+  console.log('Saint index:', saintIdx);
+  console.log('CTA Button (Read on SJDB) index:', ctaBtnIdx);
+  console.log('Holy Scripture index:', scriptureIdx);
   console.log('Footer index:', footerIdx);
 
-  const dailyCorrect = (headerIdx < readingsIdx) && (readingsIdx < ctaBtnIdx) && (ctaBtnIdx < scriptureIdx) && (scriptureIdx < footerIdx);
-  console.log('Daily Email Order Correct (Header < Readings < CTA < Scripture < Footer):', dailyCorrect);
+  const dailyCorrect = (headerIdx < verseTopIdx) &&
+                       (verseTopIdx < readingsIdx) &&
+                       (readingsIdx < reflectionIdx) &&
+                       (reflectionIdx < saintIdx) &&
+                       (saintIdx < ctaBtnIdx) &&
+                       (ctaBtnIdx < scriptureIdx) &&
+                       (scriptureIdx < footerIdx);
+  console.log('Daily Email Order Correct (Header < Verse < Readings < Reflection < Saint < Button < Scripture < Footer):', dailyCorrect);
 
   const cardMatches = (processedDaily.match(/<!-- DYNAMIC BILINGUAL BIBLE VERSE CARD -->/g) || []).length;
   console.log('Dynamic Bible Verse Card Count (must be 1):', cardMatches);

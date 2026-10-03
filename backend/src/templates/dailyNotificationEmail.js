@@ -191,7 +191,54 @@ function generateDailyNotificationHtml({
           <tr>
             <td style="padding: 28px 24px;">
 
-              <!-- SECTION 1: MASS READINGS (PERSONALIZED) -->
+              <!-- SECTION 1: DAILY BIBLE VERSE (IMAGE + TEXT) -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 24px;">
+                <tr>
+                  <td>
+                    <!-- Section Title -->
+                    <div style="background-color: #0F172A; border-left: 4px solid #C5A059; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 14px;">
+                      <h2 style="margin: 0; color: #FFFFFF; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                        DAILY BIBLE VERSE / இன்றைய இறைவார்த்தை
+                      </h2>
+                    </div>
+
+                    <!-- Verse Image (if attached or available) -->
+                    ${hasBibleImageAttachment ? `
+                    <div style="margin-bottom: 16px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,0.12); border: 1.5px solid #D4AF37; text-align: center; background-color: #0F172A;">
+                      <img src="cid:daily_bible_verse_img" alt="Daily Bible Verse" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />
+                    </div>
+                    ` : ((bible?.imageUrl || bible?.image) ? `
+                    <div style="margin-bottom: 16px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,0.12); border: 1.5px solid #D4AF37; text-align: center; background-color: #0F172A;">
+                      <img src="${escapeHtml(bible.imageUrl || bible.image)}" alt="Daily Bible Verse" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />
+                    </div>
+                    ` : '')}
+
+                    <!-- Verse Text Card -->
+                    <div style="background: linear-gradient(135deg, #FFFDF7 0%, #FEF3C7 100%); border: 1px solid #FDE68A; border-left: 4px solid #D97706; border-radius: 12px; padding: 18px 20px; box-shadow: 0 2px 8px rgba(217, 119, 6, 0.08); font-family: 'Segoe UI', Roboto, 'Noto Sans Tamil', 'Latha', 'Vijaya', Arial, sans-serif;">
+                      ${bible?.english ? `
+                      <p style="margin: 0 0 10px 0; font-size: 15px; font-style: italic; color: #1E293B; line-height: 1.6; font-family: 'Segoe UI', Roboto, Georgia, serif;">
+                        "${escapeHtml(bible.english)}"
+                      </p>
+                      ` : ''}
+
+                      ${bible?.tamil ? `
+                      <p style="margin: 0 0 12px 0; font-size: 14.5px; color: #78350F; line-height: 1.6; font-family: 'Noto Sans Tamil', 'Latha', 'Vijaya', 'Segoe UI', Roboto, Arial, sans-serif;">
+                        "${escapeHtml(bible.tamil)}"
+                      </p>
+                      ` : ''}
+
+                      <div style="font-size: 12.5px; font-weight: 800; color: #B45309; text-align: right;">
+                        — ${escapeHtml(refEn)}${refTa && refTa !== refEn ? ` • ${escapeHtml(refTa)}` : ''}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Divider -->
+              <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 24px 0;" />
+
+              <!-- SECTION 2: DAILY MASS READINGS (PERSONALIZED) -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 24px;">
                 <tr>
                   <td>
@@ -203,7 +250,7 @@ function generateDailyNotificationHtml({
               <!-- Divider -->
               <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 24px 0;" />
 
-              <!-- SECTION 2: TODAY'S REFLECTION (PERSONALIZED) -->
+              <!-- SECTION 3: TODAY'S REFLECTION (PERSONALIZED) -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 24px;">
                 <tr>
                   <td>
@@ -215,7 +262,7 @@ function generateDailyNotificationHtml({
               <!-- Divider -->
               <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 24px 0;" />
 
-              <!-- SECTION 3: SAINT OF THE DAY (BILINGUAL) -->
+              <!-- SECTION 4: SAINT OF THE DAY (IMAGE & ABOUT THE SAINT) -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 24px;">
                 <tr>
                   <td>
@@ -253,29 +300,25 @@ function generateDailyNotificationHtml({
                         <div style="color: #334155; font-size: 14px; line-height: 1.6;">${formatParagraphs(saint.descriptionEnglish)}</div>
                       </div>
 
-                      <!-- View Saint of the Day Button -->
-                      <div style="margin-top: 16px; text-align: center;">
-                        <a href="${CLIENT_URL}/catholic-content" target="_blank" style="display: inline-block; background-color: #1E3A8A; color: #FFFFFF; font-size: 13px; font-weight: 700; text-decoration: none; padding: 9px 20px; border-radius: 8px; border: 1.5px solid #D4AF37; box-shadow: 0 2px 8px rgba(30,58,138,0.25);">
-                          View Saint of the Day / இன்றைய புனிதர் &rarr;
-                        </a>
-                      </div>
-
                       <!-- Attribution -->
                       <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #E2E8F0; font-size: 12px; color: #64748B; text-align: right;">
-                        Source: <a href="${escapeHtml(saint.sourceUrl || 'https://www.vaticannews.va/en/saints.html')}" target="_blank" style="color: #C5A059; text-decoration: none; font-weight: 600;">${escapeHtml(saint.source || 'Vatican News / Catholic Liturgical Calendar')}</a>
+                        Source: <a href="${escapeHtml(saint.sourceUrl || 'https://www.vaticannews.va/en/saints.html')}" target="_blank" style="color: #C5A059; text-decoration: none; font-weight: 600;">${escapeHtml(saint.source || 'Vatican News')}</a>
                       </div>
                     </div>
                   </td>
                 </tr>
               </table>
 
-              <!-- SECTION 4: CALL TO ACTION BUTTON -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 28px 0 12px 0;">
+              <!-- SECTION 5: CALL TO ACTION BUTTON (READ ON SJDB) -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 28px 0 16px 0;">
                 <tr>
                   <td align="center">
-                    <a href="${escapeHtml(readingsUrl)}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #1E293B, #0F172A); color: #FFFFFF; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 28px; border-radius: 10px; box-shadow: 0 4px 12px rgba(15,23,42,0.25); text-align: center; border: 1px solid #C5A059;">
-                      VIEW DAILY MASS READINGS
+                    <a href="${CLIENT_URL}/bible-verse" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #1E3A8A 0%, #0F172A 100%); color: #FFFFFF; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 34px; border-radius: 10px; box-shadow: 0 4px 14px rgba(30,58,138,0.3); text-align: center; border: 1.5px solid #D4AF37; letter-spacing: 0.5px;">
+                      Read on SJDB &rarr;
                     </a>
+                    <div style="margin-top: 6px; font-size: 12px; color: #64748B; font-weight: 600;">
+                      SJDB-ல் வாசிக்க
+                    </div>
                   </td>
                 </tr>
               </table>
@@ -283,17 +326,12 @@ function generateDailyNotificationHtml({
               <!-- Divider -->
               <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 24px 0 20px 0;" />
 
-              <!-- SECTION 5: HOLY SCRIPTURE (AT THE VERY END OF EMAIL BODY) -->
+              <!-- SECTION 6: HOLY SCRIPTURE (AT THE VERY END OF EMAIL BODY) -->
+              <!-- DYNAMIC_BIBLE_VERSE -->
               <!-- DYNAMIC BILINGUAL BIBLE VERSE CARD -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 8px;">
                 <tr>
                   <td>
-                    ${hasBibleImageAttachment ? `
-                    <div style="margin-bottom: 16px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 14px rgba(0,0,0,0.08); border: 1px solid #E2E8F0; text-align: center;">
-                      <img src="cid:daily_bible_verse_img" alt="Daily Bible Verse" style="max-width: 100%; height: auto; display: block; margin: 0 auto;" />
-                    </div>
-                    ` : ''}
-
                     <div style="background: linear-gradient(135deg, #fffdf7 0%, #fef3c7 100%); border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 12px; padding: 18px 20px; box-shadow: 0 2px 8px rgba(217, 119, 6, 0.08); font-family: 'Segoe UI', Roboto, 'Noto Sans Tamil', 'Latha', 'Vijaya', Arial Unicode MS, Arial, sans-serif;">
                       <div style="font-size: 11px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;">
                         HOLY SCRIPTURE • Daily Scripture • Prayer

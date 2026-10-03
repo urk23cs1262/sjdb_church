@@ -131,6 +131,8 @@ function AppRoutes() {
               <Route path="/contact" element={<Contact />} />
               <Route path="/donate" element={<Donate />} />
               <Route path="/bible-verse" element={<DailyCatholicContent />} />
+              <Route path="/catholic-content" element={<DailyCatholicContent />} />
+              <Route path="/daily-catholic-content" element={<DailyCatholicContent />} />
               <Route path="/daily-mass-readings" element={<DailyCatholicContent />} />
               <Route path="/daily-readings" element={<DailyCatholicContent />} />
               <Route path="/readings" element={<DailyCatholicContent />} />
