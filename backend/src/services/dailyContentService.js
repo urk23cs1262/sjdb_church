@@ -46,8 +46,8 @@ async function fetchImageBuffer(imageUrl) {
       const response = await axios.get(imageUrl, {
         responseType: 'arraybuffer',
         headers: {
-          'User-Agent': `SJDBChurchApp/1.0 (Catholic Parish Management; contact: ${getChurchEmail() || 'office@example.com'})`,
-          'Accept': '*/*'
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
         },
         timeout: 10000
       });
@@ -356,35 +356,62 @@ async function getTodayDailyContent(targetDate = new Date()) {
     contentType: saintImgBuffer.contentType || 'image/jpeg'
   } : null);
 
+  const { getSaintForDate } = require('../data/catholic_saints_calendar');
+  const fallbackSaint = getSaintForDate(dateKey);
+
+  let rawNameEn = saintData?.nameEn || saintData?.englishName || saintData?.saintName || saintData?.name;
+  if (!rawNameEn || rawNameEn.toLowerCase().includes('saint of the day') || rawNameEn.toLowerCase().includes('today\'s saint')) {
+    rawNameEn = fallbackSaint?.name || 'Saint of the Day';
+  }
+
+  let rawNameTa = saintData?.nameTa || saintData?.tamilName;
+  if (!rawNameTa || rawNameTa.trim() === 'இன்றைய புனிதர்' || rawNameTa.trim() === 'புனிதர்') {
+    rawNameTa = fallbackSaint?.nameTa || rawNameEn;
+  }
+
+  const isBoilerplate = (text) => /Every day, we will|Other Sts whose feast day|December 31|டிசம்பர் 31|ஒவ்வொரு நாளும்|பீடிகாபிகேஷன்|Saints are special people in the Catholic faith|beacons of light|கலங்கரை விளக்கங்களாக/i.test(text || '');
+
+  let rawDescEn = saintData?.descriptionEn || saintData?.description || saintData?.descriptionEnglish || '';
+  if (isBoilerplate(rawDescEn) || !rawDescEn) {
+    rawDescEn = fallbackSaint?.description || '';
+  }
+
+  let rawDescTa = saintData?.descriptionTa || saintData?.descriptionTamil || '';
+  if (isBoilerplate(rawDescTa) || !rawDescTa || !/[\u0B80-\u0BFF]/.test(rawDescTa)) {
+    rawDescTa = fallbackSaint?.descriptionTa || '';
+  }
+
+  const finalSaintImage = saintImageUrl || fallbackSaint?.image || null;
+
   const saint = {
     date: saintData?.date || dateKey,
-    nameEnglish: saintData?.nameEn || saintData?.englishName || saintData?.saintName || saintData?.name || 'Saint of the Day',
-    nameTamil: saintData?.nameTa || saintData?.tamilName || 'இன்றைய புனிதர்',
-    nameEn: saintData?.nameEn || saintData?.englishName || saintData?.saintName || 'Saint of the Day',
-    nameTa: saintData?.nameTa || saintData?.tamilName || 'இன்றைய புனிதர்',
-    titleEn: saintData?.titleEn || saintData?.feastTitle || saintData?.englishName || 'Saint of the Day',
-    titleTa: saintData?.titleTa || saintData?.feastTitleTa || saintData?.tamilName || 'இன்றைய புனிதர்',
-    description: saintData?.descriptionEn || saintData?.description || saintData?.descriptionEnglish || '',
-    descriptionEnglish: saintData?.descriptionEn || saintData?.description || '',
-    descriptionEn: saintData?.descriptionEn || saintData?.description || '',
-    descriptionTa: saintData?.descriptionTa && /[\u0B80-\u0BFF]/.test(saintData.descriptionTa) ? saintData.descriptionTa : '',
-    descriptionTamil: saintData?.descriptionTa && /[\u0B80-\u0BFF]/.test(saintData.descriptionTa) ? saintData.descriptionTa : '',
+    nameEnglish: rawNameEn,
+    nameTamil: rawNameTa,
+    nameEn: rawNameEn,
+    nameTa: rawNameTa,
+    titleEn: saintData?.titleEn || saintData?.feastTitle || rawNameEn,
+    titleTa: saintData?.titleTa || saintData?.feastTitleTa || rawNameTa,
+    description: rawDescEn,
+    descriptionEnglish: rawDescEn,
+    descriptionEn: rawDescEn,
+    descriptionTa: rawDescTa,
+    descriptionTamil: rawDescTa,
     feastDay: saintData?.feastDay || formattedEn,
     feastDayEn: formattedEn,
     feastDayTa: formattedTa,
-    feastTitle: saintData?.feastTitle || saintData?.titleEn || null,
-    feastTitleTa: saintData?.feastTitleTa || saintData?.titleTa || null,
+    feastTitle: saintData?.feastTitle || saintData?.titleEn || fallbackSaint?.feastTitle || null,
+    feastTitleTa: saintData?.feastTitleTa || saintData?.titleTa || fallbackSaint?.feastTitleTa || null,
     feastType: saintData?.feastType || null,
     feastTypeTa: saintData?.feastTypeTa || null,
-    hasFeastInfo: Boolean(saintData?.hasFeastInfo),
-    image: saintImageUrl,
-    imageUrl: saintImageUrl,
-    remoteUrl: saintData?.remoteUrl || saintImageUrl,
+    hasFeastInfo: Boolean(saintData?.hasFeastInfo || fallbackSaint?.hasFeastInfo),
+    image: finalSaintImage,
+    imageUrl: finalSaintImage,
+    remoteUrl: saintData?.remoteUrl || finalSaintImage,
     localUrl: saintData?.localUrl || null,
     localPath: saintData?.localPath || null,
     imageAttachment: saintAttachment,
-    imageSource: saintData?.imageSource || 'Catholic Readings',
-    sourceUrl: saintData?.sourceUrl || saintData?.link || 'https://catholicreadings.org/catholic-saint-of-the-day/',
+    imageSource: saintData?.imageSource || 'liturgical_calendar',
+    sourceUrl: saintData?.sourceUrl || saintData?.link || 'https://www.vaticannews.va/en/saints.html',
     saints: saintData?.saints || []
   };
 

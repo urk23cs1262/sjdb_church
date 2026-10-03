@@ -399,8 +399,8 @@ async function sendWhatsAppMedia(phone, mediaArg, optionalCaption) {
           responseType: 'arraybuffer',
           timeout: 10000,
           headers: {
-            'User-Agent': `SJDBChurchApp/1.0 (Catholic Parish Management; contact: ${getChurchEmail() || 'office@example.com'})`,
-            'Accept': '*/*'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8'
           }
         });
         if (resp.status === 200 && resp.data && resp.data.length > 200) {

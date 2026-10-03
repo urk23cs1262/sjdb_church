@@ -15,10 +15,8 @@ const { getChurchEmail } = require('../config/contactConfig');
  */
 
 const HTTP_HEADERS = {
-  get 'User-Agent'() {
-    return `SJDBChurchApp/1.0 (Catholic Parish Management; contact: ${getChurchEmail() || 'office@example.com'})`;
-  },
-  'Accept': 'application/json, text/html, */*'
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,application/json,text/html,*/*;q=0.8'
 };
 
 const DIGNIFIED_FALLBACK_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons/b/bf/St._John_De_Britto.jpg';

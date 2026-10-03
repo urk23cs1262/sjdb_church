@@ -784,12 +784,20 @@ async function fetchFromCatholicReadings(month, day, year = new Date().getFullYe
     $('article a, .entry-content a').each((i, el) => {
       const href = $(el).attr('href') || '';
       const text = $(el).text().trim();
+      const lowerHref = href.toLowerCase();
+      const lowerText = text.toLowerCase();
       if (
-        !href.includes('whatsapp') && 
-        !href.includes('category') && 
-        !href.includes('tag') &&
-        !href.includes('daily-readings') &&
-        !href.includes('saint-of-the-day-for-') &&
+        !lowerHref.includes('whatsapp') && 
+        !lowerHref.includes('category') && 
+        !lowerHref.includes('tag') &&
+        !lowerHref.includes('feed') &&
+        !lowerHref.includes('daily-readings') &&
+        !lowerHref.includes('saint-of-the-day-for-') &&
+        !lowerHref.includes('catholic-saint-of-the-day') &&
+        !lowerHref.includes('all-saints') &&
+        !lowerText.includes('saint of the day') &&
+        !lowerText.includes('today’s saint') &&
+        !lowerText.includes('catholic saint of the day') &&
         text.length > 2 &&
         !saintArticleUrl
       ) {
@@ -799,7 +807,7 @@ async function fetchFromCatholicReadings(month, day, year = new Date().getFullYe
     });
 
     if (!saintArticleUrl) {
-      console.warn(`[Saint Service] Could not find saint article link on Catholic Readings for ${monthName} ${dayNum}`);
+      console.warn(`[Saint Service] Could not find specific saint article link on Catholic Readings for ${monthName} ${dayNum}`);
       return null;
     }
 
@@ -817,6 +825,14 @@ async function fetchFromCatholicReadings(month, day, year = new Date().getFullYe
       .trim();
     if (!cleanName) cleanName = saintNameCandidate;
 
+    const isGenericName = !cleanName || 
+      /^(saint of the day|today's catholic saint|catholic saint of the day|today's saint|saints)$/i.test(cleanName.trim()) ||
+      cleanName.trim().length < 3;
+    if (isGenericName) {
+      console.warn(`[Saint Service] Catholic Readings returned generic title: "${cleanName}". Rejecting.`);
+      return null;
+    }
+
     let rawImageUrl = null;
     $art('article img, .entry-content img').each((i, el) => {
       const src = $art(el).attr('src') || $art(el).attr('data-src') || '';
@@ -833,6 +849,12 @@ async function fetchFromCatholicReadings(month, day, year = new Date().getFullYe
       }
     });
     let bioText = paragraphs.slice(0, 5).join('\n\n');
+
+    const isBoilerplate = /Every day, we will|Other Sts whose feast day|December 31|டிசம்பர் 31|ஒவ்வொரு நாளும்|பீடிகாபிகேஷன்|Saints are special people in the Catholic faith|beacons of light/i.test(bioText);
+    if (isBoilerplate || bioText.length < 50) {
+      console.warn(`[Saint Service] Catholic Readings returned generic boilerplate text. Rejecting.`);
+      return null;
+    }
 
     return {
       name: cleanName,
@@ -1232,7 +1254,14 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
       console.warn('[Saint Service] Catholic Readings fetch notice:', crErr.message);
     }
 
-    if (crResult && crResult.name && (crResult.description || crResult.imageUrl)) {
+    const isCrGeneric = crResult && (
+      !crResult.name ||
+      crResult.name.toLowerCase().includes('saint of the day') ||
+      crResult.name.toLowerCase().includes('today\'s saint') ||
+      /Every day, we will|Other Sts whose feast day|December 31|டிசம்பர் 31|ஒவ்வொரு நாளும்|பீடிகாபிகேஷன்|Saints are special people in the Catholic faith|beacons of light/i.test(crResult.description || '')
+    );
+
+    if (crResult && crResult.name && !isCrGeneric && (crResult.description || crResult.imageUrl)) {
       saintName = crResult.name;
       description = crResult.description || '';
       detailUrl = buildVaticanNewsUrl(month, day);
@@ -1599,10 +1628,16 @@ async function loadCachedSaint() {
         const isStaleCatholicReadings = (parsed.source && parsed.source.includes('Catholic Readings')) ||
           (parsed.sourceUrl && parsed.sourceUrl.includes('catholicreadings.org'));
 
+        const isGenericName = (parsed.saintName || parsed.name || '').toLowerCase().includes('saint of the day') ||
+          (parsed.nameTa || parsed.tamilName || '') === 'இன்றைய புனிதர்';
+        const isBoilerplateBio = /Every day, we will|Other Sts whose feast day|December 31|டிசம்பர் 31|ஒவ்வொரு நாளும்|பீடிகாபிகேஷன்|Saints are special people in the Catholic faith|beacons of light/i.test(
+          (parsed.description || '') + ' ' + (parsed.descriptionTa || '')
+        );
+
         const hasShortBio = !parsed.description || parsed.description.length < 250;
 
-        // Valid cache: matches today's date AND has a valid image AND is not from obsolete Catholic Readings source AND has substantial bio
-        if (parsed && parsed.date === todayStr && (parsed.saintName || parsed.name) && parsed.image && !isBrokenVirginMary && !isGarbageImage && !isStaleCatholicReadings && !hasShortBio) {
+        // Valid cache: matches today's date AND has a valid image AND is not generic/boilerplate AND has substantial bio
+        if (parsed && parsed.date === todayStr && (parsed.saintName || parsed.name) && parsed.image && !isBrokenVirginMary && !isGarbageImage && !isStaleCatholicReadings && !isGenericName && !isBoilerplateBio && !hasShortBio) {
           if (!parsed.imageAttachment && parsed.localPath) {
             try {
               const fs = require('fs');
@@ -1741,7 +1776,14 @@ const getDailySaint = (targetDate = new Date()) => {
   const { dateKey, dt } = getISTDateParts(targetDate);
   const todayStr = dateKey;
 
-  if (!dailySaint || dailySaint.date !== todayStr) {
+  const isGenericName = !dailySaint?.name || 
+    (dailySaint.name || '').toLowerCase().includes('saint of the day') ||
+    (dailySaint.nameTa || dailySaint.tamilName || '') === 'இன்றைய புனிதர்';
+  const isBoilerplateBio = /Every day, we will|Other Sts whose feast day|December 31|டிசம்பர் 31|ஒவ்வொரு நாளும்|பீடிகாபிகேஷன்|Saints are special people in the Catholic faith|beacons of light/i.test(
+    (dailySaint?.description || '') + ' ' + (dailySaint?.descriptionTa || '')
+  );
+
+  if (!dailySaint || dailySaint.date !== todayStr || isGenericName || isBoilerplateBio) {
     const fallbackSaint = getSaintForDate(dateKey);
     const feastInfo = extractFeastInfo(null, [fallbackSaint], todayStr.split('-')[1], todayStr.split('-')[2], dateKey);
     dailySaint = {

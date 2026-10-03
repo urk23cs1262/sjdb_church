@@ -711,19 +711,64 @@ async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false, ra
     session.lastSentAt = new Date();
     session.save().catch(() => {});
 
-    // Fast 0ms in-memory saint retrieval from canonical saintService
+    // Retrieve unified daily content and authentic liturgical saint data
+    const { getSaintForDate } = require('../data/catholic_saints_calendar');
     const { getDailySaint } = require('../services/saintService');
-    const sData = getDailySaint();
-    const dailyContent = {
-      dateKey: sData.date || new Date().toISOString().slice(0, 10),
-      saint: sData,
-      saintName: sData.nameEn || sData.name,
-      saintNameTa: sData.nameTa || sData.tamilName,
-      saintImage: sData.image
+    const cachedDaily = await getCachedDailyContent();
+    let sData = cachedDaily?.saint || getDailySaint();
+
+    const dateKey = cachedDaily?.dateKey || sData?.date || new Date().toISOString().slice(0, 10);
+    const fallbackSaint = getSaintForDate(dateKey);
+
+    let saintNameEn = sData?.nameEn || sData?.englishName || sData?.name || cachedDaily?.saintName;
+    if (!saintNameEn || saintNameEn.toLowerCase().includes('saint of the day') || saintNameEn.toLowerCase().includes('today\'s saint')) {
+      saintNameEn = fallbackSaint?.name || 'Saint of the Day';
+    }
+
+    let saintNameTa = sData?.nameTa || sData?.tamilName || cachedDaily?.saintNameTa;
+    if (!saintNameTa || saintNameTa.trim() === 'இன்றைய புனிதர்' || saintNameTa.trim() === 'புனிதர்') {
+      saintNameTa = fallbackSaint?.nameTa || saintNameEn;
+    }
+
+    const isBoilerplate = (text) => /Every day, we will|Other Sts whose feast day|December 31|டிசம்பர் 31|ஒவ்வொரு நாளும்|பீடிகாபிகேஷன்|Saints are special people in the Catholic faith|beacons of light|கலங்கரை விளக்கங்களாக/i.test(text || '');
+
+    let descEn = sData?.descriptionEn || sData?.description || '';
+    if (isBoilerplate(descEn) || !descEn) {
+      descEn = fallbackSaint?.description || '';
+    }
+
+    let descTa = sData?.descriptionTa || '';
+    if (isBoilerplate(descTa) || !descTa || !/[\u0B80-\u0BFF]/.test(descTa)) {
+      descTa = fallbackSaint?.descriptionTa || '';
+    }
+
+    const saintImage = sData?.image || cachedDaily?.saintImage || fallbackSaint?.image || null;
+
+    sData = {
+      ...sData,
+      name: saintNameEn,
+      nameEn: saintNameEn,
+      englishName: saintNameEn,
+      nameTa: saintNameTa,
+      tamilName: saintNameTa,
+      description: descEn,
+      descriptionEn: descEn,
+      descriptionTa: descTa,
+      image: saintImage,
+      imageUrl: saintImage,
+      remoteUrl: saintImage
     };
 
-    const dateKey = dailyContent.dateKey;
-    const hasTa = Boolean(sData?.descriptionTa && /[\u0B80-\u0BFF]/.test(sData.descriptionTa));
+    const dailyContent = {
+      ...cachedDaily,
+      dateKey,
+      saint: sData,
+      saintName: saintNameEn,
+      saintNameTa: saintNameTa,
+      saintImage
+    };
+
+    const hasTa = Boolean(descTa && /[\u0B80-\u0BFF]/.test(descTa));
     console.log(`[SaintOfDay] Date: ${dateKey}`);
     console.log(`[SaintOfDay] Source: ${sData?.imageSource || 'Vatican News'}`);
     console.log(`[SaintOfDay] User chosen Daily Catholic Content language: ${contentLang}`);

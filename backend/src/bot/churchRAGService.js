@@ -319,19 +319,41 @@ function extractQueryIntents(rawText) {
 // Saint of the Day Section
 function buildSaintSection(dailyContent, isTamil, contentLang = null) {
   const lang = contentLang ? normalizeContentLanguage(contentLang) : (isTamil ? 'ta' : 'en');
+  const { getSaintForDate } = require('../data/catholic_saints_calendar');
+  const fallbackSaint = getSaintForDate(dailyContent?.dateKey || new Date());
+
   const saintData = dailyContent?.saint || dailyContent?.saintOfTheDay || getDailySaint(new Date());
-  const saintNameEn = saintData?.nameEn || saintData?.nameEnglish || saintData?.name || dailyContent?.saintName || 'Saint of the Day';
-  const saintNameTa = saintData?.nameTa || saintData?.nameTamil || saintData?.tamilName || dailyContent?.saintNameTa || saintNameEn;
-  const descEn = (saintData?.descriptionEn || saintData?.description || saintData?.descriptionEnglish || dailyContent?.saintDescription || '').trim();
-  const descTaRaw = (saintData?.descriptionTa || saintData?.descriptionTamil || dailyContent?.saintDescriptionTa || '').trim();
+
+  let saintNameEn = saintData?.nameEn || saintData?.nameEnglish || saintData?.name || dailyContent?.saintName;
+  if (!saintNameEn || saintNameEn.toLowerCase().includes('saint of the day') || saintNameEn.toLowerCase().includes('today\'s saint')) {
+    saintNameEn = fallbackSaint?.name || 'Saint of the Day';
+  }
+
+  let saintNameTa = saintData?.nameTa || saintData?.nameTamil || saintData?.tamilName || dailyContent?.saintNameTa;
+  if (!saintNameTa || saintNameTa.trim() === 'இன்றைய புனிதர்' || saintNameTa.trim() === 'புனிதர்') {
+    saintNameTa = fallbackSaint?.nameTa || saintNameEn;
+  }
+
+  const isBoilerplate = (text) => /Every day, we will|Other Sts whose feast day|December 31|டிசம்பர் 31|ஒவ்வொரு நாளும்|பீடிகாபிகேஷன்|Saints are special people in the Catholic faith|beacons of light|கலங்கரை விளக்கங்களாக/i.test(text || '');
+
+  let descEn = (saintData?.descriptionEn || saintData?.description || saintData?.descriptionEnglish || dailyContent?.saintDescription || '').trim();
+  if (isBoilerplate(descEn) || !descEn) {
+    descEn = fallbackSaint?.description || '';
+  }
+
+  let descTaRaw = (saintData?.descriptionTa || saintData?.descriptionTamil || dailyContent?.saintDescriptionTa || '').trim();
+  if (isBoilerplate(descTaRaw) || !descTaRaw) {
+    descTaRaw = fallbackSaint?.descriptionTa || '';
+  }
+
   const hasTamil = Boolean(descTaRaw && /[\u0B80-\u0BFF]/.test(descTaRaw));
-  const descTa = hasTamil ? descTaRaw : '';
+  const descTa = hasTamil ? descTaRaw : (fallbackSaint?.descriptionTa || '');
   const feastDayEn = saintData?.feastDayEn || saintData?.feastDay || dailyContent?.formattedDate || '';
   const feastDayTa = saintData?.feastDayTa || dailyContent?.formattedDateTa || feastDayEn;
-  const saintImageUrl = dailyContent?.saintImage || saintData?.image || saintData?.imageUrl;
+  const saintImageUrl = dailyContent?.saintImage || saintData?.image || saintData?.imageUrl || fallbackSaint?.image;
 
-  const titleEn = saintData?.titleEn || saintData?.feastTitle;
-  const titleTa = saintData?.titleTa || saintData?.feastTitleTa;
+  const titleEn = saintData?.titleEn || saintData?.feastTitle || fallbackSaint?.feastTitle || saintNameEn;
+  const titleTa = saintData?.titleTa || saintData?.feastTitleTa || fallbackSaint?.feastTitleTa || saintNameTa;
 
   if (lang === 'en') {
     let body = `👑 *${saintNameEn}*\n\n`;
