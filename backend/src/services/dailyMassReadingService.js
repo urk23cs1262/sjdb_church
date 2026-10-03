@@ -684,18 +684,30 @@ async function fetchAndStoreTamilReading(dateStr) {
   for (const url of candidateUrls) {
     try {
       console.log(`[TAMIL MASS] Attempting fetch from: ${url}`);
-      const res = await axios.get(url, {
-        httpsAgent,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'ta,en-US;q=0.9,en;q=0.8',
-          'Cache-Control': 'no-cache'
-        },
-        timeout: 30000
-      });
+      let res = null;
+      try {
+        res = await axios.get(url, {
+          httpsAgent,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'ta,en-US;q=0.9,en;q=0.8',
+            'Cache-Control': 'no-cache'
+          },
+          timeout: 15000
+        });
+      } catch (directErr) {
+        console.warn(`[TAMIL MASS] Direct fetch failed for ${url} (${directErr.message}). Trying reader proxy...`);
+        res = await axios.get(`https://r.jina.ai/${url}`, {
+          headers: {
+            'X-Return-Format': 'html',
+            'Accept': 'text/html,application/xhtml+xml'
+          },
+          timeout: 30000
+        });
+      }
 
-      if (res.data && typeof res.data === 'string' && res.data.length > 500) {
+      if (res && res.data && typeof res.data === 'string' && res.data.length > 500) {
         const candidateParsed = parseTamilMassReading(res.data, dateStr, url);
         const isValid = validateTamilMassReading(candidateParsed, url, dateStr);
         if (isValid) {
@@ -707,7 +719,7 @@ async function fetchAndStoreTamilReading(dateStr) {
         }
       }
     } catch (err) {
-      console.warn(`[TAMIL MASS] Fetch failed for ${url}:`, err.message);
+      console.warn(`[TAMIL MASS] Fetch and proxy failed for ${url}:`, err.message);
       lastError = err;
     }
   }

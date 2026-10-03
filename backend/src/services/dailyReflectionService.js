@@ -302,6 +302,25 @@ async function fetchAndStoreDailyReflection(dateStr) {
     }
   }
 
+  // Reader proxy fallback if direct scraping was blocked (e.g. Cloudflare 403 on cloud hosting)
+  if (!resData) {
+    try {
+      console.log(`[TAMIL DAILY REFLECTION] Direct scraping blocked/failed. Attempting reader proxy for: ${usedUrl}`);
+      const resJina = await axios.get(`https://r.jina.ai/${usedUrl}`, {
+        headers: {
+          'X-Return-Format': 'html',
+          'Accept': 'text/html,application/xhtml+xml'
+        },
+        timeout: 30000
+      });
+      if (resJina.data && typeof resJina.data === 'string' && resJina.data.length > 500) {
+        resData = resJina.data;
+      }
+    } catch (jinaErr) {
+      console.warn(`[TAMIL DAILY REFLECTION] Reader proxy fetch also failed:`, jinaErr.message);
+    }
+  }
+
   const sectionFound = !!(resData && resData.includes('இன்றைய சிந்தனை'));
   console.log(`Section found: ${sectionFound}`);
 
