@@ -100,7 +100,7 @@ const maintenanceSettingSchema = new mongoose.Schema({
     }
   },
 
-  // Analytics
+  // Access Attempts Counter
   accessAttemptsCount: { type: Number, default: 0 },
 
   // Maintenance Logs History

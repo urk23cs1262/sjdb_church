@@ -38,9 +38,6 @@ export default defineConfig(({ mode }) => {
               if (id.includes('jspdf') || id.includes('html-to-image')) {
                 return 'vendor-pdf';
               }
-              if (id.includes('recharts')) {
-                return 'vendor-charts';
-              }
               if (id.includes('framer-motion') || id.includes('swiper') || id.includes('yet-another-react-lightbox') || id.includes('canvas-confetti')) {
                 return 'vendor-ui';
               }

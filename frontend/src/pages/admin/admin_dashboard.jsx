@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { FiUsers, FiBriefcase, FiVolume2, FiBookOpen, FiCalendar, FiFileText, FiMessageSquare, FiDollarSign, FiSettings, FiImage, FiBell, FiGift, FiHeart, FiClock, FiTool, FiRefreshCw, FiShield, FiDownload, FiCheckCircle, FiKey } from 'react-icons/fi';
 import { SiWhatsapp } from 'react-icons/si';
 import { GiSpellBook, GiChurch, GiCrucifix, GiPrayer } from 'react-icons/gi';
@@ -9,7 +8,6 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { SectionLoader } from '../../components/common/common_loader';
 import { useNotifications } from '../../context/context_notification_context';
-import AdminAnalyticsSection from '../../components/admin/admin_analytics_section';
 
 const COLORS = ['#d4a017', '#1e3a8a', '#800020', '#059669', '#7c3aed'];
 
@@ -356,8 +354,6 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* Dedicated Analytics Section with Clean Bar Charts */}
-            <AdminAnalyticsSection />
 
             {/* Dedicated Admin Security & User Activity Notification System Section */}
             <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl border border-gray-100 mb-6 sm:mb-8 min-w-0 max-w-full overflow-hidden">

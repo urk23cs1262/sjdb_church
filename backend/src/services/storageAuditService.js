@@ -26,7 +26,6 @@ const Announcement = require('../models/Announcement');
 const SiteSettings = require('../models/SiteSettings');
 const Notification = require('../models/Notification');
 const SecurityAuditLog = require('../models/SecurityAuditLog');
-const PageView = require('../models/PageView');
 const DailyNotificationLog = require('../models/DailyNotificationLog');
 const BirthdayLog = require('../models/BirthdayLog');
 const CelebrationLog = require('../models/CelebrationLog');
@@ -399,14 +398,12 @@ const deleteGridFSFiles = async (fileIds = [], adminUser = null) => {
  */
 const getLogsOverview = async () => {
   const [
-    pageviewsCount,
     dailyNotifsCount,
     birthdayLogsCount,
     celebrationLogsCount,
     jobLogsCount,
     maintNotifsCount
   ] = await Promise.all([
-    PageView.countDocuments().catch(() => 0),
     DailyNotificationLog.countDocuments().catch(() => 0),
     BirthdayLog.countDocuments().catch(() => 0),
     CelebrationLog.countDocuments().catch(() => 0),
@@ -414,15 +411,13 @@ const getLogsOverview = async () => {
     MaintenanceNotificationLog.countDocuments().catch(() => 0)
   ]);
 
-  const [oldestPageview, oldestDailyNotif, oldestBirthdayLog] = await Promise.all([
-    PageView.findOne().sort({ createdAt: 1 }).select('createdAt').lean().catch(() => null),
+  const [oldestDailyNotif, oldestBirthdayLog] = await Promise.all([
     DailyNotificationLog.findOne().sort({ createdAt: 1 }).select('createdAt').lean().catch(() => null),
     BirthdayLog.findOne().sort({ createdAt: 1 }).select('createdAt').lean().catch(() => null)
   ]);
 
   return {
     collections: [
-      { name: 'pageviews', label: 'Page Views Analytics', count: pageviewsCount, oldestDate: oldestPageview?.createdAt || null, retentionCandidate: true },
       { name: 'dailyNotificationLogs', label: 'Daily Notification Logs', count: dailyNotifsCount, oldestDate: oldestDailyNotif?.createdAt || null, retentionCandidate: true },
       { name: 'birthdayLogs', label: 'Birthday Delivery Logs', count: birthdayLogsCount, oldestDate: oldestBirthdayLog?.createdAt || null, retentionCandidate: true },
       { name: 'celebrationLogs', label: 'Celebration Delivery Logs', count: celebrationLogsCount, oldestDate: null, retentionCandidate: true },
@@ -439,15 +434,13 @@ const cleanupOldLogs = async (retentionDays = 90, adminUser = null) => {
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - Number(retentionDays));
 
-  const [pageviewsRes, dailyNotifsRes, birthdayRes, celebrationRes] = await Promise.all([
-    PageView.deleteMany({ createdAt: { $lt: cutoffDate } }),
+  const [dailyNotifsRes, birthdayRes, celebrationRes] = await Promise.all([
     DailyNotificationLog.deleteMany({ createdAt: { $lt: cutoffDate } }),
     BirthdayLog.deleteMany({ createdAt: { $lt: cutoffDate } }),
     CelebrationLog.deleteMany({ createdAt: { $lt: cutoffDate } })
   ]);
 
   const totalDeleted =
-    (pageviewsRes.deletedCount || 0) +
     (dailyNotifsRes.deletedCount || 0) +
     (birthdayRes.deletedCount || 0) +
     (celebrationRes.deletedCount || 0);
@@ -464,7 +457,6 @@ const cleanupOldLogs = async (retentionDays = 90, adminUser = null) => {
         retentionDays,
         cutoffDate,
         deleted: {
-          pageviews: pageviewsRes.deletedCount,
           dailyNotificationLogs: dailyNotifsRes.deletedCount,
           birthdayLogs: birthdayRes.deletedCount,
           celebrationLogs: celebrationRes.deletedCount
@@ -479,7 +471,6 @@ const cleanupOldLogs = async (retentionDays = 90, adminUser = null) => {
     retentionDays,
     cutoffDate,
     deletedBreakdown: {
-      pageviews: pageviewsRes.deletedCount || 0,
       dailyNotificationLogs: dailyNotifsRes.deletedCount || 0,
       birthdayLogs: birthdayRes.deletedCount || 0,
       celebrationLogs: celebrationRes.deletedCount || 0

@@ -124,9 +124,8 @@ async function runTestSuite() {
   await itAsync('getLogsOverview returns log collections metrics', async () => {
     const logs = await getLogsOverview();
     assert(Array.isArray(logs.collections), 'collections must be an array');
-    assert(logs.collections.length > 0, 'Must have log collections listed');
-    const pageviews = logs.collections.find(c => c.name === 'pageviews');
-    assert(pageviews !== undefined, 'pageviews collection must be present');
+    const dailyNotifs = logs.collections.find(c => c.name === 'dailyNotificationLogs');
+    assert(dailyNotifs !== undefined, 'dailyNotificationLogs collection must be present');
   });
 
   console.log('\n' + '='.repeat(80));

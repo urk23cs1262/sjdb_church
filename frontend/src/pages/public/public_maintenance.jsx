@@ -44,7 +44,7 @@ export default function Maintenance({ isPreview = false }) {
     fetchStatus();
 
     if (!isPreview) {
-      // Track access attempt for analytics
+      // Track access attempt during maintenance
       api.post('/maintenance/track-attempt').catch(() => { });
 
       // Periodic check every 15s to auto-redirect when admin disables maintenance

@@ -188,7 +188,6 @@ app.use('/api/permission-requests', require('./routes/permissionRequests'));
 app.use('/api/security', require('./routes/security'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/admin/storage', require('./routes/storageRoutes'));
-app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/ai', require('./routes/ai'));
 app.use('/api/files', require('./routes/fileRoutes'));
 app.use('/api/upload', require('./routes/upload'));

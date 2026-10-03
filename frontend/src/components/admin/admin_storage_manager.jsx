@@ -456,10 +456,10 @@ export default function StorageManager() {
             <div>
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
                 <FiClock className="text-indigo-600" />
-                <span>System Logs & Analytics Retention Policy</span>
+                <span>System Logs & Retention Policy</span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Automatically purges aged pageview analytics and notification logs older than your configured threshold without deleting live user activity or security incidents.
+                Automatically purges aged notification logs and delivery history older than your configured threshold without deleting live user activity or security incidents.
               </p>
             </div>
 

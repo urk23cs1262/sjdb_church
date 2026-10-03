@@ -103,12 +103,12 @@ const Maintenance = lazy(() => import('./pages/public/public_maintenance'));
 const AdminMaintenance = lazy(() => import('./pages/admin/admin_maintenance'));
 
 import MaintenanceGuard from './components/common/common_maintenance_guard';
-import PageTracker from './components/common/common_page_tracker';
+
 
 function AppRoutes() {
   return (
     <BrowserRouter>
-      <PageTracker />
+
       <ScrollToTop />
       <WhatsAppWidget />
       <PWAInstallModal />
