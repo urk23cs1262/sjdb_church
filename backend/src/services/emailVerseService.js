@@ -98,15 +98,15 @@ function formatEmailVerseCard(verse, options = {}) {
 
   return `
 <!-- DYNAMIC BILINGUAL BIBLE VERSE CARD -->
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 22px 0 10px 0; width: 100%; border-collapse: separate;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 18px auto 10px auto; width: 100% !important; max-width: 100% !important; min-width: 100% !important; table-layout: fixed !important; border-collapse: separate !important; box-sizing: border-box !important;">
   <tr>
-    <td style="background: linear-gradient(135deg, #fffdf7 0%, #fef3c7 100%); border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 12px; padding: 16px 18px; box-shadow: 0 2px 8px rgba(217, 119, 6, 0.08); font-family: 'Segoe UI', Roboto, 'Noto Sans Tamil', 'Latha', 'Vijaya', Arial Unicode MS, Arial, sans-serif; text-align: left; box-sizing: border-box;">
-      <div style="font-size: 11px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;">
+    <td style="background: linear-gradient(135deg, #fffdf7 0%, #fef3c7 100%); border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 12px; padding: 14px 16px; box-shadow: 0 2px 8px rgba(217, 119, 6, 0.08); font-family: 'Segoe UI', Roboto, 'Noto Sans Tamil', 'Latha', 'Vijaya', Arial Unicode MS, Arial, sans-serif; text-align: left; box-sizing: border-box !important; width: 100% !important; max-width: 100% !important; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important; hyphens: auto;">
+      <div style="font-size: 11px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.8px; margin: 0 0 8px 0; line-height: 1.4; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important;">
         HOLY SCRIPTURE • Daily Scripture • Prayer${category}
       </div>
-      ${en ? `<p style="margin: 0 0 8px 0; font-size: 13.5px; font-style: italic; color: #1e293b; line-height: 1.6; font-family: 'Segoe UI', Roboto, Georgia, serif;">"${en}"</p>` : ''}
-      ${ta ? `<p style="margin: 0 0 10px 0; font-size: 13px; color: #78350f; line-height: 1.6; font-family: 'Noto Sans Tamil', 'Latha', 'Vijaya', 'Segoe UI', Roboto, Arial Unicode MS, sans-serif;">"${ta}"</p>` : ''}
-      <div style="font-size: 12px; font-weight: 800; color: #b45309; text-align: right;">
+      ${en ? `<p style="margin: 0 0 8px 0; font-size: 13.5px; font-style: italic; color: #1e293b; line-height: 1.6; font-family: 'Segoe UI', Roboto, Georgia, serif; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important; hyphens: auto; max-width: 100%;">"${en}"</p>` : ''}
+      ${ta ? `<p style="margin: 0 0 10px 0; font-size: 13px; color: #78350f; line-height: 1.6; font-family: 'Noto Sans Tamil', 'Latha', 'Vijaya', 'Segoe UI', Roboto, Arial Unicode MS, sans-serif; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important; hyphens: auto; max-width: 100%;">"${ta}"</p>` : ''}
+      <div style="font-size: 12px; font-weight: 800; color: #b45309; text-align: right; line-height: 1.4; margin: 0; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important;">
         — ${ref}
       </div>
     </td>
@@ -137,6 +137,7 @@ async function injectFreshBibleVerseIntoHtml(html) {
 
   const verse = await getFreshBibleVerse();
   const verseCard = formatEmailVerseCard(verse);
+  const wrappedVerseCard = `<div style="width: 100% !important; max-width: 100% !important; box-sizing: border-box !important; margin: 0 auto; clear: both; overflow: hidden;">\n${verseCard}\n</div>`;
 
   // 2. Explicit placeholder (highest priority)
   if (html.includes('<!-- DYNAMIC_BIBLE_VERSE -->')) {
@@ -160,7 +161,7 @@ async function injectFreshBibleVerseIntoHtml(html) {
   const tableFooterPattern = /(<!--\s*(?:Footer|FOOTER|footer|EMAIL FOOTER|FOOTER STATEMENT)\s*-->\s*<tr>|<tr[^>]*>\s*<td[^>]*background(?:-color)?:\s*(?:#f8fafc|#fafafa|#0f172a|#111827)[^>]*>[\s\S]*?(?:St\. John de Britto|Parish Office|May God bless|Computer Generated Receipt))/i;
   const tableFooterMatch = html.match(tableFooterPattern);
   if (tableFooterMatch && tableFooterMatch.index !== undefined) {
-    const tableRowCard = `<tr><td style="padding: 10px 24px 18px 24px;">\n${verseCard}\n</td></tr>\n`;
+    const tableRowCard = `<tr><td style="padding: 6px 16px 14px 16px; width: 100% !important; max-width: 100% !important; box-sizing: border-box !important;">\n${verseCard}\n</td></tr>\n`;
     return html.slice(0, tableFooterMatch.index) + tableRowCard + html.slice(tableFooterMatch.index);
   }
 
@@ -179,13 +180,13 @@ async function injectFreshBibleVerseIntoHtml(html) {
       // Insert inside the content container, right before its closing </div>
       return (
         beforeFooter.slice(0, lastClosingDiv) +
-        `\n${verseCard}\n` +
+        `\n${wrappedVerseCard}\n` +
         beforeFooter.slice(lastClosingDiv) +
         afterFooter
       );
     } else {
       // If no </div> before footer, insert directly before footer
-      return beforeFooter + `\n${verseCard}\n` + afterFooter;
+      return beforeFooter + `\n${wrappedVerseCard}\n` + afterFooter;
     }
   }
 
@@ -198,20 +199,20 @@ async function injectFreshBibleVerseIntoHtml(html) {
     if (prevDivIndex !== -1) {
       return (
         beforeLastDiv.slice(0, prevDivIndex) +
-        `\n${verseCard}\n` +
+        `\n${wrappedVerseCard}\n` +
         beforeLastDiv.slice(prevDivIndex) +
         html.slice(lastDivIndex)
       );
     }
-    return html.slice(0, lastDivIndex) + `\n${verseCard}\n` + html.slice(lastDivIndex);
+    return html.slice(0, lastDivIndex) + `\n${wrappedVerseCard}\n` + html.slice(lastDivIndex);
   }
 
   // 7. Last fallback: before </body> or append
   if (html.includes('</body>')) {
-    return html.replace('</body>', `${verseCard}\n</body>`);
+    return html.replace('</body>', `${wrappedVerseCard}\n</body>`);
   }
 
-  return html + '\n' + verseCard;
+  return html + '\n' + wrappedVerseCard;
 }
 
 module.exports = {

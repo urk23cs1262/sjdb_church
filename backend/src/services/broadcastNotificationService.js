@@ -268,33 +268,35 @@ _SJDB Connect_`;
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { margin: 0; padding: 0; background-color: #f8fafc; font-family: 'Segoe UI', -apple-system, Roboto, Helvetica, Arial, sans-serif; }
-    .box { max-width: 620px; margin: 25px auto; background: #ffffff; border-radius: 18px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.06); }
-    .header { background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); padding: 28px 24px; text-align: center; color: #ffffff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; background-color: #f8fafc; font-family: 'Segoe UI', -apple-system, Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+    .box { width: 100%; max-width: 620px; margin: 20px auto; background: #ffffff; border-radius: 18px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.06); box-sizing: border-box; }
+    .header { background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); padding: 28px 20px; text-align: center; color: #ffffff; box-sizing: border-box; }
     .logo { width: 70px; height: 70px; margin: 0 auto 10px; border-radius: 50%; background: #ffffff; overflow: hidden; border: 3px solid #fbbf24; }
-    .content { padding: 28px 24px; color: #1e293b; }
-    .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin: 16px 0; }
+    .content { padding: 24px 18px; color: #1e293b; box-sizing: border-box; width: 100%; }
+    .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin: 16px 0; box-sizing: border-box; }
     .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #e2e8f0; font-size: 13px; }
     .row:last-child { border-bottom: none; }
-    .btn { display: inline-block; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff !important; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 800; font-size: 14px; }
-    .footer { background: #0f172a; padding: 16px; text-align: center; color: #94a3b8; font-size: 11.5px; }
+    .btn { display: inline-block; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 12px; font-weight: 800; font-size: 14px; max-width: 100%; box-sizing: border-box; text-align: center; word-break: break-word; }
+    .footer { background: #0f172a; padding: 16px; text-align: center; color: #94a3b8; font-size: 11.5px; box-sizing: border-box; }
   </style>
 </head>
-<body>
-  <div class="box">
-    <div class="header">
+<body style="margin: 0; padding: 0; background-color: #f8fafc;">
+  <div class="box" style="width: 100%; max-width: 620px; margin: 20px auto; background: #ffffff; border-radius: 18px; overflow: hidden; border: 1px solid #e2e8f0; box-sizing: border-box;">
+    <div class="header" style="background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); padding: 28px 20px; text-align: center; color: #ffffff; box-sizing: border-box;">
       <div class="logo">
         <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width:100%; height:100%; object-fit:cover; display:block;" />
       </div>
       <h1 style="color:#fbbf24; margin:0 0 4px; font-size:20px; font-weight:800;">St. John de Britto Church</h1>
       <p style="margin:0; font-size:12px; color:#cbd5e1; font-weight:600;">PARISH EVENT NOTICE</p>
     </div>
-    <div class="content">
+    <div class="content" style="padding: 24px 18px; color: #1e293b; box-sizing: border-box; width: 100%;">
       <h2 style="color:#1e3a8a; margin:0 0 10px; font-size:18px; font-weight:800;">${cleanTitle}</h2>
       <p style="margin:0 0 16px; color:#475569; font-size:14px; line-height:1.5;">${desc || 'You are warmly invited to this parish event.'}</p>
       
-      <div class="card">
+      <div class="card" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin: 16px 0; box-sizing: border-box;">
         ${dateFormatted ? `<div class="row"><strong>Date:</strong> <span>${dateFormatted}</span></div>` : ''}
         ${timeVal ? `<div class="row"><strong>Time:</strong> <span>${timeVal}</span></div>` : ''}
         ${venueVal ? `<div class="row"><strong>Venue:</strong> <span>${venueVal}</span></div>` : ''}
@@ -302,11 +304,11 @@ _SJDB Connect_`;
         <div class="row"><strong>Status:</strong> <span style="font-weight:700; color:${action === 'cancelled' ? '#dc2626' : '#16a34a'};">${action === 'cancelled' ? 'Cancelled' : action === 'updated' ? 'Updated' : 'Active'}</span></div>
       </div>
 
-      <div style="text-align:center; margin:24px 0 10px;">
-        <a href="${eventUrl}" class="btn">👉 View Event Details & Calendar →</a>
+      <div style="text-align:center; margin:24px 0 14px;">
+        <a href="${eventUrl}" class="btn" style="display: inline-block; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 12px; font-weight: 800; font-size: 14px; max-width: 100%; box-sizing: border-box; text-align: center; word-break: break-word;">👉 View Event Details & Calendar →</a>
       </div>
     </div>
-    <div class="footer">
+    <div class="footer" style="background: #0f172a; padding: 16px; text-align: center; color: #94a3b8; font-size: 11.5px; box-sizing: border-box;">
       <p style="margin:0 0 4px; font-weight:700; color:#cbd5e1;">St. John de Britto Church, Kalayarkoil - 630551</p>
       <p style="margin:0; color:#64748b;">Automated Parish Event Notification</p>
     </div>
@@ -438,35 +440,37 @@ _SJDB Connect_`;
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { margin: 0; padding: 0; background-color: #f8fafc; font-family: 'Segoe UI', -apple-system, Roboto, Helvetica, Arial, sans-serif; }
-    .box { max-width: 620px; margin: 25px auto; background: #ffffff; border-radius: 18px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.06); }
-    .header { background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); padding: 28px 24px; text-align: center; color: #ffffff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; background-color: #f8fafc; font-family: 'Segoe UI', -apple-system, Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+    .box { width: 100%; max-width: 620px; margin: 20px auto; background: #ffffff; border-radius: 18px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.06); box-sizing: border-box; }
+    .header { background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); padding: 28px 20px; text-align: center; color: #ffffff; box-sizing: border-box; }
     .logo { width: 70px; height: 70px; margin: 0 auto 10px; border-radius: 50%; background: #ffffff; overflow: hidden; border: 3px solid #fbbf24; }
-    .content { padding: 28px 24px; color: #1e293b; }
-    .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin: 16px 0; font-size: 14px; line-height: 1.6; }
-    .btn { display: inline-block; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff !important; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 800; font-size: 14px; }
-    .footer { background: #0f172a; padding: 16px; text-align: center; color: #94a3b8; font-size: 11.5px; }
+    .content { padding: 24px 18px; color: #1e293b; box-sizing: border-box; width: 100%; }
+    .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin: 16px 0; font-size: 14px; line-height: 1.6; box-sizing: border-box; }
+    .btn { display: inline-block; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 12px; font-weight: 800; font-size: 14px; max-width: 100%; box-sizing: border-box; text-align: center; word-break: break-word; }
+    .footer { background: #0f172a; padding: 16px; text-align: center; color: #94a3b8; font-size: 11.5px; box-sizing: border-box; }
   </style>
 </head>
-<body>
-  <div class="box">
-    <div class="header">
+<body style="margin: 0; padding: 0; background-color: #f8fafc;">
+  <div class="box" style="width: 100%; max-width: 620px; margin: 20px auto; background: #ffffff; border-radius: 18px; overflow: hidden; border: 1px solid #e2e8f0; box-sizing: border-box;">
+    <div class="header" style="background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); padding: 28px 20px; text-align: center; color: #ffffff; box-sizing: border-box;">
       <div class="logo">
         <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width:100%; height:100%; object-fit:cover; display:block;" />
       </div>
       <h1 style="color:#fbbf24; margin:0 0 4px; font-size:20px; font-weight:800;">St. John de Britto Church</h1>
       <p style="margin:0; font-size:12px; color:#cbd5e1; font-weight:600;">PARISH ANNOUNCEMENT</p>
     </div>
-    <div class="content">
+    <div class="content" style="padding: 24px 18px; color: #1e293b; box-sizing: border-box; width: 100%;">
       <h2 style="color:#1e3a8a; margin:0 0 12px; font-size:18px; font-weight:800;">${cleanTitle}</h2>
-      <div class="card">${content.replace(/\n/g, '<br/>')}</div>
+      <div class="card" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin: 16px 0; font-size: 14px; line-height: 1.6; box-sizing: border-box;">${content.replace(/\n/g, '<br/>')}</div>
 
-      <div style="text-align:center; margin:24px 0 10px;">
-        <a href="${announcementUrl}" class="btn">👉 Read Full Announcement on Website →</a>
+      <div style="text-align:center; margin:24px 0 14px;">
+        <a href="${announcementUrl}" class="btn" style="display: inline-block; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 12px; font-weight: 800; font-size: 14px; max-width: 100%; box-sizing: border-box; text-align: center; word-break: break-word;">👉 Read Full Announcement on Website →</a>
       </div>
     </div>
-    <div class="footer">
+    <div class="footer" style="background: #0f172a; padding: 16px; text-align: center; color: #94a3b8; font-size: 11.5px; box-sizing: border-box;">
       <p style="margin:0 0 4px; font-weight:700; color:#cbd5e1;">St. John de Britto Church, Kalayarkoil - 630551</p>
       <p style="margin:0; color:#64748b;">Official Parish Communication</p>
     </div>
@@ -653,44 +657,46 @@ _SJDB Connect_`;
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
-    body { margin: 0; padding: 0; background-color: #f8fafc; font-family: 'Segoe UI', -apple-system, Roboto, Helvetica, Arial, sans-serif; }
-    .box { max-width: 620px; margin: 25px auto; background: #ffffff; border-radius: 18px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.06); }
-    .header { background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); padding: 28px 24px; text-align: center; color: #ffffff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; background-color: #f8fafc; font-family: 'Segoe UI', -apple-system, Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+    .box { width: 100%; max-width: 620px; margin: 20px auto; background: #ffffff; border-radius: 18px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.06); box-sizing: border-box; }
+    .header { background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); padding: 28px 20px; text-align: center; color: #ffffff; box-sizing: border-box; }
     .logo { width: 70px; height: 70px; margin: 0 auto 10px; border-radius: 50%; background: #ffffff; overflow: hidden; border: 3px solid #fbbf24; }
-    .content { padding: 28px 24px; color: #1e293b; }
-    .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin: 16px 0; }
+    .content { padding: 24px 18px; color: #1e293b; box-sizing: border-box; width: 100%; }
+    .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin: 16px 0; box-sizing: border-box; }
     .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #e2e8f0; font-size: 13px; }
     .row:last-child { border-bottom: none; }
-    .btn { display: inline-block; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff !important; text-decoration: none; padding: 14px 28px; border-radius: 12px; font-weight: 800; font-size: 14px; }
-    .footer { background: #0f172a; padding: 16px; text-align: center; color: #94a3b8; font-size: 11.5px; }
+    .btn { display: inline-block; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 12px; font-weight: 800; font-size: 14px; max-width: 100%; box-sizing: border-box; text-align: center; word-break: break-word; }
+    .footer { background: #0f172a; padding: 16px; text-align: center; color: #94a3b8; font-size: 11.5px; box-sizing: border-box; }
   </style>
 </head>
-<body>
-  <div class="box">
-    <div class="header">
+<body style="margin: 0; padding: 0; background-color: #f8fafc;">
+  <div class="box" style="width: 100%; max-width: 620px; margin: 20px auto; background: #ffffff; border-radius: 18px; overflow: hidden; border: 1px solid #e2e8f0; box-sizing: border-box;">
+    <div class="header" style="background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); padding: 28px 20px; text-align: center; color: #ffffff; box-sizing: border-box;">
       <div class="logo">
         <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width:100%; height:100%; object-fit:cover; display:block;" />
       </div>
       <h1 style="color:#fbbf24; margin:0 0 4px; font-size:20px; font-weight:800;">St. John de Britto Church</h1>
       <p style="margin:0; font-size:12px; color:#cbd5e1; font-weight:600;">PORTAL MAINTENANCE NOTICE</p>
     </div>
-    <div class="content">
+    <div class="content" style="padding: 24px 18px; color: #1e293b; box-sizing: border-box; width: 100%;">
       <h2 style="color:#1e3a8a; margin:0 0 10px; font-size:18px; font-weight:800;">${title}</h2>
       <p style="margin:0 0 16px; color:#475569; font-size:14px; line-height:1.5;">${messageText}</p>
       
-      <div class="card">
+      <div class="card" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin: 16px 0; box-sizing: border-box;">
         <div class="row"><strong>Status:</strong> <span style="font-weight:700; color:${action === 'completed' ? '#16a34a' : '#d97706'};">${action === 'completed' ? 'Completed (Online)' : action === 'started' ? 'In Progress' : 'Scheduled'}</span></div>
         <div class="row"><strong>Category:</strong> <span>${category}</span></div>
         <div class="row"><strong>Window Start:</strong> <span>${startTimeFormatted}</span></div>
         <div class="row"><strong>Expected Completion:</strong> <span>${endTimeFormatted}</span></div>
       </div>
 
-      <div style="text-align:center; margin:24px 0 10px;">
-        <a href="${maintenanceUrl}" class="btn">👉 View Maintenance Notice Portal →</a>
+      <div style="text-align:center; margin:24px 0 14px;">
+        <a href="${maintenanceUrl}" class="btn" style="display: inline-block; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 12px; font-weight: 800; font-size: 14px; max-width: 100%; box-sizing: border-box; text-align: center; word-break: break-word;">👉 View Maintenance Notice Portal →</a>
       </div>
     </div>
-    <div class="footer">
+    <div class="footer" style="background: #0f172a; padding: 16px; text-align: center; color: #94a3b8; font-size: 11.5px; box-sizing: border-box;">
       <p style="margin:0 0 4px; font-weight:700; color:#cbd5e1;">St. John de Britto Church, Kalayarkoil - 630551</p>
       <p style="margin:0; color:#64748b;">Church Technical Administration</p>
     </div>

@@ -214,20 +214,20 @@ function generateDailyNotificationHtml({
                     ` : '')}
 
                     <!-- Verse Text Card -->
-                    <div style="background: linear-gradient(135deg, #FFFDF7 0%, #FEF3C7 100%); border: 1px solid #FDE68A; border-left: 4px solid #D97706; border-radius: 12px; padding: 18px 20px; box-shadow: 0 2px 8px rgba(217, 119, 6, 0.08); font-family: 'Segoe UI', Roboto, 'Noto Sans Tamil', 'Latha', 'Vijaya', Arial, sans-serif;">
+                    <div style="background: linear-gradient(135deg, #FFFDF7 0%, #FEF3C7 100%); border: 1px solid #FDE68A; border-left: 4px solid #D97706; border-radius: 12px; padding: 14px 16px; box-shadow: 0 2px 8px rgba(217, 119, 6, 0.08); font-family: 'Segoe UI', Roboto, 'Noto Sans Tamil', 'Latha', 'Vijaya', Arial, sans-serif; box-sizing: border-box !important; width: 100% !important; max-width: 100% !important; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important; hyphens: auto;">
                       ${bible?.english ? `
-                      <p style="margin: 0 0 10px 0; font-size: 15px; font-style: italic; color: #1E293B; line-height: 1.6; font-family: 'Segoe UI', Roboto, Georgia, serif;">
+                      <p style="margin: 0 0 8px 0; font-size: 14.5px; font-style: italic; color: #1E293B; line-height: 1.6; font-family: 'Segoe UI', Roboto, Georgia, serif; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important; hyphens: auto; max-width: 100%;">
                         "${escapeHtml(bible.english)}"
                       </p>
                       ` : ''}
 
                       ${bible?.tamil ? `
-                      <p style="margin: 0 0 12px 0; font-size: 14.5px; color: #78350F; line-height: 1.6; font-family: 'Noto Sans Tamil', 'Latha', 'Vijaya', 'Segoe UI', Roboto, Arial, sans-serif;">
+                      <p style="margin: 0 0 10px 0; font-size: 13.5px; color: #78350F; line-height: 1.6; font-family: 'Noto Sans Tamil', 'Latha', 'Vijaya', 'Segoe UI', Roboto, Arial, sans-serif; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important; hyphens: auto; max-width: 100%;">
                         "${escapeHtml(bible.tamil)}"
                       </p>
                       ` : ''}
 
-                      <div style="font-size: 12.5px; font-weight: 800; color: #B45309; text-align: right;">
+                      <div style="font-size: 12.5px; font-weight: 800; color: #B45309; text-align: right; line-height: 1.4; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important;">
                         — ${escapeHtml(refEn)}${refTa && refTa !== refEn ? ` • ${escapeHtml(refTa)}` : ''}
                       </div>
                     </div>
@@ -329,31 +329,29 @@ function generateDailyNotificationHtml({
               <!-- SECTION 6: HOLY SCRIPTURE (AT THE VERY END OF EMAIL BODY) -->
               <!-- DYNAMIC_BIBLE_VERSE -->
               <!-- DYNAMIC BILINGUAL BIBLE VERSE CARD -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 8px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 18px auto 8px auto; width: 100% !important; max-width: 100% !important; min-width: 100% !important; table-layout: fixed !important; border-collapse: separate !important; box-sizing: border-box !important;">
                 <tr>
-                  <td>
-                    <div style="background: linear-gradient(135deg, #fffdf7 0%, #fef3c7 100%); border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 12px; padding: 18px 20px; box-shadow: 0 2px 8px rgba(217, 119, 6, 0.08); font-family: 'Segoe UI', Roboto, 'Noto Sans Tamil', 'Latha', 'Vijaya', Arial Unicode MS, Arial, sans-serif;">
-                      <div style="font-size: 11px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;">
-                        HOLY SCRIPTURE • Daily Scripture • Prayer
-                      </div>
+                  <td style="background: linear-gradient(135deg, #fffdf7 0%, #fef3c7 100%); border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 12px; padding: 14px 16px; box-shadow: 0 2px 8px rgba(217, 119, 6, 0.08); font-family: 'Segoe UI', Roboto, 'Noto Sans Tamil', 'Latha', 'Vijaya', Arial Unicode MS, Arial, sans-serif; text-align: left; box-sizing: border-box !important; width: 100% !important; max-width: 100% !important; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important; hyphens: auto;">
+                    <div style="font-size: 11px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.8px; margin: 0 0 8px 0; line-height: 1.4; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important;">
+                      HOLY SCRIPTURE • Daily Scripture • Prayer
+                    </div>
 
-                      <!-- English Verse -->
-                      <p style="margin: 0 0 8px 0; font-size: 14px; font-style: italic; color: #1e293b; line-height: 1.6; font-family: 'Segoe UI', Roboto, Georgia, serif;">
-                        "${escapeHtml(bible.english)}"
-                      </p>
+                    <!-- English Verse -->
+                    <p style="margin: 0 0 8px 0; font-size: 13.5px; font-style: italic; color: #1e293b; line-height: 1.6; font-family: 'Segoe UI', Roboto, Georgia, serif; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important; hyphens: auto; max-width: 100%;">
+                      "${escapeHtml(bible.english)}"
+                    </p>
 
-                      <!-- Tamil Verse -->
-                      <p style="margin: 0 0 10px 0; font-size: 13.5px; color: #78350f; line-height: 1.6; font-family: 'Noto Sans Tamil', 'Latha', 'Vijaya', 'Segoe UI', Roboto, Arial Unicode MS, sans-serif;">
-                        "${escapeHtml(bible.tamil)}"
-                      </p>
+                    <!-- Tamil Verse -->
+                    <p style="margin: 0 0 10px 0; font-size: 13px; color: #78350f; line-height: 1.6; font-family: 'Noto Sans Tamil', 'Latha', 'Vijaya', 'Segoe UI', Roboto, Arial Unicode MS, sans-serif; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important; hyphens: auto; max-width: 100%;">
+                      "${escapeHtml(bible.tamil)}"
+                    </p>
 
-                      <div style="font-size: 12px; font-weight: 800; color: #b45309; text-align: right;">
-                        — ${escapeHtml(refEn)}${refTa && refTa !== refEn ? ` • ${escapeHtml(refTa)}` : ''}
-                      </div>
+                    <div style="font-size: 12px; font-weight: 800; color: #b45309; text-align: right; line-height: 1.4; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important;">
+                      — ${escapeHtml(refEn)}${refTa && refTa !== refEn ? ` • ${escapeHtml(refTa)}` : ''}
+                    </div>
 
-                      <div style="margin-top: 10px; padding-top: 6px; border-top: 1px dashed #fcd34d; font-size: 11.5px; color: #92400e; text-align: right;">
-                        Source: <a href="https://www.vatican.va/archive/bible/index.htm" target="_blank" style="color: #b45309; text-decoration: none; font-weight: 600;">Biblia Sacra / Catholic Holy Bible (NRSV-CE / திருவிவிலியம்)</a>
-                      </div>
+                    <div style="margin-top: 10px; padding-top: 6px; border-top: 1px dashed #fcd34d; font-size: 11.5px; color: #92400e; text-align: right; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important;">
+                      Source: <a href="https://www.vatican.va/archive/bible/index.htm" target="_blank" style="color: #b45309; text-decoration: none; font-weight: 600;">Biblia Sacra / Catholic Holy Bible (NRSV-CE / திருவிவிலியம்)</a>
                     </div>
                   </td>
                 </tr>

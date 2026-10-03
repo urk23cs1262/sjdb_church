@@ -226,13 +226,13 @@ function buildReminderContent({ events, announcements, targetDateStr, lang = 'en
     : `Tomorrow at St. John de Britto Church — ${formattedDateEn}`;
 
   let emailHtml = `
-<div style="font-family:'Segoe UI',Arial,sans-serif;background:#f5f7fb;padding:35px 20px;">
-  <div style="max-width:620px;margin:0 auto;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.08);border:1px solid #e5e7eb;">
-    <div style="background:linear-gradient(135deg,#1e3a8a 0%,#0f172a 100%);padding:30px 25px;text-align:center;">
+<div style="font-family:'Segoe UI',Arial,sans-serif;background:#f5f7fb;padding:25px 12px;box-sizing:border-box;">
+  <div style="max-width:620px;width:100%;margin:0 auto;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,0.08);border:1px solid #e5e7eb;box-sizing:border-box;">
+    <div style="background:linear-gradient(135deg,#1e3a8a 0%,#0f172a 100%);padding:30px 20px;text-align:center;box-sizing:border-box;">
       <h1 style="color:#fbbf24;margin:0;font-size:24px;font-weight:800;">St. John de Britto Church</h1>
       <p style="color:#ffffff;margin:5px 0 0;font-size:13px;opacity:0.9;">புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்</p>
     </div>
-    <div style="padding:35px 30px;color:#374151;line-height:1.7;">
+    <div style="padding:28px 18px;color:#374151;line-height:1.7;box-sizing:border-box;width:100%;">
       <h2 style="color:#1e3a8a;margin-top:0;font-size:20px;">${isTamil ? 'நாளைய நிகழ்வுகள் மற்றும் அறிவிப்புகள்' : "Tomorrow's Scheduled Reminders"}</h2>
       <p style="color:#6b7280;font-size:14px;margin-top:-5px;">${isTamil ? formattedDateTa : formattedDateEn}</p>
       
@@ -242,7 +242,7 @@ function buildReminderContent({ events, announcements, targetDateStr, lang = 'en
             📅 ${isTamil ? 'நிகழ்வுகள் (Events)' : 'Scheduled Events'}
           </h3>
           ${events.map(ev => `
-            <div style="background:#f9fafb;border-left:4px solid #f59e0b;padding:14px 18px;border-radius:8px;margin-bottom:10px;">
+            <div style="background:#f9fafb;border-left:4px solid #f59e0b;padding:14px 18px;border-radius:8px;margin-bottom:10px;box-sizing:border-box;">
               <strong style="color:#111827;font-size:15px;">${isTamil && ev.titleTa ? ev.titleTa : ev.title}</strong>
               <div style="font-size:13px;color:#6b7280;margin-top:4px;">
                 ${ev.time ? `⏰ ${ev.time}` : ''} ${ev.venue ? ` | 📍 ${ev.venue}` : ''}
@@ -261,7 +261,7 @@ function buildReminderContent({ events, announcements, targetDateStr, lang = 'en
             📢 ${isTamil ? 'அறிவிப்புகள் (Announcements)' : 'Parish Announcements'}
           </h3>
           ${announcements.map(ann => `
-            <div style="background:#f9fafb;border-left:4px solid #3b82f6;padding:14px 18px;border-radius:8px;margin-bottom:10px;">
+            <div style="background:#f9fafb;border-left:4px solid #3b82f6;padding:14px 18px;border-radius:8px;margin-bottom:10px;box-sizing:border-box;">
               <strong style="color:#111827;font-size:15px;">${isTamil && ann.titleTa ? ann.titleTa : ann.title}</strong>
               ${ann.content ? `<p style="margin:4px 0 0;font-size:13px;color:#4b5563;">${ann.content.slice(0, 150)}...</p>` : ''}
             </div>
@@ -272,13 +272,13 @@ function buildReminderContent({ events, announcements, targetDateStr, lang = 'en
         </div>
       ` : ''}
 
-      <div style="text-align:center;margin:30px 0 10px;">
-        <a href="${events.length > 0 ? eventsUrl : announcementsUrl}" style="background:#1e3a8a;color:#ffffff;padding:12px 28px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;display:inline-block;">
+      <div style="text-align:center;margin:28px 0 14px;">
+        <a href="${events.length > 0 ? eventsUrl : announcementsUrl}" style="background:#1e3a8a;color:#ffffff;padding:12px 28px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;display:inline-block;max-width:100%;box-sizing:border-box;word-break:break-word;">
           Open Church Website →
         </a>
       </div>
     </div>
-    <div style="background:#111827;padding:20px;text-align:center;color:#9ca3af;font-size:12px;">
+    <div style="background:#111827;padding:20px;text-align:center;color:#9ca3af;font-size:12px;box-sizing:border-box;">
       <p style="margin:0;">St. John de Britto Church, Kalayarkoil — Tamil Nadu - 630551</p>
     </div>
   </div>
