@@ -421,7 +421,7 @@ export default function DailyCatholicContent() {
   const refTa = verse ? (verse.refTa || getTamilBibleReference(verse.ref)) : '';
 
   // Fetch Original Tamil Reading for a date
-  const fetchReading = async (d) => {
+  const fetchReading = async (d, force = false) => {
     setLoading(true);
     setError(null);
     setReading(null);
@@ -430,8 +430,23 @@ export default function DailyCatholicContent() {
     setDisplayLang('ta');
 
     try {
-      const res = await api.get(`/daily-reading?date=${d}&lang=ta`);
+      const url = force ? `/daily-reading?date=${d}&lang=ta&refresh=true` : `/daily-reading?date=${d}&lang=ta`;
+      const res = await api.get(url);
       if (res.data.success && res.data.data) {
+        // If server returned an old or mismatched date reading, trigger on-demand sync
+        if (res.data.data.date && res.data.data.date !== d) {
+          console.warn(`[Readings] Date mismatch: requested ${d} but got ${res.data.data.date}. Triggering sync...`);
+          try {
+            const syncRes = await api.get(`/daily-reading/sync?date=${d}`);
+            if (syncRes.data?.success && syncRes.data?.data) {
+              setOriginalTamilData(syncRes.data.data);
+              setReading(syncRes.data.data);
+              return;
+            }
+          } catch (syncErr) {
+            console.warn('[Readings] Sync attempt error:', syncErr.message);
+          }
+        }
         setOriginalTamilData(res.data.data);
         setReading(res.data.data);
       } else {
@@ -768,7 +783,7 @@ export default function DailyCatholicContent() {
               </button>
 
               <button
-                onClick={() => fetchReading(date)}
+                onClick={() => fetchReading(date, true)}
                 disabled={loading || isTranslating}
                 className="btn-outline-gold text-[12px] sm:text-sm py-2 px-1.5 sm:px-4 flex items-center justify-center gap-1 sm:gap-1.5 shadow-sm whitespace-nowrap rounded-xl sm:rounded-full h-10 transition-transform active:scale-95 disabled:opacity-60"
                 title="Refresh Readings"
@@ -873,7 +888,7 @@ export default function DailyCatholicContent() {
                 <p className="text-gray-500 mb-2">{error}</p>
                 <p className="text-gray-400 text-sm mb-6">Could not fetch readings for this date.</p>
                 <div className="flex gap-3 justify-center flex-wrap">
-                  <button onClick={() => fetchReading(date)} className="btn-gold"><FiRefreshCw /> Try Again</button>
+                  <button onClick={() => fetchReading(date, true)} className="btn-gold"><FiRefreshCw /> Try Again</button>
                   <a href="https://www.catholicgallery.org/mass-reading/" target="_blank" rel="noreferrer" className="btn-outline-gold">
                     <FiExternalLink /> Open Catholic Gallery
                   </a>

@@ -653,62 +653,93 @@ async function fetchDailyReflection(dateStr) {
 }
 
 /**
- * Fetch and Upsert Tamil Mass Reading into MongoDB with full validation
+ * Fetch and Upsert Tamil Mass Reading into MongoDB with full validation and fallback URLs
  */
 async function fetchAndStoreTamilReading(dateStr) {
-  const url = await getMassReadingsFetchUrl(dateStr);
+  const primaryUrl = await getMassReadingsFetchUrl(dateStr);
 
-  try {
-    const res = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'ta,en-US;q=0.9,en;q=0.8'
-      },
-      timeout: 15000
-    });
+  const [year, month, day] = dateStr.split('-');
+  const dd = String(day).padStart(2, '0');
+  const mm = String(month).padStart(2, '0');
+  const yy = String(year).slice(-2);
+  const standardBibleUrl = `https://bible.catholicgallery.org/tamil-mass-reading/tr-${dd}${mm}${yy}/`;
 
-    if (!res.data) throw new Error('Empty response received from Catholic Gallery');
+  const candidateUrls = [primaryUrl];
+  if (primaryUrl.endsWith('/')) {
+    candidateUrls.push(primaryUrl.slice(0, -1));
+  } else {
+    candidateUrls.push(primaryUrl + '/');
+  }
+  if (!candidateUrls.includes(standardBibleUrl)) {
+    candidateUrls.push(standardBibleUrl);
+  }
+  if (!candidateUrls.includes(standardBibleUrl.slice(0, -1))) {
+    candidateUrls.push(standardBibleUrl.slice(0, -1));
+  }
 
-    const parsedData = parseTamilMassReading(res.data, dateStr, url);
-    const isValid = validateTamilMassReading(parsedData, url, dateStr);
+  let parsedData = null;
+  let successfulUrl = null;
+  let lastError = null;
 
-    if (!isValid) {
-      console.warn(`[TAMIL MASS] Validation failed for ${dateStr}. Incomplete data will NOT overwrite cached reading.`);
-      const existing = await DailyMassReading.findOne({ date: dateStr });
-      if (existing) {
-        console.log(`[TAMIL MASS] Preserving previously valid cached reading for ${dateStr}.`);
-        return existing;
+  for (const url of candidateUrls) {
+    try {
+      console.log(`[TAMIL MASS] Attempting fetch from: ${url}`);
+      const res = await axios.get(url, {
+        httpsAgent,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'ta,en-US;q=0.9,en;q=0.8',
+          'Cache-Control': 'no-cache'
+        },
+        timeout: 30000
+      });
+
+      if (res.data && typeof res.data === 'string' && res.data.length > 500) {
+        const candidateParsed = parseTamilMassReading(res.data, dateStr, url);
+        const isValid = validateTamilMassReading(candidateParsed, url, dateStr);
+        if (isValid) {
+          parsedData = candidateParsed;
+          successfulUrl = url;
+          break;
+        } else {
+          console.warn(`[TAMIL MASS] Validation failed for content from ${url}`);
+        }
       }
-      throw new Error(`Tamil Mass Reading validation failed for ${dateStr}: required sections missing`);
+    } catch (err) {
+      console.warn(`[TAMIL MASS] Fetch failed for ${url}:`, err.message);
+      lastError = err;
     }
+  }
 
-    // Attach Daily Reflection ("இன்றைய சிந்தனை")
-    const reflectionData = await fetchDailyReflection(dateStr);
-    parsedData.reflection = reflectionData;
-
-    // Build standard sections array
-    parsedData.sections = buildStandardSections(parsedData);
-    parsedData.fetchedAt = new Date();
-    parsedData.updatedAt = new Date();
-
-    const doc = await DailyMassReading.findOneAndUpdate(
-      { date: dateStr },
-      { $set: parsedData },
-      { upsert: true, new: true }
-    );
-
-    console.log(`[TAMIL MASS] Successfully stored reading & reflection for ${dateStr} in MongoDB.`);
-    return doc;
-  } catch (err) {
-    console.error(`[TAMIL MASS] Failed to fetch reading for ${dateStr}:`, err.message);
+  if (!parsedData) {
+    console.error(`[TAMIL MASS] All candidate URLs failed for ${dateStr}. Last error:`, lastError?.message);
     const existing = await DailyMassReading.findOne({ date: dateStr });
-    if (existing) {
-      console.log(`[TAMIL MASS] Serving existing cached MongoDB reading for ${dateStr}.`);
+    if (existing && existing.gospel?.text && existing.gospel.text.length >= 60) {
+      console.log(`[TAMIL MASS] Preserving valid cached MongoDB reading for ${dateStr}.`);
       return existing;
     }
-    throw err;
+    throw lastError || new Error(`Failed to fetch valid Tamil Mass Reading for ${dateStr}`);
   }
+
+  // Attach Daily Reflection ("இன்றைய சிந்தனை")
+  const reflectionData = await fetchDailyReflection(dateStr);
+  parsedData.reflection = reflectionData;
+
+  // Build standard sections array
+  parsedData.sections = buildStandardSections(parsedData);
+  parsedData.sourceUrl = successfulUrl;
+  parsedData.fetchedAt = new Date();
+  parsedData.updatedAt = new Date();
+
+  const doc = await DailyMassReading.findOneAndUpdate(
+    { date: dateStr },
+    { $set: parsedData },
+    { upsert: true, new: true }
+  );
+
+  console.log(`[TAMIL MASS] Successfully stored reading & reflection for ${dateStr} in MongoDB.`);
+  return doc;
 }
 
 /**
@@ -720,6 +751,7 @@ async function getReadingForDate(dateStr) {
 
   const isCorruptedOrIncomplete = (doc) => {
     if (!doc) return true;
+    if (doc.date !== cleanDate) return true;
     // Check if Gospel was corrupted (e.g. only contains notice text or < 2 paragraphs)
     const badGospel = !doc.gospel?.text || doc.gospel.text.length < 60 || doc.gospel.paragraphs?.length < 2 || (doc.gospel.text.includes('தூய காவல் தூதர்கள் நினைவுக்கு உரியது.') && doc.gospel.paragraphs?.length <= 2);
     // Check if Responsorial Psalm is missing verse groups
@@ -737,10 +769,14 @@ async function getReadingForDate(dateStr) {
       reading = await fetchAndStoreTamilReading(cleanDate);
     } catch (e) {
       console.warn(`[Mass Readings] Live fetch failed for ${cleanDate}:`, e.message);
-      if (!reading) {
-        reading = await DailyMassReading.findOne().sort({ date: -1 });
-      }
+      // NEVER fallback to sort({ date: -1 })! Serving an old date's reading corrupts the UI.
     }
+  }
+
+  // Double check that returned reading actually matches cleanDate
+  if (reading && reading.date !== cleanDate) {
+    console.warn(`[Mass Readings] Discarding date-mismatched document (expected ${cleanDate}, got ${reading.date})`);
+    reading = null;
   }
 
   return reading;
@@ -962,6 +998,18 @@ function initMidnightCron() {
   startupSafetyCheck().catch(err => {
     console.warn('[Daily Reflection] Startup safety check notice:', err.message);
   });
+
+  // Startup Safety Check: Verify today's mass reading exists in DB and is complete, fetch if missing
+  (async () => {
+    const todayKolkata = getDateKey(new Date());
+    const existing = await DailyMassReading.findOne({ date: todayKolkata });
+    if (!existing || !existing.gospel?.text || existing.gospel.text.length < 60) {
+      console.log(`[Daily Mass Reading] Startup check: missing or incomplete reading for ${todayKolkata}. Fetching...`);
+      await fetchAndStoreTamilReading(todayKolkata).catch(err => {
+        console.warn(`[Daily Mass Reading] Startup fetch notice for ${todayKolkata}:`, err.message);
+      });
+    }
+  })().catch(() => {});
 
   // Sharp 12:00 AM IST (00:00 Asia/Kolkata)
   nodeCron.schedule('0 0 * * *', async () => {

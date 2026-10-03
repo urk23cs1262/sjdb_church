@@ -7,11 +7,34 @@ const {
   getDateKey 
 } = require('../services/dailyMassReadingService');
 
-// GET /api/mass-reading?date=YYYY-MM-DD&lang=ta|en
+// GET /api/mass-reading/sync?date=YYYY-MM-DD
+router.get('/sync', async (req, res) => {
+  try {
+    const targetDate = req.query.date || getDateKey(new Date());
+    console.log(`[massReading Route] On-demand sync requested for ${targetDate}`);
+    const doc = await fetchAndStoreTamilReading(targetDate);
+    res.json({ success: true, message: `Successfully fetched and stored reading for ${targetDate}`, date: targetDate, data: doc });
+  } catch (err) {
+    console.error(`[massReading Route] On-demand sync error for ${req.query.date}:`, err.message);
+    res.status(500).json({ success: false, message: `Sync failed for ${req.query.date || 'today'}: ${err.message}`, error: err.message });
+  }
+});
+
+// GET /api/mass-reading?date=YYYY-MM-DD&lang=ta|en&refresh=true
 router.get('/', async (req, res) => {
   try {
     const targetDate = req.query.date || getDateKey(new Date());
     const lang = req.query.lang || 'ta';
+    const forceRefresh = req.query.refresh === 'true';
+
+    if (forceRefresh && lang === 'ta') {
+      try {
+        console.log(`[massReading Route] Force-refreshing ${targetDate}...`);
+        await fetchAndStoreTamilReading(targetDate);
+      } catch (fErr) {
+        console.warn(`[massReading Route] Force-refresh fetch failed (${fErr.message}), falling back to cache.`);
+      }
+    }
 
     if (lang === 'en') {
       const translated = await getOrGenerateEnglishTranslation(targetDate);
