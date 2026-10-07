@@ -219,8 +219,8 @@ function formatCanonicalSaintWhatsApp({ saint, language = 'ta' }) {
       msg += `\n`;
     }
 
-    msg += `🌐 *Source / தகவல் மூலம்:* ${s.source}\n${s.sourceUrl}\n\n`;
-    msg += `🌐 *View on Church Website / இணையதளம்:*\n${s.websiteUrl}\n\n`;
+    // msg += `🌐 *Source / தகவல் மூலம்:* ${s.source}\n${s.sourceUrl}\n\n`;
+    // msg += `🌐 *View on Church Website / இணையதளம்:*\n${s.websiteUrl}\n\n`;
     msg += `— *St. John de Britto Church, Kalayarkoil*\n_புனித அருளானந்தர் திருத்தலம், காளையார்கோவில்_\n_SJDB Connect_`;
 
     return msg.trim();
