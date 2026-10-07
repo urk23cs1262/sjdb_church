@@ -245,8 +245,8 @@ function formatCanonicalSaintWhatsApp({ saint, language = 'ta' }) {
     msg += `\n`;
   }
 
-  msg += `🌐 *தகவல் மூலம்:* ${s.source}\n${s.sourceUrl}\n\n`;
-  msg += `🌐 *ஆலய இணையதளத்தில் வாசிக்க:*\n${s.websiteUrl}\n\n`;
+  // msg += `🌐 *தகவல் மூலம்:* ${s.source}\n${s.sourceUrl}\n\n`;
+  // msg += `🌐 *ஆலய இணையதளத்தில் வாசிக்க:*\n${s.websiteUrl}\n\n`;
   msg += `— *புனித அருளானந்தர் திருத்தலம், காளையார்கோவில்*\n_SJDB Connect_`;
 
   return msg.trim();
