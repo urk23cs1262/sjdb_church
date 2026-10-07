@@ -185,8 +185,6 @@ function formatCanonicalSaintWhatsApp({ saint, language = 'ta' }) {
       msg += `\n`;
     }
 
-    msg += `🌐 *Source:* ${s.source}\n${s.sourceUrl}\n\n`;
-    msg += `🌐 *Read on Church Website:*\n${s.websiteUrl}\n\n`;
     msg += `— *St. John de Britto Church, Kalayarkoil*\n_SJDB Connect_`;
 
     return msg.trim();
@@ -219,8 +217,6 @@ function formatCanonicalSaintWhatsApp({ saint, language = 'ta' }) {
       msg += `\n`;
     }
 
-    // msg += `🌐 *Source / தகவல் மூலம்:* ${s.source}\n${s.sourceUrl}\n\n`;
-    // msg += `🌐 *View on Church Website / இணையதளம்:*\n${s.websiteUrl}\n\n`;
     msg += `— *St. John de Britto Church, Kalayarkoil*\n_புனித அருளானந்தர் திருத்தலம், காளையார்கோவில்_\n_SJDB Connect_`;
 
     return msg.trim();
@@ -245,8 +241,6 @@ function formatCanonicalSaintWhatsApp({ saint, language = 'ta' }) {
     msg += `\n`;
   }
 
-  // msg += `🌐 *தகவல் மூலம்:* ${s.source}\n${s.sourceUrl}\n\n`;
-  // msg += `🌐 *ஆலய இணையதளத்தில் வாசிக்க:*\n${s.websiteUrl}\n\n`;
   msg += `— *புனித அருளானந்தர் திருத்தலம், காளையார்கோவில்*\n_SJDB Connect_`;
 
   return msg.trim();

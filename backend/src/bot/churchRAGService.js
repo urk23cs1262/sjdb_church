@@ -326,10 +326,10 @@ function buildSaintSection(dailyContent, isTamil, contentLang = null) {
   const imagePayload = getCanonicalSaintImagePayload({ saint: saintData, language: lang });
 
   return {
-    header: lang === 'en' ? `✝️ *Saint of the Day*` : (lang === 'both' ? `✝️ *Today's Saint / இன்றைய புனிதர்*` : `✝️ *இன்றைய புனிதர்*`),
+    header: '',
     body,
-    linkTitle: lang === 'en' ? 'Saint of the Day' : 'இன்றைய புனிதர்',
-    url: getSiteUrl(SITE_ROUTES.SAINT_OF_THE_DAY),
+    linkTitle: null,
+    url: null,
     isSaintOfDayFlow: true,
     imageUrl: imagePayload?.url || saintData?.image || saintData?.imageUrl
   };
@@ -1195,9 +1195,11 @@ async function answerChurchQuestion(rawText, userPreferredLang = null, userAuthC
   let messageContent = '';
   const links = [];
 
+  const isSaintOnly = sections.length === 1 && sections[0].isSaintOfDayFlow;
+
   sections.forEach((sec, idx) => {
     if (idx > 0) messageContent += '\n━━━━━━━━━━━━━━━━━━━━\n\n';
-    messageContent += `${sec.header}\n\n${sec.body}`;
+    messageContent += sec.header ? `${sec.header}\n\n${sec.body}` : sec.body;
     if (sec.url && !links.some(l => l.url === sec.url)) {
       links.push({ title: sec.linkTitle, url: sec.url });
     }
@@ -1213,10 +1215,10 @@ async function answerChurchQuestion(rawText, userPreferredLang = null, userAuthC
     });
   }
 
-  // Consistent Church Signature
-  messageContent += `\n— *${isTamil ? 'புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்' : "St. John de Britto Church, Kalayarkoil"}*\n_SJDB Connect_`;
-
-  const isSaintOnly = sections.length === 1 && sections[0].isSaintOfDayFlow;
+  // Consistent Church Signature (Saint section already contains signature)
+  if (!isSaintOnly) {
+    messageContent += `\n— *${isTamil ? 'புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்' : "St. John de Britto Church, Kalayarkoil"}*\n_SJDB Connect_`;
+  }
 
   return {
     success: true,
