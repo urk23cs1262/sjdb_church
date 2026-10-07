@@ -300,6 +300,16 @@ function generateDailyNotificationHtml({
                         <div style="color: #334155; font-size: 14px; line-height: 1.6;">${formatParagraphs(saint.descriptionEnglish)}</div>
                       </div>
 
+                      ${(saint.otherSaints && saint.otherSaints.length > 0) ? `
+                      <!-- Other Saints Commemorated -->
+                      <div style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed #CBD5E1;">
+                        <div style="font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 6px;">OTHER SAINTS COMMEMORATED TODAY / இன்று நினைவுகூரப்படும் பிற புனிதர்கள்</div>
+                        <ul style="margin: 0; padding-left: 18px; color: #334155; font-size: 13.5px; line-height: 1.6;">
+                          ${saint.otherSaints.map(os => `<li style="margin-bottom: 4px;"><strong>${escapeHtml(os.name || os.nameEn || os.title)}</strong>${os.description ? ` — ${escapeHtml(os.description.slice(0, 130))}${os.description.length > 130 ? '...' : ''}` : ''}</li>`).join('')}
+                        </ul>
+                      </div>
+                      ` : ''}
+
                       <!-- Attribution -->
                       <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #E2E8F0; font-size: 12px; color: #64748B; text-align: right;">
                         Source: <a href="${escapeHtml(saint.sourceUrl || 'https://www.vaticannews.va/en/saints.html')}" target="_blank" style="color: #C5A059; text-decoration: none; font-weight: 600;">${escapeHtml(saint.source || 'Vatican News')}</a>

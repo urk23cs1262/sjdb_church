@@ -101,6 +101,41 @@ export async function fetchSaintOfTheDay(dateStr) {
         image: s.image && s.image.startsWith('/uploads') ? getFileUrl(s.image) : s.image
       }));
 
+      const rawPrimary = res.data.primaryCelebration || res.data.primarySaint || null;
+      const normalizedPrimary = rawPrimary ? {
+        ...rawPrimary,
+        name: cleanSaintName(rawPrimary.name || rawPrimary.englishName),
+        englishName: cleanSaintName(rawPrimary.englishName || rawPrimary.name),
+        image: rawPrimary.image && rawPrimary.image.startsWith('/uploads') ? getFileUrl(rawPrimary.image) : rawPrimary.image,
+        sourceUrl: rawPrimary.sourceUrl || rawSourceUrl,
+        detailUrl: rawPrimary.detailUrl || rawPrimary.sourceUrl || rawSourceUrl
+      } : {
+        name: cleanSaintName(rawSaintName),
+        englishName: cleanSaintName(rawEngName),
+        tamilName: res.data.tamilName || rawSaintName,
+        title: res.data.feastTitle || rawSaintName,
+        celebrationType: res.data.celebrationType || res.data.feastType || 'Feast',
+        feastName: cleanSaintName(rawSaintName),
+        description: rawDesc,
+        descriptionTa: rawDescTa,
+        image: rawImg,
+        source: rawSource,
+        sourceUrl: rawSourceUrl,
+        detailUrl: rawSourceUrl
+      };
+
+      const rawOtherSaints = res.data.otherSaints || [];
+      const normalizedOtherSaints = rawOtherSaints.map(s => ({
+        ...s,
+        name: cleanSaintName(s.name || s.englishName),
+        englishName: cleanSaintName(s.englishName || s.name),
+        image: s.image && s.image.startsWith('/uploads') ? getFileUrl(s.image) : s.image,
+        sourceUrl: s.sourceUrl || rawSourceUrl,
+        detailUrl: s.detailUrl || s.sourceUrl || rawSourceUrl
+      }));
+
+      const resolvedPrimaryUrl = res.data.primaryCelebration?.sourceUrl || normalizedPrimary.sourceUrl || rawSourceUrl;
+
       const saintPayload = {
         date: res.data.date || dateKey,
         day: res.data.day || dayNum,
@@ -116,17 +151,22 @@ export async function fetchSaintOfTheDay(dateStr) {
         descriptionTa: rawDescTa,
         image: rawImg,
         imageSource: res.data.imageSource || (res.data.imageFallback ? 'fallback' : 'vatican'),
-        imageSourceUrl: rawSourceUrl,
+        imageSourceUrl: resolvedPrimaryUrl,
         imageFallback: typeof res.data.imageFallback === 'boolean' ? res.data.imageFallback : false,
         feastDay: res.data.feastDay || fallbackSaint.feastDay || `${targetDate.toLocaleDateString('en-US', { month: 'long' })} ${dayNum}`,
         feastTitle: res.data.feastTitle || fallbackSaint.feastTitle || null,
         feastTitleTa: res.data.feastTitleTa || fallbackSaint.feastTitleTa || null,
         feastType: res.data.feastType || fallbackSaint.feastType || null,
         feastTypeTa: res.data.feastTypeTa || fallbackSaint.feastTypeTa || null,
+        celebrationType: res.data.celebrationType || res.data.feastType || normalizedPrimary?.celebrationType || null,
+        celebrationTypeTa: res.data.celebrationTypeTa || res.data.feastTypeTa || null,
+        primaryCelebration: res.data.primaryCelebration || normalizedPrimary,
+        primarySaint: normalizedPrimary,
+        otherSaints: normalizedOtherSaints,
         hasFeastInfo: Boolean(res.data.hasFeastInfo || fallbackSaint.hasFeastInfo),
         source: rawSource,
-        sourceUrl: rawSourceUrl,
-        link: rawSourceUrl,
+        sourceUrl: resolvedPrimaryUrl,
+        link: resolvedPrimaryUrl,
         saints: normalizedSaints.length > 0 ? normalizedSaints : [
           {
             name: rawSaintName,
@@ -135,7 +175,7 @@ export async function fetchSaintOfTheDay(dateStr) {
             description: rawDesc,
             descriptionTa: rawDescTa,
             image: rawImg,
-            sourceUrl: rawSourceUrl
+            sourceUrl: resolvedPrimaryUrl
           }
         ],
         allSaints: normalizedSaints.length > 0 ? normalizedSaints : [
@@ -146,7 +186,7 @@ export async function fetchSaintOfTheDay(dateStr) {
             description: rawDesc,
             descriptionTa: rawDescTa,
             image: rawImg,
-            sourceUrl: rawSourceUrl
+            sourceUrl: resolvedPrimaryUrl
           }
         ]
       };
@@ -181,6 +221,22 @@ export async function fetchSaintOfTheDay(dateStr) {
     feastTitleTa: fallbackSaint.feastTitleTa || null,
     feastType: fallbackSaint.feastType || null,
     feastTypeTa: fallbackSaint.feastTypeTa || null,
+    celebrationType: fallbackSaint.feastType || 'Memorial',
+    celebrationTypeTa: fallbackSaint.feastTypeTa || 'நினைவுநாள்',
+    primarySaint: {
+      name: fallbackSaint.name,
+      englishName: fallbackSaint.name,
+      tamilName: fallbackSaint.nameTa,
+      title: fallbackSaint.feastTitle || fallbackSaint.name,
+      celebrationType: fallbackSaint.feastType || 'Memorial',
+      feastName: fallbackSaint.name,
+      description: fallbackSaint.description,
+      descriptionTa: fallbackSaint.descriptionTa,
+      image: fallbackSaint.image,
+      source: "Vatican News / Catholic Liturgical Calendar",
+      sourceUrl: `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`
+    },
+    otherSaints: [],
     hasFeastInfo: Boolean(fallbackSaint.hasFeastInfo),
     source: "Vatican News / Catholic Liturgical Calendar",
     sourceUrl: `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`,

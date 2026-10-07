@@ -949,6 +949,8 @@ function generateSaintContentMessage({ dailyContent, language = 'ta' }) {
   const feastTypeEn = dailyContent?.saint?.feastType || 'Feast';
   const feastTypeTa = dailyContent?.saint?.feastTypeTa || 'நினைவுநாள்';
 
+  const otherSaints = saintObj?.otherSaints || dailyContent?.otherSaints || [];
+
   let msg = '';
 
   // 1. ENGLISH ONLY
@@ -962,6 +964,13 @@ function generateSaintContentMessage({ dailyContent, language = 'ta' }) {
     }
     if (descEn) {
       msg += `${descEn}\n\n`;
+    }
+    if (otherSaints.length > 0) {
+      msg += `🕊️ *Other Saints Commemorated Today:*\n`;
+      otherSaints.forEach(os => {
+        msg += `• *${os.name || os.title}*\n`;
+      });
+      msg += `\n`;
     }
     msg += `— *St. John de Britto Church, Kalayarkoil*\n_SJDB Connect_`;
     return removeAllUrls(msg.trim());
@@ -988,6 +997,13 @@ function generateSaintContentMessage({ dailyContent, language = 'ta' }) {
     } else {
       msg += `இன்றைய புனிதரின் வாழ்க்கை வரலாறு மற்றும் அருளுரைகள் எமது ஆலய இணையதளத்தில் வாசிக்கலாம்.\n\n`;
     }
+    if (otherSaints.length > 0) {
+      msg += `🕊️ *இன்று நினைவுகூரப்படும் பிற புனிதர்கள்:*\n`;
+      otherSaints.forEach(os => {
+        msg += `• *${os.nameTa || os.tamilName || os.name || os.title}*\n`;
+      });
+      msg += `\n`;
+    }
 
     msg += `🇬🇧 *English*\n✨ *Saint of the Day*\n\n👑 *${saintNameEn}*\n\n`;
     if (feastDayEn) {
@@ -998,6 +1014,13 @@ function generateSaintContentMessage({ dailyContent, language = 'ta' }) {
     }
     if (descEn) {
       msg += `${descEn}\n\n`;
+    }
+    if (otherSaints.length > 0) {
+      msg += `🕊️ *Other Saints Commemorated Today:*\n`;
+      otherSaints.forEach(os => {
+        msg += `• *${os.name || os.title}*\n`;
+      });
+      msg += `\n`;
     }
 
     msg += `— *St. John de Britto Church, Kalayarkoil*\n_SJDB Connect_`;
@@ -1024,6 +1047,13 @@ function generateSaintContentMessage({ dailyContent, language = 'ta' }) {
   } else {
     console.warn('[SaintOfDay] Tamil biography unavailable — using dignified Tamil notice');
     msg += `இன்றைய புனிதரின் வாழ்க்கை வரலாறு மற்றும் அருளுரைகள் எமது ஆலய இணையதளத்தில் வாசிக்கலாம்.\nஇறைவனின் ஆசீரும் புனிதரின் பரிந்துரையும் நம்மோடு இருப்பதாக.\n\n`;
+  }
+  if (otherSaints.length > 0) {
+    msg += `🕊️ *இன்று நினைவுகூரப்படும் பிற புனிதர்கள்:*\n`;
+    otherSaints.forEach(os => {
+      msg += `• *${os.nameTa || os.tamilName || os.name || os.title}*\n`;
+    });
+    msg += `\n`;
   }
   msg += `— *புனித அருளானந்தர் திருத்தலம், காளையார்கோவில்*\n_SJDB Connect_`;
 

@@ -280,7 +280,11 @@ async function searchWikipediaSaintImage(rawSaintName) {
   const directSlugs = [];
   const lower = rawSaintName.toLowerCase();
 
-  if (lower.includes('cosmas') && lower.includes('damian')) {
+  if (lower.includes('mark') && lower.includes('pope')) {
+    directSlugs.push('Pope_Mark');
+  } else if (lower.includes('sergius') && (lower.includes('bacchus') || lower.includes('bacco'))) {
+    directSlugs.push('Sergius_and_Bacchus');
+  } else if (lower.includes('cosmas') && lower.includes('damian')) {
     directSlugs.push('Cosmas_and_Damian');
   } else if (lower.includes('vincent de paul')) {
     directSlugs.push('Vincent_de_Paul');

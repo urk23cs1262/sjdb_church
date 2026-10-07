@@ -27,9 +27,18 @@ const getSaint = async (req, res) => {
           const hasShortBio = !saint || !saint.description || saint.description.length < 250;
           const hasMissingSecondaryImages = saint?.saints && saint.saints.length > 1 && saint.saints.some(s => !s.image && !s.imageUrl);
           const hasMissingSecondaryBio = saint?.saints && saint.saints.length > 1 && saint.saints.some(s => !s.description || s.description.length < 200);
+          const isStaleMissingStructure = !saint?.primarySaint || !saint?.otherSaints || !saint?.primaryCelebration;
+          const isStaleRosary = currentIST.endsWith('-10-07') && (
+            !saint?.primarySaint?.name?.includes('Rosary') ||
+            !saint?.saintName?.includes('Rosary') ||
+            !saint?.description?.includes('Holy Rosary originated in 1212') ||
+            !saint?.primarySaint?.sourceUrl?.includes('memorial-of-our-lady-of-the-rosary')
+          );
           const isStale = forceRefresh ||
             !saint ||
             saint.date !== currentIST ||
+            isStaleMissingStructure ||
+            isStaleRosary ||
             (currentIST.endsWith('-09-26') && (saint.saintName?.includes('Nilus') || saint.name?.includes('Nilus'))) ||
             saint.source?.includes('Catholic Readings') ||
             saint.sourceUrl?.includes('catholicreadings.org') ||
@@ -58,9 +67,18 @@ const getSaint = async (req, res) => {
       const hasShortBio = !saint || !saint.description || saint.description.length < 250;
       const hasMissingSecondaryImages = saint?.saints && saint.saints.length > 1 && saint.saints.some(s => !s.image && !s.imageUrl);
       const hasMissingSecondaryBio = saint?.saints && saint.saints.length > 1 && saint.saints.some(s => !s.description || s.description.length < 200);
+      const isStaleMissingStructure = !saint?.primarySaint || !saint?.otherSaints || !saint?.primaryCelebration;
+      const isStaleRosary = currentIST.endsWith('-10-07') && (
+        !saint?.primarySaint?.name?.includes('Rosary') ||
+        !saint?.saintName?.includes('Rosary') ||
+        !saint?.description?.includes('Holy Rosary originated in 1212') ||
+        !saint?.primarySaint?.sourceUrl?.includes('memorial-of-our-lady-of-the-rosary')
+      );
       const isStale = forceRefresh ||
         !saint ||
         saint.date !== currentIST ||
+        isStaleMissingStructure ||
+        isStaleRosary ||
         (currentIST.endsWith('-09-26') && (saint.saintName?.includes('Nilus') || saint.name?.includes('Nilus'))) ||
         saint.source?.includes('Catholic Readings') ||
         saint.sourceUrl?.includes('catholicreadings.org') ||
@@ -117,9 +135,27 @@ const getSaint = async (req, res) => {
       feastType: saint.feastType || null,
       feastTypeTa: saint.feastTypeTa || null,
       hasFeastInfo: Boolean(saint.hasFeastInfo),
+      primaryCelebration: saint.primaryCelebration || {
+        name: saint.primarySaint?.name || saint.saintName || saint.name,
+        type: saint.primarySaint?.celebrationType || saint.primarySaint?.type || saint.feastType || "Memorial",
+        description: saint.primarySaint?.description || saint.description,
+        image: saint.primarySaint?.image || saint.image,
+        sourceUrl: saint.primarySaint?.sourceUrl || saint.sourceUrl || saint.link,
+        source: saint.primarySaint?.source || "Vatican News"
+      },
+      primarySaint: saint.primarySaint || {
+        name: saint.saintName || saint.name,
+        title: saint.feastTitle || saint.saintName,
+        celebrationType: saint.feastType || null,
+        feastName: saint.saintName || saint.name,
+        description: saint.description,
+        image: saint.image,
+        source: saint.source || "Vatican News"
+      },
+      otherSaints: saint.otherSaints || [],
       source: saint.source || "Vatican News",
-      sourceUrl: saint.sourceUrl || saint.link || VATICAN_NEWS_DEFAULT_URL,
-      link: saint.link || saint.sourceUrl || VATICAN_NEWS_DEFAULT_URL,
+      sourceUrl: saint.primaryCelebration?.sourceUrl || saint.primarySaint?.sourceUrl || saint.sourceUrl || saint.link || VATICAN_NEWS_DEFAULT_URL,
+      link: saint.primaryCelebration?.sourceUrl || saint.primarySaint?.sourceUrl || saint.link || saint.sourceUrl || VATICAN_NEWS_DEFAULT_URL,
       saints: saint.saints || saint.allSaints || [],
       allSaints: saint.allSaints || saint.saints || [],
       saint
@@ -168,9 +204,27 @@ const refreshSaint = async (req, res) => {
       feastType: saint.feastType || null,
       feastTypeTa: saint.feastTypeTa || null,
       hasFeastInfo: Boolean(saint.hasFeastInfo),
+      primaryCelebration: saint.primaryCelebration || {
+        name: saint.primarySaint?.name || saint.saintName || saint.name,
+        type: saint.primarySaint?.celebrationType || saint.primarySaint?.type || saint.feastType || "Memorial",
+        description: saint.primarySaint?.description || saint.description,
+        image: saint.primarySaint?.image || saint.image,
+        sourceUrl: saint.primarySaint?.sourceUrl || saint.sourceUrl || saint.link,
+        source: saint.primarySaint?.source || "Vatican News"
+      },
+      primarySaint: saint.primarySaint || {
+        name: saint.saintName || saint.name,
+        title: saint.feastTitle || saint.saintName,
+        celebrationType: saint.feastType || null,
+        feastName: saint.saintName || saint.name,
+        description: saint.description,
+        image: saint.image,
+        source: saint.source || "Vatican News"
+      },
+      otherSaints: saint.otherSaints || [],
       source: saint.source || "Vatican News",
-      sourceUrl: saint.sourceUrl || saint.link || VATICAN_NEWS_DEFAULT_URL,
-      link: saint.link || saint.sourceUrl || VATICAN_NEWS_DEFAULT_URL,
+      sourceUrl: saint.primaryCelebration?.sourceUrl || saint.primarySaint?.sourceUrl || saint.sourceUrl || saint.link || VATICAN_NEWS_DEFAULT_URL,
+      link: saint.primaryCelebration?.sourceUrl || saint.primarySaint?.sourceUrl || saint.link || saint.sourceUrl || VATICAN_NEWS_DEFAULT_URL,
       saints: saint.saints || saint.allSaints || [],
       allSaints: saint.allSaints || saint.saints || [],
       saint
@@ -205,6 +259,8 @@ const getSaintStatus = async (req, res) => {
       feastType: saint ? (saint.feastType || null) : null,
       feastTypeTa: saint ? (saint.feastTypeTa || null) : null,
       hasFeastInfo: Boolean(saint && saint.hasFeastInfo),
+      primarySaint: saint?.primarySaint || null,
+      otherSaints: saint?.otherSaints || [],
       saints: saint ? (saint.saints || saint.allSaints || []) : [],
       allSaints: saint ? (saint.allSaints || saint.saints || []) : []
     });

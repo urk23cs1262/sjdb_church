@@ -1133,9 +1133,22 @@ export default function DailyCatholicContent() {
             <div className="glass-card p-6 sm:p-8 md:p-10 bg-white shadow-xl rounded-3xl border border-amber-100 overflow-hidden relative">
               {(() => {
                 const saintsList = saintData?.saints || saintData?.allSaints || [];
+                const primarySaintObj = saintData?.primarySaint || (saintsList.length > 0 ? saintsList[0] : (saintData || {}));
+                const otherSaintsList = (saintData?.otherSaints && saintData.otherSaints.length > 0)
+                  ? saintData.otherSaints
+                  : saintsList.slice(1);
+
                 const activeSaint = (saintsList.length > selectedSaintIdx && saintsList[selectedSaintIdx])
                   ? saintsList[selectedSaintIdx]
                   : (saintData || {});
+
+                const isViewingPrimary = selectedSaintIdx === 0;
+
+                const primaryDisplayName = cleanSaintName(
+                  isTamil && primarySaintObj?.tamilName
+                    ? primarySaintObj.tamilName
+                    : (primarySaintObj?.englishName || primarySaintObj?.name || 'Saint of the Day')
+                );
 
                 const isPrimarySaint = cleanSaintName(activeSaint.englishName || activeSaint.name).toLowerCase() === cleanSaintName(saintData?.saintName || saintData?.name).toLowerCase();
                 const activeImage = activeSaint.image || activeSaint.imageUrl || (isPrimarySaint ? saintData?.image : null);
@@ -1145,37 +1158,27 @@ export default function DailyCatholicContent() {
                 const activeDesc = isTamil && activeSaint.descriptionTa
                   ? activeSaint.descriptionTa
                   : (activeSaint.description || saintData?.description || 'Daily Saint details.');
-                const activeSourceUrl = activeSaint.sourceUrl || activeSaint.detailUrl || saintData?.sourceUrl || 'https://www.vaticannews.va/en/saints.html';
+                const activeSourceUrl = activeSaint.sourceUrl || activeSaint.detailUrl || (isPrimarySaint ? (saintData?.primaryCelebration?.sourceUrl || saintData?.primarySaint?.sourceUrl) : null) || saintData?.sourceUrl || 'https://www.vaticannews.va/en/saints.html';
+                const celebrationType = isViewingPrimary
+                  ? (activeSaint.celebrationType || saintData?.celebrationType || saintData?.feastType || null)
+                  : null;
 
                 return (
                   <div>
-                    {/* Saints Selector Pills if multiple saints exist for this date */}
-                    {saintsList.length > 1 && (
-                      <div className="flex items-center gap-2 flex-wrap mb-6 pb-3 border-b border-amber-100">
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400">
-                          {isTamil ? 'இன்றைய புனிதர்கள்:' : 'Saints of the Day:'}
-                        </span>
-                        {saintsList.map((s, idx) => {
-                          const isSelected = selectedSaintIdx === idx;
-                          return (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={() => {
-                                setSelectedSaintIdx(idx);
-                                setSaintImgError(false);
-                              }}
-                              className={`px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                                isSelected
-                                  ? 'bg-church-gold text-amber-950 shadow-md scale-105'
-                                  : 'bg-amber-50/80 hover:bg-amber-100 text-gray-700'
-                              }`}
-                            >
-                              <span>{isTamil && s.tamilName ? s.tamilName : cleanSaintName(s.englishName || s.name)}</span>
-                              {(s.image || s.imageUrl) && <span className="text-[10px] opacity-75">🖼️</span>}
-                            </button>
-                          );
-                        })}
+                    {/* If viewing an other saint, show quick return button to primary celebration */}
+                    {!isViewingPrimary && (
+                      <div className="mb-5 pb-3 border-b border-amber-100 flex items-center justify-between flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedSaintIdx(0);
+                            setSaintImgError(false);
+                          }}
+                          className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-amber-950 bg-amber-100 hover:bg-amber-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs border border-amber-300/70"
+                        >
+                          <span>←</span>
+                          <span>{isTamil ? 'முதன்மை கொண்டாட்டத்திற்குத் திரும்பு' : 'Back to Primary Celebration'}: <span className="underline font-black">{primaryDisplayName}</span></span>
+                        </button>
                       </div>
                     )}
 
@@ -1199,8 +1202,15 @@ export default function DailyCatholicContent() {
                         <div className="absolute bottom-3 left-4 right-4 text-white">
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <span className="inline-block px-2.5 py-0.5 rounded-md bg-church-gold text-amber-950 font-black text-[10px] uppercase tracking-wider">
-                              {isTamil ? 'இன்றைய புனிதர்' : 'Saint of the Day'}
+                              {isViewingPrimary 
+                                ? (isTamil ? 'இன்றைய புனிதர்' : 'Saint of the Day')
+                                : (isTamil ? 'பிற புனிதர்' : 'Other Saint')}
                             </span>
+                            {celebrationType && (
+                              <span className="inline-block px-2.5 py-0.5 rounded-md bg-amber-500 text-white font-black text-[10px] uppercase tracking-wider shadow-xs">
+                                {celebrationType}
+                              </span>
+                            )}
                             {activeImage && (activeImage.includes('vaticannews.va') || activeSaint.imageSource === 'vatican') ? (
                               <span className="inline-block px-2 py-0.5 rounded-md bg-white/20 backdrop-blur-xs text-white text-[9px] font-bold tracking-wider">
                                 Vatican News
@@ -1220,13 +1230,58 @@ export default function DailyCatholicContent() {
                       {/* Details & Biography */}
                       <div className="flex-1 space-y-4 text-left flex flex-col justify-between">
                         <div>
-                          <div>
-                            <span className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400">
-                              {isTamil ? 'திருவிழா நாள்' : 'FEAST DAY'}
-                            </span>
-                            <h3 className="text-xl sm:text-2xl font-bold text-church-gold font-display mt-0.5">
-                              {saintData?.feastDay || formatDisplay(date)}
-                            </h3>
+                          {/* Dedicated OTHER SAINTS Section (ABOVE FEAST DAY) */}
+                          {otherSaintsList.length > 0 && (
+                            <div className="mb-4 pb-3 border-b border-amber-100">
+                              <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-500 mb-2 flex items-center gap-1.5">
+                                <span>{isTamil ? 'இன்று நினைவுகூரப்படும் பிற புனிதர்கள்' : 'OTHER SAINTS'}</span>
+                                <span className="text-xs text-gray-400">({otherSaintsList.length})</span>
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                {otherSaintsList.map((os, osIdx) => {
+                                  const actualIdx = osIdx + 1;
+                                  const isSelected = selectedSaintIdx === actualIdx;
+                                  const osName = cleanSaintName(isTamil && os.tamilName ? os.tamilName : (os.englishName || os.name));
+                                  return (
+                                    <button
+                                      key={osIdx}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedSaintIdx(actualIdx);
+                                        setSaintImgError(false);
+                                      }}
+                                      className={`group px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer shadow-2xs ${
+                                        isSelected
+                                          ? 'bg-church-gold text-amber-950 ring-2 ring-church-gold/60 scale-102 font-bold'
+                                          : 'bg-amber-50/80 hover:bg-amber-100 text-gray-800 border border-amber-200/60 hover:scale-102'
+                                      }`}
+                                    >
+                                      {os.image && (
+                                        <img src={os.image} alt="" className="w-5 h-5 rounded-full object-cover border border-amber-300" />
+                                      )}
+                                      <span>{osName}</span>
+                                      <span className="text-[10px] text-church-gold group-hover:translate-x-0.5 transition-transform">→</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div>
+                              <span className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400">
+                                {isTamil ? 'திருவிழா நாள்' : 'FEAST DAY'}
+                              </span>
+                              <h3 className="text-xl sm:text-2xl font-bold text-church-gold font-display mt-0.5">
+                                {saintData?.feastDay || formatDisplay(date)}
+                              </h3>
+                            </div>
+                            {celebrationType && (
+                              <span className="px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-100 text-amber-950 border border-amber-300">
+                                {celebrationType}
+                              </span>
+                            )}
                           </div>
 
                           <div className="text-gray-700 leading-relaxed text-sm sm:text-base font-normal mt-3">
@@ -1277,20 +1332,22 @@ export default function DailyCatholicContent() {
                               ? activeSourceUrl
                               : ((activeSourceUrl && activeSourceUrl.includes('vaticannews.va'))
                                   ? activeSourceUrl
-                                  : (saintData?.sourceUrl && saintData.sourceUrl.includes('vaticannews.va'))
-                                    ? saintData.sourceUrl
-                                    : defaultVaticanUrl);
+                                  : (saintData?.primaryCelebration?.sourceUrl && saintData.primaryCelebration.sourceUrl.includes('vaticannews.va'))
+                                    ? saintData.primaryCelebration.sourceUrl
+                                    : (saintData?.sourceUrl && saintData.sourceUrl.includes('vaticannews.va'))
+                                      ? saintData.sourceUrl
+                                      : defaultVaticanUrl);
 
                             return (
                               <a
                                 href={targetUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="btn-royal text-xs sm:text-sm py-2 px-4 rounded-xl flex items-center gap-1.5 shadow-sm hover:shadow-md"
+                                className="btn-royal text-xs sm:text-sm py-2 px-4 rounded-xl flex items-center gap-1.5 shadow-sm hover:shadow-md cursor-pointer"
                               >
                                 <FiExternalLink />
                                 <span>
-                                  {isTamil ? `${siteName}-ல் வாசிக்க` : `Read full story on ${siteName}`}
+                                  {isTamil ? (isContentFromWiki ? 'Wikipedia-ல் வாசிக்க' : 'Vatican News') : siteName}
                                 </span>
                               </a>
                             );

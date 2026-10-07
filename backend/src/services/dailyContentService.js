@@ -403,6 +403,8 @@ async function getTodayDailyContent(targetDate = new Date()) {
     feastTitleTa: saintData?.feastTitleTa || saintData?.titleTa || fallbackSaint?.feastTitleTa || null,
     feastType: saintData?.feastType || null,
     feastTypeTa: saintData?.feastTypeTa || null,
+    celebrationType: saintData?.celebrationType || saintData?.feastType || null,
+    celebrationTypeTa: saintData?.celebrationTypeTa || saintData?.feastTypeTa || null,
     hasFeastInfo: Boolean(saintData?.hasFeastInfo || fallbackSaint?.hasFeastInfo),
     image: finalSaintImage,
     imageUrl: finalSaintImage,
@@ -412,7 +414,9 @@ async function getTodayDailyContent(targetDate = new Date()) {
     imageAttachment: saintAttachment,
     imageSource: saintData?.imageSource || 'liturgical_calendar',
     sourceUrl: saintData?.sourceUrl || saintData?.link || 'https://www.vaticannews.va/en/saints.html',
-    saints: saintData?.saints || []
+    saints: saintData?.saints || [],
+    primarySaint: saintData?.primarySaint || null,
+    otherSaints: saintData?.otherSaints || []
   };
 
   const { getSiteUrl } = require('../config/siteRoutes');
@@ -429,6 +433,10 @@ async function getTodayDailyContent(targetDate = new Date()) {
     saintImage: saintImageUrl,
     saintFeastDay: saint.feastDay,
     saintFeastDayTa: formattedTa,
+    celebrationType: saint.celebrationType,
+    celebrationTypeTa: saint.celebrationTypeTa,
+    primarySaint: saint.primarySaint,
+    otherSaints: saint.otherSaints,
     bible: {
       tamil: verseData.verseTa || verseData.verseTextTa || verseData.tamil || '',
       english: verseData.verseEn || verseData.verseTextEn || verseData.english || '',
