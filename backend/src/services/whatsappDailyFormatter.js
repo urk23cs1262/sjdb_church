@@ -884,10 +884,9 @@ function getDailySaintImagePayload({ dailyContent, language = 'ta' }) {
  * Guaranteed 0 URLs. No Read More link.
  */
 function generateSaintContentMessage({ dailyContent, language = 'ta' }) {
-  const lang = normalizeContentLanguage(language);
-
+  const { formatCanonicalSaintWhatsApp } = require('./canonicalContentService');
   let saintObj = dailyContent?.saint;
-  if (!saintObj || !saintObj.nameEn) {
+  if (!saintObj || !saintObj.nameEn || !saintObj.descriptionEn) {
     try {
       const { getDailySaint } = require('./saintService');
       const directSaint = getDailySaint();
@@ -899,166 +898,12 @@ function generateSaintContentMessage({ dailyContent, language = 'ta' }) {
     } catch (e) {}
   }
 
-  const { getSaintForDate } = require('../data/catholic_saints_calendar');
-  const fallbackSaint = getSaintForDate(dailyContent?.dateKey || new Date());
-
-  let saintNameEn = saintObj?.nameEn || saintObj?.nameEnglish || saintObj?.name || dailyContent?.saintName;
-  if (!saintNameEn || saintNameEn.toLowerCase().includes('saint of the day') || saintNameEn.toLowerCase().includes('today\'s saint')) {
-    saintNameEn = fallbackSaint?.name || 'Saint of the Day';
-  }
-
-  let saintNameTa = saintObj?.nameTa || saintObj?.nameTamil || dailyContent?.saintNameTa;
-  if (!saintNameTa || saintNameTa.trim() === 'இன்றைய புனிதர்' || saintNameTa.trim() === 'புனிதர்') {
-    saintNameTa = fallbackSaint?.nameTa || saintNameEn;
-  }
-
-  const titleEn = saintObj?.titleEn || saintObj?.feastTitle || saintNameEn;
-  const titleTa = saintObj?.titleTa || saintObj?.feastTitleTa || saintNameTa;
-  const feastDayEn = saintObj?.feastDayEn || saintObj?.feastDay || dailyContent?.formattedDate || '';
-  const feastDayTa = saintObj?.feastDayTa || dailyContent?.formattedDateTa || feastDayEn;
-
-  const isBoilerplate = (text) => /Every day, we will|Other Sts whose feast day|December 31|டிசம்பர் 31|ஒவ்வொரு நாளும்|பீடிகாபிகேஷன்|Saints are special people in the Catholic faith|beacons of light|கலங்கரை விளக்கங்களாக/i.test(text || '');
-
-  let descEn = (
-    dailyContent?.saint?.descriptionEn ||
-    dailyContent?.saint?.description ||
-    dailyContent?.saint?.descriptionEnglish ||
-    dailyContent?.saintDescription ||
-    dailyContent?.saintDescriptionEn ||
-    ''
-  ).trim();
-
-  let descTaRaw = (
-    dailyContent?.saint?.descriptionTa ||
-    dailyContent?.saint?.descriptionTamil ||
-    dailyContent?.saintDescriptionTa ||
-    ''
-  ).trim();
-
-  if (isBoilerplate(descEn) || !descEn) {
-    descEn = fallbackSaint?.description || '';
-  }
-  if (isBoilerplate(descTaRaw) || !descTaRaw) {
-    descTaRaw = fallbackSaint?.descriptionTa || '';
-  }
-
-  // Validate that Tamil biography actually contains Tamil characters
-  const hasTamilInBio = Boolean(descTaRaw && /[\u0B80-\u0BFF]/.test(descTaRaw));
-  const descTa = hasTamilInBio ? descTaRaw : (fallbackSaint?.descriptionTa || '');
-
-  const feastTypeEn = dailyContent?.saint?.feastType || 'Feast';
-  const feastTypeTa = dailyContent?.saint?.feastTypeTa || 'நினைவுநாள்';
-
-  const otherSaints = saintObj?.otherSaints || dailyContent?.otherSaints || [];
-
-  let msg = '';
-
-  // 1. ENGLISH ONLY
-  if (lang === 'en') {
-    msg = `✨ *Saint of the Day*\n\n👑 *${saintNameEn}*\n\n`;
-    if (feastDayEn) {
-      msg += `📅 *Feast Day:* ${feastDayEn}\n\n`;
-    }
-    if (titleEn && titleEn !== saintNameEn) {
-      msg += `🎉 *${feastTypeEn}:* ${titleEn}\n\n`;
-    }
-    if (descEn) {
-      msg += `${descEn}\n\n`;
-    }
-    if (otherSaints.length > 0) {
-      msg += `🕊️ *Other Saints Commemorated Today:*\n`;
-      otherSaints.forEach(os => {
-        msg += `• *${os.name || os.title}*\n`;
-      });
-      msg += `\n`;
-    }
-    msg += `— *St. John de Britto Church, Kalayarkoil*\n_SJDB Connect_`;
-    return removeAllUrls(msg.trim());
-  }
-
-  // 2. BILINGUAL (TAMIL + ENGLISH)
-  if (lang === 'both') {
-    let finalNameTa = saintNameTa || saintNameEn;
-    if (!finalNameTa || finalNameTa.trim() === 'இன்றைய புனிதர்') {
-      finalNameTa = fallbackSaint?.nameTa || fallbackSaint?.name || 'Saint of the Day';
-    }
-    const finalFeastDayTa = feastDayTa || feastDayEn;
-    const finalTitleTa = titleTa && titleTa !== titleEn ? titleTa : (dailyContent?.saint?.feastTitleTa || null);
-
-    msg = `🇮🇳 *தமிழ் (Tamil)*\n✨ *இன்றைய புனிதர்*\n\n👑 *${finalNameTa}*\n\n`;
-    if (finalFeastDayTa) {
-      msg += `📅 *திருவிழா நாள்:* ${finalFeastDayTa}\n\n`;
-    }
-    if (finalTitleTa && finalTitleTa !== finalNameTa) {
-      msg += `🎉 *${feastTypeTa}:* ${finalTitleTa}\n\n`;
-    }
-    if (descTa) {
-      msg += `${descTa}\n\n`;
-    } else {
-      msg += `இன்றைய புனிதரின் வாழ்க்கை வரலாறு மற்றும் அருளுரைகள் எமது ஆலய இணையதளத்தில் வாசிக்கலாம்.\n\n`;
-    }
-    if (otherSaints.length > 0) {
-      msg += `🕊️ *இன்று நினைவுகூரப்படும் பிற புனிதர்கள்:*\n`;
-      otherSaints.forEach(os => {
-        msg += `• *${os.nameTa || os.tamilName || os.name || os.title}*\n`;
-      });
-      msg += `\n`;
-    }
-
-    msg += `🇬🇧 *English*\n✨ *Saint of the Day*\n\n👑 *${saintNameEn}*\n\n`;
-    if (feastDayEn) {
-      msg += `📅 *Feast Day:* ${feastDayEn}\n\n`;
-    }
-    if (titleEn && titleEn !== saintNameEn) {
-      msg += `🎉 *${feastTypeEn}:* ${titleEn}\n\n`;
-    }
-    if (descEn) {
-      msg += `${descEn}\n\n`;
-    }
-    if (otherSaints.length > 0) {
-      msg += `🕊️ *Other Saints Commemorated Today:*\n`;
-      otherSaints.forEach(os => {
-        msg += `• *${os.name || os.title}*\n`;
-      });
-      msg += `\n`;
-    }
-
-    msg += `— *St. John de Britto Church, Kalayarkoil*\n_SJDB Connect_`;
-    return removeAllUrls(msg.trim());
-  }
-
-  // 3. TAMIL ONLY (Strict default)
-  let finalName = saintNameTa || saintNameEn;
-  if (!finalName || finalName.trim() === 'இன்றைய புனிதர்') {
-    finalName = fallbackSaint?.nameTa || fallbackSaint?.name || 'Saint of the Day';
-  }
-  const finalFeastDay = feastDayTa || feastDayEn;
-  const finalTitle = titleTa && titleTa !== titleEn ? titleTa : (dailyContent?.saint?.feastTitleTa || null);
-
-  msg = `✨ *இன்றைய புனிதர்*\n\n👑 *${finalName}*\n\n`;
-  if (finalFeastDay) {
-    msg += `📅 *திருவிழா நாள்:* ${finalFeastDay}\n\n`;
-  }
-  if (finalTitle && finalTitle !== finalName) {
-    msg += `🎉 *${feastTypeTa}:* ${finalTitle}\n\n`;
-  }
-  if (descTa) {
-    msg += `${descTa}\n\n`;
-  } else {
-    console.warn('[SaintOfDay] Tamil biography unavailable — using dignified Tamil notice');
-    msg += `இன்றைய புனிதரின் வாழ்க்கை வரலாறு மற்றும் அருளுரைகள் எமது ஆலய இணையதளத்தில் வாசிக்கலாம்.\nஇறைவனின் ஆசீரும் புனிதரின் பரிந்துரையும் நம்மோடு இருப்பதாக.\n\n`;
-  }
-  if (otherSaints.length > 0) {
-    msg += `🕊️ *இன்று நினைவுகூரப்படும் பிற புனிதர்கள்:*\n`;
-    otherSaints.forEach(os => {
-      msg += `• *${os.nameTa || os.tamilName || os.name || os.title}*\n`;
-    });
-    msg += `\n`;
-  }
-  msg += `— *புனித அருளானந்தர் திருத்தலம், காளையார்கோவில்*\n_SJDB Connect_`;
-
-  return removeAllUrls(msg.trim());
+  return formatCanonicalSaintWhatsApp({
+    saint: saintObj || dailyContent?.saint || {},
+    language
+  });
 }
+
 
 /**
  * MESSAGE 5 — READ MORE LINK (Sent as final separate message)
@@ -1398,57 +1243,10 @@ _காளையார்கோவில்_`;
  * SAINT OF THE DAY — SEPARATE INFORMATION MESSAGE (Message 2 in Saint flow)
  */
 function generateSaintInfoMessage({ dailyContent, language = 'ta' }) {
-  const isTamil = language === 'ta';
-  const isBoth = language === 'both';
-  const saintNameEn = dailyContent?.saint?.nameEnglish || dailyContent?.saintOfTheDay?.english?.name || dailyContent?.saintName || 'Saint of the Day';
-  const saintNameTa = dailyContent?.saint?.nameTamil || dailyContent?.saintOfTheDay?.tamil?.name || dailyContent?.saintNameTa || saintNameEn;
-  const feastDay = dailyContent?.saint?.feastDay || dailyContent?.saintOfTheDay?.english?.feastDay || dailyContent?.formattedDate || '';
-  const descEn = dailyContent?.saint?.description || dailyContent?.saint?.descriptionEnglish || dailyContent?.saintOfTheDay?.english?.description || dailyContent?.saintDescription || '';
-  const descTa = dailyContent?.saint?.descriptionTamil || dailyContent?.saint?.descriptionTa || dailyContent?.saintOfTheDay?.tamil?.description || descEn;
-  const saintLink = getSiteUrl(SITE_ROUTES.SAINT_OF_THE_DAY);
-
-  if (isBoth) {
-    let msg = `✝️ *Saint of the Day • இன்றைய புனிதர்*\n\n`;
-    msg += `👑 *${saintNameEn}* (${saintNameTa})\n\n`;
-    if (feastDay) {
-      msg += `📅 *Feast Day / திருவிழா:* ${feastDay}\n\n`;
-    }
-    if (dailyContent?.saint?.feastTitle) {
-      msg += `🎉 *Feast / திருவிழா:* ${dailyContent.saint.feastTitle}\n\n`;
-    }
-    if (descTa && descTa !== descEn) {
-      msg += `🇮🇳 *தமிழ் (Tamil):*\n${descTa}\n\n`;
-    }
-    if (descEn) {
-      msg += `🇬🇧 *English:*\n${descEn}\n\n`;
-    }
-    msg += `🔗 *மேலும் வாசிக்க / Read More:*\n${saintLink}\n\n`;
-    msg += `— *St. John de Britto Church, Kalayarkoil*\n_புனித ஜான் டி பிரிட்டோ திருத்தலம்_\n_SJDB Connect_`;
-    return msg;
-  }
-
-  const name = isTamil ? saintNameTa : saintNameEn;
-  const desc = isTamil ? (descTa || descEn) : (descEn || descTa);
-
-  let msg = isTamil ? `✝️ *இன்றைய புனிதர் (Saint of the Day)*\n\n👑 *${name}*\n\n` : `✝️ *Saint of the Day*\n\n👑 *${name}*\n\n`;
-
-  if (feastDay) {
-    msg += `📅 *${isTamil ? 'திருவிழா / நாள்' : 'Feast Day'}:* ${feastDay}\n\n`;
-  }
-  if (dailyContent?.saint?.feastTitle) {
-    const fType = isTamil ? (dailyContent.saint.feastTypeTa || 'திருவிழா') : (dailyContent.saint.feastType || 'Feast');
-    const fTitle = isTamil ? (dailyContent.saint.feastTitleTa || dailyContent.saint.feastTitle) : dailyContent.saint.feastTitle;
-    msg += `🎉 *${fType}:* ${fTitle}\n\n`;
-  }
-  if (desc) {
-    msg += `${desc}\n\n`;
-  }
-
-  msg += `🔗 *${isTamil ? 'மேலும் வாசிக்க' : 'Read More'}:*\n${saintLink}\n\n`;
-  msg += `— *${isTamil ? 'புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்' : "St. John de Britto Church, Kalayarkoil"}*\n_SJDB Connect_`;
-
-  return msg;
+  const { formatCanonicalSaintWhatsApp } = require('./canonicalContentService');
+  return formatCanonicalSaintWhatsApp({ saint: dailyContent?.saint || {}, language });
 }
+
 
 /**
  * MESSAGE 2 — SAINT OF THE DAY SEPARATE MESSAGE CAPTION (Tamil + English Bilingual)

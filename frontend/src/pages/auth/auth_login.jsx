@@ -35,6 +35,7 @@ export default function Login() {
   const [verifyMaskedEmail, setVerifyMaskedEmail] = useState('');
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifyCooldown, setVerifyCooldown] = useState(0);
+  const [verifiedUser, setVerifiedUser] = useState(null);
 
   // Policy modal state
   const [agreePolicy, setAgreePolicy] = useState(false);
@@ -259,6 +260,15 @@ export default function Login() {
         emailOrUsername: verifyIdentifier.trim(),
         otp: verifyOtpVal.trim()
       });
+      if (res.data?.user) {
+        setVerifiedUser(res.data.user);
+        if (res.data.token && login) {
+          login(res.data.user, res.data.token);
+        } else if (login) {
+          const curToken = localStorage.getItem('token');
+          if (curToken) login(res.data.user, curToken);
+        }
+      }
       setVerifyStep('success');
       toast.success(res.data.message || 'Account verified successfully!');
     } catch (err) {
@@ -843,18 +853,18 @@ export default function Login() {
                     </p>
                   </div>
 
-                  <div className="pt-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const target = getRedirectDestination(null);
-                        navigate(target);
-                      }}
-                      className="btn-gold w-full justify-center py-3.5 text-base font-bold shadow-md"
-                    >
-                      Continue to Website →
-                    </button>
-                  </div>
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const target = getRedirectDestination(verifiedUser || user);
+                          navigate(target);
+                        }}
+                        className="btn-gold w-full justify-center py-3.5 text-base font-bold shadow-md"
+                      >
+                        Continue to Website →
+                      </button>
+                    </div>
                 </div>
               )}
             </div>

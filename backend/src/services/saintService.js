@@ -2025,6 +2025,7 @@ const getDailySaint = (targetDate = new Date()) => {
 module.exports = { 
   getDailySaint, 
   fetchDailySaint, 
+  loadCachedSaint,
   searchAndApplySaintImage, 
   getISTDateParts, 
   saveSaintToDatabase,

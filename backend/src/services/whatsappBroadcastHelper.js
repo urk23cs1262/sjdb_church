@@ -46,87 +46,15 @@ function formatEventDate(dateInput) {
  * Format an Announcement into the exact WhatsApp message template
  */
 function formatAnnouncementWhatsApp(announcement) {
-  const cleanTitle = (announcement.title || 'Parish Announcement').trim();
-  let content = (announcement.content || announcement.description || '').trim();
-
-  // Guard against broken or placeholder values
-  if (!content || content.toLowerCase() === 'ee' || content.toLowerCase() === 'undefined' || content.toLowerCase() === 'null') {
-    content = `The Parish Office of St. John de Britto Church, Kalayarkoil, wishes to inform all parishioners regarding ${cleanTitle}.\n\nAll parishioners are kindly requested to take note of this information and participate actively in the parish community.\n\nFor further details, please contact the Parish Office.`;
-  }
-
-  const announcementUrl = `${getPublicClientUrl()}/announcements`;
-
-  return `📢 *Parish Announcement*
-
-⛪ *${cleanTitle}*
-
-${content}
-
-🌐 *Read the complete announcement:*
-${announcementUrl}
-
-— *St. John de Britto Church, Kalayarkoil*
-_SJDB Connect_`;
+  const { formatCanonicalAnnouncement } = require('./canonicalContentService');
+  return formatCanonicalAnnouncement({ announcement, language: 'both' });
 }
 
-/**
- * Format an Event into the exact WhatsApp message template
- */
 function formatEventWhatsApp(event) {
-  const cleanTitle = (event.title || 'Parish Event').trim();
-  let desc = (event.description || '').trim();
-  if (desc.toLowerCase() === 'ee' || desc.toLowerCase() === 'test' || desc.toLowerCase() === 'undefined') {
-    desc = `St. John de Britto Church, Kalayarkoil, warmly invites all parishioners and their families to the ${cleanTitle}.\n\nThe gathering is being organized as an opportunity for parish families to come together in fellowship, strengthen community relationships, and participate in activities prepared by the parish.\n\nFor further information, please contact the Parish Office.`;
-  }
-
-  const dateFormatted = event.date ? formatEventDate(event.date) : '';
-  const timeVal = (event.time || '').trim();
-  const venueVal = (event.venue || event.location || '').trim();
-  const organizerVal = (event.organizer || '').trim();
-
-  const isRegRequired = event.registrationRequired === true ||
-    event.registrationRequired === 'true' ||
-    event.requiresRegistration === true ||
-    event.requiresRegistration === 'true';
-
-  // Build field lines cleanly, omitting any missing fields completely
-  const infoLines = [];
-  if (dateFormatted && dateFormatted !== 'undefined') {
-    infoLines.push(`📅 *Date:* ${dateFormatted}`);
-  }
-  if (timeVal && timeVal !== 'undefined') {
-    infoLines.push(`🕕 *Time:* ${timeVal}`);
-  }
-  if (venueVal && venueVal !== 'undefined') {
-    infoLines.push(`📍 *Venue:* ${venueVal}`);
-  }
-  if (organizerVal && organizerVal !== 'undefined') {
-    infoLines.push(`👤 *Organizer:* ${organizerVal}`);
-  }
-
-  const infoSection = infoLines.length > 0 ? infoLines.join('\n') : '';
-
-  // Dynamic registration message
-  const regMessage = isRegRequired
-    ? `All parishioners and families are encouraged to participate and make the gathering a joyful and meaningful occasion.\n\n📝 *Registration is required.*`
-    : `All parishioners and families are welcome to participate.`;
-
-  const eventUrl = `${getPublicClientUrl()}/events`;
-
-  return `📅 *Parish Event*
-
-⛪ *${cleanTitle}*
-
-${desc}
-
-${infoSection ? `${infoSection}\n\n` : ''}${regMessage}
-
-🌐 *View event details & register:*
-${eventUrl}
-
-— *St. John de Britto Church, Kalayarkoil*
-_SJDB Connect_`;
+  const { formatCanonicalEvent } = require('./canonicalContentService');
+  return formatCanonicalEvent({ event, language: 'both' });
 }
+
 
 /**
  * Fetch all unique, active WhatsApp recipient phone numbers (excluding STOP opt-outs)

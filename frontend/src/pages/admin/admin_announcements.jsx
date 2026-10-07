@@ -5,7 +5,9 @@ export default function AdminAnnouncements() {
     { name: 'content', label: 'Content', type: 'textarea', required: true },
     { name: 'type', label: 'Type', type: 'select', options: ['general','feast','funeral','marriage','emergency','meeting'], defaultValue: 'general' },
     { name: 'priority', label: 'Priority', type: 'select', options: ['low','medium','high','urgent'], defaultValue: 'medium' },
+    { name: 'eventLink', label: 'Event Page Link', placeholder: '/events', defaultValue: '/events' },
     { name: 'expiresAt', label: 'Expires At', type: 'date' },
+    { name: 'status', label: 'Status', type: 'select', options: ['published', 'unpublished', 'expired', 'deleted'], defaultValue: 'published' },
     { name: 'isPublished', label: 'Published', type: 'checkbox', defaultValue: true },
   ]} />;
 }

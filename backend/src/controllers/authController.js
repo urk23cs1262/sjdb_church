@@ -591,45 +591,48 @@ const login = async (req, res) => {
       }
     }
 
-    // Check 30-Day OTP Re-verification Cycle & Global OTP Reset Requirement
-    // Admin and Priest accounts are strictly EXEMPT from routine 30-day OTP
+    // Check Global OTP Reset & 30-Day OTP Re-verification Cycle
     const userRole = (user.role || '').toLowerCase();
-    const isExempt = ['admin', 'priest'].includes(userRole);
+    const isExemptFromRoutineCycle = ['admin', 'priest'].includes(userRole);
+    const hasGlobalResetRequired = user.verificationRequired === true || !!user.activeGlobalResetId;
 
-    if (!isExempt) {
-      const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-      const lastVerified = user.lastVerifiedAt || user.otpVerifiedAt;
-      const nextDue = user.nextVerificationAt || (lastVerified ? new Date(new Date(lastVerified).getTime() + THIRTY_DAYS_MS) : null);
-      const isCycleExpired = !lastVerified || (nextDue && now.getTime() >= new Date(nextDue).getTime());
-      const isVerificationRequired = user.otpVerificationRequired === true || !user.isVerified || isCycleExpired;
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const lastVerified = user.lastVerifiedAt || user.otpVerifiedAt;
+    const nextDue = user.verificationExpiresAt || user.nextVerificationAt || (lastVerified ? new Date(new Date(lastVerified).getTime() + THIRTY_DAYS_MS) : null);
+    const isCycleExpired = !lastVerified || (nextDue && now.getTime() >= new Date(nextDue).getTime());
 
-      if (isVerificationRequired) {
-        // Mark user state as pending verification if not already
-        if (!user.otpVerificationRequired || user.verificationStatus !== 'Pending Verification') {
-          await User.findByIdAndUpdate(user._id, {
-            otpVerificationRequired: true,
-            verificationStatus: 'Pending Verification'
-          });
-        }
+    // Global reset applies to EVERYONE (including admins). Routine cycle applies to non-exempt members.
+    const isVerificationRequired = hasGlobalResetRequired || (!isExemptFromRoutineCycle && (user.otpVerificationRequired === true || !user.isVerified || isCycleExpired));
 
-        const { otp } = await createAndSendOTP({
-          userId: user._id,
-          phone: user.phone,
-          email: user.email,
-          purpose: 'login',
-          req
-        });
-
-        return res.status(200).json({
-          success: true,
-          requiresOTP: true,
-          userId: user._id,
-          devOtp: otp,
-          message: isCycleExpired
-            ? 'Your 30-day security verification cycle has matured. A 6-digit verification code has been dispatched to your email and WhatsApp.'
-            : 'Account verification is required. A 6-digit verification code has been dispatched to your email and WhatsApp.'
+    if (isVerificationRequired) {
+      // Mark user state as pending verification if not already
+      if (!user.otpVerificationRequired || user.verificationStatus !== 'Pending Verification') {
+        await User.findByIdAndUpdate(user._id, {
+          verificationRequired: true,
+          otpVerificationRequired: true,
+          verificationStatus: 'Pending Verification'
         });
       }
+
+      const { otp } = await createAndSendOTP({
+        userId: user._id,
+        phone: user.phone,
+        email: user.email,
+        purpose: 'login',
+        req
+      });
+
+      return res.status(200).json({
+        success: true,
+        requiresOTP: true,
+        userId: user._id,
+        devOtp: otp,
+        message: hasGlobalResetRequired
+          ? 'Security verification required due to Church Global Reset. A 6-digit verification code has been dispatched to your email and WhatsApp.'
+          : (isCycleExpired
+            ? 'Your 30-day security verification cycle has matured. A 6-digit verification code has been dispatched to your email and WhatsApp.'
+            : 'Account verification is required. A 6-digit verification code has been dispatched to your email and WhatsApp.')
+      });
     }
 
     const isFirstLogin = !user.firstSuccessfulLoginAt;
@@ -918,20 +921,26 @@ const lookupFamily = async (req, res) => {
 // POST /api/auth/verify-account/send-otp
 const sendVerificationOtp = async (req, res) => {
   try {
-    const { emailOrUsername } = req.body;
-    if (!emailOrUsername) {
-      return res.status(400).json({ success: false, message: 'Please enter your email or username' });
+    let { emailOrUsername, userId } = req.body;
+    let user = null;
+
+    if (userId) {
+      user = await User.findById(userId);
+    } else if (req.user?._id) {
+      user = await User.findById(req.user._id);
     }
 
-    const trimmed = emailOrUsername.trim().toLowerCase();
-    const user = await User.findOne({
-      $or: [
-        { email: trimmed },
-        { phone: trimmed },
-        { parishMemberId: trimmed.toUpperCase() },
-        { name: new RegExp(`^${trimmed}$`, 'i') }
-      ]
-    });
+    if (!user && emailOrUsername) {
+      const trimmed = emailOrUsername.trim().toLowerCase();
+      user = await User.findOne({
+        $or: [
+          { email: trimmed },
+          { phone: trimmed },
+          { parishMemberId: trimmed.toUpperCase() },
+          { name: new RegExp(`^${trimmed}$`, 'i') }
+        ]
+      });
+    }
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'No registered account found with that email or identifier' });
@@ -939,7 +948,7 @@ const sendVerificationOtp = async (req, res) => {
 
     // Generate and dispatch OTP via Email and SMS
     const { createAndSendOTP } = require('../services/otpService');
-    await createAndSendOTP({
+    const otpResult = await createAndSendOTP({
       userId: user._id,
       email: user.email,
       phone: user.phone,
@@ -947,12 +956,16 @@ const sendVerificationOtp = async (req, res) => {
       req
     });
 
+    user.lastOtpSentAt = new Date();
+    await user.save();
+
     const emailMasked = user.email ? user.email.replace(/^(.{2})(.*)(@.*)$/, '$1***$3') : null;
 
     res.json({
       success: true,
       message: `Verification code sent to ${emailMasked || 'your registered contact'}`,
       userId: user._id,
+      devOtp: otpResult?.otp,
       emailMasked
     });
   } catch (err) {
@@ -972,6 +985,8 @@ const verifyAccountOtp = async (req, res) => {
     let user = null;
     if (userId) {
       user = await User.findById(userId);
+    } else if (req.user?._id) {
+      user = await User.findById(req.user._id);
     } else if (emailOrUsername) {
       const trimmed = emailOrUsername.trim().toLowerCase();
       user = await User.findOne({
@@ -999,23 +1014,42 @@ const verifyAccountOtp = async (req, res) => {
       return res.status(400).json({ success: false, message: result.message });
     }
 
-    // Reset 30-day verification cycle
+    // Reset individual 30-day verification cycle & global reset state
     user.account_verified = true;
     user.isVerified = true;
     user.last_verified_at = new Date();
     user.last_verification_stage = null;
     user.last_verification_reminder_at = null;
+    user.verificationRequired = false;
+    user.otpVerificationRequired = false;
+    user.otpVerified = true;
+    user.activeGlobalResetId = null;
     await user.save();
+
+    try {
+      const { recordGlobalOtpVerificationSuccess } = require('../services/globalOtpResetService');
+      await recordGlobalOtpVerificationSuccess({ userId: user._id, req });
+    } catch (globalErr) {
+      console.warn('[AuthController] recordGlobalOtpVerificationSuccess warning:', globalErr.message);
+    }
+
+    const token = generateToken(user._id, user.role, user.authVersion || user.tokenVersion || 1);
 
     res.json({
       success: true,
       message: 'Account verified successfully! You can now use all church features freely.',
+      token,
       user: {
         _id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role,
         account_verified: true,
-        last_verified_at: user.last_verified_at
+        isVerified: true,
+        verificationRequired: false,
+        verificationStatus: 'Verified',
+        last_verified_at: user.last_verified_at,
+        verificationExpiresAt: user.verificationExpiresAt
       }
     });
   } catch (err) {

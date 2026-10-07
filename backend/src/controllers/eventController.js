@@ -127,6 +127,12 @@ const create = async (req, res) => {
     if (req.user) data.createdBy = req.user._id;
     const event = await Event.create(data);
 
+    // Server-Side Hourly Tomorrow Event Reminder & Announcement Hook
+    const { onEventCreated } = require('../services/hourlyEventReminderService');
+    onEventCreated(event).catch(err => {
+      console.error('[EventController] Error initializing hourly event reminder:', err.message);
+    });
+
     // Multi-Channel Broadcast across WhatsApp, Email, In-App, and Push
     if (event.isPublished !== false) {
       const { broadcastEventPublished } = require('../services/broadcastNotificationService');
@@ -171,6 +177,15 @@ const update = async (req, res) => {
     const previousEvent = await Event.findById(req.params.id);
     if (!previousEvent) return res.status(404).json({ success: false, message: 'Event not found' });
 
+    if (data.status === 'cancelled' || data.isCancelled === 'true' || data.isCancelled === true) {
+      data.status = 'cancelled';
+      data.isCancelled = true;
+      data.cancelledAt = new Date();
+      data.reminderStatus = 'cancelled';
+    } else if (data.status === 'active') {
+      data.isCancelled = false;
+    }
+
     if (req.body.removeImage === 'true') {
       data.image = '';
       if (previousEvent.image && previousEvent.image.startsWith('/api/files/')) {
@@ -189,6 +204,18 @@ const update = async (req, res) => {
       }
     }
     const event = await Event.findByIdAndUpdate(req.params.id, data, { new: true });
+
+    // Server-Side Hourly Event Reminder Hook
+    const { onEventCreated: reevalEvent, onEventCancelledOrDeleted } = require('../services/hourlyEventReminderService');
+    if (event.status === 'cancelled' || event.isCancelled === true) {
+      onEventCancelledOrDeleted(event._id).catch(err => {
+        console.error('[EventController] Error cancelling event reminders:', err.message);
+      });
+    } else {
+      reevalEvent(event).catch(err => {
+        console.error('[EventController] Error updating event reminders:', err.message);
+      });
+    }
 
     // Multi-Channel Broadcast for Updated Event
     if (event && event.isPublished !== false) {
@@ -214,6 +241,10 @@ const remove = async (req, res) => {
       const { deleteFromGridFS } = require('../services/gridfsService');
       deleteFromGridFS(event.image.replace('/api/files/', '')).catch(() => {});
     }
+
+    // Immediately halt reminders and purge announcements BEFORE deleting the event
+    const { onEventCancelledOrDeleted } = require('../services/hourlyEventReminderService');
+    await onEventCancelledOrDeleted(req.params.id);
 
     await Event.findByIdAndDelete(req.params.id);
 

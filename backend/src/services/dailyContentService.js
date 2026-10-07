@@ -369,16 +369,14 @@ async function getTodayDailyContent(targetDate = new Date()) {
     rawNameTa = fallbackSaint?.nameTa || rawNameEn;
   }
 
-  const isBoilerplate = (text) => /Every day, we will|Other Sts whose feast day|December 31|டிசம்பர் 31|ஒவ்வொரு நாளும்|பீடிகாபிகேஷன்|Saints are special people in the Catholic faith|beacons of light|கலங்கரை விளக்கங்களாக/i.test(text || '');
-
-  let rawDescEn = saintData?.descriptionEn || saintData?.description || saintData?.descriptionEnglish || '';
-  if (isBoilerplate(rawDescEn) || !rawDescEn) {
+  let rawDescEn = (saintData?.descriptionEn || saintData?.description || saintData?.descriptionEnglish || '').trim();
+  if (!rawDescEn || rawDescEn.length < 50) {
     rawDescEn = fallbackSaint?.description || '';
   }
 
-  let rawDescTa = saintData?.descriptionTa || saintData?.descriptionTamil || '';
-  if (isBoilerplate(rawDescTa) || !rawDescTa || !/[\u0B80-\u0BFF]/.test(rawDescTa)) {
-    rawDescTa = fallbackSaint?.descriptionTa || '';
+  let rawDescTa = (saintData?.descriptionTa || saintData?.descriptionTamil || '').trim();
+  if (!rawDescTa || rawDescTa.length < 50 || !/[\u0B80-\u0BFF]/.test(rawDescTa)) {
+    rawDescTa = fallbackSaint?.descriptionTa || 'இன்றைய புனிதரின் வாழ்க்கை வரலாறு மற்றும் அருளுரைகள் எமது ஆலய இணையதளத்தில் வாசிக்கலாம்.';
   }
 
   const finalSaintImage = saintImageUrl || fallbackSaint?.image || null;
@@ -389,6 +387,9 @@ async function getTodayDailyContent(targetDate = new Date()) {
     nameTamil: rawNameTa,
     nameEn: rawNameEn,
     nameTa: rawNameTa,
+    saintName: rawNameEn,
+    englishName: rawNameEn,
+    tamilName: rawNameTa,
     titleEn: saintData?.titleEn || saintData?.feastTitle || rawNameEn,
     titleTa: saintData?.titleTa || saintData?.feastTitleTa || rawNameTa,
     description: rawDescEn,
@@ -412,9 +413,12 @@ async function getTodayDailyContent(targetDate = new Date()) {
     localUrl: saintData?.localUrl || null,
     localPath: saintData?.localPath || null,
     imageAttachment: saintAttachment,
-    imageSource: saintData?.imageSource || 'liturgical_calendar',
-    sourceUrl: saintData?.sourceUrl || saintData?.link || 'https://www.vaticannews.va/en/saints.html',
+    imageSource: saintData?.imageSource || 'vatican',
+    source: saintData?.source || 'Vatican News',
+    sourceUrl: saintData?.primaryCelebration?.sourceUrl || saintData?.primarySaint?.sourceUrl || saintData?.sourceUrl || saintData?.link || 'https://www.vaticannews.va/en/saints.html',
+    link: saintData?.primaryCelebration?.sourceUrl || saintData?.primarySaint?.sourceUrl || saintData?.link || saintData?.sourceUrl || 'https://www.vaticannews.va/en/saints.html',
     saints: saintData?.saints || [],
+    primaryCelebration: saintData?.primaryCelebration || null,
     primarySaint: saintData?.primarySaint || null,
     otherSaints: saintData?.otherSaints || []
   };

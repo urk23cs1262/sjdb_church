@@ -25,6 +25,19 @@ const eventSchema = new mongoose.Schema({
   }],
   isPublished: { type: Boolean, default: true },
   isFeatured: { type: Boolean, default: false },
+  status: { type: String, enum: ['active', 'cancelled', 'completed'], default: 'active' },
+  isCancelled: { type: Boolean, default: false },
+  cancelledAt: { type: Date },
+  cancelledReason: { type: String },
+  lastReminderSentAt: { type: Date },
+  nextReminderAt: { type: Date },
+  reminderStatus: { type: String, enum: ['active', 'idle', 'completed', 'cancelled'], default: 'idle' },
+  reminderCount: { type: Number, default: 0 },
+  reminderHistory: [{
+    sentAt: { type: Date, default: Date.now },
+    channels: [String],
+    recipientCount: Number
+  }],
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 }, { timestamps: true });
 

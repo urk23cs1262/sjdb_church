@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { MdNotifications } from 'react-icons/md';
@@ -100,9 +101,30 @@ export default function Announcements() {
                       {ann.priority !== 'low' && <span className={`badge ${ann.priority === 'urgent' ? 'badge-red' : ann.priority === 'high' ? 'badge-gold' : 'badge-blue'} capitalize`}>{ann.priority}</span>}
                     </div>
                   </div>
-                  <p className="text-gray-600 text-sm leading-relaxed pl-13">{ann.content}</p>
+                  <p className="text-gray-600 text-sm leading-relaxed pl-13 whitespace-pre-line">{ann.content}</p>
+                  
+                  <div className="mt-4 pl-13 flex flex-wrap items-center gap-3">
+                    {ann.expiresAt && (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200/80 rounded-lg text-xs font-semibold text-amber-800">
+                        <span>⏰</span>
+                        <span>Valid until {new Date(ann.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                      </span>
+                    )}
+
+                    {(ann.eventId || (ann.eventLink && ann.eventLink !== '/announcements')) && (
+                      <Link
+                        to={ann.eventLink || '/events'}
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-church-gold to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow-md transition-all group cursor-pointer"
+                      >
+                        <span>📅</span>
+                        <span>View Event Details</span>
+                        <span className="transition-transform group-hover:translate-x-1">→</span>
+                      </Link>
+                    )}
+                  </div>
+
                   {ann.attachment && (
-                    <a href={ann.attachment} target="_blank" rel="noreferrer" className="inline-block mt-3 text-church-gold text-sm hover:underline"> View Attachment</a>
+                    <a href={ann.attachment} target="_blank" rel="noreferrer" className="inline-block mt-3 text-church-gold text-sm hover:underline pl-13"> View Attachment</a>
                   )}
                 </motion.div>
               ))}

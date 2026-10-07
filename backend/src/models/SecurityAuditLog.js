@@ -26,6 +26,12 @@ const securityAuditLogSchema = new mongoose.Schema({
       'OTP_EXPIRED',
       'OTP_RESEND',
       'GLOBAL_OTP_RESET',
+      'GLOBAL_OTP_RESET_INITIATED',
+      'GLOBAL_OTP_REVERIFICATION_SUCCESS',
+      'USER_OTP_REVERIFIED',
+      'ADMIN_OTP_REVERIFIED',
+      'OTP_REVERIFICATION_REMINDER_SENT',
+      'OTP_REVERIFICATION_EXPIRED',
       'DAILY_REMINDER_SENT',
       'NOTIFICATION_FAILURE'
     ],
@@ -46,7 +52,7 @@ const securityAuditLogSchema = new mongoose.Schema({
   },
   source: {
     type: String,
-    enum: ['LOGIN', 'REGISTER', 'GLOBAL_OTP_RESET', 'CRON_JOB', 'ADMIN_ACTION', 'SYSTEM'],
+    enum: ['LOGIN', 'REGISTER', 'GLOBAL_OTP_RESET', 'CRON_JOB', 'ADMIN_ACTION', 'ADMIN_DASHBOARD', 'SYSTEM'],
     default: 'SYSTEM'
   },
   success: {

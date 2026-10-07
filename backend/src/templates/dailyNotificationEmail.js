@@ -86,11 +86,11 @@ function renderMassReadingsSection(massReadings, lang) {
     `;
   }
 
-  html += `
-    <div style="margin-top: 12px; padding-top: 8px; border-top: 1px dashed #CBD5E1; font-size: 12px; color: #64748B; text-align: right;">
-      Source: <a href="https://www.catholicgallery.org/tamil-mass-readings-today/" target="_blank" style="color: #C5A059; text-decoration: none; font-weight: 600;">Catholic Lectionary / CCBI &amp; USCCB Liturgy</a>
-    </div>
-  `;
+  // html += `
+  //   <div style="margin-top: 12px; padding-top: 8px; border-top: 1px dashed #CBD5E1; font-size: 12px; color: #64748B; text-align: right;">
+  //     Source: <a href="https://www.catholicgallery.org/tamil-mass-readings-today/" target="_blank" style="color: #C5A059; text-decoration: none; font-weight: 600;">Catholic Lectionary / CCBI &amp; USCCB Liturgy</a>
+  //   </div>
+  // `;
 
   return html;
 }
@@ -127,11 +127,11 @@ function renderReflectionSection(reflection, lang) {
     `;
   }
 
-  html += `
-    <div style="margin-top: 12px; padding-top: 8px; font-size: 12px; color: #64748B; text-align: right;">
-      Source: <a href="https://www.tamilcatholicdaily.com/dailyverse" target="_blank" style="color: #C5A059; text-decoration: none; font-weight: 600;">Catholic Liturgical Meditations / Daily Living Word</a>
-    </div>
-  `;
+  // html += `
+  //   <div style="margin-top: 12px; padding-top: 8px; font-size: 12px; color: #64748B; text-align: right;">
+  //     Source: <a href="https://www.tamilcatholicdaily.com/dailyverse" target="_blank" style="color: #C5A059; text-decoration: none; font-weight: 600;">Catholic Liturgical Meditations / Daily Living Word</a>
+  //   </div>
+  // `;
 
   return html;
 }
@@ -310,10 +310,6 @@ function generateDailyNotificationHtml({
                       </div>
                       ` : ''}
 
-                      <!-- Attribution -->
-                      <div style="margin-top: 14px; padding-top: 10px; border-top: 1px solid #E2E8F0; font-size: 12px; color: #64748B; text-align: right;">
-                        Source: <a href="${escapeHtml(saint.sourceUrl || 'https://www.vaticannews.va/en/saints.html')}" target="_blank" style="color: #C5A059; text-decoration: none; font-weight: 600;">${escapeHtml(saint.source || 'Vatican News')}</a>
-                      </div>
                     </div>
                   </td>
                 </tr>

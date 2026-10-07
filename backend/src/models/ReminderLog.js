@@ -5,7 +5,6 @@ const reminderLogSchema = new mongoose.Schema({
   itemModel: { type: String, enum: ['Event', 'Announcement'], required: true },
   reminderType: {
     type: String,
-    enum: ['2_days_before', '1_day_before', 'day_of_5am', 'day_of_12pm'],
     required: true
   },
   title: { type: String },

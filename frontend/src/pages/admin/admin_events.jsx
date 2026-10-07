@@ -12,6 +12,7 @@ export default function AdminEvents() {
         { name: 'venue', label: 'Venue' },
         { name: 'organizer', label: 'Organizer' },
         { name: 'category', label: 'Category', type: 'select', defaultValue: 'other', options: ['feast','mass','meeting','youth','choir','catechism','community','other'] },
+        { name: 'status', label: 'Status', type: 'select', defaultValue: 'active', options: ['active','cancelled','completed'] },
         { name: 'isFeatured', label: 'Featured Event', type: 'checkbox' },
         { name: 'registrationRequired', label: 'Requires Registration', type: 'checkbox' },
         { name: 'isPublished', label: 'Published', type: 'checkbox', defaultValue: true },

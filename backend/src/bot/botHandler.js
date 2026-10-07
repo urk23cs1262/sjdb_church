@@ -711,72 +711,16 @@ async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false, ra
     session.lastSentAt = new Date();
     session.save().catch(() => {});
 
-    // Retrieve unified daily content and authentic liturgical saint data
-    const { getSaintForDate } = require('../data/catholic_saints_calendar');
-    const { getDailySaint } = require('../services/saintService');
-    const cachedDaily = await getCachedDailyContent();
-    let sData = cachedDaily?.saint || getDailySaint();
+    const { getCanonicalSaint, formatCanonicalSaintWhatsApp, getCanonicalSaintImagePayload } = require('../services/canonicalContentService');
+    const saint = await getCanonicalSaint(new Date());
 
-    const dateKey = cachedDaily?.dateKey || sData?.date || new Date().toISOString().slice(0, 10);
-    const fallbackSaint = getSaintForDate(dateKey);
-
-    let saintNameEn = sData?.nameEn || sData?.englishName || sData?.name || cachedDaily?.saintName;
-    if (!saintNameEn || saintNameEn.toLowerCase().includes('saint of the day') || saintNameEn.toLowerCase().includes('today\'s saint')) {
-      saintNameEn = fallbackSaint?.name || 'Saint of the Day';
-    }
-
-    let saintNameTa = sData?.nameTa || sData?.tamilName || cachedDaily?.saintNameTa;
-    if (!saintNameTa || saintNameTa.trim() === 'இன்றைய புனிதர்' || saintNameTa.trim() === 'புனிதர்') {
-      saintNameTa = fallbackSaint?.nameTa || saintNameEn;
-    }
-
-    const isBoilerplate = (text) => /Every day, we will|Other Sts whose feast day|December 31|டிசம்பர் 31|ஒவ்வொரு நாளும்|பீடிகாபிகேஷன்|Saints are special people in the Catholic faith|beacons of light|கலங்கரை விளக்கங்களாக/i.test(text || '');
-
-    let descEn = sData?.descriptionEn || sData?.description || '';
-    if (isBoilerplate(descEn) || !descEn) {
-      descEn = fallbackSaint?.description || '';
-    }
-
-    let descTa = sData?.descriptionTa || '';
-    if (isBoilerplate(descTa) || !descTa || !/[\u0B80-\u0BFF]/.test(descTa)) {
-      descTa = fallbackSaint?.descriptionTa || '';
-    }
-
-    const saintImage = sData?.image || cachedDaily?.saintImage || fallbackSaint?.image || null;
-
-    sData = {
-      ...sData,
-      name: saintNameEn,
-      nameEn: saintNameEn,
-      englishName: saintNameEn,
-      nameTa: saintNameTa,
-      tamilName: saintNameTa,
-      description: descEn,
-      descriptionEn: descEn,
-      descriptionTa: descTa,
-      image: saintImage,
-      imageUrl: saintImage,
-      remoteUrl: saintImage
-    };
-
-    const dailyContent = {
-      ...cachedDaily,
-      dateKey,
-      saint: sData,
-      saintName: saintNameEn,
-      saintNameTa: saintNameTa,
-      saintImage
-    };
-
-    const hasTa = Boolean(descTa && /[\u0B80-\u0BFF]/.test(descTa));
-    console.log(`[SaintOfDay] Date: ${dateKey}`);
-    console.log(`[SaintOfDay] Source: ${sData?.imageSource || 'Vatican News'}`);
-    console.log(`[SaintOfDay] User chosen Daily Catholic Content language: ${contentLang}`);
-    console.log(`[SaintOfDay] Tamil translation: ${hasTa ? 'available' : 'unavailable'}`);
-    console.log(`[SaintOfDay] Sending ${contentLang === 'ta' ? 'Tamil' : contentLang === 'both' ? 'Bilingual' : 'English'} Saint content`);
+    console.log(`[SaintOfDay] Date: ${saint.date}`);
+    console.log(`[SaintOfDay] Source: ${saint.source}`);
+    console.log(`[SaintOfDay] User chosen language: ${contentLang}`);
+    console.log(`[SaintOfDay] Delivering canonical Saint of the Day: ${saint.nameEn}`);
 
     // 1. Saint of the Day Image (separate message)
-    const saintImagePayload = getDailySaintImagePayload({ dailyContent, language: contentLang });
+    const saintImagePayload = getCanonicalSaintImagePayload({ saint, language: contentLang });
     if (saintImagePayload && typeof wa.sendWhatsAppMedia === 'function') {
       try {
         await wa.sendWhatsAppMedia(replyTarget, saintImagePayload);
@@ -786,9 +730,9 @@ async function sendTodaySaint(replyTarget, session, wa, isTamilQuery = false, ra
       }
     }
 
-    // 2. Saint of the Day Content (separate message)
-    const saintContentMsg = generateSaintContentMessage({
-      dailyContent,
+    // 2. Saint of the Day Content (separate message matching website 1:1)
+    const saintContentMsg = formatCanonicalSaintWhatsApp({
+      saint,
       language: contentLang
     });
     await wa.sendWhatsAppMessage(replyTarget, saintContentMsg);

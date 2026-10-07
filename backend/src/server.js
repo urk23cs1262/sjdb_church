@@ -216,8 +216,10 @@ require('./services/maintenanceSchedulerService'); // Automated Maintenance star
 require('./services/bibleVerseService'); // 12:00 AM Daily Bible Verse automated rotation scheduler
 require('./services/dailyMassReadingService').initMidnightCron(); // 12:00 AM IST Daily Tamil Mass Readings automated sync scheduler
 require('./services/dailyNotificationService'); // 4:00 AM IST Daily Automated Catholic Content Multi-Channel Broadcast
-require('./services/tomorrowReminderService'); // 6:00 AM IST Daily Tomorrow's Events & Announcements Multi-Channel Reminder
 require('./services/accountVerificationService'); // 8:00 AM IST Daily Account Verification & Admin Alert System
+require('./services/globalOtpResetService'); // 12:00 AM & 8:00 AM IST Global OTP Reset & 30-Day Re-Verification Schedulers
+require('./services/hourlyEventReminderService'); // Server-Side Hourly Tomorrow Event Reminder & Crossed Event Prune System
+require('./services/hourlyAnnouncementReminderService'); // Server-Side Hourly Announcement Reminder & Auto-Expiry System
 
 // Background Monitor: Scan for expired/abandoned unverified OTPs every 60s
 const { checkAndNotifyExpiredOTPs } = require('./services/otpService');

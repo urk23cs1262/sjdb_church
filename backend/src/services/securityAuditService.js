@@ -19,11 +19,11 @@ async function logSecurityEvent({
     let userAgent = 'Unknown';
 
     if (req) {
-      ipAddress = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || 'Unknown';
+      ipAddress = req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || req.ip || 'Unknown';
       if (typeof ipAddress === 'string' && ipAddress.includes(',')) {
         ipAddress = ipAddress.split(',')[0].trim();
       }
-      userAgent = req.headers['user-agent'] || 'Unknown';
+      userAgent = req.headers?.['user-agent'] || 'Unknown';
     }
 
     // Sanitize details to ensure no OTP is ever stored

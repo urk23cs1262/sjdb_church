@@ -324,6 +324,45 @@ export default function UserDashboard() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 py-10">
+        {/* Prominent Security Verification Required Banner (Global OTP Reset) */}
+        {(user?.verificationRequired || user?.otpVerified === false || user?.verificationStatus === 'Pending' || user?.verificationStatus === 'Pending Verification' || user?.verificationStatus === 'Expired' || user?.verificationStatus === 'expired' || !!user?.activeGlobalResetId) && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl mb-6 sm:mb-8 border border-white/20 flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+          >
+            <div className="flex items-start sm:items-center gap-3.5 sm:gap-4 flex-1">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white text-2xl sm:text-3xl flex-shrink-0 shadow-md">
+                <FiShield />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base sm:text-lg font-black tracking-wide font-display text-white">
+                    Security Verification Required
+                  </h2>
+                  <span className="bg-white/25 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    Action Required
+                  </span>
+                </div>
+                <p className="text-xs sm:text-sm text-white/95 mt-1 font-medium leading-relaxed">
+                  Your account requires OTP re-verification due to a security reset initiated by the Church Administration.
+                </p>
+                <p className="text-[11px] text-white/80 mt-0.5">
+                  Please complete OTP verification to continue using your account. Your re-verification cycle is valid for 30 days.
+                </p>
+              </div>
+            </div>
+            <div className="w-full md:w-auto flex justify-end flex-shrink-0">
+              <Link
+                to={`/login?verify=true&email=${encodeURIComponent(user?.email || user?.phone || '')}`}
+                className="w-full sm:w-auto text-center bg-white text-rose-700 hover:bg-rose-50 font-black text-xs sm:text-sm py-2.5 px-5 rounded-xl shadow-lg transition-all transform active:scale-95 whitespace-nowrap cursor-pointer"
+              >
+                Verify Now →
+              </Link>
+            </div>
+          </motion.div>
+        )}
+
         {/* Pending Settings Change Request Banner */}
         {activePendingRequests.length > 0 && (
           <div className="space-y-4 mb-8">

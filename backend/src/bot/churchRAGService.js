@@ -319,98 +319,22 @@ function extractQueryIntents(rawText) {
 // Saint of the Day Section
 function buildSaintSection(dailyContent, isTamil, contentLang = null) {
   const lang = contentLang ? normalizeContentLanguage(contentLang) : (isTamil ? 'ta' : 'en');
-  const { getSaintForDate } = require('../data/catholic_saints_calendar');
-  const fallbackSaint = getSaintForDate(dailyContent?.dateKey || new Date());
-
+  const { formatCanonicalSaintWhatsApp, getCanonicalSaintImagePayload } = require('../services/canonicalContentService');
   const saintData = dailyContent?.saint || dailyContent?.saintOfTheDay || getDailySaint(new Date());
 
-  let saintNameEn = saintData?.nameEn || saintData?.nameEnglish || saintData?.name || dailyContent?.saintName;
-  if (!saintNameEn || saintNameEn.toLowerCase().includes('saint of the day') || saintNameEn.toLowerCase().includes('today\'s saint')) {
-    saintNameEn = fallbackSaint?.name || 'Saint of the Day';
-  }
-
-  let saintNameTa = saintData?.nameTa || saintData?.nameTamil || saintData?.tamilName || dailyContent?.saintNameTa;
-  if (!saintNameTa || saintNameTa.trim() === 'இன்றைய புனிதர்' || saintNameTa.trim() === 'புனிதர்') {
-    saintNameTa = fallbackSaint?.nameTa || saintNameEn;
-  }
-
-  const isBoilerplate = (text) => /Every day, we will|Other Sts whose feast day|December 31|டிசம்பர் 31|ஒவ்வொரு நாளும்|பீடிகாபிகேஷன்|Saints are special people in the Catholic faith|beacons of light|கலங்கரை விளக்கங்களாக/i.test(text || '');
-
-  let descEn = (saintData?.descriptionEn || saintData?.description || saintData?.descriptionEnglish || dailyContent?.saintDescription || '').trim();
-  if (isBoilerplate(descEn) || !descEn) {
-    descEn = fallbackSaint?.description || '';
-  }
-
-  let descTaRaw = (saintData?.descriptionTa || saintData?.descriptionTamil || dailyContent?.saintDescriptionTa || '').trim();
-  if (isBoilerplate(descTaRaw) || !descTaRaw) {
-    descTaRaw = fallbackSaint?.descriptionTa || '';
-  }
-
-  const hasTamil = Boolean(descTaRaw && /[\u0B80-\u0BFF]/.test(descTaRaw));
-  const descTa = hasTamil ? descTaRaw : (fallbackSaint?.descriptionTa || '');
-  const feastDayEn = saintData?.feastDayEn || saintData?.feastDay || dailyContent?.formattedDate || '';
-  const feastDayTa = saintData?.feastDayTa || dailyContent?.formattedDateTa || feastDayEn;
-  const saintImageUrl = dailyContent?.saintImage || saintData?.image || saintData?.imageUrl || fallbackSaint?.image;
-
-  const titleEn = saintData?.titleEn || saintData?.feastTitle || fallbackSaint?.feastTitle || saintNameEn;
-  const titleTa = saintData?.titleTa || saintData?.feastTitleTa || fallbackSaint?.feastTitleTa || saintNameTa;
-
-  if (lang === 'en') {
-    let body = `👑 *${saintNameEn}*\n\n`;
-    if (feastDayEn) body += `📅 *Feast Day:* ${feastDayEn}\n\n`;
-    if (titleEn && titleEn !== saintNameEn) body += `🎉 *Memorial / Feast:* ${titleEn}\n\n`;
-    if (descEn) body += `${descEn}\n`;
-    return {
-      header: `✝️ *Saint of the Day*`,
-      body,
-      linkTitle: 'Saint of the Day',
-      url: getSiteUrl(SITE_ROUTES.SAINT_OF_THE_DAY),
-      isSaintOfDayFlow: true,
-      imageUrl: saintImageUrl
-    };
-  }
-
-  if (lang === 'both') {
-    let body = `🇮🇳 *தமிழ் (Tamil)*\n👑 *${saintNameTa || saintNameEn}*\n\n`;
-    if (feastDayTa) body += `📅 *திருவிழா நாள்:* ${feastDayTa}\n\n`;
-    if (titleTa && titleTa !== saintNameTa) body += `🎉 *நினைவுநாள்:* ${titleTa}\n\n`;
-    if (descTa) body += `${descTa}\n\n`;
-    else body += `இன்றைய புனிதரின் வாழ்க்கை வரலாறு மற்றும் அருளுரைகள் எமது ஆலய இணையதளத்தில் வாசிக்கலாம்.\n\n`;
-
-    body += `🇬🇧 *English*\n👑 *${saintNameEn}*\n\n`;
-    if (feastDayEn) body += `📅 *Feast Day:* ${feastDayEn}\n\n`;
-    if (titleEn && titleEn !== saintNameEn) body += `🎉 *Feast / Memorial:* ${titleEn}\n\n`;
-    if (descEn) body += `${descEn}\n`;
-
-    return {
-      header: `✝️ *இன்றைய புனிதர் / Saint of the Day*`,
-      body,
-      linkTitle: 'இன்றைய புனிதர்',
-      url: getSiteUrl(SITE_ROUTES.SAINT_OF_THE_DAY),
-      isSaintOfDayFlow: true,
-      imageUrl: saintImageUrl
-    };
-  }
-
-  // lang === 'ta'
-  let body = `👑 *${saintNameTa || saintNameEn}*\n\n`;
-  if (feastDayTa) body += `📅 *திருவிழா நாள்:* ${feastDayTa}\n\n`;
-  if (titleTa && titleTa !== (saintNameTa || saintNameEn)) body += `🎉 *நினைவுநாள்:* ${titleTa}\n\n`;
-  if (descTa) {
-    body += `${descTa}\n`;
-  } else {
-    body += `இன்றைய புனிதரின் வாழ்க்கை வரலாறு மற்றும் அருளுரைகள் எமது ஆலய இணையதளத்தில் வாசிக்கலாம்.\n`;
-  }
+  const body = formatCanonicalSaintWhatsApp({ saint: saintData, language: lang });
+  const imagePayload = getCanonicalSaintImagePayload({ saint: saintData, language: lang });
 
   return {
-    header: `✝️ *இன்றைய புனிதர்*`,
+    header: lang === 'en' ? `✝️ *Saint of the Day*` : (lang === 'both' ? `✝️ *Today's Saint / இன்றைய புனிதர்*` : `✝️ *இன்றைய புனிதர்*`),
     body,
-    linkTitle: 'இன்றைய புனிதர்',
+    linkTitle: lang === 'en' ? 'Saint of the Day' : 'இன்றைய புனிதர்',
     url: getSiteUrl(SITE_ROUTES.SAINT_OF_THE_DAY),
     isSaintOfDayFlow: true,
-    imageUrl: saintImageUrl
+    imageUrl: imagePayload?.url || saintData?.image || saintData?.imageUrl
   };
 }
+
 
 // Saint History Section (Entity: St. John de Britto / Arulanandar)
 function buildSaintHistorySection(isTamil) {

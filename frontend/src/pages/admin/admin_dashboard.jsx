@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import { SectionLoader } from '../../components/common/common_loader';
 import { useNotifications } from '../../context/context_notification_context';
+import { useAuth } from '../../context/context_auth_context';
 
 const COLORS = ['#d4a017', '#1e3a8a', '#800020', '#059669', '#7c3aed'];
 
@@ -39,6 +40,7 @@ export default function AdminDashboard() {
   const [loadingPendingUsers, setLoadingPendingUsers] = useState(false);
   const [remindingPendingUsers, setRemindingPendingUsers] = useState(false);
   const { adminUnreadCount } = useNotifications();
+  const { user } = useAuth();
 
   const fetchDashboardData = () => {
     api.get('/admin/dashboard')
@@ -262,6 +264,36 @@ export default function AdminDashboard() {
       <div className="p-3.5 sm:p-6 max-w-full overflow-hidden">
         {loading ? <SectionLoader /> : (
           <>
+            {/* Admin Self Security Re-verification Banner */}
+            {(user?.verificationRequired || user?.activeGlobalResetId) && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xl border border-white/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-6"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white text-2xl flex-shrink-0 shadow-md">
+                    <FiShield />
+                  </div>
+                  <div>
+                    <h3 className="text-sm sm:text-base font-extrabold text-white flex items-center gap-2">
+                      Security Verification Required
+                      <span className="bg-white/25 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Action Required</span>
+                    </h3>
+                    <p className="text-xs text-white/95 mt-0.5">
+                      Your administrator account requires OTP re-verification due to the security reset initiated by Church Administration.
+                    </p>
+                  </div>
+                </div>
+                <Link
+                  to={`/login?verify=true&email=${encodeURIComponent(user?.email || user?.phone || '')}`}
+                  className="w-full sm:w-auto text-center bg-white text-rose-700 hover:bg-rose-50 font-black text-xs sm:text-sm py-2 px-4 rounded-xl shadow-md transition-all whitespace-nowrap self-end sm:self-auto cursor-pointer"
+                >
+                  Verify Now →
+                </Link>
+              </motion.div>
+            )}
+
             {/* Today's Scripture Banner */}
             {stats?.todayVerse && (
               <div className="bg-gradient-to-r from-church-royal-blue to-blue-900 text-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-xl border border-church-gold/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4 mb-6 min-w-0 max-w-full overflow-hidden">
@@ -381,7 +413,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Force Global OTP Re-verification Confirmation Modal */}
+              {/* Force Global OTP Reset Confirmation Modal */}
               {showOtpResetModal && (
                 <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
                   <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-gray-200 animate-in fade-in zoom-in duration-200">
@@ -390,26 +422,26 @@ export default function AdminDashboard() {
                         <FiShield size={24} />
                       </div>
                       <div>
-                        <h4 className="text-base font-extrabold text-gray-900">Force Global OTP Re-verification</h4>
-                        <p className="text-xs text-gray-500">Enforce OTP on Next User Authentication</p>
+                        <h4 className="text-base font-extrabold text-gray-900">Force Global OTP Reset?</h4>
+                        <p className="text-xs text-gray-500">Security Verification Event</p>
                       </div>
                     </div>
 
-                    <div className="space-y-3 text-xs text-gray-700 bg-amber-50/70 p-4 rounded-2xl border border-amber-200/60 mb-6">
-                      <p className="font-bold text-amber-900">
-                        Are you sure you want to enforce Global OTP Re-verification?
+                    <div className="space-y-2.5 text-xs text-gray-700 bg-amber-50/70 p-4 rounded-2xl border border-amber-200/60 mb-6">
+                      <p className="font-semibold text-amber-950">
+                        This action will require OTP re-verification for all registered users and administrators.
                       </p>
-                      <ul className="list-disc pl-4 space-y-1.5 text-gray-600">
-                        <li><strong>Safe Transition:</strong> Active in-app sessions will NOT be abruptly terminated. Re-verification is enforced when users next attempt to sign in.</li>
-                        <li><strong>All Eligible Parishioners:</strong> All registered parishioner accounts will immediately be marked with <code>otpVerificationRequired = true</code>.</li>
-                        <li><strong>Next Sign-in Verification:</strong> Users must enter their credentials and verify a fresh 6-digit OTP code sent to their Email and WhatsApp.</li>
-                        <li><strong>Admin Exemption:</strong> Administrators and priests remain exempt from routine OTP and access directly with password.</li>
-                        <li><strong>Security Audit:</strong> This security event is permanently logged with timestamp and admin credentials.</li>
-                      </ul>
+                      <p className="text-gray-700 leading-relaxed">
+                        All affected users will receive security notifications through the available notification channels.
+                      </p>
+                      <p className="text-gray-700 leading-relaxed">
+                        The new verification cycle will remain active for 30 days.
+                      </p>
                     </div>
 
                     <div className="flex items-center justify-end gap-3">
                       <button
+                        type="button"
                         onClick={() => setShowOtpResetModal(false)}
                         disabled={resettingOtp}
                         className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition-all cursor-pointer"
@@ -417,6 +449,7 @@ export default function AdminDashboard() {
                         Cancel
                       </button>
                       <button
+                        type="button"
                         onClick={handleForceGlobalOtpReset}
                         disabled={resettingOtp}
                         className="px-4 py-2 rounded-xl text-xs font-extrabold text-white bg-amber-600 hover:bg-amber-700 transition-all shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50"
@@ -424,11 +457,11 @@ export default function AdminDashboard() {
                         {resettingOtp ? (
                           <>
                             <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            Enforcing Re-verification...
+                            Executing Reset...
                           </>
                         ) : (
                           <>
-                            <FiKey /> Enforce OTP on Next Login
+                            <FiKey /> Confirm Global OTP Reset
                           </>
                         )}
                       </button>
@@ -483,18 +516,18 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Pending OTP Parishioners List & Multi-Channel Reminder Modal */}
+              {/* Pending OTP Parishioners & Admins List Modal */}
               {showPendingOtpModal && (
                 <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-                  <div className="bg-white rounded-3xl p-5 sm:p-6 max-w-2xl w-full shadow-2xl border border-gray-200 animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col">
+                  <div className="bg-white rounded-3xl p-5 sm:p-6 max-w-3xl w-full shadow-2xl border border-gray-200 animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col">
                     <div className="flex items-center justify-between border-b border-gray-100 pb-4 mb-4 flex-shrink-0">
                       <div className="flex items-center gap-3 text-purple-700">
                         <div className="p-2.5 bg-purple-100 rounded-2xl">
                           <FiClock size={22} />
                         </div>
                         <div>
-                          <h4 className="text-base font-extrabold text-gray-900">Parishioners Pending OTP Re-verification</h4>
-                          <p className="text-xs text-gray-500">Awaiting 30-day cycle renewal or initial account verification</p>
+                          <h4 className="text-base font-extrabold text-gray-900">OTP Pending — Verification List</h4>
+                          <p className="text-xs text-gray-500">Accounts awaiting 30-day security re-verification</p>
                         </div>
                       </div>
                       <span className="bg-purple-100 text-purple-800 font-extrabold text-xs px-3 py-1 rounded-full">
@@ -505,34 +538,75 @@ export default function AdminDashboard() {
                     {loadingPendingUsers ? (
                       <div className="py-12 text-center text-gray-400 text-xs flex items-center justify-center gap-2">
                         <span className="w-4 h-4 border-2 border-purple-600 border-t-transparent rounded-full animate-spin" />
-                        Loading pending parishioners list...
+                        Loading pending accounts list...
                       </div>
                     ) : pendingUsersList.length === 0 ? (
                       <div className="py-10 text-center text-gray-400 text-xs italic bg-gray-50 rounded-2xl border border-gray-100">
-                        All parishioners are currently fully verified. No pending OTP re-verifications.
+                        All parishioners and administrators are currently fully verified. No pending OTP re-verifications.
                       </div>
                     ) : (
-                      <div className="overflow-y-auto flex-1 pr-1 space-y-2 max-h-[360px] custom-scrollbar">
+                      <div className="overflow-y-auto flex-1 pr-1 space-y-3 max-h-[420px] custom-scrollbar">
                         {pendingUsersList.map((u) => (
-                          <div key={u._id} className="p-3 bg-gray-50/80 hover:bg-purple-50/50 rounded-2xl border border-gray-100 transition-colors flex items-center justify-between gap-3 text-xs">
-                            <div className="min-w-0 flex-1">
-                              <p className="font-bold text-gray-900 text-xs truncate flex items-center gap-1.5">
-                                <span>{u.name}</span>
-                                <span className="font-mono text-[10px] text-gray-400 font-normal">({u.parishMemberId})</span>
-                              </p>
-                              <p className="text-gray-500 text-[11px] truncate mt-0.5">
-                                {u.email} • {u.phone}
-                              </p>
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                                u.status === 'Global Reset Pending' ? 'bg-orange-100 text-orange-800' :
-                                u.status === 'Initial Verification Pending' ? 'bg-amber-100 text-amber-800' :
-                                'bg-rose-100 text-rose-800'
+                          <div key={u._id} className="p-3.5 bg-gray-50/90 hover:bg-purple-50/40 rounded-2xl border border-gray-200/80 transition-all flex flex-col gap-2">
+                            {/* Header: User name, Role, Verification Status */}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="min-w-0 flex items-center gap-2">
+                                <span className="font-extrabold text-gray-900 text-sm truncate">{u.name}</span>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border ${
+                                  u.role === 'Admin' || u.role === 'Priest' 
+                                    ? 'bg-amber-100 text-amber-900 border-amber-300' 
+                                    : 'bg-blue-100 text-blue-800 border-blue-200'
+                                }`}>
+                                  {u.role || 'User'}
+                                </span>
+                                {u.parishMemberId && u.parishMemberId !== 'N/A' && (
+                                  <span className="font-mono text-[10px] text-gray-400 font-normal">
+                                    ({u.parishMemberId})
+                                  </span>
+                                )}
+                              </div>
+                              <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                                u.verifyStatus === 'Pending' || u.verificationStatus === 'Pending' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                                u.verifyStatus === 'Expired' || u.verificationStatus === 'Expired' ? 'bg-rose-100 text-rose-800 border border-rose-300' :
+                                'bg-emerald-100 text-emerald-800 border border-emerald-300'
                               }`}>
-                                {u.status}
+                                {u.verifyStatus || u.verificationStatus || 'Pending'}
                               </span>
-                              <p className="text-[10px] text-gray-400 mt-0.5">{u.daysPending} days pending</p>
+                            </div>
+
+                            {/* Contact: Mobile & Email */}
+                            <div className="text-xs text-gray-600 flex flex-wrap items-center gap-x-3 gap-y-1">
+                              <span><strong className="text-gray-700">Email:</strong> {u.email || 'None'}</span>
+                              <span className="text-gray-300">•</span>
+                              <span><strong className="text-gray-700">Mobile:</strong> {u.phone || 'None'}</span>
+                            </div>
+
+                            {/* 4 Details: Reset Date, Expiry, Last OTP Sent, Last Reminder Sent */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-gray-200/60 text-[11px]">
+                              <div className="bg-white/80 p-2 rounded-xl border border-gray-100">
+                                <p className="text-gray-400 font-semibold text-[10px] uppercase">Reset Date</p>
+                                <p className="font-bold text-gray-800 mt-0.5 truncate">
+                                  {u.resetDate ? new Date(u.resetDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                                </p>
+                              </div>
+                              <div className="bg-white/80 p-2 rounded-xl border border-gray-100">
+                                <p className="text-gray-400 font-semibold text-[10px] uppercase">Expiry</p>
+                                <p className="font-bold text-rose-700 mt-0.5 truncate">
+                                  {u.verificationExpiry ? new Date(u.verificationExpiry).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '30 Days'}
+                                </p>
+                              </div>
+                              <div className="bg-white/80 p-2 rounded-xl border border-gray-100">
+                                <p className="text-gray-400 font-semibold text-[10px] uppercase">Last OTP Sent</p>
+                                <p className="font-medium text-gray-700 mt-0.5 truncate">
+                                  {u.lastOtpSent ? new Date(u.lastOtpSent).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'None yet'}
+                                </p>
+                              </div>
+                              <div className="bg-white/80 p-2 rounded-xl border border-gray-100">
+                                <p className="text-gray-400 font-semibold text-[10px] uppercase">Last Reminder</p>
+                                <p className="font-medium text-gray-700 mt-0.5 truncate">
+                                  {u.lastReminderSent ? new Date(u.lastReminderSent).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'None yet'}
+                                </p>
+                              </div>
                             </div>
                           </div>
                         ))}

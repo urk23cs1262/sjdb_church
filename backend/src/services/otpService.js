@@ -406,7 +406,7 @@ const verifyOTPSession = async (argsOrUserId, maybeOtp, maybePurpose, maybeReq) 
   const verifiedNow = new Date();
   const nextCycle = new Date(verifiedNow.getTime() + THIRTY_DAYS_MS);
 
-  if (userId && mongoose.Types.ObjectId.isValid(userId)) {
+  if (userId) {
     user = await User.findByIdAndUpdate(userId, {
       isVerified: true,
       isActive: true,
@@ -414,8 +414,11 @@ const verifyOTPSession = async (argsOrUserId, maybeOtp, maybePurpose, maybeReq) 
       suspensionReason: undefined,
       lastVerifiedAt: verifiedNow,
       nextVerificationAt: nextCycle,
+      verificationExpiresAt: nextCycle,
       verificationStatus: 'Verified',
+      verificationRequired: false,
       otpVerificationRequired: false,
+      activeGlobalResetId: null,
       otpVerified: true,
       otpVerifiedAt: verifiedNow,
       failedLoginAttempts: 0,
@@ -426,6 +429,13 @@ const verifyOTPSession = async (argsOrUserId, maybeOtp, maybePurpose, maybeReq) 
       firstLockoutAt: null,
       otpNotifiedExpired: true
     }, { new: true });
+
+    try {
+      const { recordGlobalOtpVerificationSuccess } = require('./globalOtpResetService');
+      await recordGlobalOtpVerificationSuccess({ userId: user?._id || userId, req });
+    } catch (globalErr) {
+      console.warn('[OTP Service] recordGlobalOtpVerificationSuccess warning:', globalErr.message);
+    }
   }
 
   // Auto-resolve any pending SecurityIncident records for this user

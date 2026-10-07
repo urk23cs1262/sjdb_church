@@ -12,16 +12,47 @@ let lastBroadcastSync = 0;
 
 const getAll = async (req, res) => {
   try {
-    const { type, page = 1, limit = 20, admin, all } = req.query;
-    const query = {};
-    const isAdmin = admin === 'true' || all === 'true';
+    const now = new Date();
 
-    if (!isAdmin) {
-      query.isPublished = true;
-      const now = new Date();
-      query.$or = [{ expiresAt: { $gt: now } }, { expiresAt: null }, { expiresAt: { $exists: false } }];
+    // 1. Permanently purge crossed event announcements
+    try {
+      const { cleanupCrossedEventAnnouncements } = require('../services/hourlyEventReminderService');
+      await cleanupCrossedEventAnnouncements();
+    } catch (cleanupErr) {
+      console.warn('[AnnouncementController] Event auto-cleanup error:', cleanupErr.message);
     }
-    if (type) query.type = type;
+
+    // 2. Automatically mark passed announcements as EXPIRED (halts reminders, deletes broadcasts)
+    try {
+      const { cleanupExpiredAnnouncements } = require('../services/hourlyAnnouncementReminderService');
+      await cleanupExpiredAnnouncements();
+    } catch (cleanupErr) {
+      console.warn('[AnnouncementController] Announcement expiry cleanup error:', cleanupErr.message);
+    }
+
+    const { type, page = 1, limit = 20, search } = req.query;
+    const query = {};
+
+    // Both Public and Admin announcement pages only return active, published, non-expired announcements!
+    // Expired announcements automatically disappear from both pages immediately upon expiration.
+    query.isPublished = true;
+    query.status = { $nin: ['expired', 'deleted', 'unpublished'] };
+    query.$or = [
+      { expiresAt: { $gt: now } },
+      { expiresAt: null },
+      { expiresAt: { $exists: false } }
+    ];
+
+    if (type && type !== 'all') query.type = type;
+    if (search) {
+      query.$and = query.$and || [];
+      query.$and.push({
+        $or: [
+          { title: { $regex: search, $options: 'i' } },
+          { content: { $regex: search, $options: 'i' } }
+        ]
+      });
+    }
 
     const total = await Announcement.countDocuments(query);
     let announcements = await Announcement.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(Number(limit)).lean();
@@ -44,6 +75,7 @@ const getAll = async (req, res) => {
               content: notif.message,
               priority: notif.priority === 'high' ? 'urgent' : 'medium',
               type: 'general',
+              status: 'published',
               isPublished: true,
               createdAt: notif.createdAt
             }).catch(() => null);
@@ -51,10 +83,6 @@ const getAll = async (req, res) => {
           }
         }
       } catch { /* silent */ }
-    }
-
-    if (!isAdmin) {
-      res.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
     }
 
     res.json({ success: true, total, announcements });
@@ -70,12 +98,21 @@ const create = async (req, res) => {
     if (!data.priority) data.priority = 'medium';
     if (data.expiresAt === '' || data.expiresAt === 'null' || !data.expiresAt) {
       delete data.expiresAt;
+    } else {
+      const d = new Date(data.expiresAt);
+      if (!isNaN(d.getTime())) {
+        data.expiresAt = d;
+      }
     }
     if (typeof data.isPublished === 'string') {
       data.isPublished = data.isPublished === 'true';
     } else if (data.isPublished === undefined) {
       data.isPublished = true;
     }
+
+    data.status = data.isPublished ? 'published' : 'unpublished';
+    data.reminderStatus = data.isPublished ? 'active' : 'idle';
+    if (!data.eventLink) data.eventLink = '/announcements';
 
     if (req.file) {
       const { uploadToGridFS } = require('../services/gridfsService');
@@ -87,6 +124,12 @@ const create = async (req, res) => {
       }
     }
     const ann = await Announcement.create(data);
+
+    // Server-Side Hourly Announcement Reminder Lifecycle
+    const { onAnnouncementCreated } = require('../services/hourlyAnnouncementReminderService');
+    onAnnouncementCreated(ann).catch(err => {
+      console.error('[AnnouncementController] Error initializing hourly reminders:', err.message);
+    });
 
     // Multi-Channel Broadcast across WhatsApp, Email, In-App, and Push
     if (ann.isPublished !== false) {
@@ -108,6 +151,16 @@ const update = async (req, res) => {
     }
     if (typeof data.isPublished === 'string') {
       data.isPublished = data.isPublished === 'true';
+    }
+
+    if (data.isPublished === false || data.status === 'unpublished') {
+      data.status = 'unpublished';
+      data.reminderStatus = 'cancelled';
+    } else if (data.status === 'expired') {
+      data.isPublished = false;
+      data.reminderStatus = 'expired';
+    } else if (data.isPublished === true) {
+      data.status = 'published';
     }
 
     const previousAnn = await Announcement.findById(req.params.id);
@@ -137,8 +190,20 @@ const update = async (req, res) => {
     }
     const ann = await Announcement.findByIdAndUpdate(req.params.id, data, { new: true });
 
+    // Server-Side Hourly Announcement Reminder Hook
+    const { onAnnouncementCreated, onAnnouncementCancelledOrExpired } = require('../services/hourlyAnnouncementReminderService');
+    if (ann.status === 'unpublished' || ann.status === 'expired' || ann.isPublished === false) {
+      onAnnouncementCancelledOrExpired(ann._id, { reason: ann.status }).catch(err => {
+        console.error('[AnnouncementController] Error cancelling reminders:', err.message);
+      });
+    } else {
+      onAnnouncementCreated(ann).catch(err => {
+        console.error('[AnnouncementController] Error updating announcement reminders:', err.message);
+      });
+    }
+
     // Multi-Channel Broadcast for Updated Announcement
-    if (ann && ann.isPublished !== false) {
+    if (ann && ann.isPublished !== false && ann.status === 'published') {
       const { broadcastAnnouncementPublished } = require('../services/broadcastNotificationService');
       broadcastAnnouncementPublished({ announcement: ann, action: 'updated' }).catch(err => {
         console.error('[AnnouncementController] Error broadcasting updated announcement:', err.message);
@@ -155,6 +220,10 @@ const remove = async (req, res) => {
     const ann = await Announcement.findById(annId);
 
     if (ann) {
+      // Stop all future reminders immediately and clear notification broadcasts
+      const { onAnnouncementCancelledOrExpired } = require('../services/hourlyAnnouncementReminderService');
+      await onAnnouncementCancelledOrExpired(annId, { reason: 'deleted' });
+
       const { deleteFromGridFS } = require('../services/gridfsService');
       if (ann.image && ann.image.startsWith('/api/files/')) {
         deleteFromGridFS(ann.image.replace('/api/files/', '')).catch(() => {});
