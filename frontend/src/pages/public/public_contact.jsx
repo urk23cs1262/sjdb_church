@@ -150,7 +150,7 @@ export default function Contact() {
                   className="flex items-center justify-center gap-2.5 bg-gradient-to-r from-[#833AB4] via-[#FD1D1D] to-[#F77737] hover:opacity-95 text-white px-4 py-3.5 rounded-2xl transition-all shadow-lg font-bold text-xs sm:text-sm text-center border border-pink-400/30"
                 >
                   <FaInstagram className="text-xl flex-shrink-0" />
-                  <span className="truncate">{t('contact.followInstagram', 'Follow on Instagram')}</span>
+                  <span className="truncate">{t('contact.followInstagram', 'Follow us on Instagram')}</span>
                 </a>
               </div>
 
