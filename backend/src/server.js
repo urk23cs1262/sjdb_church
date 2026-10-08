@@ -220,6 +220,7 @@ require('./services/accountVerificationService'); // 8:00 AM IST Daily Account V
 require('./services/globalOtpResetService'); // 12:00 AM & 8:00 AM IST Global OTP Reset & 30-Day Re-Verification Schedulers
 require('./services/hourlyEventReminderService'); // Server-Side Hourly Tomorrow Event Reminder & Crossed Event Prune System
 require('./services/hourlyAnnouncementReminderService'); // Server-Side Hourly Announcement Reminder & Auto-Expiry System
+require('./services/centralNotificationScheduler'); // Central Notification Scheduler & Deduplication System
 
 // Background Monitor: Scan for expired/abandoned unverified OTPs every 60s
 const { checkAndNotifyExpiredOTPs } = require('./services/otpService');

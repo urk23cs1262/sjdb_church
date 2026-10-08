@@ -530,48 +530,20 @@ async function cleanupCrossedEventAnnouncements(specificEventId = null) {
 
 /**
  * Called immediately when an admin creates a new event.
+ * Delegates to Central Notification Scheduler.
  */
 async function onEventCreated(event) {
-  try {
-    const now = new Date();
-    await syncEventToAnnouncement(event);
-
-    const isTomorrow = isEventTomorrow(event, now);
-    const isToday = isEventToday(event, now);
-    const eventDateTime = getEventExactDateTime(event);
-
-    if ((isTomorrow || isToday) && eventDateTime && now < eventDateTime) {
-      console.log(`[HourlyEventReminder] New event "${event.title}" is scheduled for ${isTomorrow ? 'TOMORROW' : 'TODAY'}. Triggering immediate 1st reminder!`);
-      event.status = 'active';
-      event.isCancelled = false;
-      event.reminderStatus = 'active';
-      await event.save();
-
-      await dispatchHourlyEventReminder(event._id, { isInitial: true });
-    }
-  } catch (err) {
-    console.error('[HourlyEventReminder] onEventCreated error:', err.message);
-  }
+  const central = require('./centralNotificationScheduler');
+  return central.onEventCreated(event);
 }
 
 /**
  * Called immediately when an admin cancels or deletes an event.
- * Halts all pending reminders immediately and purges announcements.
+ * Delegates to Central Notification Scheduler.
  */
 async function onEventCancelledOrDeleted(eventId) {
-  try {
-    console.log(`[HourlyEventReminder] Event ${eventId} cancelled/deleted. Halting reminders and purging announcements.`);
-    await Event.findByIdAndUpdate(eventId, {
-      status: 'cancelled',
-      isCancelled: true,
-      cancelledAt: new Date(),
-      reminderStatus: 'cancelled'
-    }).catch(() => {});
-
-    await cleanupCrossedEventAnnouncements(eventId);
-  } catch (err) {
-    console.error('[HourlyEventReminder] onEventCancelledOrDeleted error:', err.message);
-  }
+  const central = require('./centralNotificationScheduler');
+  return central.onEventCancelledOrDeleted(eventId);
 }
 
 // ─── EMAIL TEMPLATE BUILDER ──────────────────────────────────────────────────
@@ -664,21 +636,24 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-// ─── BACKGROUND CRON SCHEDULER (Runs every 1 minute) ─────────────────────────
-// Running every 1 minute ensures that hourly reminders trigger promptly when nextReminderAt arrives
-cron.schedule('* * * * *', async () => {
-  await processHourlyEventReminders();
-}, { timezone: 'Asia/Kolkata' });
-
-console.log('✅ [HourlyEventReminder] 1-Minute Cron Scheduler registered (Asia/Kolkata).');
+// Note: Cron execution is centralized in centralNotificationScheduler.js to prevent duplicate sends.
 
 module.exports = {
-  processHourlyEventReminders,
+  processHourlyEventReminders: () => {
+    const central = require('./centralNotificationScheduler');
+    return central.runCentralSchedulerTick();
+  },
   dispatchHourlyEventReminder,
   onEventCreated,
   onEventCancelledOrDeleted,
-  syncEventToAnnouncement,
-  cleanupCrossedEventAnnouncements,
+  syncEventToAnnouncement: (event) => {
+    const central = require('./centralNotificationScheduler');
+    return central.syncEventToAnnouncement(event);
+  },
+  cleanupCrossedEventAnnouncements: (id) => {
+    const central = require('./centralNotificationScheduler');
+    return central.cleanupCrossedEventAnnouncements(id);
+  },
   getEventExactDateTime,
   isEventTomorrow,
   isEventToday

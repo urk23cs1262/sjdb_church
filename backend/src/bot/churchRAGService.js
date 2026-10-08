@@ -406,7 +406,11 @@ function buildReadingsSection(dailyContent, isTamil) {
     ? new Date().toLocaleDateString('ta-IN', { day: 'numeric', month: 'long', year: 'numeric' })
     : new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 
-  let body = `📅 ${dateStr}\n\n`;
+  const { extractLiturgicalHeaderLines } = require('../services/whatsappDailyFormatter');
+  const headerLines = extractLiturgicalHeaderLines(isTamil ? taReadings : enReadings, isTamil ? 'ta' : 'en', dailyContent);
+  const headerBlock = headerLines.length > 0 ? `${headerLines.join('\n')}\n\n` : '';
+
+  let body = `📅 ${dateStr}\n${headerBlock}`;
   body += `*${isTamil ? 'முதல் வாசகம்' : 'First Reading'}:*\n${firstR || (isTamil ? 'இன்றைய வாசகம் கிடைக்கவில்லை.' : 'Not available')}\n\n`;
   body += `*${isTamil ? 'திருப்பாடல்' : 'Responsorial Psalm'}:*\n${psalmR || (isTamil ? 'இன்றைய திருப்பாடல் கிடைக்கவில்லை.' : 'Not available')}\n\n`;
   if (secondR) {

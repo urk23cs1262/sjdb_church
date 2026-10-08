@@ -82,9 +82,16 @@ async function sendReminderToAllUsers({
   reminderType
 }) {
   try {
-    // Check duplicate log
+    // Check duplicate log across both ReminderLog and central NotificationLog
     const exists = await ReminderLog.findOne({ itemId, reminderType });
     if (exists) return 0;
+
+    const NotificationLog = require('../models/NotificationLog');
+    const notifLogExists = await NotificationLog.findOne({
+      entityId: itemId,
+      reminderType
+    });
+    if (notifLogExists) return 0;
 
     const fullLink = getSiteUrl(targetUrl);
 
@@ -299,48 +306,15 @@ async function checkAndSendReminders(triggerSource = 'cron') {
         });
       }
 
-      // Day of Event (4:00 AM IST & 12:00 PM IST)
-      if (diffDays === 0) {
-        // 4:00 AM IST Morning Alert (sent if currentHour >= 4)
-        if (currentHour >= 4) {
-          await sendReminderToAllUsers({
-            itemId: ev._id,
-            itemModel: 'Event',
-            title: ev.title,
-            details: ev.description,
-            dateText,
-            timeText,
-            venueText,
-            category: 'events',
-            typeLabel: 'Today (Morning Alert)',
-            targetUrl: '/events',
-            reminderType: 'day_of_4am'
-          });
-        }
-
-        // 12:00 PM Afternoon Reminder (sent if currentHour >= 12 and event is after noon)
-        if (currentHour >= 12 && isAfterNoon(ev.time)) {
-          await sendReminderToAllUsers({
-            itemId: ev._id,
-            itemModel: 'Event',
-            title: ev.title,
-            details: ev.description,
-            dateText,
-            timeText,
-            venueText,
-            category: 'events',
-            typeLabel: 'Today (Afternoon Reminder)',
-            targetUrl: '/events',
-            reminderType: 'day_of_12pm'
-          });
-        }
-      }
+      // Day of Event (4:00 AM IST onwards is handled centrally by centralNotificationScheduler with strict deduplication)
     }
 
-    // 2. Process ANNOUNCEMENTS (Excluding completed, cancelled, or expired)
+    // 2. Process ANNOUNCEMENTS (Excluding event-mirrored, completed, cancelled, or expired)
     const announcements = await Announcement.find({
       isPublished: { $ne: false },
-      status: { $nin: ['completed', 'cancelled'] },
+      sourceType: { $ne: 'event' },
+      eventId: { $exists: false },
+      status: { $nin: ['completed', 'cancelled', 'expired'] },
       $or: [{ expiresAt: { $gt: now } }, { expiresAt: null }]
     });
 

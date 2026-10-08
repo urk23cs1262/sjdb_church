@@ -265,6 +265,7 @@ const broadcast = async (req, res) => {
           content: message,
           priority: priority === 'high' ? 'urgent' : (priority || 'medium'),
           publishedBy: req.user._id,
+          sourceType: 'announcement',
           isPublished: true
         });
         targetActionUrl = '/announcements';

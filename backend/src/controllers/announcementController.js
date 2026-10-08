@@ -75,6 +75,7 @@ const getAll = async (req, res) => {
               content: notif.message,
               priority: notif.priority === 'high' ? 'urgent' : 'medium',
               type: 'general',
+              sourceType: 'announcement',
               status: 'published',
               isPublished: true,
               createdAt: notif.createdAt
@@ -94,6 +95,7 @@ const create = async (req, res) => {
     const data = { ...req.body };
     if (req.user) data.publishedBy = req.user._id;
 
+    if (!data.sourceType) data.sourceType = 'announcement';
     if (!data.type) data.type = 'general';
     if (!data.priority) data.priority = 'medium';
     if (data.expiresAt === '' || data.expiresAt === 'null' || !data.expiresAt) {

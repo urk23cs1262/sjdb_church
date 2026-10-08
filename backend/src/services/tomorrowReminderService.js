@@ -84,9 +84,11 @@ async function getTomorrowContent(targetDateStr) {
     return evDateStr === targetDateStr;
   });
 
-  // Query all published, non-expired announcements
+  // Query all published, non-expired genuine announcements (excluding event mirrors)
   const allAnnouncements = await Announcement.find({
-    isPublished: { $ne: false }
+    isPublished: { $ne: false },
+    sourceType: { $ne: 'event' },
+    eventId: { $exists: false }
   }).lean();
 
   const matchingAnnouncements = allAnnouncements.filter(ann => {

@@ -636,10 +636,176 @@ _புனித ஜான் டி பிரிட்டோ திருத்
 }
 
 /**
+ * Helper to get English ordinal suffix (1st, 2nd, 3rd, 4th, 27th, etc.)
+ */
+function getEnglishOrdinal(n) {
+  const num = parseInt(n, 10);
+  if (isNaN(num)) return `${n}th`;
+  const j = num % 10, k = num % 100;
+  if (j === 1 && k !== 11) return `${num}st`;
+  if (j === 2 && k !== 12) return `${num}nd`;
+  if (j === 3 && k !== 13) return `${num}rd`;
+  return `${num}th`;
+}
+
+/**
+ * Translates Tamil liturgical day strings to Catholic standard English
+ * e.g. "பொதுக்காலம் 27ஆம் வாரம் – வியாழன்" -> "Thursday of the 27th Week in Ordinary Time"
+ *      "பொதுக்காலம் 21ஆம் வாரம் – ஞாயிறு" -> "21st Sunday in Ordinary Time"
+ */
+function translateTamilLiturgicalDay(tamilStr) {
+  if (!tamilStr || typeof tamilStr !== 'string') {
+    return tamilStr || '';
+  }
+  let s = tamilStr.trim();
+
+  // Fix literal machine translation artifacts if already in English
+  if (/General\s*Term/i.test(s) || /General\s*Period/i.test(s)) {
+    s = s.replace(/General\s*(?:Term|Period)/gi, 'Ordinary Time');
+    const m = s.match(/Ordinary\s*Time\s*(\d+)(?:th|st|nd|rd)?\s*Week\s*[-–—]\s*(\w+)/i);
+    if (m) {
+      const week = getEnglishOrdinal(m[1]);
+      const day = m[2];
+      return `${day} of the ${week} Week in Ordinary Time`;
+    }
+    return s;
+  }
+
+  if (!/[\u0B80-\u0BFF]/.test(s)) {
+    return s;
+  }
+  const dayMap = {
+    'ஞாயிறு': 'Sunday',
+    'திங்கள்': 'Monday',
+    'செவ்வாய்': 'Tuesday',
+    'புதன்': 'Wednesday',
+    'வியாழன்': 'Thursday',
+    'வெள்ளி': 'Friday',
+    'சனி': 'Saturday'
+  };
+
+  const seasons = [
+    { pattern: /பொதுக்காலம்\s*(\d+)ஆம்\s*வாரம்/, seasonEn: 'Ordinary Time', inOf: 'in' },
+    { pattern: /தவக்காலம்\s*(\d+)ஆம்\s*வாரம்/, seasonEn: 'Lent', inOf: 'of' },
+    { pattern: /பாஸ்கா\s*காலம்\s*(\d+)ஆம்\s*வாரம்/, seasonEn: 'Easter', inOf: 'of' },
+    { pattern: /திருவருகைக்\s*காலம்\s*(\d+)ஆம்\s*வாரம்/, seasonEn: 'Advent', inOf: 'of' }
+  ];
+
+  for (const { pattern, seasonEn, inOf } of seasons) {
+    const fullMatch = s.match(new RegExp(pattern.source + '\\s*[-–—]\\s*(ஞாயிறு|திங்கள்|செவ்வாய்|புதன்|வியாழன்|வெள்ளி|சனி)', 'i'));
+    if (fullMatch) {
+      const week = getEnglishOrdinal(fullMatch[1]);
+      const day = dayMap[fullMatch[2]] || fullMatch[2];
+      if (day === 'Sunday') return `${week} Sunday ${inOf} ${seasonEn}`;
+      return `${day} of the ${week} Week ${inOf} ${seasonEn}`;
+    }
+    const weekOnly = s.match(pattern);
+    if (weekOnly) {
+      const week = getEnglishOrdinal(weekOnly[1]);
+      return `${week} Week ${inOf} ${seasonEn}`;
+    }
+  }
+
+  // Handle Solemnities, Feasts, Memorials
+  let trans = s;
+  trans = trans.replace(/பெருவிழா/g, 'Solemnity')
+               .replace(/திருவிழா|விழா/g, 'Feast')
+               .replace(/வி\.?\s*நினைவு/g, 'Opt. Memorial')
+               .replace(/நினைவு/g, 'Memorial');
+
+  return trans;
+}
+
+/**
+ * Extracts and formats liturgical day / season / celebration lines for Mass Readings header
+ * Displays e.g.:
+ * 🗓️ *பொதுக்காலம் 27ஆம் வாரம் – வியாழன்*
+ * (and if celebration/memorial/feast exists e.g.:)
+ * ✨ *தூய காவல் தூதர்கள் (நினைவு)*
+ */
+function extractLiturgicalHeaderLines(massReadingsLangObj, lang = 'ta', rootDailyContent = null) {
+  const rawLitDay = (massReadingsLangObj?.liturgicalDay || rootDailyContent?.liturgicalDay || rootDailyContent?.massReadings?.liturgicalDay || '').trim();
+  const rawTitle = (massReadingsLangObj?.title || rootDailyContent?.title || rootDailyContent?.massReadings?.title || '').trim();
+  const rawCelebration = (massReadingsLangObj?.celebration || rootDailyContent?.celebration || rootDailyContent?.massReadings?.celebration || '').trim();
+  const rawLectionary = (massReadingsLangObj?.lectionary || rootDailyContent?.lectionary || rootDailyContent?.massReadings?.lectionary || '').trim();
+
+  const isGeneric = (str) => {
+    if (!str || typeof str !== 'string') return true;
+    const clean = str.trim().toLowerCase();
+    if (clean.length < 3) return true;
+    return clean === 'இன்றைய திருப்பலி வாசகங்கள்' ||
+           clean === 'இன்றைய வாசகங்கள்' ||
+           clean === 'திருப்பலி வாசகங்கள்' ||
+           clean === 'daily mass readings' ||
+           clean === 'daily mass reading' ||
+           clean === 'mass readings' ||
+           clean === 'catholic mass readings' ||
+           clean === 'today\'s mass readings' ||
+           clean === 'today\'s catholic mass readings' ||
+           clean.startsWith('new:') ||
+           clean.startsWith('readings for');
+  };
+
+  const lines = [];
+  const seen = new Set();
+
+  // 1. Liturgical Day / Season (e.g. "பொதுக்காலம் 27ஆம் வாரம் – வியாழன்")
+  let litDay = '';
+  if (!isGeneric(rawLitDay)) {
+    litDay = rawLitDay;
+  } else if (!isGeneric(rawTitle) && (rawTitle.includes('வாரம்') || rawTitle.includes('காலம்') || rawTitle.includes('Week') || rawTitle.includes('Time') || rawTitle.includes('Sunday') || rawTitle.includes('ஞாயிறு'))) {
+    litDay = rawTitle;
+  }
+
+  if (litDay) {
+    if (rawLitDay) seen.add(rawLitDay.toLowerCase());
+    if (lang === 'en') {
+      litDay = translateTamilLiturgicalDay(litDay);
+    }
+    let litDayDisplay = litDay;
+    if (rawLectionary && !litDayDisplay.includes(rawLectionary)) {
+      litDayDisplay += ` (${rawLectionary})`;
+    }
+    lines.push(`🗓️ *${litDayDisplay}*`);
+    seen.add(litDay.toLowerCase());
+  }
+
+  // 2. Celebration / Feast / Memorial (e.g. "தூய காவல் தூதர்கள் (நினைவு)" or Saint's feast)
+  let celebration = '';
+  if (!isGeneric(rawCelebration) && !seen.has(rawCelebration.toLowerCase())) {
+    celebration = rawCelebration;
+  } else if (!isGeneric(rawTitle) && !seen.has(rawTitle.toLowerCase())) {
+    celebration = rawTitle;
+  }
+
+  if (celebration) {
+    if (lang === 'en' && /[\u0B80-\u0BFF]/.test(celebration)) {
+      celebration = translateTamilLiturgicalDay(celebration);
+    }
+    if (!seen.has(celebration.toLowerCase())) {
+      lines.push(`✨ *${celebration}*`);
+      seen.add(celebration.toLowerCase());
+    }
+  }
+
+  // Fallback: If no lines yet, but rawTitle is non-generic, use rawTitle
+  if (lines.length === 0 && !isGeneric(rawTitle)) {
+    let fallbackTitle = rawTitle;
+    if (lang === 'en') {
+      fallbackTitle = translateTamilLiturgicalDay(fallbackTitle);
+    }
+    lines.push(`🗓️ *${fallbackTitle}*`);
+  }
+
+  return lines;
+}
+
+/**
  * MESSAGE 2 — DAILY MASS READINGS (Sent as its own separate WhatsApp message)
  *
  * Contains:
  * - Header with Date
+ * - Liturgical Day / Season / Celebration (e.g. பொதுக்காலம் 27ஆம் வாரம் – வியாழன்)
  * - First Reading
  * - Responsorial Psalm
  * - Second Reading (if applicable)
@@ -658,16 +824,24 @@ function generateDailyMassReadingsMessage({ dailyContent, language = 'ta', readi
 
   if (lang === 'en') {
     const formattedEn = formatMassReadingsLangBlock(dailyContent.massReadings?.english, 'en', isShort);
-    msg = `✝️ *Today's Catholic Mass Readings*\n📅 *${dateEn}*\n\n${formattedEn || 'Readings are not available today.'}`;
+    const headerLinesEn = extractLiturgicalHeaderLines(dailyContent.massReadings?.english, 'en', dailyContent);
+    const headerBlockEn = headerLinesEn.length > 0 ? `\n${headerLinesEn.join('\n')}` : '';
+    msg = `✝️ *Today's Catholic Mass Readings*\n📅 *${dateEn}*${headerBlockEn}\n\n${formattedEn || 'Readings are not available today.'}`;
   } else if (lang === 'both') {
     const formattedTa = formatMassReadingsLangBlock(dailyContent.massReadings?.tamil, 'ta', isShort);
     const formattedEn = formatMassReadingsLangBlock(dailyContent.massReadings?.english, 'en', isShort);
-    msg = `✝️ *இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள்*\n📅 *${dateTa}*\n\n${formattedTa || 'இன்றைய வாசகம் கிடைக்கவில்லை.'}\n\n━━━━━━━━━━━━━━━━━━━━━\n\n✝️ *Today's Catholic Mass Readings*\n📅 *${dateEn}*\n\n${formattedEn || 'Readings are not available today.'}`;
+    const headerLinesTa = extractLiturgicalHeaderLines(dailyContent.massReadings?.tamil, 'ta', dailyContent);
+    const headerBlockTa = headerLinesTa.length > 0 ? `\n${headerLinesTa.join('\n')}` : '';
+    const headerLinesEn = extractLiturgicalHeaderLines(dailyContent.massReadings?.english, 'en', dailyContent);
+    const headerBlockEn = headerLinesEn.length > 0 ? `\n${headerLinesEn.join('\n')}` : '';
+    msg = `✝️ *இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள்*\n📅 *${dateTa}*${headerBlockTa}\n\n${formattedTa || 'இன்றைய வாசகம் கிடைக்கவில்லை.'}\n\n━━━━━━━━━━━━━━━━━━━━━\n\n✝️ *Today's Catholic Mass Readings*\n📅 *${dateEn}*${headerBlockEn}\n\n${formattedEn || 'Readings are not available today.'}`;
   } else {
     // Tamil (default)
     const formattedTa = formatMassReadingsLangBlock(dailyContent.massReadings?.tamil, 'ta', isShort);
     const fallbackEn = !formattedTa ? formatMassReadingsLangBlock(dailyContent.massReadings?.english, 'en', isShort) : '';
-    msg = `✝️ *இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள்*\n📅 *${dateTa}*\n\n${formattedTa || fallbackEn || 'இன்றைய வாசகம் கிடைக்கவில்லை.'}`;
+    const headerLinesTa = extractLiturgicalHeaderLines(dailyContent.massReadings?.tamil, 'ta', dailyContent);
+    const headerBlockTa = headerLinesTa.length > 0 ? `\n${headerLinesTa.join('\n')}` : '';
+    msg = `✝️ *இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள்*\n📅 *${dateTa}*${headerBlockTa}\n\n${formattedTa || fallbackEn || 'இன்றைய வாசகம் கிடைக்கவில்லை.'}`;
   }
 
   return removeAllUrls(msg.trim());
@@ -1049,11 +1223,14 @@ function generateDailyCatholicMessage({ dailyContent, language = 'ta', readingPr
 Strengthen our faith, fill our hearts with
 your love, and help us to follow your word.`;
 
+    const headerLinesEn = extractLiturgicalHeaderLines(dailyContent.massReadings?.english, 'en', dailyContent);
+    const enLitLine = headerLinesEn.length > 0 ? `\n${headerLinesEn.join('\n')}` : '';
+
     message = `⛪ *St. John de Britto Church, Kalayarkoil*
 
 🙏 Good Morning!
 
-✝️ *Daily Catholic Devotions* — ${dateEn}
+✝️ *Daily Catholic Devotions* — ${dateEn}${enLitLine}
 
 📖 *DAILY BIBLE VERSE*
 
@@ -1147,13 +1324,20 @@ your love, and help us to follow your word.`;
 எங்கள் விசுவாசத்தை திடப்படுத்தி, உம் அன்பால் இதயங்களை நிரப்பி,
 உம் வார்த்தையின்படி நடக்க அருள் தாரும்.`;
 
+    const headerLinesTa = extractLiturgicalHeaderLines(dailyContent.massReadings?.tamil, 'ta', dailyContent);
+    const headerLinesEn = extractLiturgicalHeaderLines(dailyContent.massReadings?.english, 'en', dailyContent);
+    const bothLitParts = [];
+    if (headerLinesTa.length > 0) bothLitParts.push(headerLinesTa.join('\n'));
+    if (headerLinesEn.length > 0) bothLitParts.push(headerLinesEn.join('\n'));
+    const bothLitLine = bothLitParts.length > 0 ? `\n${bothLitParts.join('\n')}` : '';
+
     message = `⛪ *St. John de Britto Church, Kalayarkoil*
 _புனித ஜான் டி பிரிட்டோ திருத்தலம், காளையார்கோவில்_
 
 🙏 Good Morning! / காலை வணக்கம்!
 
 ✝️ *DAILY CATHOLIC DEVOTIONS / இன்றைய கத்தோலிக்க வாசகங்கள்*
-📅 ${dateEn} / ${dateTa}
+📅 ${dateEn} / ${dateTa}${bothLitLine}
 
 📖 *DAILY BIBLE VERSE / இன்றைய இறைவார்த்தை*
 
@@ -1203,12 +1387,15 @@ _Kalayarkoil_`;
 எங்கள் விசுவாசத்தை திடப்படுத்தி, உம் தெய்வீக அன்பால் எங்கள் இதயங்களை நிரப்பி,
 உம் திருமொழியின்படி வாழ எங்களுக்கு அருள் தாரும்.`;
 
+    const headerLinesTa = extractLiturgicalHeaderLines(dailyContent.massReadings?.tamil, 'ta', dailyContent);
+    const taLitLine = headerLinesTa.length > 0 ? `\n${headerLinesTa.join('\n')}` : '';
+
     message = `⛪ *புனித ஜான் டி பிரிட்டோ திருத்தலம்*
 _காளையார்கோவில்_
 
 🙏 காலை வணக்கம்!
 
-✝️ *இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள்* — ${dateTa}
+✝️ *இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள்* — ${dateTa}${taLitLine}
 
 📖 *இன்றைய இறைவார்த்தை / DAILY BIBLE VERSE*
 
@@ -1349,6 +1536,8 @@ module.exports = {
   generateSaintCaption,
   generateSaintInfoMessage,
   generateDailyLinksMessage,
+  extractLiturgicalHeaderLines,
+  translateTamilLiturgicalDay,
   validateUrl,
   removeAllUrls
 };

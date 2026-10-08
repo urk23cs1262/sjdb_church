@@ -12,6 +12,12 @@ const announcementSchema = new mongoose.Schema({
   date: { type: Date },
   expiresAt: { type: Date },
   attachment: { type: String },
+  sourceType: {
+    type: String,
+    enum: ['announcement', 'event'],
+    default: 'announcement',
+    index: true
+  },
   eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Event' },
   eventLink: { type: String, default: '/events' },
   status: {
@@ -36,5 +42,7 @@ const announcementSchema = new mongoose.Schema({
 
 announcementSchema.index({ status: 1, expiresAt: 1 });
 announcementSchema.index({ isPublished: 1, status: 1, createdAt: -1 });
+announcementSchema.index({ sourceType: 1, status: 1, expiresAt: 1 });
+announcementSchema.index({ eventId: 1 });
 
 module.exports = mongoose.model('Announcement', announcementSchema);

@@ -49,12 +49,15 @@ function renderMassReadingsSection(massReadings, lang) {
   if (showTamil) {
     const rawTa = massReadings.tamil?.readings || [];
     const taReadings = deduplicateReadings(rawTa);
+    const { extractLiturgicalHeaderLines } = require('../services/whatsappDailyFormatter');
+    const headerLinesTa = extractLiturgicalHeaderLines(massReadings.tamil, 'ta');
+    const cleanHeaderTa = headerLinesTa.map(l => l.replace(/^[^\w\u0B80-\u0BFF*]+/, '').replace(/\*/g, '')).join(' — ');
     html += `
       <div style="margin-bottom: ${showEnglish ? '24px' : '0'};">
         <div style="background-color: #F8FAFC; border-left: 4px solid #C5A059; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 14px;">
           <h3 style="margin: 0; color: #1E293B; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">DAILY MASS READINGS</h3>
           <div style="margin: 4px 0 0 0; color: #C5A059; font-size: 14px; font-weight: 700;">தமிழ்</div>
-          ${massReadings.tamil?.title && massReadings.tamil.title !== 'New:' ? `<p style="margin: 4px 0 0 0; color: #64748B; font-size: 13px; font-weight: 600;">${escapeHtml(massReadings.tamil.title)}</p>` : ''}
+          ${cleanHeaderTa ? `<p style="margin: 6px 0 0 0; color: #1E3A8A; font-size: 14px; font-weight: 700;">🗓️ ${escapeHtml(cleanHeaderTa)}</p>` : (massReadings.tamil?.title && massReadings.tamil.title !== 'New:' ? `<p style="margin: 4px 0 0 0; color: #64748B; font-size: 13px; font-weight: 600;">${escapeHtml(massReadings.tamil.title)}</p>` : '')}
         </div>
         ${taReadings.length > 0 ? taReadings.map(r => `
           <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed #E2E8F0;">
@@ -69,12 +72,15 @@ function renderMassReadingsSection(massReadings, lang) {
   if (showEnglish) {
     const rawEn = massReadings.english?.readings || [];
     const enReadings = deduplicateReadings(rawEn);
+    const { extractLiturgicalHeaderLines } = require('../services/whatsappDailyFormatter');
+    const headerLinesEn = extractLiturgicalHeaderLines(massReadings.english, 'en');
+    const cleanHeaderEn = headerLinesEn.map(l => l.replace(/^[^\w\u0B80-\u0BFF*]+/, '').replace(/\*/g, '')).join(' — ');
     html += `
       <div>
         <div style="background-color: #F8FAFC; border-left: 4px solid #1E293B; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 14px;">
           <h3 style="margin: 0; color: #1E293B; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">DAILY MASS READINGS</h3>
           <div style="margin: 4px 0 0 0; color: #64748B; font-size: 14px; font-weight: 700;">English</div>
-          ${massReadings.english?.title && massReadings.english.title !== 'New:' ? `<p style="margin: 4px 0 0 0; color: #64748B; font-size: 13px; font-weight: 600;">${escapeHtml(massReadings.english.title)}</p>` : ''}
+          ${cleanHeaderEn ? `<p style="margin: 6px 0 0 0; color: #1E3A8A; font-size: 14px; font-weight: 700;">🗓️ ${escapeHtml(cleanHeaderEn)}</p>` : (massReadings.english?.title && massReadings.english.title !== 'New:' ? `<p style="margin: 4px 0 0 0; color: #64748B; font-size: 13px; font-weight: 600;">${escapeHtml(massReadings.english.title)}</p>` : '')}
         </div>
         ${enReadings.length > 0 ? enReadings.map(r => `
           <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed #E2E8F0;">

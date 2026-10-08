@@ -420,24 +420,11 @@ async function cleanupExpiredAnnouncements(specificAnnId = null) {
 
 /**
  * Called immediately when an admin creates a new announcement.
+ * Delegates to Central Notification Scheduler.
  */
 async function onAnnouncementCreated(announcement) {
-  try {
-    const now = new Date();
-    const expiryDate = getAnnouncementExactExpiry(announcement);
-
-    if (announcement.isPublished !== false && (!expiryDate || now < expiryDate)) {
-      console.log(`[HourlyAnnouncementReminder] New announcement "${announcement.title}" created. Initializing hourly reminder cycle!`);
-      announcement.status = 'published';
-      announcement.isPublished = true;
-      announcement.reminderStatus = 'active';
-      await announcement.save();
-
-      await dispatchHourlyAnnouncementReminder(announcement._id, { isInitial: true });
-    }
-  } catch (err) {
-    console.error('[HourlyAnnouncementReminder] onAnnouncementCreated error:', err.message);
-  }
+  const central = require('./centralNotificationScheduler');
+  return central.onAnnouncementCreated(announcement);
 }
 
 /**
@@ -445,18 +432,8 @@ async function onAnnouncementCreated(announcement) {
  * Halts all pending reminders immediately.
  */
 async function onAnnouncementCancelledOrExpired(announcementId, { reason = 'deleted' } = {}) {
-  try {
-    console.log(`[HourlyAnnouncementReminder] Announcement ${announcementId} ${reason}. Halting reminders immediately.`);
-    await Announcement.findByIdAndUpdate(announcementId, {
-      status: reason === 'unpublished' ? 'unpublished' : 'deleted',
-      isPublished: false,
-      reminderStatus: 'cancelled'
-    }).catch(() => {});
-
-    await Notification.deleteMany({ relatedId: announcementId, category: 'announcements' }).catch(() => {});
-  } catch (err) {
-    console.error('[HourlyAnnouncementReminder] onAnnouncementCancelledOrExpired error:', err.message);
-  }
+  const central = require('./centralNotificationScheduler');
+  return central.onAnnouncementCancelledOrExpired(announcementId);
 }
 
 // ─── EMAIL TEMPLATE BUILDER ──────────────────────────────────────────────────
@@ -544,18 +521,19 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
-// ─── BACKGROUND CRON SCHEDULER (Runs every 1 minute) ─────────────────────────
-cron.schedule('* * * * *', async () => {
-  await processHourlyAnnouncementReminders();
-}, { timezone: 'Asia/Kolkata' });
-
-console.log('✅ [HourlyAnnouncementReminder] 1-Minute Cron Scheduler registered (Asia/Kolkata).');
+// Note: Cron execution is centralized in centralNotificationScheduler.js to prevent duplicate sends.
 
 module.exports = {
-  processHourlyAnnouncementReminders,
+  processHourlyAnnouncementReminders: () => {
+    const central = require('./centralNotificationScheduler');
+    return central.runCentralSchedulerTick();
+  },
   dispatchHourlyAnnouncementReminder,
   onAnnouncementCreated,
   onAnnouncementCancelledOrExpired,
-  cleanupExpiredAnnouncements,
+  cleanupExpiredAnnouncements: (id) => {
+    const central = require('./centralNotificationScheduler');
+    return central.cleanupExpiredAnnouncements(id);
+  },
   getAnnouncementExactExpiry
 };

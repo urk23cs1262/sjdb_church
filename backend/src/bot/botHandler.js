@@ -33,7 +33,8 @@ const {
   generateReadMoreMessage,
   generateDailyCatholicMessage,
   generateSaintCaption,
-  generateSaintInfoMessage
+  generateSaintInfoMessage,
+  extractLiturgicalHeaderLines
 } = require('../services/whatsappDailyFormatter');
 const { getDailyVerseImage } = require('../services/bibleVerseImageService');
 const { processIncomingMessage, isPhoneBlocked } = require('../services/userModerationService');
@@ -508,7 +509,10 @@ function formatSingleReadingsMessage(dailyContent, isTamil) {
     ? new Date().toLocaleDateString('ta-IN', { day: 'numeric', month: 'long', year: 'numeric' })
     : new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 
-  let body = `📜 *${isTamil ? 'இன்றைய திருப்பலி வாசகங்கள்' : 'Daily Mass Readings'}*\n📅 ${dateStr}\n\n`;
+  const headerLines = extractLiturgicalHeaderLines(isTamil ? taReadings : enReadings, isTamil ? 'ta' : 'en', dailyContent);
+  const headerBlock = headerLines.length > 0 ? `\n${headerLines.join('\n')}` : '';
+
+  let body = `📜 *${isTamil ? 'இன்றைய திருப்பலி வாசகங்கள்' : 'Daily Mass Readings'}*\n📅 ${dateStr}${headerBlock}\n\n`;
   body += `*${isTamil ? 'முதல் வாசகம்' : 'First Reading'}:*\n${firstR || (isTamil ? 'வாசகம் கிடைக்கவில்லை.' : 'Not available')}\n\n`;
   body += `*${isTamil ? 'திருப்பாடல்' : 'Responsorial Psalm'}:*\n${psalmR || (isTamil ? 'திருப்பாடல் கிடைக்கவில்லை.' : 'Not available')}\n\n`;
   if (secondR) {

@@ -134,6 +134,20 @@ async function broadcastEventPublished({ event, action = 'created' }) {
   try {
     if (!event) return;
 
+    // Deduplication check via NotificationLog for event creation
+    if (action === 'created') {
+      const NotificationLog = require('../models/NotificationLog');
+      const alreadySent = await NotificationLog.findOne({
+        entityType: 'event',
+        entityId: event._id,
+        notificationType: 'event_created'
+      });
+      if (alreadySent) {
+        console.log(`[BroadcastNotificationService] Event ${event._id} creation notification already logged. Suppressing duplicate broadcast.`);
+        return true;
+      }
+    }
+
     // Immediately refresh in-memory cache
     invalidateCache('events');
 
@@ -361,6 +375,22 @@ _SJDB Connect_`;
       });
     } catch (_) { }
 
+    // Log to NotificationLog on creation for strict idempotency
+    if (action === 'created') {
+      const NotificationLog = require('../models/NotificationLog');
+      await NotificationLog.create({
+        entityType: 'event',
+        entityId: event._id,
+        notificationType: 'event_created',
+        reminderType: 'creation',
+        scheduledFor: event.createdAt || new Date(),
+        title: cleanTitle,
+        channels: ['website', 'whatsapp', 'email', 'push'],
+        status: 'sent',
+        recipientCount: emailRecipients.length + waRecipients.length
+      }).catch(() => {});
+    }
+
     return true;
   } catch (err) {
     console.error('[BroadcastNotificationService] broadcastEventPublished error:', err.message);
@@ -381,6 +411,26 @@ _SJDB Connect_`;
 async function broadcastAnnouncementPublished({ announcement, action = 'created' }) {
   try {
     if (!announcement) return;
+
+    // Strict Duplication Guard: If announcement is mirrored from an event, NEVER broadcast as announcement!
+    if (announcement.sourceType === 'event' || announcement.eventId) {
+      console.log(`[BroadcastNotificationService] Suppressing announcement broadcast for event mirror "${announcement.title}".`);
+      return true;
+    }
+
+    // Deduplication check via NotificationLog for announcement creation
+    if (action === 'created') {
+      const NotificationLog = require('../models/NotificationLog');
+      const alreadySent = await NotificationLog.findOne({
+        entityType: 'announcement',
+        entityId: announcement._id,
+        notificationType: 'announcement_created'
+      });
+      if (alreadySent) {
+        console.log(`[BroadcastNotificationService] Announcement ${announcement._id} creation notification already logged. Suppressing duplicate broadcast.`);
+        return true;
+      }
+    }
 
     // Immediately refresh in-memory cache
     invalidateCache('announcements');
@@ -536,6 +586,22 @@ _SJDB Connect_`;
         console.warn('⚠️ [BroadcastNotificationService] WhatsApp Channel announcement notice:', err.message);
       });
     } catch (_) { }
+
+    // Log to NotificationLog on creation for strict idempotency
+    if (action === 'created') {
+      const NotificationLog = require('../models/NotificationLog');
+      await NotificationLog.create({
+        entityType: 'announcement',
+        entityId: announcement._id,
+        notificationType: 'announcement_created',
+        reminderType: 'creation',
+        scheduledFor: announcement.createdAt || new Date(),
+        title: cleanTitle,
+        channels: ['website', 'whatsapp', 'email', 'push'],
+        status: 'sent',
+        recipientCount: emailRecipients.length + waRecipients.length
+      }).catch(() => {});
+    }
 
     return true;
   } catch (err) {

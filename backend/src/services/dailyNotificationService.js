@@ -17,7 +17,8 @@ const {
   generateReadMoreMessage,
   generateDailyCatholicMessage,
   generateDailyLinksMessage,
-  generateSaintInfoMessage
+  generateSaintInfoMessage,
+  extractLiturgicalHeaderLines
 } = require('./whatsappDailyFormatter');
 const { getDailyVerseImage } = require('./bibleVerseImageService');
 const { SITE_ROUTES, EXTERNAL_LINKS, getSiteUrl, getBaseClientUrl } = require('../config/siteRoutes');
@@ -59,6 +60,10 @@ function formatInAppMessage(dailyContent, userLang = 'ta') {
   const reflectionSnippet = isEn ? dailyContent.reflection?.english : dailyContent.reflection?.tamil;
   const saintName = isEn ? dailyContent.saint?.nameEnglish : (dailyContent.saint?.nameTamil || dailyContent.saint?.nameEnglish);
 
+  const readingsObj = isEn ? dailyContent.massReadings?.english : dailyContent.massReadings?.tamil;
+  const headerLines = extractLiturgicalHeaderLines(readingsObj, isEn ? 'en' : 'ta', dailyContent);
+  const cleanLitHeader = headerLines.map(l => l.replace(/^[^\w\u0B80-\u0BFF*]+/, '').replace(/\*/g, '')).join(' — ');
+
   const verseEn = (dailyContent?.bible?.english || dailyContent?.verse?.english || '').trim();
   const verseTa = (dailyContent?.bible?.tamil || dailyContent?.verse?.tamil || '').trim();
   const rawRef = (dailyContent?.bible?.ref || dailyContent?.verse?.reference || '').trim();
@@ -77,7 +82,7 @@ function formatInAppMessage(dailyContent, userLang = 'ta') {
 
   return `${verseSection}
 
-${isEn ? 'Mass Readings' : 'திருப்பலி வாசகங்கள்'}: ${massTitle || 'Daily Liturgy'}
+${isEn ? 'Mass Readings' : 'திருப்பலி வாசகங்கள்'}: ${cleanLitHeader || massTitle || 'Daily Liturgy'}
 ${isEn ? 'Saint of the Day' : 'இன்றைய புனிதர்'}: ${saintName || 'Holy Saint'}
 ${isEn ? 'Reflection' : 'தியானம்'}: ${(reflectionSnippet || '').slice(0, 150)}...`;
 }
@@ -95,9 +100,17 @@ function formatPushPayload(dailyContent, lang = 'ta') {
   const refEn = getEnglishBibleReference(rawRef);
   const refTa = getTamilBibleReference(rawRef);
 
+  const readingsObj = isEn ? dailyContent.massReadings?.english : dailyContent.massReadings?.tamil;
+  const headerLines = extractLiturgicalHeaderLines(readingsObj, isEn ? 'en' : 'ta', dailyContent);
+  const cleanLitHeader = headerLines.map(l => l.replace(/^[^\w\u0B80-\u0BFF*]+/, '').replace(/\*/g, '')).join(' — ');
+
   const bibleUrl = getSiteUrl(SITE_ROUTES.BIBLE_VERSE);
+  const pushTitle = cleanLitHeader
+    ? `🗓️ ${cleanLitHeader}`
+    : `📖 இன்றைய இறைவார்த்தை / DAILY BIBLE VERSE`;
+
   return {
-    title: `📖 இன்றைய இறைவார்த்தை / DAILY BIBLE VERSE`,
+    title: pushTitle,
     body: `"${verseEn.slice(0, 80)}..." — ${refEn}\n"${verseTa.slice(0, 80)}..." — ${refTa}`,
     url: bibleUrl,
     image: `/api/settings/daily-verses/today/image`,
@@ -399,9 +412,13 @@ async function sendDailyChurchNotifications({
           hasBibleImageAttachment: hasVerseImage
         });
 
+        const testReadingsObj = testLang === 'en' ? dailyContent.massReadings?.english : dailyContent.massReadings?.tamil;
+        const testHeaderLines = extractLiturgicalHeaderLines(testReadingsObj, testLang === 'en' ? 'en' : 'ta', dailyContent);
+        const testLitDay = testHeaderLines.map(l => l.replace(/^[^\w\u0B80-\u0BFF*]+/, '').replace(/\*/g, '')).join(' — ');
+
         const subject = testLang === 'en'
-          ? `Good Morning - Your Daily Catholic Reading - ${dailyContent.formattedDate}`
-          : `காலை வணக்கம் - இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள் - ${dailyContent.formattedDateTa || dailyContent.formattedDate}`;
+          ? `Good Morning - Your Daily Catholic Reading - ${dailyContent.formattedDate}${testLitDay ? ` (${testLitDay})` : ''}`
+          : `காலை வணக்கம் - இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள் - ${dailyContent.formattedDateTa || dailyContent.formattedDate}${testLitDay ? ` (${testLitDay})` : ''}`;
 
         const emailRes = await sendMail({
           to: toEmail,
@@ -719,9 +736,13 @@ async function sendDailyChurchNotifications({
             hasBibleImageAttachment: hasVerseImage
           });
 
+          const userReadingsObj = recipient.userLang === 'en' ? dailyContent.massReadings?.english : dailyContent.massReadings?.tamil;
+          const userHeaderLines = extractLiturgicalHeaderLines(userReadingsObj, recipient.userLang === 'en' ? 'en' : 'ta', dailyContent);
+          const userLitDay = userHeaderLines.map(l => l.replace(/^[^\w\u0B80-\u0BFF*]+/, '').replace(/\*/g, '')).join(' — ');
+
           const subject = recipient.userLang === 'en'
-            ? `Good Morning - Your Daily Catholic Reading - ${dailyContent.formattedDate}`
-            : `காலை வணக்கம் - இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள் - ${dailyContent.formattedDateTa || dailyContent.formattedDate}`;
+            ? `Good Morning - Your Daily Catholic Reading - ${dailyContent.formattedDate}${userLitDay ? ` (${userLitDay})` : ''}`
+            : `காலை வணக்கம் - இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள் - ${dailyContent.formattedDateTa || dailyContent.formattedDate}${userLitDay ? ` (${userLitDay})` : ''}`;
 
           const mailRes = await sendMail({
             to: recipient.userEmail,
@@ -753,12 +774,14 @@ async function sendDailyChurchNotifications({
           const { createNotification } = require('./notificationService');
           const inAppMsg = formatInAppMessage(dailyContent, recipient.userLang);
 
+          const notifTitle = recipient.userLang === 'en'
+            ? `Daily Catholic Word & Readings — ${dailyContent.formattedDate}${userLitDay ? ` (${userLitDay})` : ''}`
+            : `இன்றைய கத்தோலிக்க வாசகங்கள் — ${dailyContent.formattedDateTa || dailyContent.formattedDate}${userLitDay ? ` (${userLitDay})` : ''}`;
+
           const notif = await createNotification({
             userId: recipient.userId,
             isBroadcast: false,
-            title: recipient.userLang === 'en'
-              ? `Daily Catholic Word & Readings — ${dailyContent.formattedDate}`
-              : `இன்றைய கத்தோலிக்க வாசகங்கள் — ${dailyContent.formattedDateTa || dailyContent.formattedDate}`,
+            title: notifTitle,
             message: inAppMsg,
             type: 'daily_spiritual',
             category: 'daily_spiritual',
@@ -1081,5 +1104,7 @@ module.exports = {
   getUserNotificationHistory,
   checkAndSendOnStartup,
   sendDailyWhatsAppSequence,
-  resolveUserLanguage
+  resolveUserLanguage,
+  formatInAppMessage,
+  formatPushPayload
 };
