@@ -361,7 +361,7 @@ const broadcast = async (req, res) => {
         const { getEligibleWhatsAppRecipients } = require('../services/broadcastNotificationService');
         const waRecipients = await getEligibleWhatsAppRecipients(selectedCategory);
         if (waRecipients.length > 0) {
-          const wa = require('../bot/whatsapp');
+          const { sendWhatsAppNotification } = require('../services/whatsAppNotificationService');
           const cleanTitle = (title || 'Church Notice').trim();
           const cleanBody = (message || '').trim();
           const clientBase = process.env.CLIENT_URL || 'https://sjdbchurch.in';
@@ -380,7 +380,7 @@ _SJDB Connect_`;
 
           setImmediate(async () => {
             for (const phone of waRecipients) {
-              wa.sendWhatsAppMessage(phone, waMsg).catch(() => { });
+              sendWhatsAppNotification(phone, waMsg).catch(() => { });
               await new Promise(r => setTimeout(r, 70));
             }
           });

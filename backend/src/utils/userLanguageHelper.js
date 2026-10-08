@@ -71,6 +71,11 @@ function normalizeContentLanguage(lang) {
 function getUserDailyContentLanguage(userOrSession) {
   if (!userOrSession) return 'ta';
 
+  // 0. Dedicated Daily Catholic Content Language
+  if (userOrSession.dailyCatholicLanguage) {
+    return normalizeContentLanguage(userOrSession.dailyCatholicLanguage);
+  }
+
   // 1. WhatsApp BotSession stores Daily Catholic Content language in session.language
   if (userOrSession.language) {
     return normalizeContentLanguage(userOrSession.language);

@@ -43,11 +43,8 @@ function getWA() {
 }
 
 function sendWA(phone, text) {
-  const wa = getWA();
-  if (wa && typeof wa.sendWhatsAppMessage === 'function') {
-    return wa.sendWhatsAppMessage(phone, text).catch(() => {});
-  }
-  return Promise.resolve(false);
+  const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
+  return sendWhatsAppNotification(phone, text).catch(() => {});
 }
 
 // ─── DATE & TIME HELPERS (Asia/Kolkata UTC+5:30) ─────────────────────────────

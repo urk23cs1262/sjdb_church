@@ -89,11 +89,9 @@ function generateSecurityReportToken(userId, extra = {}) {
 async function dispatchWhatsAppAlert(phone, text) {
   if (!phone) return false;
   try {
-    const waBot = require('../bot/whatsapp');
-    if (waBot && typeof waBot.sendWhatsAppMessage === 'function') {
-      const sent = await waBot.sendWhatsAppMessage(phone, text);
-      if (sent) return true;
-    }
+    const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
+    const res = await sendWhatsAppNotification(phone, text);
+    if (res && res.success) return true;
   } catch (e) {
     // Continue to Twilio fallback
   }

@@ -48,11 +48,8 @@ function getWA() {
 }
 
 function sendWA(phone, text) {
-  const wa = getWA();
-  if (wa && typeof wa.sendWhatsAppMessage === 'function') {
-    return wa.sendWhatsAppMessage(phone, text).catch(() => {});
-  }
-  return Promise.resolve(false);
+  const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
+  return sendWhatsAppNotification(phone, text).catch(() => {});
 }
 
 // ─── TIMEZONE & DATE UTILITIES (Asia/Kolkata UTC+5:30) ───────────────────────

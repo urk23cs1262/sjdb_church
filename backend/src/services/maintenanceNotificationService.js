@@ -4,7 +4,7 @@ const MaintenanceNotificationLog = require('../models/MaintenanceNotificationLog
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 const { sendMail } = require('../config/mailer');
-const { sendWhatsAppMessage } = require('../bot/whatsapp');
+const { sendWhatsAppNotification: sendWhatsAppMessage } = require('./whatsAppNotificationService');
 const { sendPushToUser, sendPushBroadcast } = require('./webPushService');
 
 const SITE_URL = process.env.CLIENT_URL || 'https://stjb-church.vercel.app';

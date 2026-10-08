@@ -7,7 +7,8 @@ const { registerUserForEvent, withdrawUserRegistration } = require('../services/
 const { resolveBackendImageUrl } = require('../utils/imageUrlHelper');
 
 function sendWA(phone, text) {
-  return require('../bot/whatsapp').sendWhatsAppMessage(phone, text).catch(() => { });
+  const { sendWhatsAppNotification } = require('../services/whatsAppNotificationService');
+  return sendWhatsAppNotification(phone, text).catch(() => { });
 }
 
 const getAll = async (req, res) => {

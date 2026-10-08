@@ -21,15 +21,18 @@ const { sendPushToUser } = require('./webPushService');
 const { getSiteUrl } = require('../config/siteRoutes');
 const { getAdminEmails, getAdminPhones } = require('../config/contactConfig');
 
-function sendWA(phone, text) {
+function sendWA(phoneOrUser, text) {
   try {
-    const wa = require('../bot/whatsapp');
-    if (wa && typeof wa.sendWhatsAppMessage === 'function') {
-      return wa.sendWhatsAppMessage(phone, text).catch(err => {
-        console.warn('[EventRegistrationService] WhatsApp send warning:', err.message);
-        return false;
-      });
-    }
+    const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
+    return sendWhatsAppNotification(phoneOrUser, text).catch(err => {
+      console.warn('[EventRegistrationService] Central WhatsApp send warning:', err.message);
+      const wa = require('../bot/whatsapp');
+      if (wa && typeof wa.sendWhatsAppMessage === 'function') {
+        const phone = typeof phoneOrUser === 'string' ? phoneOrUser : (phoneOrUser?.phone || '');
+        return wa.sendWhatsAppMessage(phone, text).catch(() => false);
+      }
+      return false;
+    });
   } catch (err) {
     console.warn('[EventRegistrationService] WhatsApp module warning:', err.message);
   }
@@ -406,7 +409,7 @@ ${publicEventUrl}
 
 *St. John de Britto Church, Kalayarkoil*`;
 
-      await sendWA(userPhone, waMsg);
+      await sendWA(user || userPhone, waMsg);
       console.log(`[EVENT NOTIFICATION] User WhatsApp sent to ${userPhone}`);
     } catch (err) {
       console.warn('[EVENT NOTIFICATION] User WhatsApp failed:', err.message);

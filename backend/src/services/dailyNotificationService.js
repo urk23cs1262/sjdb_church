@@ -532,22 +532,61 @@ async function sendDailyChurchNotifications({
         .filter(Boolean)
     );
 
-    // Active website users only (strictly excluding deactivated/restricted accounts)
-    const rawUsers = await User.find({ isActive: { $ne: false } }).lean();
+    // Dedicated helper to check Daily Catholic Content eligibility
+    function isDailyCatholicEligible(record) {
+      if (!record) return false;
+      const isCompleted = record.dailyCatholicSetupCompleted === true;
+      const isSubscribed = record.dailyCatholicSubscribed === true;
+      const lang = (record.dailyCatholicLanguage || '').toLowerCase().trim();
+      const hasValidLang = ['english', 'tamil', 'both', 'en', 'ta'].includes(lang);
+      return isCompleted && isSubscribed && hasValidLang;
+    }
+
+    function resolveDailyCatholicLanguage(record) {
+      const lang = (record?.dailyCatholicLanguage || '').toLowerCase().trim();
+      if (lang === 'english' || lang === 'en') return 'en';
+      if (lang === 'tamil' || lang === 'ta') return 'ta';
+      if (lang === 'both') return 'both';
+      return resolveUserLanguage(record);
+    }
+
+    // Active website users strictly eligible for Daily Catholic Content
+    const rawUsers = await User.find({
+      isActive: { $ne: false },
+      dailyCatholicSetupCompleted: true,
+      dailyCatholicSubscribed: true,
+      dailyCatholicLanguage: { $in: ['english', 'tamil', 'both', 'en', 'ta'] }
+    }).lean();
+
     const users = rawUsers.filter(u => {
       if (blockedUserIds.has(u._id.toString())) return false;
       const phone10 = (u.phone || '').replace(/\D/g, '').slice(-10);
       if (phone10 && blockedPhone10s.has(phone10)) return false;
+      // Dedicated completion & subscription check
+      if (!isDailyCatholicEligible(u)) {
+        return false;
+      }
       return true;
     });
 
-    // WhatsApp bot sessions that have not stopped AND are NOT restricted/blocked
-    const rawBotSessions = await BotSession.find({ step: { $ne: 'stopped' } }).lean();
+    // Standalone WhatsApp bot sessions with strictly completed Daily Catholic setup & active subscription
+    const rawBotSessions = await BotSession.find({
+      step: 'done',
+      isOnboarded: true,
+      dailyCatholicSetupCompleted: true,
+      dailyCatholicSubscribed: true,
+      dailyCatholicLanguage: { $in: ['english', 'tamil', 'both', 'en', 'ta'] }
+    }).lean();
+
     const botSessions = rawBotSessions.filter(session => {
       const phone10 = (session.phoneNumber || '').replace(/\D/g, '').slice(-10);
       if (!phone10) return false;
       if (blockedPhone10s.has(phone10)) {
         console.log(`[Daily Notification Service] Skipping restricted user phone ${phone10} from 4 AM broadcast.`);
+        return false;
+      }
+      // Dedicated completion & subscription check
+      if (!isDailyCatholicEligible(session)) {
         return false;
       }
       return true;
@@ -560,7 +599,7 @@ async function sendDailyChurchNotifications({
     for (const user of users) {
       const phone10 = (user.phone || '').replace(/\D/g, '').slice(-10);
       const userSettings = user.settings?.notifications || {};
-      const userLang = resolveUserLanguage(user);
+      const userLang = resolveDailyCatholicLanguage(user);
       const userName = user.name || 'Parishioner';
       const userEmail = (user.email || '').trim().toLowerCase();
 
@@ -580,6 +619,9 @@ async function sendDailyChurchNotifications({
         userLang,
         readingPreference: user.readingPreference || 'full',
         sendLinks: user.sendLinks !== false,
+        dailyCatholicSetupCompleted: true,
+        dailyCatholicSubscribed: true,
+        dailyCatholicLanguage: user.dailyCatholicLanguage,
         isEmailEnabled,
         isInAppEnabled,
         isPushEnabled,
@@ -605,7 +647,7 @@ async function sendDailyChurchNotifications({
       }
 
       // Standalone bot-only subscriber
-      const sessionLang = resolveUserLanguage(session);
+      const sessionLang = resolveDailyCatholicLanguage(session);
       recipientMap.set(phone10, {
         recipientKey: phone10,
         phone10,
@@ -616,6 +658,9 @@ async function sendDailyChurchNotifications({
         userLang: sessionLang,
         readingPreference: session.readingPreference || 'full',
         sendLinks: session.sendLinks !== false,
+        dailyCatholicSetupCompleted: true,
+        dailyCatholicSubscribed: true,
+        dailyCatholicLanguage: session.dailyCatholicLanguage,
         isEmailEnabled: false,
         isInAppEnabled: false,
         isPushEnabled: false,

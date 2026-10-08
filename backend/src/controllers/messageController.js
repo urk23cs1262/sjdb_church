@@ -180,7 +180,8 @@ ${escapeHtml(message)}
     // 5. WhatsApp Notification (if selected)
     if (sendWhatsApp && recipient.phone) {
       const waMsg = `*St. John de Britto Church, Kalayarkoil*\n*Message from Administration*\n\nDear *${recipient.name}*,\n\n*Subject:* ${subject}\n\n${message}\n\n*View on Website:*\n${messagesUrl}\n\n_புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்_`;
-      require('../bot/whatsapp').sendWhatsAppMessage(recipient.phone, waMsg).catch(() => { });
+      const { sendWhatsAppNotification } = require('../services/whatsAppNotificationService');
+      sendWhatsAppNotification(recipient, waMsg).catch(() => { });
     }
 
     res.status(201).json({

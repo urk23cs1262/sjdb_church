@@ -279,8 +279,9 @@ async function processUserBirthday({ user, istInfo, isManualTest = false }) {
     } else {
       try {
         const waText = formatBirthdayWhatsAppMessage(user, userLang);
-        const { sendWhatsAppMessage } = require('../bot/whatsapp');
-        const sent = await sendWhatsAppMessage(cleanPhone, waText);
+        const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
+        const res = await sendWhatsAppNotification(user || cleanPhone, waText);
+        const sent = res && res.success !== false;
         
         if (sent !== false) {
           birthdayLog.channels.whatsapp = {

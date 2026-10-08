@@ -257,7 +257,8 @@ async function dispatchImmediateGlobalResetNotifications({ resetEvent, adminUser
         const waMsg = `⛪ *St. John de Britto Church, Kalayarkoil*\n*Security Verification Required*\n\nDear *${userName}*,\n\nA security re-verification has been initiated by the Church Administration. Please complete OTP verification to continue using your account. Your re-verification cycle is valid for 30 days.\n\n*Verify Now:*\n${clientUrl}/login?verify=true\n\n_நிர்வாகத்தின் பாதுகாப்பு விதிமுறைகளின்படி உங்கள் கணக்கை OTP மூலம் மீண்டும் சரிபார்க்கவும்._\n\n_புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்_`;
 
         try {
-          await wa.sendWhatsAppMessage(u.phone, waMsg);
+          const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
+          await sendWhatsAppNotification(u, waMsg);
           await GlobalOtpNotificationLog.create({
             notificationType: 'immediate',
             userId: u._id,
@@ -586,7 +587,8 @@ async function checkAndSendGlobalResetReminders({ forceDay = null } = {}) {
           const waReminderMsg = `⛪ *St. John de Britto Church, Kalayarkoil*\n*OTP Re-Verification Reminder (Day ${currentReminderDay})*\n\nDear *${userName}*,\n\nYour account still requires security re-verification. Please complete OTP verification to keep your account active.\n\n*Verify Now:*\n${clientUrl}/login?verify=true\n\n_உங்கள் கணக்கு தொடர்ந்து செயல்பட OTP சரிபார்ப்பை பூர்த்தி செய்யவும்._\n\n_புனித அருளானந்தர் தேவாலயம்_`;
 
           try {
-            await wa.sendWhatsAppMessage(u.phone, waReminderMsg);
+            const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
+            await sendWhatsAppNotification(u, waReminderMsg);
             await GlobalOtpNotificationLog.create({
               notificationType: 'reminder',
               userId: u._id,

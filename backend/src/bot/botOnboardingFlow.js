@@ -29,13 +29,14 @@ _"Come; Listen; and you will find life"_
 
 🌐 *1️⃣ Bot Language / பாட் மொழி*
 
-Please select your preferred language for bot conversation:
-தயவுசெய்து போட் உரையாடலுக்கான மொழியைத் தேர்ந்தெடுக்கவும்:
+Please select your preferred language for bot conversation and notifications:
+தயவுசெய்து போட் உரையாடல் மற்றும் அறிவிப்புகளுக்கான மொழியைத் தேர்ந்தெடுக்கவும்:
 
 1️⃣ English
 2️⃣ தமிழ் (Tamil)
+3️⃣ Both (English + Tamil / இரண்டும்)
 
-👉 Reply with *1* or *2*`;
+👉 Reply with *1*, *2*, or *3*`;
 }
 
 function getStep2PhoneVerificationMessage(botLang = 'en') {
@@ -236,35 +237,18 @@ _SJDB Connect_`;
 
 function getStep8MainMenuMessage(userName, botLang = 'en') {
   const greeting = userName ? `Welcome, *${userName}*! ` : 'Welcome! ';
-  if (botLang === 'ta') {
-    return `⛪ *Main Menu*
+  return `⛪ *Main Menu*
 ${greeting}How can I help you today?
 _(வணக்கம்! உங்களுக்கு எவ்வாறு உதவ முடியும்?)_
 
 1️⃣ 📖 *Daily Bible* (தினசரி விவிலியம்)
-2️⃣ ⛪ *Mass Timings* (திருப்பலி நேரங்கள்)
-3️⃣ 🕊️ *Services & Help Desk* (பங்கு சேவைகள்)
-4️⃣ 📅 *Events* (நிகழ்வுகள்)
-5️⃣ 📢 *Announcements* (அறிவிப்புகள்)
-6️⃣ 📜 *Church Information* (ஆலய விபரங்கள்)
-7️⃣ 🌟 *Saint of the Day* (இன்றைய புனிதர்)
+2️⃣ 🕊️ *Daily Mass Readings* (தினசரி திருப்பலி வாசகங்கள்)
+3️⃣  ⛪ *Mass Timings* (திருப்பலி நேரங்கள்)
+4️⃣  🌟 *Saint of the Day* (இன்றைய புனிதர்)
+5️⃣ 📅 *Events* (நிகழ்வுகள்)
+6️⃣ 📢 *Announcements* (அறிவிப்புகள்)
+7️⃣ 📜 *Church Information* (ஆலய விபரங்கள்)
 8️⃣ ❓ *Help* (உதவி)
-
-👉 *You can reply with a number or ask your question naturally.*
-➡️ *Type "Services" for the complete 15 Parish Help Desk services.*`;
-  }
-
-  return `⛪ *Main Menu*
-${greeting}How can I help you today?
-
-1️⃣ 📖 *Daily Bible*
-2️⃣ ⛪ *Mass Timings*
-3️⃣ 🕊️ *Services & Help Desk*
-4️⃣ 📅 *Events*
-5️⃣ 📢 *Announcements*
-6️⃣ 📜 *Church Information*
-7️⃣ 🌟 *Saint of the Day*
-8️⃣ ❓ *Help*
 
 👉 *You can reply with a number or ask your question naturally.*
 ➡️ *Type "Services" for the complete 15 Parish Help Desk services.*`;
@@ -274,6 +258,7 @@ function parseBotLanguage(rawText) {
   const t = (rawText || '').trim().toLowerCase();
   if (/^(1|english|eng|en)$/i.test(t)) return 'en';
   if (/^(2|tamil|தமிழ்|ta)$/i.test(t)) return 'ta';
+  if (/^(3|both|இரண்டும்|tamil \+ english|english \+ tamil|all)$/i.test(t)) return 'both';
   return null;
 }
 

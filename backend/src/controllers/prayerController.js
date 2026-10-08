@@ -4,7 +4,8 @@ const { createAdminNotification, createUserNotification } = require('../services
 const { sendMail } = require('../config/mailer');
 
 function sendWA(phone, text) {
-  return require('../bot/whatsapp').sendWhatsAppMessage(phone, text).catch(() => { });
+  const { sendWhatsAppNotification } = require('../services/whatsAppNotificationService');
+  return sendWhatsAppNotification(phone, text).catch(() => { });
 }
 
 const getPublic = async (req, res) => {

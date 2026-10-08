@@ -121,8 +121,18 @@ const prepareFinalDocumentPdf = async (file, docType = '') => {
 /**
  * Helper to dispatch WhatsApp text message to user.
  */
-const dispatchWhatsAppText = async (phoneNumber, text) => {
+const dispatchWhatsAppText = async (targetUserOrPhone, text) => {
   try {
+    const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
+    const res = await sendWhatsAppNotification(targetUserOrPhone, text);
+    if (res?.success) return true;
+  } catch (err) {
+    console.warn('[DocumentDelivery] Central WhatsApp dispatch error:', err.message);
+  }
+
+  // Fallback to Baileys if central service did not deliver
+  try {
+    const phoneNumber = typeof targetUserOrPhone === 'string' ? targetUserOrPhone : (targetUserOrPhone?.phone || '');
     const sent = await sendWhatsAppMessage(phoneNumber, text);
     if (sent) return true;
   } catch (err) {
@@ -131,6 +141,7 @@ const dispatchWhatsAppText = async (phoneNumber, text) => {
 
   // Fallback to Twilio if Baileys did not deliver
   try {
+    const phoneNumber = typeof targetUserOrPhone === 'string' ? targetUserOrPhone : (targetUserOrPhone?.phone || '');
     let formatted = phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
     await sendTwilioWhatsApp(formatted, text);
     return true;
@@ -342,7 +353,7 @@ You can also review your request here:
 ${secureReviewUrl}`;
 
         // Send WhatsApp approval notification text
-        await dispatchWhatsAppText(formattedPhone, waMessage);
+        await dispatchWhatsAppText(user || formattedPhone, waMessage);
 
         // Immediately send the actual PDF document file via Baileys socket
         if (finalPdfBuffer && Buffer.isBuffer(finalPdfBuffer)) {

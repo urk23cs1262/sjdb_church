@@ -182,7 +182,7 @@ _St. John de Britto Church, Kalayarkoil_
 }
 
 /**
- * Comprehensive Church Information Message (Option 6 from Main Menu)
+ * Comprehensive Church Information Message (Option 7 from Main Menu)
  */
 function formatChurchInformationMessage(isTamil = false) {
   if (isTamil) {
@@ -206,7 +206,7 @@ _காளையார்கோவில், சிவகங்கை மறை�
 📧 *மின்னஞ்சல்:* ${getChurchEmail() || ''}
 🌐 *இணையதளம்:* ${getSiteUrl(SITE_ROUTES.ABOUT)}
 
-👉 *திருப்பலி நேரங்களுக்கு '2', நிகழ்வுகளுக்கு '4', அல்லது 15 சேவைகளைக் காண 'Services' என அனுப்பவும்.*`;
+👉 *திருப்பலி நேரங்களுக்கு '3', நிகழ்வுகளுக்கு '5', அல்லது 15 சேவைகளைக் காண 'Services' என அனுப்பவும்.*`;
   }
 
   return `📜 *St. John de Britto Church — Church Information*
@@ -229,7 +229,7 @@ St. John de Britto Church, Kalayarkoil, Sivagangai District, Tamil Nadu – 6305
 📧 *Email:* ${getChurchEmail() || ''}
 🌐 *Website Portal:* ${getSiteUrl(SITE_ROUTES.ABOUT)}
 
-👉 *Reply 2 for Mass Timings, 4 for Events, or type "Services" for the complete 15 Parish Help Desk services.*`;
+👉 *Reply 3 for Mass Timings, 5 for Events, or type "Services" for the complete 15 Parish Help Desk services.*`;
 }
 
 /**
@@ -898,11 +898,11 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
         isActive: { $ne: false }
       }).select('_id name phone isActive').lean();
 
-      if (registeredUser) {
+        if (registeredUser) {
         console.log(`[BotHandler] Linking registered parishioner ${registeredUser.name} (${phone10}) to WhatsApp session.`);
         session.linkedUserId = registeredUser._id;
         if (!session.providedPhone) session.providedPhone = registeredUser.phone || phone10;
-        session.save().catch(() => {});
+        await session.save();
       } else {
         session.unregisteredChecked = true;
       }
@@ -916,6 +916,14 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
       console.log(`[BotHandler] 🔄 Self-healing corrupted session for ${session.phoneNumber} back to 'preferences' step.`);
       session.step = 'preferences';
       session.isOnboarded = false;
+      session.dailyCatholicSetupCompleted = false;
+      session.dailyCatholicSubscribed = false;
+      await session.save();
+    } else if (session.step === 'done' && session.isOnboarded && session.isVerified && session.language && !session.dailyCatholicSetupCompleted) {
+      const canonicalDailyLang = (session.language === 'ta') ? 'tamil' : (session.language === 'en') ? 'english' : 'both';
+      session.dailyCatholicSetupCompleted = true;
+      session.dailyCatholicSubscribed = true;
+      session.dailyCatholicLanguage = canonicalDailyLang;
       await session.save();
     }
 
@@ -955,7 +963,7 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
       session.firstInteractionEmailSent = true;
       session.firstInteractionAt = new Date();
       if (pushName) session.pushName = pushName;
-      session.save().catch(() => {});
+      await session.save();
 
       // Fire and forget in background so SMTP email never delays bot replies
       (async () => {
@@ -1000,12 +1008,18 @@ async function handleIncomingMessage(fromNumber, body, rawJid, pushName, message
     if (isStopCommand) {
       session.step = 'stopped';
       session.isOnboarded = false;
+      session.dailyCatholicSetupCompleted = false;
+      session.dailyCatholicSubscribed = false;
       session.preferences = [];
       await session.save();
 
       if (session.linkedUserId) {
         try {
-          await User.findByIdAndUpdate(session.linkedUserId, { whatsappOptIn: false, botPreferences: [] });
+          await User.findByIdAndUpdate(session.linkedUserId, {
+            whatsappOptIn: false,
+            botPreferences: [],
+            dailyCatholicSubscribed: false
+          });
         } catch (e) { }
       }
 
@@ -1087,6 +1101,9 @@ _SJDB Connect_`;
     if (isVerifyCommand) {
       session.isVerified = false;
       session.isOnboarded = false;
+      session.dailyCatholicSetupCompleted = false;
+      session.dailyCatholicSubscribed = false;
+      session.dailyCatholicLanguage = null;
       session.step = 'bot_language';
       session.pendingOtp = '';
       session.otpAttempts = 0;
@@ -1096,36 +1113,62 @@ _SJDB Connect_`;
       return;
     }
 
+    const isGreetingOrStart = /^(hi|hello|hey|hai|hlo|start|வணக்கம்|vanakkam|good morning|good evening|good afternoon|praise the lord|praised be jesus|இயேசுவுக்கே புகழ்|கிறிஸ்துவுக்கே புகழ்|பிரைஸ் தி லார்ட்|ave maria|halleluiah|அல்லேலூயா)$/i.test(normalizedText) ||
+      normalizedText === 'start' ||
+      normalizedText === 'hi' ||
+      normalizedText === 'hello' ||
+      normalizedText === 'hey';
+
     // ── Single Authoritative Onboarding & Preference Flow ────────────────
-    if (!session.isOnboarded || session.step === 'preferences' || session.step === 'language') {
+    const isOnboardingIncomplete = !session.isOnboarded || session.step !== 'done' || !session.dailyCatholicSetupCompleted;
+    if (isOnboardingIncomplete || session.step === 'preferences' || session.step === 'language') {
       // 1️⃣ Step 1: Bot Language
       if (!session.step || session.step === 'welcome' || session.step === 'bot_language') {
-        if (session.step === 'bot_language') {
-          const chosenBotLang = parseBotLanguage(rawText);
-          if (chosenBotLang) {
-            session.botLanguage = chosenBotLang;
-            session.step = 'phone_verification';
-            await session.save();
-            await wa.sendWhatsAppMessage(replyTarget, getStep2PhoneVerificationMessage(session.botLanguage));
-            return;
+        const chosenBotLang = parseBotLanguage(rawText);
+        if (chosenBotLang) {
+          session.botLanguage = chosenBotLang;
+          session.step = 'phone_verification';
+          await session.save();
+
+          if (session.linkedUserId) {
+            try {
+              const norm = (chosenBotLang === 'ta' || chosenBotLang === 'tamil') ? 'tamil'
+                : (chosenBotLang === 'both') ? 'both' : 'english';
+              await User.findByIdAndUpdate(session.linkedUserId, { botLanguage: norm });
+            } catch (e) { }
           }
-          // Invalid choice for bot language
-          const invalidMsg = session.botLanguage === 'ta'
-            ? `⚠️ தயவுசெய்து *1* (English) அல்லது *2* (தமிழ்) என பதிலளிக்கவும்.\n\n` + getStep1BotLanguageMessage()
-            : `⚠️ Please reply with *1* for English or *2* for தமிழ் (Tamil).\n\n` + getStep1BotLanguageMessage();
-          await wa.sendWhatsAppMessage(replyTarget, invalidMsg);
+
+          const promptLang = (chosenBotLang === 'ta' || chosenBotLang === 'tamil') ? 'ta' : 'en';
+          await wa.sendWhatsAppMessage(replyTarget, getStep2PhoneVerificationMessage(promptLang));
           return;
         }
 
-        // Fresh user or 'welcome': Send Step 1 Bot Language prompt
         session.step = 'bot_language';
         await session.save();
-        await wa.sendWhatsAppMessage(replyTarget, getStep1BotLanguageMessage());
+
+        if (isGreetingOrStart) {
+          await wa.sendWhatsAppMessage(replyTarget, getStep1BotLanguageMessage());
+          return;
+        }
+
+        // Invalid choice for bot language
+        const invalidMsg = (session.botLanguage === 'ta' || session.botLanguage === 'tamil')
+          ? `⚠️ தயவுசெய்து *1* (English), *2* (தமிழ்), அல்லது *3* (இரண்டும்) என பதிலளிக்கவும்.\n\n` + getStep1BotLanguageMessage()
+          : `⚠️ Please reply with *1* for English, *2* for தமிழ் (Tamil), or *3* for Both.\n\n` + getStep1BotLanguageMessage();
+        await wa.sendWhatsAppMessage(replyTarget, invalidMsg);
         return;
       }
 
       // 2️⃣ Step 2: Phone Number Verification
       if (session.step === 'phone_verification' || session.step === 'ask_phone') {
+        if (isGreetingOrStart) {
+          const welcomeBackMsg = session.botLanguage === 'ta'
+            ? `👋 மீண்டும் வருக! தயவுசெய்து உங்கள் அமைப்புப் பணியைத் தொடரவும்.\n\n` + getStep2PhoneVerificationMessage(session.botLanguage)
+            : `👋 Welcome back! Let's continue your setup.\n\n` + getStep2PhoneVerificationMessage(session.botLanguage);
+          await wa.sendWhatsAppMessage(replyTarget, welcomeBackMsg);
+          return;
+        }
+
         const clean10 = parsePhoneNumber(rawText);
         if (!clean10) {
           const phoneRetryMsg = session.botLanguage === 'ta'
@@ -1175,10 +1218,30 @@ _SJDB Connect_`;
         }
 
         if (session.otpExpiresAt && Date.now() > new Date(session.otpExpiresAt).getTime()) {
+          if (isGreetingOrStart) {
+            const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
+            session.pendingOtp = newOtp;
+            session.otpExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
+            session.otpAttempts = 0;
+            await session.save();
+            const welcomeBackOtpMsg = session.botLanguage === 'ta'
+              ? `👋 மீண்டும் வருக! உங்கள் முந்தைய OTP காலாவதியாகிவிட்டதால் புதிய குறியீடு அனுப்பப்பட்டுள்ளது:\n\n` + getStep3OTPVerificationMessage(session.pendingPhone, newOtp, session.botLanguage)
+              : `👋 Welcome back! Your previous OTP had expired, so here is a fresh code to continue your setup:\n\n` + getStep3OTPVerificationMessage(session.pendingPhone, newOtp, session.botLanguage);
+            await wa.sendWhatsAppMessage(replyTarget, welcomeBackOtpMsg);
+            return;
+          }
           const expiredMsg = session.botLanguage === 'ta'
             ? `⌛ OTP காலாவதியாகிவிட்டது. புதிய குறியீட்டைப் பெற *RESEND* என தட்டச்சு செய்யவும்.`
             : `⌛ This OTP has expired. Please reply with *RESEND* to receive a new code.`;
           await wa.sendWhatsAppMessage(replyTarget, expiredMsg);
+          return;
+        }
+
+        if (isGreetingOrStart) {
+          const reminderOtpMsg = session.botLanguage === 'ta'
+            ? `👋 மீண்டும் வருக! தயவுசெய்து உங்கள் 6 இலக்க OTP குறியீட்டை உள்ளிடவும்:\n\n` + getStep3OTPVerificationMessage(session.pendingPhone, session.pendingOtp, session.botLanguage)
+            : `👋 Welcome back! Please enter your 6-digit OTP code to continue:\n\n` + getStep3OTPVerificationMessage(session.pendingPhone, session.pendingOtp, session.botLanguage);
+          await wa.sendWhatsAppMessage(replyTarget, reminderOtpMsg);
           return;
         }
 
@@ -1197,6 +1260,9 @@ _SJDB Connect_`;
             : null;
           if (parishUser) {
             session.linkedUserId = parishUser._id;
+            const norm = (session.botLanguage === 'ta' || session.botLanguage === 'tamil') ? 'tamil'
+              : (session.botLanguage === 'both') ? 'both' : 'english';
+            User.findByIdAndUpdate(parishUser._id, { botLanguage: norm }).catch(() => {});
           } else {
             session.linkedUserId = null;
           }
@@ -1232,6 +1298,18 @@ _SJDB Connect_`;
 
       // 5️⃣ Step 5: Preferences Selection
       if (session.step === 'preferences') {
+        if (isGreetingOrStart) {
+          let parishUser = null;
+          if (session.linkedUserId) {
+            try { parishUser = await User.findById(session.linkedUserId).lean(); } catch (e) { }
+          }
+          const welcomeBackPref = session.botLanguage === 'ta'
+            ? `👋 மீண்டும் வருக! நீங்கள் நிறுத்திய இடத்திலிருந்து தொடர்வோம்:\n\n` + getStep4And5PreferencesMessage(session.providedPhone, parishUser, session.botLanguage)
+            : `👋 Welcome back! Continuing from where you left off:\n\n` + getStep4And5PreferencesMessage(session.providedPhone, parishUser, session.botLanguage);
+          await wa.sendWhatsAppMessage(replyTarget, welcomeBackPref);
+          return;
+        }
+
         const selectedPrefs = parsePreferences(rawText);
         if (selectedPrefs) {
           session.preferences = selectedPrefs;
@@ -1261,11 +1339,27 @@ _SJDB Connect_`;
 
       // 6️⃣ Step 6: Daily Catholic Content Language
       if (session.step === 'language') {
+        if (isGreetingOrStart) {
+          const welcomeBackLang = session.botLanguage === 'ta'
+            ? `👋 மீண்டும் வருக! கடைசிப் படியை முடித்து உங்கள் தினசரி கத்தோலிக்க உள்ளடக்க மொழியைத் தேர்ந்தெடுக்கவும்:\n\n` + getStep6ContentLanguageMessage(session.botLanguage)
+            : `👋 Welcome back! Please complete your final step — choose your Daily Catholic Content language:\n\n` + getStep6ContentLanguageMessage(session.botLanguage);
+          await wa.sendWhatsAppMessage(replyTarget, welcomeBackLang);
+          return;
+        }
+
         const chosenLang = parseContentLanguage(rawText);
         if (chosenLang) {
           session.language = chosenLang;
           session.step = 'done';
           session.isOnboarded = true;
+
+          // Canonical Daily Catholic Language: 'english', 'tamil', or 'both'
+          const canonicalDailyLang = (chosenLang === 'en' || chosenLang === 'english') ? 'english'
+            : (chosenLang === 'ta' || chosenLang === 'tamil') ? 'tamil'
+            : 'both';
+          session.dailyCatholicSetupCompleted = true;
+          session.dailyCatholicSubscribed = true;
+          session.dailyCatholicLanguage = canonicalDailyLang;
           await session.save();
 
           // Search the provided number whether present in the website database or not
@@ -1294,12 +1388,19 @@ _SJDB Connect_`;
 
           if (session.linkedUserId) {
             try {
+              const normBotLang = (session.botLanguage === 'ta' || session.botLanguage === 'tamil') ? 'tamil'
+                : (session.botLanguage === 'both') ? 'both' : 'english';
+
               await User.findByIdAndUpdate(session.linkedUserId, {
+                botLanguage: normBotLang,
                 language: chosenLang,
                 mass_reflection_language: chosenLang,
                 preferredLanguage: chosenLang,
                 botPreferences: session.preferences,
-                whatsappOptIn: true
+                whatsappOptIn: true,
+                dailyCatholicSetupCompleted: true,
+                dailyCatholicSubscribed: true,
+                dailyCatholicLanguage: canonicalDailyLang
               });
             } catch (lErr) { }
           }
@@ -1319,16 +1420,26 @@ _SJDB Connect_`;
 
         const langRetryMsg = session.botLanguage === 'ta'
           ? `⚠️ தயவுசெய்து *1*, *2*, அல்லது *3* என பதிலளிக்கவும்:\n\n1️⃣ தமிழ் (Tamil)\n2️⃣ English\n3️⃣ Both (Tamil + English)`
-          : `⚠️ Please reply with *1*, *2*, or *3* to choose your Daily Catholic Content language:\n\n1️⃣ Tamil (Tamil)\n2️⃣ English\n3️⃣ Both (Tamil + English)`;
+          : `⚠️ Please reply with *1*, *2*, or *3* to choose your Daily Catholic Content language:\n\n1️⃣ தமிழ் (Tamil)\n2️⃣ English\n3️⃣ Both (Tamil + English)`;
         await wa.sendWhatsAppMessage(replyTarget, langRetryMsg);
         return;
       }
+
+      // Incomplete state fallback: route to language step
+      session.step = 'language';
+      await session.save();
+      await wa.sendWhatsAppMessage(replyTarget, getStep6ContentLanguageMessage(session.botLanguage));
+      return;
     }
 
     // ── Bot Language Change Reply Handler (after user sees BOT_LANGUAGE_CHANGE prompt) ──
-    // Catches reply "1" or "2" immediately after user sends "language" command.
+    // Catches reply "1", "2", or "3" immediately after user sends "language" command.
     if (session.lastBotReplyType === 'BOT_LANGUAGE_CHANGE') {
-      const chosenBotLang = (menuNum === 1) ? 'en' : (menuNum === 2) ? 'ta' : null;
+      const chosenBotLang = (menuNum === 1 || /^(1|english|eng|en)$/i.test(normalizedText)) ? 'english'
+        : (menuNum === 2 || /^(2|tamil|தமிழ்|ta)$/i.test(normalizedText)) ? 'tamil'
+        : (menuNum === 3 || /^(3|both|இரண்டும்|tamil \+ english|all)$/i.test(normalizedText)) ? 'both'
+        : null;
+
       if (chosenBotLang) {
         session.botLanguage = chosenBotLang;
         session.invalidInputStreak = 0;
@@ -1336,28 +1447,42 @@ _SJDB Connect_`;
         session.lastSentAt = new Date();
         await session.save();
 
-        const ackMsg = chosenBotLang === 'ta'
+        if (session.linkedUserId) {
+          try {
+            await User.findByIdAndUpdate(session.linkedUserId, { botLanguage: chosenBotLang });
+          } catch (e) { }
+        }
+
+        const ackMsg = chosenBotLang === 'tamil'
           ? `✅ *Bot Language set to Tamil (தமிழ்) successfully!*
-வாட்ஸ்அப் போட் உரையாடல் இனி தமிழில் நடகும்.
+வாட்ஸ்அப் போட் உரையாடல் மற்றும் அனைத்து அறிவிப்புகளும் இனி தமிழில் அனுப்பப்படும்.
 
-📌 தினசரி கத்தோலிக்க செய்திகள் மொழியை மாற்ற *TAMIL* அல்லது *ENGLISH* என அனுப்பவும்.
+📌 தினசரி கத்தோலிக்க ஆன்மீக உள்ளடக்க மொழியை மாற்ற *TAMIL*, *ENGLISH*, அல்லது *BOTH* என அனுப்பவும்.
 முதன்மை மெனுவிற்கு *MENU* என தட்டச்சு செய்யவும். 🙏`
-          : `✅ *Bot Language set to English successfully!*
-The WhatsApp bot will now respond in English.
+          : chosenBotLang === 'both'
+          ? `✅ *Bot Language set to Both (English + தமிழ்) successfully!*
+All WhatsApp notifications will now be delivered in both English and Tamil.
+அனைத்து அறிவிப்புகளும் ஆங்கிலம் மற்றும் தமிழில் அனுப்பப்படும்.
 
-📌 To change Daily Catholic Content language, type *TAMIL* or *ENGLISH*.
+📌 To change Daily Catholic Content language, type *TAMIL*, *ENGLISH*, or *BOTH*.
+Type *MENU* for Main Menu. 🙏`
+          : `✅ *Bot Language set to English successfully!*
+The WhatsApp bot and all parish notifications will now be delivered in English.
+
+📌 To change Daily Catholic Content language, type *TAMIL*, *ENGLISH*, or *BOTH*.
 Type *MENU* for Main Menu. 🙏`;
 
         await wa.sendWhatsAppMessage(replyTarget, ackMsg);
         return;
       }
       // Invalid reply — re-prompt
-      const retryMsg = `⚠️ Please reply with *1* for English or *2* for தமிழ் (Tamil).
+      const retryMsg = `⚠️ Please reply with *1* for English, *2* for தமிழ் (Tamil), or *3* for Both (English + Tamil).
 
 1️⃣ English
 2️⃣ தமிழ் (Tamil)
+3️⃣ Both (English + Tamil)
 
-👉 Reply with *1* or *2*`;
+👉 Reply with *1*, *2*, or *3*`;
       await wa.sendWhatsAppMessage(replyTarget, retryMsg);
       return;
     }
@@ -1367,25 +1492,25 @@ Type *MENU* for Main Menu. 🙏`;
     // If in Main Menu (or default), numbers 1-8 map to Main Menu items, and 9-15 map to extended services.
     const isInServicesMenu = session.lastBotReplyType === 'SERVICES_MENU';
 
-    const isMassTimingsNum = isInServicesMenu ? (menuNum === 1) : (menuNum === 2);
-    const isConfessionNum = isInServicesMenu && (menuNum === 2);
     const isVerseNum = isInServicesMenu ? (menuNum === 3) : (menuNum === 1);
-    const isReadingsNum = isInServicesMenu && (menuNum === 4);
-    const isReflectionNum = isInServicesMenu && (menuNum === 5);   // NEW: #5 Daily Reflection
-    const isSaintNum = isInServicesMenu ? (menuNum === 6) : (menuNum === 7); // shifted from 5 to 6
-    const isPrayersNum = isInServicesMenu && (menuNum === 7);       // shifted from 6 to 7
-    const isEventsNum = isInServicesMenu ? (menuNum === 8) : (menuNum === 4); // shifted from 7 to 8
-    const isAnnouncementsNum = isInServicesMenu ? (menuNum === 9) : (menuNum === 5); // shifted from 8 to 9
-    const isChurchInfoNum = !isInServicesMenu && (menuNum === 6);
+    const isReadingsNum = isInServicesMenu ? (menuNum === 4) : (menuNum === 2);
+    const isMassTimingsNum = isInServicesMenu ? (menuNum === 1) : (menuNum === 3);
+    const isConfessionNum = isInServicesMenu && (menuNum === 2);
+    const isReflectionNum = isInServicesMenu && (menuNum === 5);   // Services #5 Daily Reflection
+    const isSaintNum = isInServicesMenu ? (menuNum === 6) : (menuNum === 4);
+    const isPrayersNum = isInServicesMenu && (menuNum === 7);
+    const isEventsNum = isInServicesMenu ? (menuNum === 8) : (menuNum === 5);
+    const isAnnouncementsNum = isInServicesMenu ? (menuNum === 9) : (menuNum === 6 || menuNum === 9);
+    const isChurchInfoNum = !isInServicesMenu && (menuNum === 7);
     const isHelpNum = !isInServicesMenu && (menuNum === 8);
-    const isLocationNum = (menuNum === 10);   // shifted from 9 to 10
-    const isMinistriesNum = (menuNum === 11); // shifted from 10 to 11
-    const isPriestsNum = (menuNum === 12);    // shifted from 11 to 12
-    const isHistoryNum = (menuNum === 13);    // shifted from 12 to 13
-    const isContactNum = (menuNum === 14);    // shifted from 13 to 14
-    const isIntentionsCertNum = (menuNum === 15); // shifted from 14 to 15
+    const isLocationNum = (menuNum === 10);
+    const isMinistriesNum = (menuNum === 11);
+    const isPriestsNum = (menuNum === 12);
+    const isHistoryNum = (menuNum === 13);
+    const isContactNum = (menuNum === 14);
+    const isIntentionsCertNum = (menuNum === 15);
 
-    // ── 1. SERVICES / HELP DESK MENU COMMAND ("Services" or "Help Desk" or Main Menu Option 3) ──
+    // ── 1. SERVICES / HELP DESK MENU COMMAND ("Services" or "Help Desk") ──
     const isServicesKeyword = /^(services|service|help desk|சேவைகள்|பங்கு சேவைகள்|உதவி மையம்)$/i.test(normalizedText) ||
       normalizedText.includes('what services do you provide') ||
       normalizedText.includes('what services') ||
@@ -1395,7 +1520,7 @@ Type *MENU* for Main Menu. 🙏`;
       normalizedText.includes('available services') ||
       normalizedText.includes('என்னென்ன சேவைகள்');
 
-    const isServicesTrigger = isServicesKeyword || (!isInServicesMenu && menuNum === 3);
+    const isServicesTrigger = isServicesKeyword;
 
     if (isServicesTrigger) {
       session.invalidInputStreak = 0;
@@ -1658,13 +1783,14 @@ Please bring parish family ID or relevant record dates when collecting certifica
 
       const botLangPrompt = `🌐 *Bot Language / பாட் மொழி*
 
-Please select your preferred language for bot conversation:
-தயவுசெய்து போட் உரையாடலுக்கான மொழியைத் தேர்ந்தெடுக்கவும்:
+Please select your preferred language for bot conversation and notifications:
+தயவுசெய்து போட் உரையாடல் மற்றும் அறிவிப்புகளுக்கான மொழியைத் தேர்ந்தெடுக்கவும்:
 
 1️⃣ English
 2️⃣ தமிழ் (Tamil)
+3️⃣ Both (English + Tamil / இரண்டும்)
 
-👉 Reply with *1* or *2*`;
+👉 Reply with *1*, *2*, or *3*`;
       await wa.sendWhatsAppMessage(replyTarget, botLangPrompt);
       return;
     }
@@ -1673,7 +1799,22 @@ Please select your preferred language for bot conversation:
     if (/^(tamil|தமிழ்|ta)$/i.test(normalizedText) || normalizedText === 'change to tamil' || normalizedText === 'switch to tamil') {
       session.invalidInputStreak = 0;
       session.language = 'ta';
+      session.dailyCatholicLanguage = 'tamil';
+      session.dailyCatholicSetupCompleted = true;
+      session.dailyCatholicSubscribed = true;
       await session.save();
+      if (session.linkedUserId) {
+        try {
+          await User.findByIdAndUpdate(session.linkedUserId, {
+            dailyCatholicLanguage: 'tamil',
+            dailyCatholicSetupCompleted: true,
+            dailyCatholicSubscribed: true,
+            language: 'ta',
+            mass_reflection_language: 'ta',
+            preferredLanguage: 'ta'
+          });
+        } catch (_) { }
+      }
       const taAck = `✅ *Daily Catholic Content Language set to Tamil (தமிழ்) successfully!*\nBible Verse, Mass Readings, Reflection & Saint of the Day will be delivered in Tamil.\n\n📌 Type *MENU* for Quick Commands or *SERVICES* for Help Desk.`;
       await wa.sendWhatsAppMessage(replyTarget, taAck);
       return;
@@ -1682,9 +1823,48 @@ Please select your preferred language for bot conversation:
     if (/^(english|eng|en)$/i.test(normalizedText) || normalizedText === 'change to english' || normalizedText === 'switch to english') {
       session.invalidInputStreak = 0;
       session.language = 'en';
+      session.dailyCatholicLanguage = 'english';
+      session.dailyCatholicSetupCompleted = true;
+      session.dailyCatholicSubscribed = true;
       await session.save();
+      if (session.linkedUserId) {
+        try {
+          await User.findByIdAndUpdate(session.linkedUserId, {
+            dailyCatholicLanguage: 'english',
+            dailyCatholicSetupCompleted: true,
+            dailyCatholicSubscribed: true,
+            language: 'en',
+            mass_reflection_language: 'en',
+            preferredLanguage: 'en'
+          });
+        } catch (_) { }
+      }
       const enAck = `✅ *Daily Catholic Content Language set to English successfully!*\nBible Verse, Mass Readings, Reflection & Saint of the Day will be delivered in English.\n\n📌 Type *MENU* for Quick Commands or *SERVICES* for Help Desk.`;
       await wa.sendWhatsAppMessage(replyTarget, enAck);
+      return;
+    }
+
+    if (/^(both|tamil \+ english|english \+ tamil|தமிழ் \+ ஆங்கிலம்)$/i.test(normalizedText) || normalizedText === 'change to both' || normalizedText === 'switch to both') {
+      session.invalidInputStreak = 0;
+      session.language = 'both';
+      session.dailyCatholicLanguage = 'both';
+      session.dailyCatholicSetupCompleted = true;
+      session.dailyCatholicSubscribed = true;
+      await session.save();
+      if (session.linkedUserId) {
+        try {
+          await User.findByIdAndUpdate(session.linkedUserId, {
+            dailyCatholicLanguage: 'both',
+            dailyCatholicSetupCompleted: true,
+            dailyCatholicSubscribed: true,
+            language: 'both',
+            mass_reflection_language: 'both',
+            preferredLanguage: 'both'
+          });
+        } catch (_) { }
+      }
+      const bothAck = `✅ *Daily Catholic Content Language set to Both (Tamil + English) successfully!*\nBible Verse, Mass Readings, Reflection & Saint of the Day will be delivered in both Tamil and English.\n\n📌 Type *MENU* for Quick Commands or *SERVICES* for Help Desk.`;
+      await wa.sendWhatsAppMessage(replyTarget, bothAck);
       return;
     }
 
@@ -1767,7 +1947,7 @@ Please select your preferred language for bot conversation:
     }
 
     // 2️⃣ 📜 Daily Mass Readings
-    // - Services Menu: Option 4
+    // - Services Menu: Option 4 | Main Menu: Option 2
     const isSpecificReadingsQuery = isReadingsNum ||
       /^(today'?s mass readings?|today mass readings?|mass readings?|today'?s readings?|today readings?|daily readings?|daily mass readings?|readings?|gospel|இன்றைய திருப்பலி வாசகங்கள்|திருப்பலி வாசகங்கள்|வாசகங்கள்|வாசகம்|இன்றைய வாசகங்கள்)$/i.test(normalizedText) ||
       normalizedText.includes("mass readings") ||
@@ -1781,8 +1961,8 @@ Please select your preferred language for bot conversation:
       return;
     }
 
-    // 6️⃣ 🌟 Saint of the Day
-    // - Services Menu: Option 6 | Main Menu: Option 7
+    // 4️⃣ 🌟 Saint of the Day
+    // - Services Menu: Option 6 | Main Menu: Option 4
     const isSaintChoice = isSaintNum ||
       /\b(saint\s*of\s*(the|th)?\s*day|today'?s?\s*saint|saint\s*today|saint\s*of\s*day|who\s*is\s*today'?s?\s*saint|tell\s*me\s*about\s*(today'?s?\s*)?saint)\b/i.test(normalizedText) ||
       /^(saint|saints|புனிதர்|இன்றைய புனிதர்)$/i.test(normalizedText) ||
@@ -1827,8 +2007,8 @@ Please select your preferred language for bot conversation:
 
     // ── UNIFIED PARISH MENU & NUMERIC ROUTING (Main Menu 1-8 & Services 1-15) ────
 
-    // ⛪ Mass Timings
-    // - Services Menu: Option 1 | Main Menu: Option 2
+    // 3️⃣ ⛪ Mass Timings
+    // - Services Menu: Option 1 | Main Menu: Option 3
     const isMassTimingsQuery = isMassTimingsNum ||
       /\b(mass timings?|mass times?|mass schedule|when is mass|what time is mass|morning mass|evening mass|sunday mass|today mass)\b/i.test(normalizedText) ||
       /(திருப்பலி நேரம்|பூசை நேரம்|திருப்பலி நேரங்கள்|ஞாயிறு திருப்பலி)/.test(rawText);
@@ -1941,7 +2121,7 @@ Call Parish Office: ${getChurchPhone() || 'Parish Office'}
       return;
     }
 
-    // 4️⃣ 📅 Option 4 in Main Menu, Option 8 in Services Menu: Church Events
+    // 5️⃣ 📅 Option 5 in Main Menu, Option 8 in Services Menu: Church Events
     const isEventsChoice = isEventsNum ||
       /\b(events?|upcoming events?|church events?|parish events?|show events?|list events?|what are the events|any events|what events|events this week)\b/i.test(normalizedText) ||
       normalizedText.includes('what are the events') ||
@@ -1993,7 +2173,7 @@ Call Parish Office: ${getChurchPhone() || 'Parish Office'}
       }
     }
 
-    // 5️⃣ 📢 Option 5 in Main Menu, Option 9 in Services Menu: Parish Announcements
+    // 6️⃣ 📢 Option 6 in Main Menu, Option 9 in Services Menu: Parish Announcements
     const isAnnouncementsChoice = isAnnouncementsNum ||
       /\b(announcements?|notices?|parish announcements?|what is new|what\'?s new|latest announcements?|show announcements?|any announcements?)\b/i.test(normalizedText) ||
       normalizedText.includes('any announcements') ||
@@ -2048,7 +2228,7 @@ Call Parish Office: ${getChurchPhone() || 'Parish Office'}
       }
     }
 
-    // 6️⃣ 📜 Option 6 in Main Menu (not in Services Menu): Church Information
+    // 7️⃣ 📜 Option 7 in Main Menu (not in Services Menu): Church Information
     const isChurchInfoChoice = isChurchInfoNum ||
       /\b(church info|church information|about church|about parish|parish info|parish information)\b/i.test(normalizedText) ||
       normalizedText === 'church information' ||
@@ -2494,8 +2674,8 @@ Please bring parish family ID or relevant record dates when collecting certifica
         : `❓ I didn't quite recognize that option.\n\nPlease reply with a number or ask your church question naturally.\n(Type *Menu* for Main Menu or *Services* for the 15 Parish Help Desk services)`;
     } else if (session.invalidInputStreak === 2) {
       invalidReply = isTamilQuery
-        ? `💡 வழிகாட்டல்: 1 முதல் 8 வரையிலான எண்ணைத் தேர்ந்தெடுக்கவும் (எ.கா: *1* விவிலிய வசனம், *2* திருப்பலி நேரம், *3* பங்கு சேவைகள்), அல்லது முதன்மை மெனுவைக் காண *Menu* என தட்டச்சு செய்யவும்.`
-        : `💡 Guidance: Please reply with a number from 1 to 8 (e.g. *1* for Daily Bible, *2* for Mass Timings, *3* for Services), or type *Menu* to see the Main Menu.`;
+        ? `💡 வழிகாட்டல்: 1 முதல் 8 வரையிலான எண்ணைத் தேர்ந்தெடுக்கவும் (எ.கா: *1* விவிலிய வசனம், *2* திருப்பலி வாசகங்கள், *3* திருப்பலி நேரம்), அல்லது முதன்மை மெனுவைக் காண *Menu* என தட்டச்சு செய்யவும்.`
+        : `💡 Guidance: Please reply with a number from 1 to 8 (e.g. *1* for Daily Bible, *2* for Mass Readings, *3* for Mass Timings), or type *Menu* to see the Main Menu.`;
     } else {
       const officePhone = getChurchPhone() || 'பங்கு அலுவலகம்';
       const officePhoneEn = getChurchPhone() || 'our parish office';

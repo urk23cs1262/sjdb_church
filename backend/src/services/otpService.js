@@ -158,10 +158,10 @@ const createAndSendOTP = async ({ userId, phone, email, purpose = 'login', req }
   // 7. Send OTP via WhatsApp Bot
   if (targetPhone) {
     try {
-      const { sendWhatsAppMessage } = require('../bot/whatsapp');
+      const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
       const waMsg = `*Account Verification Required*\n\nDear *${userName}*,\n\nYour St. John De Britto Church account requires verification.\n\n*Your OTP is: ${otp}*\n\n⏱️ OTP expires in 5 minutes.\n⚠️ Do not share this OTP with anyone.\n\n_St. John de Britto Church, Kalayarkoil_`;
-      sendWhatsAppMessage(targetPhone, waMsg).then(sent => {
-        if (sent) console.log(`✉️ OTP WhatsApp delivered to ${targetPhone}`);
+      sendWhatsAppNotification(user || targetPhone, waMsg).then(res => {
+        if (res && res.success) console.log(`✉️ OTP WhatsApp delivered to ${targetPhone} in ${res.botLanguage}`);
       }).catch(err => console.error(`❌ OTP WhatsApp error: ${err.message}`));
     } catch (waErr) {
       console.error('WhatsApp Bot OTP dispatch error:', waErr.message);

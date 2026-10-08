@@ -23,7 +23,8 @@ const { createNotification } = require('./notificationService');
 const { SITE_ROUTES, EXTERNAL_LINKS, getSiteUrl } = require('../config/siteRoutes');
 
 function sendWA(phone, text) {
-  return require('../bot/whatsapp').sendWhatsAppMessage(phone, text).catch(() => { });
+  const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
+  return sendWhatsAppNotification(phone, text).catch(() => { });
 }
 
 // ─── HELPER FUNCTIONS ────────────────────────────────────────────────────────

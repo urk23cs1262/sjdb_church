@@ -5,7 +5,8 @@ const Notification = require('../models/Notification');
 const { sendSMS } = require('../config/twilio');
 const { createNotification } = require('../services/notificationService');
 function sendWA(phone, text) {
-  return require('../bot/whatsapp').sendWhatsAppMessage(phone, text).catch(() => { });
+  const { sendWhatsAppNotification } = require('../services/whatsAppNotificationService');
+  return sendWhatsAppNotification(phone, text).catch(() => { });
 }
 
 let lastBroadcastSync = 0;

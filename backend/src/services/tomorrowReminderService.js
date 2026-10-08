@@ -29,13 +29,11 @@ const { getPublicFrontendUrl } = require('./eventRegistrationService');
 
 function sendWA(phone, text) {
   try {
-    const wa = require('../bot/whatsapp');
-    if (wa && typeof wa.sendWhatsAppMessage === 'function') {
-      return wa.sendWhatsAppMessage(phone, text).catch(err => {
-        console.warn('[TomorrowReminder] WhatsApp error:', err.message);
-        return false;
-      });
-    }
+    const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
+    return sendWhatsAppNotification(phone, text).catch(err => {
+      console.warn('[TomorrowReminder] WhatsApp error:', err.message);
+      return false;
+    });
   } catch (err) {
     console.warn('[TomorrowReminder] WhatsApp module error:', err.message);
   }

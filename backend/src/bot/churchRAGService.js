@@ -973,24 +973,35 @@ async function buildUserProfileSection(userAuthContext, isTamil) {
 
 async function buildUserLanguageSection(userAuthContext, isTamil) {
   const { session, user } = userAuthContext;
-  const langCode = session?.language || user?.preferredLanguage || 'ta';
+  const botLangCode = session?.botLanguage || user?.botLanguage || 'english';
+  const dailyLangCode = session?.dailyCatholicLanguage || user?.dailyCatholicLanguage || session?.language || user?.preferredLanguage || 'english';
+
   const langNames = {
     ta: 'தமிழ் (Tamil)',
+    tamil: 'தமிழ் (Tamil)',
     en: 'English',
+    english: 'English',
     both: 'தமிழ் + English (Both)'
   };
-  const currentLang = langNames[langCode] || 'English';
+  const curBotLang = langNames[botLangCode] || 'English';
+  const curDailyLang = langNames[dailyLangCode] || 'English';
 
   const body = isTamil
-    ? `🌐 உங்கள் தற்போதைய மொழி: *${currentLang}*
+    ? `🌐 *உங்கள் சேமிக்கப்பட்ட மொழி அமைப்புகள்:*
+• வாட்ஸ்அப் அறிவிப்புகள் (Bot Language): *${curBotLang}*
+• தினசரி கத்தோலிக்க உள்ளடக்கம்: *${curDailyLang}*
 
-மொழியை மாற்ற விரும்பினால் *3* அல்லது *LANGUAGE* என தட்டச்சு செய்து அனுப்பவும்.\n`
-    : `🌐 Your saved language preference: *${currentLang}*
+📌 அறிவிப்புகளுக்கான மொழியை மாற்ற *LANGUAGE* என அனுப்பவும்.
+📌 ஆன்மீக உள்ளடக்க மொழியை மாற்ற *TAMIL*, *ENGLISH*, அல்லது *BOTH* என அனுப்பவும்.\n`
+    : `🌐 *Your Saved Language Preferences:*
+• All WhatsApp Notifications (Bot Language): *${curBotLang}*
+• Daily Catholic Content (Devotions): *${curDailyLang}*
 
-To change your language, reply with *3* or *LANGUAGE* anytime.\n`;
+📌 To change language for all WhatsApp notifications, reply *LANGUAGE*.
+📌 To change Daily Catholic Content language, reply *TAMIL*, *ENGLISH*, or *BOTH*.\n`;
 
   return {
-    header: isTamil ? `🌐 *மொழி விருப்பத்தேர்வு (Language Preference)*` : `🌐 *Saved Language Preference*`,
+    header: isTamil ? `🌐 *மொழி விருப்பத்தேர்வு (Language Preferences)*` : `🌐 *Saved Language Preferences*`,
     body,
     linkTitle: isTamil ? 'அமைப்புகள் போர்டல்' : 'Settings Portal',
     url: getSiteUrl(SITE_ROUTES.SETTINGS)

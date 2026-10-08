@@ -303,21 +303,23 @@ const sendDonationReceiptEmails = async (donation, { force = false } = {}) => {
     const donorPhone = donation.phone || (donation.userId && typeof donation.userId === 'object' ? donation.userId.phone : null);
     if (donorPhone) {
       try {
-        const { sendWhatsAppMedia, sendWhatsAppMessage } = require('../bot/whatsapp');
-        const waCaption = `*ST. JOHN DE Britto CHURCH*\n*புனித அருளானந்தர் தேவாலயம்*\n\nDear *${donorName}*,\n\nThank you for your generous donation of *₹${donation.amount}* towards *${categoryLabel}*.\n\n*Receipt No:* ${receiptNumber}\n*Payment ID:* ${paymentRef}\n*Date:* ${paymentDateStr}\n\n_“God loves a cheerful giver.” — 2 Corinthians 9:7_\n\nMay Lord Jesus and St. John de Britto bless you abundantly.`;
+        const { sendWhatsAppNotification } = require('../services/whatsAppNotificationService');
+        const waCaption = `*ST. JOHN DE BRITTO CHURCH*\n\nDear *${donorName}*,\n\nThank you for your generous donation of *₹${donation.amount}* towards *${categoryLabel}*.\n\n*Receipt No:* ${receiptNumber}\n*Payment ID:* ${paymentRef}\n*Date:* ${paymentDateStr}\n\n_“God loves a cheerful giver.” — 2 Corinthians 9:7_\n\nMay Lord Jesus and St. John de Britto bless you abundantly.`;
 
+        const donorTarget = donation.userId || donorPhone;
         if (fs.existsSync(fullPath)) {
-          sendWhatsAppMedia(donorPhone, {
-            url: fullPath,
-            mimetype: 'application/pdf',
-            fileName: filename,
-            caption: waCaption
+          sendWhatsAppNotification(donorTarget, waCaption, {
+            media: {
+              url: fullPath,
+              mimetype: 'application/pdf',
+              fileName: filename
+            }
           }).catch(err => {
-            console.warn('[Donation] WhatsApp media send fallback to text:', err.message);
-            sendWhatsAppMessage(donorPhone, waCaption).catch(e => console.warn('[Donation] WhatsApp text send error:', e.message));
+            console.warn('[Donation] WhatsApp notification send fallback to text:', err.message);
+            sendWhatsAppNotification(donorTarget, waCaption).catch(e => console.warn('[Donation] WhatsApp text send error:', e.message));
           });
         } else {
-          sendWhatsAppMessage(donorPhone, waCaption).catch(e => console.warn('[Donation] WhatsApp text send error:', e.message));
+          sendWhatsAppNotification(donorTarget, waCaption).catch(e => console.warn('[Donation] WhatsApp text send error:', e.message));
         }
       } catch (waErr) {
         console.warn('[Donation] WhatsApp dispatch error:', waErr.message);

@@ -225,8 +225,8 @@ async function checkAndSendMonthlyVerificationReminders({ forceAll = false, trig
         const userWaMsg = `*St. John de Britto Church, Kalayarkoil*\n*Account Re-verification Notice*\n\nDear *${userName}* (ID: ${userMemberId}),\n\nYour 30-day security verification cycle has matured. Please log in to complete verification and keep your church account protected.\n\n*Log in to Verify:*\n${clientUrl}/login?verify=true\n\n_புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்_`;
 
         try {
-          const { sendWhatsAppMessage } = require('../bot/whatsapp');
-          await sendWhatsAppMessage(user.phone, userWaMsg);
+          const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
+          await sendWhatsAppNotification(user, userWaMsg);
         } catch (waErr) {
           console.warn(`[Verification] WhatsApp reminder warning to ${user.phone}:`, waErr.message);
         }

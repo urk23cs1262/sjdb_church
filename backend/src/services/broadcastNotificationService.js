@@ -19,6 +19,7 @@ const Notification = require('../models/Notification');
 const { sendMail } = require('../config/mailer');
 const { sendPushBroadcast } = require('./webPushService');
 const { invalidateCache } = require('../bot/churchDataCache');
+const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
 
 const { getSiteUrl } = require('../config/siteRoutes');
 
@@ -355,12 +356,12 @@ _SJDB Connect_`;
         console.log(`[BroadcastNotificationService] Broadcasting event "${cleanTitle}" (${action}) to ${waRecipients.length} WhatsApp subscribers...`);
         const eventImg = event.image || event.bannerUrl;
         for (const phone of waRecipients) {
-          if (eventImg && action !== 'cancelled' && typeof wa.sendWhatsAppMedia === 'function') {
-            wa.sendWhatsAppMedia(phone, { url: eventImg, caption: waMessage }).catch(() => {
-              wa.sendWhatsAppMessage(phone, waMessage).catch(() => { });
+          if (eventImg && action !== 'cancelled') {
+            sendWhatsAppNotification(phone, waMessage, { media: { url: eventImg } }).catch(() => {
+              sendWhatsAppNotification(phone, waMessage).catch(() => { });
             });
           } else {
-            wa.sendWhatsAppMessage(phone, waMessage).catch(() => { });
+            sendWhatsAppNotification(phone, waMessage).catch(() => { });
           }
           await new Promise(r => setTimeout(r, 70));
         }
@@ -567,12 +568,12 @@ _SJDB Connect_`;
         console.log(`[BroadcastNotificationService] Broadcasting announcement "${cleanTitle}" (${action}) to ${waRecipients.length} WhatsApp subscribers...`);
         const annImg = announcement.attachment || announcement.image;
         for (const phone of waRecipients) {
-          if (annImg && typeof wa.sendWhatsAppMedia === 'function') {
-            wa.sendWhatsAppMedia(phone, { url: annImg, caption: waMessage }).catch(() => {
-              wa.sendWhatsAppMessage(phone, waMessage).catch(() => { });
+          if (annImg) {
+            sendWhatsAppNotification(phone, waMessage, { media: { url: annImg } }).catch(() => {
+              sendWhatsAppNotification(phone, waMessage).catch(() => { });
             });
           } else {
-            wa.sendWhatsAppMessage(phone, waMessage).catch(() => { });
+            sendWhatsAppNotification(phone, waMessage).catch(() => { });
           }
           await new Promise(r => setTimeout(r, 70));
         }
@@ -815,7 +816,7 @@ _SJDB Connect_`;
       setImmediate(async () => {
         console.log(`[BroadcastNotificationService] Broadcasting maintenance notice (${action}) to ${waRecipients.length} WhatsApp subscribers...`);
         for (const phone of waRecipients) {
-          wa.sendWhatsAppMessage(phone, waMessage).catch(() => { });
+          sendWhatsAppNotification(phone, waMessage).catch(() => { });
           await new Promise(r => setTimeout(r, 70));
         }
       });

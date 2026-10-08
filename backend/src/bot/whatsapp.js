@@ -471,43 +471,15 @@ async function sendWhatsAppDocument(phone, docOptions) {
   return sendWhatsAppMedia(phone, { ...docOptions, mimetype: 'application/pdf' });
 }
 
-async function sendWhatsAppToUser(userObjOrId, text) {
+async function sendWhatsAppNotification(userOrPhone, notification, options = {}) {
+  const { sendWhatsAppNotification: dispatchNotif } = require('../services/whatsAppNotificationService');
+  return dispatchNotif(userOrPhone, notification, options);
+}
+
+async function sendWhatsAppToUser(userObjOrId, text, options = {}) {
   try {
-    const BotSession = require('../models/BotSession');
-    const User = require('../models/User');
-
-    let user = userObjOrId;
-    if (typeof userObjOrId === 'string') {
-      user = await User.findById(userObjOrId);
-    }
-
-    if (!user) return false;
-
-    const phoneDigits = user.phone ? user.phone.replace(/\D/g, '').slice(-10) : '';
-    const queryList = [{ linkedUserId: user._id }];
-    if (phoneDigits) {
-      queryList.push({ phoneNumber: { $regex: phoneDigits } });
-    }
-
-    let session = await BotSession.findOne({ $or: queryList });
-    let targetJid = session?.phoneNumber || user.phone;
-
-    if (!targetJid && (user.role === 'admin' || user.isAdmin)) {
-      const adminUsers = await User.find({ role: 'admin', phone: { $exists: true, $ne: '' } });
-      for (const adm of adminUsers) {
-        if (adm.phone) {
-          targetJid = adm.phone;
-          break;
-        }
-      }
-    }
-
-    if (!targetJid || isChannelJid(targetJid)) {
-      console.warn(`⚠️ Invalid target number or Channel JID (${targetJid}) for user ${user.name}`);
-      return false;
-    }
-
-    return await sendWhatsAppMessage(targetJid, text);
+    const res = await sendWhatsAppNotification(userObjOrId, text, options);
+    return res && res.success !== false;
   } catch (err) {
     console.error('❌ Error sending WhatsApp to user:', err.message);
     return false;
@@ -725,6 +697,7 @@ module.exports = {
   sendWhatsAppMessage,
   sendWhatsAppMedia,
   sendWhatsAppDocument,
+  sendWhatsAppNotification,
   sendWhatsAppToUser,
   sendWhatsAppRouted,
   getConnectionStatus,

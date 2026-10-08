@@ -103,6 +103,22 @@ const userSchema = new mongoose.Schema({
   deactivatedAt: { type: Date },
   preferredLanguage: { type: String, enum: ['en', 'ta', 'both'], default: 'en' },
   mass_reflection_language: { type: String, enum: ['ta', 'en', 'both'], default: 'en' },
+  // Dedicated Bot Language (Single source of truth for ALL WhatsApp notifications)
+  botLanguage: {
+    type: String,
+    enum: ['english', 'tamil', 'both', 'en', 'ta', null],
+    default: 'english',
+    index: true
+  },
+  // Dedicated Daily Catholic Content Subscription Gate
+  dailyCatholicSetupCompleted: { type: Boolean, default: false, index: true },
+  dailyCatholicSubscribed: { type: Boolean, default: false, index: true },
+  dailyCatholicLanguage: {
+    type: String,
+    enum: ['english', 'tamil', 'both', 'en', 'ta', null],
+    default: null,
+    index: true
+  },
   // WhatsApp Bot preferences — defaults to opted-in for website registrants
   whatsappOptIn: { type: Boolean, default: true },
   readingPreference: { type: String, enum: ['full', 'short', 'verse-reflection', 'complete'], default: 'full' },

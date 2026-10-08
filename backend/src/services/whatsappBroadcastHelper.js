@@ -100,7 +100,7 @@ async function broadcastEventCreated(event) {
   try {
     if (!event || event.isPublished === false) return;
 
-    const wa = getWA();
+    const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
     const recipients = await getEligibleWhatsAppRecipients();
     if (!recipients.length) return;
 
@@ -109,7 +109,7 @@ async function broadcastEventCreated(event) {
     console.log(`[WhatsApp Broadcast] Auto-broadcasting new event "${event.title}" to ${recipients.length} recipients...`);
 
     for (const phone of recipients) {
-      wa.sendWhatsAppMessage(phone, msg).catch(() => { });
+      sendWhatsAppNotification(phone, msg).catch(() => { });
       await new Promise(r => setTimeout(r, 70));
     }
   } catch (err) {
@@ -124,7 +124,7 @@ async function broadcastAnnouncementCreated(announcement) {
   try {
     if (!announcement || announcement.isPublished === false) return;
 
-    const wa = getWA();
+    const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
     const recipients = await getEligibleWhatsAppRecipients();
     if (!recipients.length) return;
 
@@ -133,7 +133,7 @@ async function broadcastAnnouncementCreated(announcement) {
     console.log(`[WhatsApp Broadcast] Auto-broadcasting new announcement "${announcement.title}" to ${recipients.length} recipients...`);
 
     for (const phone of recipients) {
-      wa.sendWhatsAppMessage(phone, msg).catch(() => { });
+      sendWhatsAppNotification(phone, msg).catch(() => { });
       await new Promise(r => setTimeout(r, 70));
     }
   } catch (err) {
@@ -146,7 +146,7 @@ async function broadcastAnnouncementCreated(announcement) {
  */
 async function broadcastMaintenanceCreated(maintenance) {
   try {
-    const wa = getWA();
+    const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
     const recipients = await getEligibleWhatsAppRecipients();
     if (!recipients.length) return;
 
@@ -168,7 +168,7 @@ _SJDB Connect_`;
     console.log(`[WhatsApp Broadcast] Auto-broadcasting maintenance update to ${recipients.length} recipients...`);
 
     for (const phone of recipients) {
-      wa.sendWhatsAppMessage(phone, msg).catch(() => { });
+      sendWhatsAppNotification(phone, msg).catch(() => { });
       await new Promise(r => setTimeout(r, 70));
     }
   } catch (err) {

@@ -191,9 +191,15 @@ const createNotification = async ({ userId, isBroadcast, title, message, type, c
         const { getSiteUrl } = require('../config/siteRoutes');
         const viewLink = actionUrl ? (actionUrl.startsWith('http') ? actionUrl : getSiteUrl(actionUrl)) : '';
         const waMsg = `*${title}*\n\n${message}${viewLink ? `\n\n👉 View Details:\n${viewLink}` : ''}`;
-        sendWhatsApp(formattedPhone, waMsg, fullFileUrl)
-          .then(res => console.log(res.success ? ` WhatsApp sent to ${formattedPhone}` : ` WhatsApp failed: ${res.error}`))
-          .catch(err => console.error(` WhatsApp error:`, err.message));
+        const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
+        sendWhatsAppNotification(user || formattedPhone, waMsg, fullFileUrl ? { media: { url: fullFileUrl } } : {})
+          .then(res => console.log(res?.success ? ` WhatsApp notification sent to ${formattedPhone}` : ` WhatsApp notification result: ${res?.error || 'dispatched'}`))
+          .catch(err => {
+            console.error(` WhatsApp notification error:`, err.message);
+            sendWhatsApp(formattedPhone, waMsg, fullFileUrl)
+              .then(res => console.log(res.success ? ` WhatsApp fallback sent to ${formattedPhone}` : ` WhatsApp fallback failed: ${res.error}`))
+              .catch(e => console.error(` WhatsApp fallback error:`, e.message));
+          });
       }
     }
 
@@ -214,6 +220,7 @@ const notifyAdmins = async ({ title, message, fileUrl }) => {
       }
     }
 
+    const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
     for (const admin of admins) {
       if (admin.email) {
         await sendMail({
@@ -247,7 +254,12 @@ const notifyAdmins = async ({ title, message, fileUrl }) => {
       }
       if (admin.phone) {
         const fullFileUrl = fileUrl ? `${process.env.BACKEND_URL || 'http://localhost:5000'}${fileUrl}` : '';
-        await sendWhatsApp(admin.phone, ` *${title}*\n\n${message}${fullFileUrl ? `\n\n Receipt: ${fullFileUrl}` : ''}`);
+        const adminWaMsg = `*${title}*\n\n${message}${fullFileUrl ? `\n\n📄 Receipt: ${fullFileUrl}` : ''}`;
+        try {
+          await sendWhatsAppNotification(admin, adminWaMsg, fullFileUrl ? { media: { url: fullFileUrl } } : {});
+        } catch (_) {
+          await sendWhatsApp(admin.phone, adminWaMsg);
+        }
       }
     }
   } catch (err) {

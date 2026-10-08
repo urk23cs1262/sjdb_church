@@ -23,9 +23,18 @@ const botSessionSchema = new mongoose.Schema({
     ],
     default: 'welcome'
   },
-  botLanguage: { type: String, enum: ['en', 'ta'], default: 'en' },
+  botLanguage: { type: String, enum: ['english', 'tamil', 'both', 'en', 'ta'], default: 'en' },
   isVerified: { type: Boolean, default: false },
   isOnboarded: { type: Boolean, default: false },
+  // Dedicated Daily Catholic Content Subscription Gate
+  dailyCatholicSetupCompleted: { type: Boolean, default: false, index: true },
+  dailyCatholicSubscribed: { type: Boolean, default: false, index: true },
+  dailyCatholicLanguage: {
+    type: String,
+    enum: ['english', 'tamil', 'both', 'en', 'ta', null],
+    default: null,
+    index: true
+  },
   providedPhone: { type: String, default: '' },
   pendingPhone: { type: String, default: '' },
   pendingOtp: { type: String, default: '' },

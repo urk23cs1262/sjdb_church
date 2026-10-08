@@ -263,12 +263,9 @@ We will notify you once the services are live again.
           formattedPhone = `91${formattedPhone}`;
         }
         try {
-          const { getWA } = require('../bot/whatsapp');
-          const wa = getWA();
-          if (wa && typeof wa.sendWhatsAppMessage === 'function') {
-            await wa.sendWhatsAppMessage(formattedPhone, waMsg);
-            waCount++;
-          }
+          const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
+          const res = await sendWhatsAppNotification(u, waMsg);
+          if (res && res.success) waCount++;
         } catch (waErr) { }
       }
     }

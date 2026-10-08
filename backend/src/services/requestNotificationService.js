@@ -168,29 +168,19 @@ const dispatchWhatsApp = async (phoneNumber, text, mediaOptions = null) => {
   if (!cleanPhone || cleanPhone.length < 10) return false;
 
   try {
-    const whatsappBot = require('../bot/whatsapp');
-    if (whatsappBot) {
-      // If a document/PDF attachment is provided, deliver as media message
-      if (mediaOptions && (mediaOptions.url || mediaOptions.buffer || mediaOptions.path)) {
-        if (typeof whatsappBot.sendWhatsAppMedia === 'function') {
-          const sentMedia = await whatsappBot.sendWhatsAppMedia(cleanPhone, {
-            url: mediaOptions.url || mediaOptions.path,
-            buffer: mediaOptions.buffer,
-            mimetype: mediaOptions.mimetype || 'application/pdf',
-            fileName: mediaOptions.fileName || mediaOptions.filename || 'Donation_Receipt.pdf',
-            caption: mediaOptions.caption || text
-          });
-          if (sentMedia) return true;
+    const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
+    const mediaPayload = mediaOptions && (mediaOptions.url || mediaOptions.buffer || mediaOptions.path)
+      ? {
+          url: mediaOptions.url || mediaOptions.path,
+          buffer: mediaOptions.buffer,
+          mimetype: mediaOptions.mimetype || 'application/pdf',
+          fileName: mediaOptions.fileName || mediaOptions.filename || 'Donation_Receipt.pdf'
         }
-      }
-
-      if (typeof whatsappBot.sendWhatsAppMessage === 'function') {
-        const sent = await whatsappBot.sendWhatsAppMessage(cleanPhone, text);
-        if (sent) return true;
-      }
-    }
+      : null;
+    const res = await sendWhatsAppNotification(cleanPhone, text, mediaPayload ? { media: mediaPayload } : {});
+    if (res && res.success) return true;
   } catch (err) {
-    console.warn('[RequestNotification] Baileys bot dispatch error:', err.message);
+    console.warn('[RequestNotification] sendWhatsAppNotification dispatch error:', err.message);
   }
 
   // Fallback to Twilio
