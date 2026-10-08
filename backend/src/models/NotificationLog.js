@@ -13,7 +13,7 @@ const mongoose = require('mongoose');
 const notificationLogSchema = new mongoose.Schema({
   entityType: {
     type: String,
-    enum: ['event', 'announcement'],
+    enum: ['event', 'announcement', 'registration', 'general'],
     required: true,
     index: true
   },
@@ -32,7 +32,9 @@ const notificationLogSchema = new mongoose.Schema({
       'announcement_created',
       'announcement_reminder',
       'announcement_updated',
-      'announcement_expired'
+      'announcement_expired',
+      'event_registration',
+      'event_registration_withdrawn'
     ],
     required: true,
     index: true

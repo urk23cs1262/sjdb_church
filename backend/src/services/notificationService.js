@@ -87,9 +87,13 @@ const createNotification = async ({ userId, isBroadcast, title, message, type, c
     }
 
     // ── Email channel ──────────────────────────────────────────────────────
-    const shouldSendEmail = (channels && channels.length > 0)
-      ? channels.includes('email')
-      : (isBroadcast || (recipient === 'user' && userId));
+    // In-App Notification Service must NOT send generic broadcast emails for system events/announcements.
+    // Dedicated broadcast services (broadcastNotificationService, etc.) format and dispatch branded emails.
+    const shouldSendEmail = Boolean(
+      !isBroadcast &&
+      userId &&
+      ((channels && channels.length > 0) ? channels.includes('email') : true)
+    );
     if (shouldSendEmail) {
       let recipientEmails = [];
       if (userId) {

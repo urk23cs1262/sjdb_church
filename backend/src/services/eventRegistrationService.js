@@ -15,7 +15,8 @@ const Event = require('../models/Event');
 const EventRegistration = require('../models/EventRegistration');
 const User = require('../models/User');
 const { createNotification } = require('./notificationService');
-const { sendMail } = require('../config/mailer');
+const mailer = require('../config/mailer');
+const sendMail = (opts) => mailer.sendMail(opts);
 const { sendSMS } = require('../config/twilio');
 const { sendPushToUser } = require('./webPushService');
 const { getSiteUrl } = require('../config/siteRoutes');
@@ -23,8 +24,8 @@ const { getAdminEmails, getAdminPhones } = require('../config/contactConfig');
 
 function sendWA(phoneOrUser, text) {
   try {
-    const { sendWhatsAppNotification } = require('./whatsAppNotificationService');
-    return sendWhatsAppNotification(phoneOrUser, text).catch(err => {
+    const waService = require('./whatsAppNotificationService');
+    return waService.sendWhatsAppNotification(phoneOrUser, text).catch(err => {
       console.warn('[EventRegistrationService] Central WhatsApp send warning:', err.message);
       const wa = require('../bot/whatsapp');
       if (wa && typeof wa.sendWhatsAppMessage === 'function') {
@@ -201,6 +202,26 @@ async function withdrawUserRegistration({ eventId, userId }) {
     throw err;
   }
 
+  // Find user and existing registration before removal
+  const userDoc = await User.findById(userId).lean();
+  const existingReg = await EventRegistration.findOne({ eventId: event._id, userId }).lean();
+  const inArrayReg = (event.registrations || []).find(
+    r => r.userId?.toString() === userId.toString()
+  );
+
+  const initialLength = (event.registrations || []).length;
+  if (!existingReg && !inArrayReg && initialLength === 0) {
+    const err = new Error('You are not currently registered for this event.');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const participantSnapshot = {
+    name: (existingReg?.name || inArrayReg?.name || userDoc?.name || 'Parishioner').trim(),
+    phone: (existingReg?.phone || inArrayReg?.phone || userDoc?.phone || '').trim(),
+    email: (existingReg?.email || inArrayReg?.email || userDoc?.email || '').trim().toLowerCase()
+  };
+
   // Remove from EventRegistration collection
   await EventRegistration.deleteMany({
     eventId: event._id,
@@ -208,20 +229,31 @@ async function withdrawUserRegistration({ eventId, userId }) {
   });
 
   // Remove from embedded registrations array
-  const initialLength = (event.registrations || []).length;
   event.registrations = (event.registrations || []).filter(
     r => r.userId?.toString() !== userId.toString()
   );
   event.registrationCount = Math.max(0, event.registrations.length);
   await event.save();
 
-  if (initialLength === event.registrations.length) {
+  if (initialLength === event.registrations.length && !existingReg) {
     const err = new Error('You are not currently registered for this event.');
     err.statusCode = 400;
     throw err;
   }
 
-  console.log(`[EVENT WITHDRAWAL] User (${userId}) withdrew from "${event.title}". Total: ${event.registrationCount}`);
+  console.log(`[EVENT WITHDRAWAL] User "${participantSnapshot.name}" (${userId}) withdrew from "${event.title}". Total: ${event.registrationCount}`);
+
+  // Dispatch multi-channel withdrawal notifications to user and admin asynchronously
+  setImmediate(() => {
+    dispatchWithdrawalNotifications({
+      event,
+      registration: participantSnapshot,
+      user: userDoc || { _id: userId, ...participantSnapshot },
+      updatedCount: event.registrationCount
+    }).catch(notifErr => {
+      console.error('[EVENT WITHDRAWAL] Notification dispatch error:', notifErr.message);
+    });
+  });
 
   return {
     success: true,
@@ -548,10 +580,337 @@ ${publicEventUrl}`;
   }
 }
 
+/**
+ * Dispatch multi-channel withdrawal notifications to user and admin
+ */
+async function dispatchWithdrawalNotifications({ event, registration, user, updatedCount = 0 }) {
+  if (!event) return;
+
+  const publicBaseUrl = getPublicFrontendUrl();
+  const publicEventUrl = `${publicBaseUrl}/events`;
+  const adminEventUrl = `${publicBaseUrl}/admin/events`;
+
+  const dateText = formatEventDate(event.date);
+  const timeText = event.time || 'Schedule will be announced';
+  const venueText = event.venue || 'Church Premises, Kalayarkoil';
+  const userName = registration?.name || user?.name || 'Parishioner';
+  const userPhone = registration?.phone || user?.phone || '';
+  const userEmail = registration?.email || user?.email || '';
+
+  const withdrawnTime = new Date().toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  });
+
+  const targetUserId = user?._id || user?.id;
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // A. USER WITHDRAWAL NOTIFICATION
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // 1. User In-App Notification (Website)
+  if (targetUserId) {
+    try {
+      await createNotification({
+        userId: targetUserId,
+        recipient: 'user',
+        title: 'Registration Withdrawn',
+        message: `You have successfully withdrawn your registration from ${event.title}.\n\nEvent: ${event.title}\nDate: ${dateText}\nTime: ${timeText}\nVenue: ${venueText}\nStatus: Registration Withdrawn`,
+        type: 'event',
+        category: 'events',
+        requestType: 'EVENT_REGISTRATION_WITHDRAWN',
+        priority: 'normal',
+        actionUrl: '/events',
+        relatedId: event._id,
+        relatedModel: 'Event',
+        channels: ['inApp', 'website']
+      });
+      console.log(`[EVENT WITHDRAWAL] User In-App notification created for ${targetUserId}`);
+    } catch (err) {
+      console.warn('[EVENT WITHDRAWAL] User In-App notification failed:', err.message);
+    }
+  }
+
+  // 2. User WhatsApp Message (Auto-translated to user's saved botLanguage)
+  if (userPhone) {
+    try {
+      const userWaMsg = `*Registration Withdrawn*
+
+You have withdrawn your registration from the event *${event.title}*.
+
+📅 *Event:* ${event.title}
+🗓️ *Date:* ${dateText}
+🕒 *Time:* ${timeText}
+📍 *Venue:* ${venueText}
+⚠️ *Status:* Registration Withdrawn
+
+👉 *View Event Details:*
+${publicEventUrl}
+
+*St. John de Britto Church, Kalayarkoil*`;
+
+      await sendWA(user || userPhone, userWaMsg);
+      console.log(`[EVENT WITHDRAWAL] User WhatsApp notification sent to ${userPhone}`);
+    } catch (err) {
+      console.warn('[EVENT WITHDRAWAL] User WhatsApp notification failed:', err.message);
+    }
+  }
+
+  // 3. User Email Notification (Branded Church Notification Email)
+  if (userEmail) {
+    try {
+      const userEmailHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registration Withdrawn - ${event.title}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
+  <div style="background-color: #f8fafc; padding: 32px 12px; width: 100%; box-sizing: border-box;">
+    <div style="max-width: 580px; width: 100%; margin: 0 auto; background-color: #ffffff; border-radius: 18px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.06); border: 1px solid #e2e8f0; box-sizing: border-box;">
+      
+      <!-- HEADER -->
+      <div style="background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); padding: 30px 20px; text-align: center; color: #ffffff;">
+        <div style="width: 70px; height: 70px; background: #ffffff; border-radius: 50%; margin: 0 auto 12px; overflow: hidden; border: 3px solid #fbbf24;">
+          <img src="cid:sjdb_church_logo" alt="St. John de Britto" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
+        </div>
+        <h1 style="margin: 0; font-size: 20px; font-weight: 800; color: #fbbf24;">St. John de Britto Church</h1>
+        <p style="margin: 4px 0 0 0; font-size: 13px; color: #cbd5e1; font-weight: 500;">புனித அருளானந்தர் தேவாலயம், காளையார்கோவில்</p>
+      </div>
+
+      <!-- CONTENT -->
+      <div style="padding: 30px 24px; color: #1e293b; box-sizing: border-box;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <span style="display: inline-block; background: #fee2e2; color: #dc2626; padding: 6px 18px; border-radius: 999px; font-size: 13px; font-weight: 800; letter-spacing: 0.5px;">
+            ⚠️ REGISTRATION WITHDRAWN
+          </span>
+        </div>
+
+        <h2 style="color: #1e3a8a; margin: 0 0 12px; font-size: 20px; font-weight: 800; text-align: center;">Registration Withdrawn</h2>
+        <p style="font-size: 15px; color: #475569; margin: 0 0 12px; line-height: 1.6;">Dear <strong>${userName}</strong>,</p>
+        <p style="font-size: 15px; color: #475569; margin: 0 0 20px; line-height: 1.6;">You have successfully withdrawn your registration from <strong>${event.title}</strong>.</p>
+
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px 20px; margin: 20px 0; font-size: 14px; line-height: 1.8;">
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #e2e8f0; padding: 6px 0;">
+            <strong style="color: #64748b;">Event:</strong>
+            <span style="color: #0f172a; font-weight: 600;">${event.title}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #e2e8f0; padding: 6px 0;">
+            <strong style="color: #64748b;">Date:</strong>
+            <span style="color: #0f172a; font-weight: 600;">${dateText}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #e2e8f0; padding: 6px 0;">
+            <strong style="color: #64748b;">Time:</strong>
+            <span style="color: #0f172a; font-weight: 600;">${timeText}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #e2e8f0; padding: 6px 0;">
+            <strong style="color: #64748b;">Venue:</strong>
+            <span style="color: #0f172a; font-weight: 600;">${venueText}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed #e2e8f0; padding: 6px 0;">
+            <strong style="color: #64748b;">Withdrawn At:</strong>
+            <span style="color: #0f172a; font-weight: 600;">${withdrawnTime}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding: 6px 0;">
+            <strong style="color: #64748b;">Status:</strong>
+            <span style="color: #dc2626; font-weight: 700;">Registration Withdrawn</span>
+          </div>
+        </div>
+
+        <div style="text-align: center; margin: 26px 0 10px;">
+          <a href="${publicEventUrl}" style="display: inline-block; background: linear-gradient(135deg, #1e3a8a, #2563eb); color: #ffffff !important; text-decoration: none; padding: 12px 28px; border-radius: 12px; font-weight: 800; font-size: 14px; text-align: center;">
+            👉 View Event Details →
+          </a>
+        </div>
+      </div>
+
+      <!-- FOOTER -->
+      <div style="background: #0f172a; padding: 16px; text-align: center; color: #94a3b8; font-size: 11.5px;">
+        <p style="margin: 0 0 4px; font-weight: 700; color: #cbd5e1;">St. John de Britto Church, Kalayarkoil - 630551</p>
+        <p style="margin: 0; color: #64748b;">Official Parish Event Notification</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+      await sendMail({
+        to: userEmail,
+        subject: `Registration Withdrawn - ${event.title}`,
+        html: userEmailHtml
+      });
+      console.log(`[EVENT WITHDRAWAL] User confirmation email sent to ${userEmail}`);
+    } catch (err) {
+      console.warn('[EVENT WITHDRAWAL] User email failed:', err.message);
+    }
+  }
+
+  // 4. User Web Push
+  if (targetUserId) {
+    try {
+      await sendPushToUser(targetUserId, {
+        title: 'Registration Withdrawn',
+        body: `You have successfully withdrawn your registration from ${event.title}.`,
+        url: '/events',
+        tag: `event-withdrawn-${event._id}`
+      });
+    } catch (err) {
+      console.warn('[EVENT WITHDRAWAL] User Web Push skipped/failed:', err.message);
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // B. ADMIN WITHDRAWAL NOTIFICATION
+  // ──────────────────────────────────────────────────────────────────────────
+
+  const adminMessage = `Registration Withdrawn
+${userName} has withdrawn their registration from ${event.title}.
+
+Participant: ${userName}
+Phone: ${userPhone || 'N/A'}
+Email: ${userEmail || 'N/A'}
+Event: ${event.title}
+Event Date: ${dateText}
+Event Time: ${timeText}
+Withdrawn At: ${withdrawnTime}
+Total Registrations: ${updatedCount}`;
+
+  // 1. Admin In-App Notification (Website)
+  try {
+    await createNotification({
+      recipient: 'admin',
+      title: 'Registration Withdrawn',
+      message: adminMessage,
+      type: 'event',
+      category: 'events',
+      requestType: 'EVENT_REGISTRATION_WITHDRAWN',
+      priority: 'normal',
+      actionUrl: '/admin/events',
+      relatedId: event._id,
+      relatedModel: 'Event',
+      channels: ['inApp', 'website']
+    });
+    console.log('[EVENT WITHDRAWAL] Admin In-App notification created');
+  } catch (err) {
+    console.warn('[EVENT WITHDRAWAL] Admin In-App failed:', err.message);
+  }
+
+  // 2. Admin Multi-Channel Broadcast (WhatsApp & Email)
+  try {
+    const adminRecipients = await getAdminNotificationRecipients();
+
+    // Admin WhatsApp message
+    const adminWaText = `🔔 *Registration Withdrawn*
+
+*${userName}* has withdrawn their registration from *${event.title}*.
+
+*Participant:* ${userName}
+*Phone:* ${userPhone || 'N/A'}
+*Email:* ${userEmail || 'N/A'}
+*Event:* ${event.title}
+*Event Date:* ${dateText}
+*Event Time:* ${timeText}
+*Withdrawn At:* ${withdrawnTime}
+*Total Registrations:* ${updatedCount}
+
+👉 *Admin Event Page:*
+${adminEventUrl}
+
+👉 *Public Event:*
+${publicEventUrl}`;
+
+    for (const phone of adminRecipients.phones) {
+      sendWA(phone, adminWaText).catch(e => {
+        console.warn(`[EVENT WITHDRAWAL] Admin WhatsApp failed to ${phone}:`, e.message);
+      });
+    }
+
+    // Admin Email HTML
+    const adminEmailHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Registration Withdrawn: ${event.title}</title>
+</head>
+<body style="margin: 0; padding: 0; background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <div style="background:#f8fafc; padding:30px 15px;">
+    <div style="max-width:600px; margin:0 auto; background:#ffffff; border-radius:16px; padding:30px; border:1px solid #e2e8f0; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+      <div style="display: inline-block; background: #fee2e2; color: #dc2626; padding: 4px 14px; border-radius: 999px; font-size: 12px; font-weight: 800; margin-bottom: 14px;">
+        ⚠️ PARTICIPANT WITHDRAWAL
+      </div>
+      <h2 style="color:#1e3a8a; margin:0 0 10px;">🔔 Registration Withdrawn</h2>
+      <p style="color:#475569; font-size:15px; line-height: 1.5; margin: 0 0 18px;">
+        <strong>${userName}</strong> has withdrawn their registration from <strong>"${event.title}"</strong>.
+      </p>
+      
+      <div style="background:#f8fafc; padding:18px; border-radius:10px; margin:20px 0; border:1px solid #e2e8f0; font-size: 14px; line-height: 1.8;">
+        <p style="margin:4px 0;"><strong>Participant:</strong> ${userName}</p>
+        <p style="margin:4px 0;"><strong>Phone:</strong> ${userPhone || 'N/A'}</p>
+        <p style="margin:4px 0;"><strong>Email:</strong> ${userEmail || 'N/A'}</p>
+        <p style="margin:4px 0;"><strong>Event:</strong> ${event.title}</p>
+        <p style="margin:4px 0;"><strong>Event Date:</strong> ${dateText}</p>
+        <p style="margin:4px 0;"><strong>Event Time:</strong> ${timeText}</p>
+        <p style="margin:4px 0;"><strong>Withdrawn At:</strong> ${withdrawnTime}</p>
+        <p style="margin:8px 0 0; color:#1e3a8a; font-size: 15px; font-weight:800; border-top: 1px dashed #cbd5e1; padding-top: 8px;">
+          Total Registrations: ${updatedCount}
+        </p>
+      </div>
+
+      <div style="margin-top:25px;">
+        <a href="${adminEventUrl}" style="background:#1e3a8a; color:#ffffff; padding:10px 22px; border-radius:8px; text-decoration:none; font-weight:700; font-size:13px; display:inline-block; margin-right:10px;">
+          Open Admin Registrations
+        </a>
+        <a href="${publicEventUrl}" style="background:#f1f5f9; color:#334155; padding:10px 22px; border-radius:8px; text-decoration:none; font-weight:600; font-size:13px; display:inline-block;">
+          View Public Event
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    for (const email of adminRecipients.emails) {
+      sendMail({
+        to: email,
+        subject: `Registration Withdrawn: ${event.title} (${userName})`,
+        html: adminEmailHtml
+      }).catch(e => {
+        console.warn(`[EVENT WITHDRAWAL] Admin email failed to ${email}:`, e.message);
+      });
+    }
+  } catch (err) {
+    console.warn('[EVENT WITHDRAWAL] Admin multi-channel dispatch error:', err.message);
+  }
+
+  // 3. Strict Deduplication & Idempotency Logging via NotificationLog
+  try {
+    const NotificationLog = require('../models/NotificationLog');
+    await NotificationLog.create({
+      entityType: 'registration',
+      entityId: event._id,
+      notificationType: 'event_registration_withdrawn',
+      reminderType: 'withdrawal',
+      scheduledFor: new Date(),
+      title: `Registration Withdrawn - ${event.title}`,
+      status: 'sent',
+      channels: ['website', 'email', 'whatsapp', 'push'],
+      sentAt: new Date(),
+      metadata: {
+        userId: targetUserId,
+        userName,
+        updatedCount
+      }
+    });
+  } catch (_) { }
+}
+
 module.exports = {
   registerUserForEvent,
   withdrawUserRegistration,
   dispatchRegistrationNotifications,
+  dispatchWithdrawalNotifications,
   getPublicFrontendUrl,
   formatEventDate
 };

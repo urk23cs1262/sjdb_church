@@ -7,7 +7,7 @@ import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { FiMapPin, FiPhone, FiMail, FiClock, FiSend, FiHelpCircle, FiArrowRight } from 'react-icons/fi';
-import { FaWhatsapp } from 'react-icons/fa';
+import { FaWhatsapp, FaInstagram } from 'react-icons/fa';
 import { GiChurch } from 'react-icons/gi';
 import PageHero from '../../components/common/common_page_hero';
 import { getChurchPhone, getChurchEmail, getWhatsAppNumber, getWhatsAppChannelUrl } from '../../config/contactConfig';
@@ -16,7 +16,8 @@ export default function Contact() {
   const { t } = useTranslation();
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm();
   const [whatsappNumber, setWhatsappNumber] = useState(() => getWhatsAppNumber() || '');
-  const [whatsappChannelUrl, setWhatsappChannelUrl] = useState(() => getWhatsAppChannelUrl() || '');
+  const [whatsappChannelUrl, setWhatsappChannelUrl] = useState(() => getWhatsAppChannelUrl() || 'https://whatsapp.com/channel/0029Vbf3th71iUxSmSsBYg3D');
+  const [instagramUrl, setInstagramUrl] = useState('https://www.instagram.com/sjdb_church?stkn=MW82ZXpsbW4xMTRyeQ==');
   const churchPhone = getChurchPhone() || '';
   const churchEmail = getChurchEmail() || '';
 
@@ -30,6 +31,10 @@ export default function Contact() {
         const chanUrl = res.data?.settings?.whatsappChannelUrl || res.data?.settings?.whatsapp_channel_url;
         if (chanUrl) {
           setWhatsappChannelUrl(chanUrl);
+        }
+        const ig = res.data?.settings?.socialLinks?.instagram || res.data?.settings?.instagramUrl;
+        if (ig) {
+          setInstagramUrl(ig);
         }
       })
       .catch(() => { });
@@ -126,19 +131,28 @@ export default function Contact() {
                 </a>
               </div>
 
-              {whatsappChannelUrl && (
-                <div className="mb-6">
-                  <a
-                    href={whatsappChannelUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-center gap-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white px-4 py-3.5 rounded-2xl transition-all shadow-lg font-bold text-xs sm:text-sm text-center border border-emerald-400/30"
-                  >
-                    <FaWhatsapp className="text-xl text-emerald-200 flex-shrink-0" />
-                    <span className="truncate">{t('contact.followChannel', 'Follow Official WhatsApp Channel (Updates & Daily Liturgy)')}</span>
-                  </a>
-                </div>
-              )}
+              {/* WhatsApp Channel & Instagram Horizontal 2-Column Action Buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+                <a
+                  href={whatsappChannelUrl || 'https://whatsapp.com/channel/0029Vbf3th71iUxSmSsBYg3D'}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center gap-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white px-4 py-3.5 rounded-2xl transition-all shadow-lg font-bold text-xs sm:text-sm text-center border border-emerald-400/30"
+                >
+                  <FaWhatsapp className="text-xl text-emerald-200 flex-shrink-0" />
+                  <span className="truncate">{t('contact.followChannel', 'WhatsApp Channel')}</span>
+                </a>
+
+                <a
+                  href={instagramUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center gap-2.5 bg-gradient-to-r from-[#833AB4] via-[#FD1D1D] to-[#F77737] hover:opacity-95 text-white px-4 py-3.5 rounded-2xl transition-all shadow-lg font-bold text-xs sm:text-sm text-center border border-pink-400/30"
+                >
+                  <FaInstagram className="text-xl flex-shrink-0" />
+                  <span className="truncate">{t('contact.followInstagram', 'Follow on Instagram')}</span>
+                </a>
+              </div>
 
               {/* Google Maps */}
               <div className="rounded-2xl overflow-hidden shadow-card border border-gray-100 ">

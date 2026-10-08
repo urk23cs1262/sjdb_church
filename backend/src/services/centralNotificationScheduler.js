@@ -380,7 +380,7 @@ async function sendLogicalNotification({
     actionUrl,
     relatedId: entityId,
     relatedModel: entityType === 'event' ? 'Event' : 'Announcement',
-    channels: ['in_app', 'push', 'email', 'whatsapp']
+    channels: ['inApp', 'website']
   }).catch(e => console.warn(`[CentralScheduler] In-app notification error: ${e.message}`));
 
   // 4. Channel B: Web Push Notification
@@ -607,37 +607,17 @@ async function onEventCreated(event) {
   try {
     if (!event || event.isPublished === false || event.isCancelled === true) return;
 
-    // A. Mirror into Announcements (sourceType: 'event')
+    // A. Mirror into Announcements (sourceType: 'event') WITHOUT triggering an announcement notification
     await syncEventToAnnouncement(event);
 
-    const now = new Date();
-    const eventDateTime = getEventExactDateTime(event);
-    const dateFormatted = formatEventDate(event.date);
-    const timeFormatted = event.time || '12:00 PM';
-    const venueFormatted = event.venue || 'Church Premises';
-    const title = `📅 New Event: ${event.title}`;
-    const message = `Parish Event scheduled for ${dateFormatted} at ${timeFormatted} (${venueFormatted}). Click to view details and register.`;
-
-    // B. Send ONE Event Notification (Strictly Idempotent)
-    await sendLogicalNotification({
-      entityType: 'event',
-      entityId: event._id,
-      notificationType: 'event_created',
-      reminderType: 'creation',
-      scheduledFor: event.createdAt || now,
-      title,
-      message,
-      badgeText: 'NEW PARISH EVENT',
-      actionUrl: '/events',
-      eventDate: dateFormatted,
-      eventTime: timeFormatted,
-      venue: venueFormatted,
-      description: event.description || '',
-      priority: 'high'
-    });
-
+    // B. Activate reminder status on the event
     event.reminderStatus = 'active';
     await event.save().catch(() => {});
+
+    // C. Single Notification Pipeline: Dispatch ONE Event Created notification using Template 1 (PARISH EVENT NOTICE)
+    // Deduplication via NotificationLog ensures strictly ONE send across all channels
+    const { broadcastEventPublished } = require('./broadcastNotificationService');
+    await broadcastEventPublished({ event, action: 'created' });
   } catch (err) {
     console.error('[CentralScheduler] onEventCreated error:', err.message);
   }
@@ -696,27 +676,13 @@ async function onAnnouncementCreated(announcement) {
     const expiryDate = getAnnouncementExactExpiry(announcement);
     if (expiryDate && now >= expiryDate) return;
 
-    const expiryFormatted = formatExpiryDate(expiryDate);
-    const title = `📢 ${announcement.title}`;
-    const cleanContent = announcement.content || '';
-    const message = `${cleanContent.slice(0, 150)}${cleanContent.length > 150 ? '...' : ''} (Valid until ${expiryFormatted}). Tap to view.`;
-
-    await sendLogicalNotification({
-      entityType: 'announcement',
-      entityId: announcement._id,
-      notificationType: 'announcement_created',
-      reminderType: 'creation',
-      scheduledFor: announcement.createdAt || now,
-      title,
-      message,
-      badgeText: announcement.priority === 'urgent' ? '🚨 URGENT ANNOUNCEMENT' : '📢 PARISH ANNOUNCEMENT',
-      actionUrl: '/announcements',
-      description: cleanContent,
-      priority: announcement.priority === 'urgent' ? 'urgent' : 'high'
-    });
-
     announcement.reminderStatus = 'active';
     await announcement.save().catch(() => {});
+
+    // Single Notification Pipeline: Dispatch ONE Announcement Created notification
+    // Deduplication via NotificationLog ensures strictly ONE send across all channels
+    const { broadcastAnnouncementPublished } = require('./broadcastNotificationService');
+    await broadcastAnnouncementPublished({ announcement, action: 'created' });
   } catch (err) {
     console.error('[CentralScheduler] onAnnouncementCreated error:', err.message);
   }

@@ -128,17 +128,11 @@ const create = async (req, res) => {
     if (req.user) data.createdBy = req.user._id;
     const event = await Event.create(data);
 
-    // Server-Side Hourly Tomorrow Event Reminder & Announcement Hook
-    const { onEventCreated } = require('../services/hourlyEventReminderService');
-    onEventCreated(event).catch(err => {
-      console.error('[EventController] Error initializing hourly event reminder:', err.message);
-    });
-
-    // Multi-Channel Broadcast across WhatsApp, Email, In-App, and Push
+    // Single Notification Pipeline: Hourly reminder scheduling & multi-channel broadcast with deduplication
     if (event.isPublished !== false) {
-      const { broadcastEventPublished } = require('../services/broadcastNotificationService');
-      broadcastEventPublished({ event, action: 'created' }).catch(err => {
-        console.error('[EventController] Error broadcasting new event:', err.message);
+      const { onEventCreated } = require('../services/hourlyEventReminderService');
+      onEventCreated(event).catch(err => {
+        console.error('[EventController] Error initializing event notification pipeline:', err.message);
       });
     }
 

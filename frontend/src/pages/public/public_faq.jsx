@@ -7,20 +7,23 @@ import {
 } from 'react-icons/fi';
 import { HiSparkles } from 'react-icons/hi2';
 import { GiChurch, GiCrucifix, GiPrayer, GiDove } from 'react-icons/gi';
-import { FaDonate, FaHandHoldingHeart } from 'react-icons/fa';
+import { FaDonate, FaHandHoldingHeart, FaWhatsapp } from 'react-icons/fa';
 import { Link } from 'react-router-dom';
 import PageHero from '../../components/common/common_page_hero';
 
 const FAQ_CATEGORIES = [
   { id: 'all', name: 'All Questions', icon: FiHelpCircle },
   { id: 'mass', name: 'Mass Bookings', icon: GiCrucifix },
+  { id: 'events', name: 'Events & Registration', icon: FiCalendar },
+  { id: 'whatsapp', name: 'WhatsApp Bot & Daily Content', icon: FaWhatsapp },
+  { id: 'sacraments', name: 'Sacraments & Pastoral Care', icon: GiChurch },
   { id: 'anbiyams', name: 'Anbiyams & Community', icon: FiUsers },
   { id: 'documents', name: 'Certificates & Documents', icon: FiFileText },
   { id: 'prayer', name: 'Prayer Requests', icon: GiPrayer },
   { id: 'donations', name: 'Donations & Receipts', icon: FaDonate },
   { id: 'tickets', name: 'Support & Tickets', icon: FiMessageSquare },
-  { id: 'account', name: 'Account & Registration', icon: FiShield },
-  { id: 'general', name: 'Parish Life & Devotions', icon: GiChurch },
+  { id: 'account', name: 'Account & Family Ledger', icon: FiShield },
+  { id: 'general', name: 'Parish Life & Voice AI', icon: HiSparkles },
 ];
 
 const FAQS = [
@@ -56,7 +59,77 @@ const FAQS = [
     tags: ['reschedule', 'suggested date', 'approval']
   },
 
-  // Anbiyams (Basic Christian Communities)
+  // Parish Events & Registration
+  {
+    category: 'events',
+    q: 'How do I register for an upcoming Parish Event or Pilgrimage?',
+    a: 'Navigate to the "Events" page from the main menu. Browse our upcoming parish events, retreats, youth conventions, and feast celebrations. For events that require registration, click "Register Now", enter your participant details, and submit. You will immediately receive a digital confirmation pass and an instant email and WhatsApp confirmation.',
+    tags: ['event', 'registration', 'pilgrimage', 'retreat', 'feast', 'pass']
+  },
+  {
+    category: 'events',
+    q: 'Can I withdraw my event registration if I am unable to attend?',
+    a: 'Yes, absolutely. Open the Events page, locate the event you registered for, and click "Withdraw Registration". The system will immediately cancel your registration, free up the participant spot for another parishioner, and send you and the parish office an instant confirmation notice.',
+    tags: ['withdraw', 'cancel registration', 'event spot', 'attendance']
+  },
+  {
+    category: 'events',
+    q: 'Do I need to carry a printed ticket or pass for parish events?',
+    a: 'No printed paper is required! When you register, a digital event pass with a verification QR code is generated in your account. You can simply display this QR code on your mobile phone upon arrival at the church venue for seamless check-in.',
+    tags: ['qr code', 'digital pass', 'entry', 'mobile check-in']
+  },
+
+  // WhatsApp Bot & Daily Catholic Devotions
+  {
+    category: 'whatsapp',
+    q: 'How does the St. John de Britto WhatsApp Bot work?',
+    a: 'Our church has an interactive AI-powered WhatsApp Bot available 24/7. You can send a message to check today\'s Mass timings, read the daily Scripture reading, query saint feast days, check event dates, or request prayer intentions directly through WhatsApp.',
+    tags: ['whatsapp', 'bot', 'chat', 'mobile', 'interactive']
+  },
+  {
+    category: 'whatsapp',
+    q: 'What is the 4:00 AM Daily Catholic Content on WhatsApp?',
+    a: 'Parishioners can receive our blessed morning spiritual package delivered to their WhatsApp daily at 4:00 AM IST. It includes the Daily Bible Verse with liturgical reflection, the Saint of the Day memorial biography, and daily Catholic prayer points.',
+    tags: ['daily catholic', '4am', 'morning devotion', 'saint of the day', 'reflection']
+  },
+  {
+    category: 'whatsapp',
+    q: 'How do I change my WhatsApp notification language (Tamil or English)?',
+    a: 'Your saved Bot Language determines the language of all WhatsApp notifications. You can change your preferred language between Tamil (தமிழ்), English, or Both anytime by going to User Dashboard > Profile Settings > WhatsApp Preferences, or by texting the language command directly to our WhatsApp bot.',
+    tags: ['bot language', 'tamil', 'english', 'notifications', 'bilingual']
+  },
+  {
+    category: 'whatsapp',
+    q: 'How can I follow the official Parish WhatsApp Newsletter Channel?',
+    a: 'Click the green WhatsApp Channel icon in our website footer or visit the Social Media page to join our official broadcast channel. The channel publishes official diocese circulars, novena schedules, festive feast photos, and live Mass streaming links.',
+    tags: ['whatsapp channel', 'newsletter', 'circular', 'announcements']
+  },
+
+  // Sacraments & Pastoral Care
+  {
+    category: 'sacraments',
+    q: 'How do I arrange for the Sacrament of Baptism for a newborn or child?',
+    a: 'Parents should contact the Parish Office or Priest at least 15 days in advance. Please bring the child\'s birth certificate and the family parish registration record. Godparents must be practicing Catholic parishioners in good standing. A short pre-baptism catechesis session is held for parents and godparents before the celebration.',
+    tags: ['baptism', 'sacrament', 'newborn', 'godparents', 'catechesis']
+  },
+  {
+    category: 'sacraments',
+    q: 'What are the requirements for Holy Matrimony (Marriage) in the parish?',
+    a: 'Couples must meet with the Parish Priest at least three months prior to the proposed wedding date. The mandatory requirements include: 1) Recent Baptism Certificate with "Free to Marry" notation issued within the last 6 months, 2) Confirmation Certificate, 3) Completion Certificate of the Diocesan Pre-Cana Marriage Preparation Course, and 4) Publication of Marriage Banns in respective parishes.',
+    tags: ['marriage', 'matrimony', 'wedding', 'pre-cana', 'banns', 'certificate']
+  },
+  {
+    category: 'sacraments',
+    q: 'When is the Sacrament of Reconciliation (Confession) available?',
+    a: 'Confessions are regularly heard 30 minutes before every weekday Mass, every Saturday from 4:30 PM to 5:00 PM, and on Sundays between morning Masses. You can also request Confession privately with the priest at the rectory at any time.',
+    tags: ['confession', 'reconciliation', 'penance', 'schedule']
+  },
+  {
+    category: 'sacraments',
+    q: 'How do I request Anointing of the Sick or Holy Communion for a homebound elderly person?',
+    a: 'For urgent medical emergencies or Anointing of the Sick, call our 24/7 parish telephone immediately. For routine home visits and First Friday Holy Communion to the elderly or sick, submit a ticket under Support or inform your neighborhood Anbiyam leader.',
+    tags: ['sick call', 'anointing of the sick', 'elderly', 'homebound', 'first friday']
+  },
   {
     category: 'anbiyams',
     q: 'What is an Anbiyam (Basic Christian Community / அன்பியம்)?',
@@ -151,8 +224,26 @@ const FAQS = [
     a: 'You can still log in and view public announcements, Mass timings, and devotions. Once approved by the parish office, you will unlock full access to Mass bookings, document requests, and tickets.',
     tags: ['pending approval', 'access', 'dashboard']
   },
+  {
+    category: 'account',
+    q: 'What is a Parish Family ID and Member ID?',
+    a: 'Every registered household in St. John de Britto Parish has a permanent Family ID (e.g., SJDB_FAM-01) tied to their Anbiyam unit, and each individual has a Parish Member ID (e.g., SJDB_M01). This ID unifies your baptismal records, census ledger, Mass intentions, and contribution receipts.',
+    tags: ['family id', 'member id', 'census', 'ledger', 'family register']
+  },
+  {
+    category: 'account',
+    q: 'Can I add my spouse, children, or parents under my family account?',
+    a: 'Yes! Inside User Dashboard > Family Members, you can register and update details for all members of your household including dates of birth, sacraments received, and blood groups. This ensures accurate family records for parish certificates and pastoral care.',
+    tags: ['family members', 'spouse', 'children', 'household', 'census']
+  },
 
   // General & Devotions
+  {
+    category: 'general',
+    q: 'What is "Hey Connect" (Voice Assistant) in the navigation bar?',
+    a: '"Hey Connect" is our interactive parish AI assistant. Click the microphone button at the top of the website to speak or type in English or Tamil. You can ask questions about the life and martyrdom of St. John de Britto, church history, catechism, feast calendars, or how to use portal services.',
+    tags: ['hey connect', 'voice assistant', 'ai', 'saint john de britto', 'bilingual']
+  },
   {
     category: 'general',
     q: 'Is the website available in Tamil?',

@@ -128,17 +128,11 @@ const create = async (req, res) => {
     }
     const ann = await Announcement.create(data);
 
-    // Server-Side Hourly Announcement Reminder Lifecycle
-    const { onAnnouncementCreated } = require('../services/hourlyAnnouncementReminderService');
-    onAnnouncementCreated(ann).catch(err => {
-      console.error('[AnnouncementController] Error initializing hourly reminders:', err.message);
-    });
-
-    // Multi-Channel Broadcast across WhatsApp, Email, In-App, and Push
+    // Single Notification Pipeline: Hourly reminder scheduling & multi-channel broadcast with deduplication
     if (ann.isPublished !== false) {
-      const { broadcastAnnouncementPublished } = require('../services/broadcastNotificationService');
-      broadcastAnnouncementPublished({ announcement: ann, action: 'created' }).catch(err => {
-        console.error('[AnnouncementController] Error broadcasting new announcement:', err.message);
+      const { onAnnouncementCreated } = require('../services/hourlyAnnouncementReminderService');
+      onAnnouncementCreated(ann).catch(err => {
+        console.error('[AnnouncementController] Error initializing announcement notification pipeline:', err.message);
       });
     }
 

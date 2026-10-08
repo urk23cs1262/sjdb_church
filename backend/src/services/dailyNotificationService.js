@@ -246,7 +246,7 @@ async function sendDailyWhatsAppSequence({
 
   await new Promise(r => setTimeout(r, STAGE_DELAY_MS));
 
-  // ── 4. 🖼️ Saint of the Day image message ──────────────────────────────────
+  // ── 4. Saint of the Day image message ──────────────────────────────────
   if (!messagesSent.includes('saint_image')) {
     const saintImagePayload = getDailySaintImagePayload({ dailyContent, language: userLang });
     if (saintImagePayload && typeof waService.sendWhatsAppMedia === 'function') {
@@ -254,7 +254,7 @@ async function sendDailyWhatsAppSequence({
         const imgOk = await waService.sendWhatsAppMedia(phone, saintImagePayload);
         if (imgOk) {
           messagesSent.push('saint_image');
-          console.log(`[DELIVERY 4/6] 🖼️ Saint image sent to ${phone}`);
+          console.log(`[DELIVERY 4/6] Saint image sent to ${phone}`);
         } else {
           console.warn(`⚠️ [DELIVERY 4/6] Saint image send returned false for ${phone}`);
         }
@@ -283,7 +283,7 @@ async function sendDailyWhatsAppSequence({
       const ok = await waService.sendWhatsAppMessage(phone, saintContentMsg);
       if (ok) {
         messagesSent.push('saint_content');
-        console.log(`[DELIVERY 5/6] ✨ Saint content sent to ${phone}`);
+        console.log(`[DELIVERY 5/6] Saint content sent to ${phone}`);
       } else {
         stageErrors.push({ stage: 'saint_content', error: 'Socket send returned false' });
         console.error(`❌ [DELIVERY FAILED 5/6] Saint content failed for ${phone}`);
@@ -303,7 +303,7 @@ async function sendDailyWhatsAppSequence({
       const ok = await waService.sendWhatsAppMessage(phone, readMoreMsg);
       if (ok) {
         messagesSent.push('read_more');
-        console.log(`[DELIVERY 6/6] 🌐 Read More link sent to ${phone}`);
+        console.log(`[DELIVERY 6/6] Read More link sent to ${phone}`);
       } else {
         stageErrors.push({ stage: 'read_more', error: 'Socket send returned false' });
         console.warn(`⚠️ [DELIVERY 6/6] Read More link failed for ${phone}`);
