@@ -42,35 +42,48 @@ function getWA() {
  * Normalizes language string to canonical 'english' | 'tamil' | 'both'
  */
 function normalizeBotLanguage(langInput) {
-  if (!langInput) return 'english';
+  if (!langInput) return 'tamil';
   const clean = String(langInput).trim().toLowerCase();
-  if (clean === 'ta' || clean === 'tamil') return 'tamil';
+  if (clean === 'ta' || clean === 'tamil' || clean === 'தமிழ்') return 'tamil';
+  if (clean === 'both' || clean === 'all' || clean === 'இரண்டும்' || (clean.includes('ta') && clean.includes('en')) || (clean.includes('tamil') && clean.includes('english'))) return 'both';
   if (clean === 'en' || clean === 'english') return 'english';
-  if (clean === 'both' || clean === 'all') return 'both';
-  return 'english';
+  return 'tamil';
 }
 
 /**
  * Resolves the recipient's saved botLanguage from User doc, BotSession doc, or phone number.
  */
 async function resolveUserBotLanguage(userOrPhone) {
-  if (!userOrPhone) return 'english';
+  if (!userOrPhone) return 'tamil';
 
-  // 1. Direct object with botLanguage
+  // 1. Direct object with botLanguage or related language fields
   if (typeof userOrPhone === 'object') {
     if (userOrPhone.botLanguage) {
       return normalizeBotLanguage(userOrPhone.botLanguage);
     }
+    const churchPrefLang = userOrPhone.settings?.churchPreferences?.preferredLanguage || userOrPhone.churchPreferences?.preferredLanguage;
+    if (churchPrefLang) {
+      return normalizeBotLanguage(churchPrefLang);
+    }
+    if (userOrPhone.mass_reflection_language) {
+      return normalizeBotLanguage(userOrPhone.mass_reflection_language);
+    }
     if (userOrPhone.language) {
       return normalizeBotLanguage(userOrPhone.language);
     }
-    if (userOrPhone.preferredLanguage) {
+    if (userOrPhone.dailyCatholicLanguage) {
+      return normalizeBotLanguage(userOrPhone.dailyCatholicLanguage);
+    }
+    if (userOrPhone.preferredLanguage && userOrPhone.preferredLanguage !== 'en') {
       return normalizeBotLanguage(userOrPhone.preferredLanguage);
     }
     // Object without language property: try resolving by phone or ID
-    const phone = userOrPhone.phone || userOrPhone.phoneNumber;
+    const phone = userOrPhone.phone || userOrPhone.phoneNumber || userOrPhone.providedPhone;
     if (phone) return resolveUserBotLanguage(phone);
     if (userOrPhone._id) return resolveUserBotLanguage(String(userOrPhone._id));
+    if (userOrPhone.preferredLanguage) {
+      return normalizeBotLanguage(userOrPhone.preferredLanguage);
+    }
   }
 
   const str = String(userOrPhone).trim();
@@ -78,41 +91,64 @@ async function resolveUserBotLanguage(userOrPhone) {
   // 2. MongoDB ObjectId lookup
   if (/^[0-9a-fA-F]{24}$/.test(str)) {
     try {
-      const u = await User.findById(str).select('botLanguage preferredLanguage language phone').lean();
+      const u = await User.findById(str).select('botLanguage preferredLanguage language settings mass_reflection_language dailyCatholicLanguage phone').lean();
       if (u) {
         if (u.botLanguage) return normalizeBotLanguage(u.botLanguage);
-        if (u.preferredLanguage) return normalizeBotLanguage(u.preferredLanguage);
+        const churchPrefLang = u.settings?.churchPreferences?.preferredLanguage;
+        if (churchPrefLang) return normalizeBotLanguage(churchPrefLang);
+        if (u.mass_reflection_language) return normalizeBotLanguage(u.mass_reflection_language);
         if (u.language) return normalizeBotLanguage(u.language);
+        if (u.dailyCatholicLanguage) return normalizeBotLanguage(u.dailyCatholicLanguage);
+        if (u.preferredLanguage && u.preferredLanguage !== 'en') return normalizeBotLanguage(u.preferredLanguage);
+        if (u.preferredLanguage) return normalizeBotLanguage(u.preferredLanguage);
       }
     } catch (_) {}
   }
 
-  // 3. Phone number lookup (search User and BotSession)
-  const phone10 = str.replace(/\D/g, '').slice(-10);
-  if (phone10 && phone10.length >= 10) {
+  // 3. Phone number lookup (search User and BotSession with regex for full tolerance)
+  const digits = str.replace(/\D/g, '');
+  const phone10 = digits.slice(-10);
+  if (phone10 && phone10.length === 10) {
     try {
       const [userDoc, sessionDoc] = await Promise.all([
         User.findOne({
-          phone: { $in: [phone10, `+91${phone10}`, `91${phone10}`, `0${phone10}`] },
+          phone: { $regex: phone10 + '$' },
           isActive: { $ne: false }
-        }).select('botLanguage preferredLanguage language').lean(),
+        }).select('botLanguage preferredLanguage language settings mass_reflection_language dailyCatholicLanguage').lean(),
         BotSession.findOne({
           $or: [
-            { phoneNumber: { $regex: phone10 + '$' } },
-            { providedPhone: { $regex: phone10 + '$' } }
+            { phoneNumber: { $regex: phone10 } },
+            { providedPhone: { $regex: phone10 } },
+            { pendingPhone: { $regex: phone10 } }
           ]
-        }).select('botLanguage language').lean()
+        }).select('botLanguage language linkedUserId dailyCatholicLanguage').lean()
       ]);
 
+      // A. Explicit botLanguage on userDoc or sessionDoc
       if (userDoc?.botLanguage) return normalizeBotLanguage(userDoc.botLanguage);
-      if (sessionDoc?.botLanguage) return normalizeBotLanguage(sessionDoc.botLanguage);
-      if (userDoc?.preferredLanguage) return normalizeBotLanguage(userDoc.preferredLanguage);
+      if (sessionDoc?.botLanguage && sessionDoc.botLanguage !== 'en') return normalizeBotLanguage(sessionDoc.botLanguage);
+
+      // B. Church Preferences / Mass Reflection Tamil settings
+      const churchPrefLang = userDoc?.settings?.churchPreferences?.preferredLanguage;
+      if (churchPrefLang) return normalizeBotLanguage(churchPrefLang);
+      if (userDoc?.mass_reflection_language) return normalizeBotLanguage(userDoc.mass_reflection_language);
       if (userDoc?.language) return normalizeBotLanguage(userDoc.language);
-      if (sessionDoc?.language) return normalizeBotLanguage(sessionDoc.language);
+      if (sessionDoc?.language && sessionDoc.language !== 'en') return normalizeBotLanguage(sessionDoc.language);
+      if (userDoc?.dailyCatholicLanguage) return normalizeBotLanguage(userDoc.dailyCatholicLanguage);
+      if (sessionDoc?.dailyCatholicLanguage) return normalizeBotLanguage(sessionDoc.dailyCatholicLanguage);
+
+      // C. If user explicitly chose English in botLanguage
+      if (userDoc?.botLanguage === 'english') return 'english';
+      if (sessionDoc?.botLanguage === 'english' || sessionDoc?.botLanguage === 'en') return 'english';
+
+      // D. User preferredLanguage
+      if (userDoc?.preferredLanguage === 'ta') return 'tamil';
+      if (userDoc?.preferredLanguage === 'en') return 'english';
     } catch (_) {}
   }
 
-  return 'english';
+  // 4. Default for parish
+  return 'tamil';
 }
 
 /**

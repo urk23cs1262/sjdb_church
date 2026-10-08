@@ -252,6 +252,7 @@ _St. John de Britto Church, Kalayarkoil_`;
   if (passed !== total) {
     process.exit(1);
   }
+  process.exit(0);
 }
 
 runTests().catch(err => {
