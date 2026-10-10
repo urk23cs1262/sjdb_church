@@ -1,10 +1,11 @@
 import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const API_URL = import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD ? 'https://st-jb-church.onrender.com/api' : '/api');
 
 const UPLOADS_URL = import.meta.env.VITE_API_BASE_URL
-  ? import.meta.env.VITE_API_BASE_URL.replace('/api', '') + '/uploads'
-  : '/uploads';
+  ? import.meta.env.VITE_API_BASE_URL.replace(/\/api\/?$/, '') + '/uploads'
+  : (import.meta.env.PROD ? 'https://st-jb-church.onrender.com/uploads' : '/uploads');
 
 const api = axios.create({
   baseURL: API_URL,

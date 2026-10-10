@@ -2,6 +2,14 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "https://st-jb-church.onrender.com/api/$1"
+    },
+    {
+      "source": "/uploads/(.*)",
+      "destination": "https://st-jb-church.onrender.com/uploads/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

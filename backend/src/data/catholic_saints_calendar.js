@@ -528,8 +528,16 @@ const CATHOLIC_SAINTS_CALENDAR = {
     nameTa: "ஜெபமாலை அன்னை திருவிழா",
     description: "Celebrates the Blessed Virgin Mary under the title Our Lady of the Rosary, commemorating the victory at Lepanto through the Rosary.",
     descriptionTa: "புனித ஜெபமாலையின் வல்லமையையும் அன்னை மரியாவின் பரிந்துரையையும் கொண்டாடும் பெருவிழா.",
-    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Madonna_of_the_Rosary_by_Caravaggio.jpg/500px-Madonna_of_the_Rosary_by_Caravaggio.jpg",
+    image: "https://upload.wikimedia.org/wikipedia/commons/c/c8/Madonna_of_the_Rosary_by_Caravaggio.jpg",
     link: "https://www.catholic.org/saints/saint.php?saint_id=474"
+  },
+  "10-10": {
+    name: "Sts. Daniel, Samuel and Companions, first Franciscan Martyrs",
+    nameTa: "புனிதர்கள் டேனியல், சாமுவேல் மற்றும் தோழர்கள் (முதல் பிரான்சிஸ்கன் மறைசாட்சியர்)",
+    description: "Seven Franciscan friars who travelled to Ceuta in 1227 to preach the Gospel and were martyred for their steadfast faith in Jesus Christ.",
+    descriptionTa: "1227 ஆம் ஆண்டு மொராக்கோவின் சியூட்டாவில் நற்செய்தியைப் போதித்து கிறிஸ்துவுக்காக மறைசாட்சியாய் உயிர்நீத்த ஏழு பிரான்சிஸ்கன் துறவியர்.",
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/Martyrdom_daniele_fasanella.jpg/500px-Martyrdom_daniele_fasanella.jpg",
+    link: "https://en.wikipedia.org/wiki/Daniel_and_companions"
   },
   "10-15": {
     name: "St. Teresa of Avila",

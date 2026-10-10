@@ -11,7 +11,8 @@ const {
   cacheSaintImageFile,
   searchSaintFallback, 
   cleanSaintName, 
-  verifyImageUrl 
+  verifyImageUrl,
+  DIGNIFIED_FALLBACK_IMAGE
 } = require('./saintImageResolver');
 
 // ─── SOURCE CONFIGURATION ────────────────────────────────────────────────────
