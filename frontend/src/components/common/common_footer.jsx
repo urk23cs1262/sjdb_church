@@ -202,8 +202,7 @@ export default function Footer() {
       <div className="border-t border-white/15 bg-black/40 py-5">
         <div className="max-w-7xl mx-auto px-4 text-center">
           <p className="text-gold-300 font-bold text-xs sm:text-sm flex flex-col items-center justify-center gap-1">
-            <span className="italic font-serif">"Come; Listen; and you will find life" — Isaiah 55:3</span>
-            <span className="text-gold-400/90 text-xs font-tamil font-normal">“வாருங்கள்; கேளுங்கள்; அப்பொழுது உங்கள் ஆன்மா பிழைக்கும்” — எசாயா 55:3</span>
+            <span className="italic font-serif">"Come; Listen; and you will find life"</span>
           </p>
 
           <p className="text-gray-300 font-medium text-xs sm:text-sm tracking-wide mt-2.5">
