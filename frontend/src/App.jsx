@@ -1,6 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { Analytics } from '@vercel/analytics/react';
 import { AuthProvider, useAuth } from './context/context_auth_context';
 import { NotificationProvider } from './context/context_notification_context';
 import { PWAProvider } from './context/context_pwa';
@@ -247,6 +248,7 @@ export default function App() {
               success: { iconTheme: { primary: '#d4a017', secondary: '#fff' } },
             }}
           />
+          <Analytics />
         </PWAProvider>
       </NotificationProvider>
     </AuthProvider>
