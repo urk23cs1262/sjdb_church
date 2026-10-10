@@ -316,6 +316,29 @@ async function searchWikipediaSaintImage(rawSaintName) {
     directSlugs.push('Our_Lady_of_Lourdes');
   } else if (lower.includes('fatima')) {
     directSlugs.push('Our_Lady_of_Fatima');
+  } else if (lower.includes('daniel') && (lower.includes('samuel') || lower.includes('franciscan') || lower.includes('ceuta'))) {
+    directSlugs.push('Daniel_and_companions', 'Saints_Daniel_and_companions');
+  } else if (lower.includes('paulinus') && (lower.includes('york') || lower.includes('gregory'))) {
+    directSlugs.push('Paulinus_of_York', 'Saint_Paulinus_of_York');
+  }
+
+  // Handle "and companions"
+  if (lower.includes('companion') || lower.includes('martyr')) {
+    const firstPerson = cleanName.split(/,|\band\b/i)[0].trim().replace(/\s+/g, '_');
+    if (firstPerson) {
+      directSlugs.push(`${firstPerson}_and_companions`, `Saints_${firstPerson}_and_companions`);
+    }
+  }
+
+  // Handle "Bishop of X", "Archbishop of X", "Duke of X", "of X"
+  const ofMatch = rawSaintName.match(/(?:Bishop|Archbishop|Duke|Pope|Abbot|King|Queen)?\s*of\s+([A-Za-z\s]+?)(?:,|$)/i);
+  if (ofMatch && ofMatch[1]) {
+    const location = ofMatch[1].trim().replace(/\s+/g, '_');
+    const baseSlug = cleanName.split(/[,–—-]/)[0].trim().replace(/\s+/g, '_');
+    if (baseSlug && location) {
+      directSlugs.push(`${baseSlug}_of_${location}`);
+      directSlugs.push(`Saint_${baseSlug}_of_${location}`);
+    }
   }
 
   directSlugs.push(cleanName.replace(/\s+/g, '_'));

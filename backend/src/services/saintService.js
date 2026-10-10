@@ -241,14 +241,34 @@ async function translateText(text, targetLang = 'ta') {
 }
 
 /**
- * Cleans a saint name for Wikipedia querying.
- * Strips ecclesiastical titles, qualifiers, prefixes, and suffixes.
+ * Checks if a title or text extract corresponds to a Wikipedia disambiguation page.
+ */
+function isDisambiguation(title, extract, pageprops) {
+  if (pageprops && pageprops.disambiguation !== undefined) return true;
+  if (/\(disambiguation\)/i.test(title || '')) return true;
+  if (!extract || typeof extract !== 'string') return false;
+  const lower = extract.toLowerCase();
+  return (
+    lower.includes('commonly refers to') ||
+    lower.includes('may refer to') ||
+    lower.includes('can refer to') ||
+    lower.includes('most commonly refers to') ||
+    lower.includes('may also refer to') ||
+    lower.includes('a masculine given name') ||
+    lower.includes('a feminine given name') ||
+    lower.includes('given name and a surname') ||
+    lower.includes('list of people named') ||
+    lower.includes('refer to any of the following')
+  );
+}
+
+/**
+ * Cleans a saint name for Wikipedia querying without stripping crucial historical or ecclesiastical qualifiers.
  */
 function cleanSaintNameForWiki(rawName) {
   if (!rawName) return '';
   const lowerRaw = rawName.toLowerCase();
   if (lowerRaw.includes('candida') && (lowerRaw.includes('portuense') || lowerRaw.includes('martyr') || lowerRaw.includes('rome'))) {
-    // Candida, Martyr on the Via Portuense does not have a standalone Wikipedia page.
     return '';
   }
   if (lowerRaw.includes('eustachius') && (lowerRaw.includes('paula') || lowerRaw.includes('virgin'))) {
@@ -264,9 +284,6 @@ function cleanSaintNameForWiki(rawName) {
     return 'Our Lady of the Rosary';
   }
   let name = rawName
-    // Strip everything after first comma or dash (e.g. ", priest...", ", Apostle...", " - Martyr")
-    .replace(/,.*$/, '')
-    .replace(/\s*[-–—]\s*.*$/, '')
     // Strip parenthetical text like (Patron Saint)
     .replace(/\s*\([^)]*\)/g, '')
     // Replace St. / Sts. / Saint / Saints / Blessed / Pope / s.
@@ -284,13 +301,139 @@ function cleanSaintNameForWiki(rawName) {
 }
 
 /**
- * Validates that the fetched Wikipedia article corresponds to the displayed saint
- * to avoid duplicate or mismatched saint biographies.
+ * Generates prioritized Wikipedia canonical slugs for any Catholic saint.
  */
-function validateWikiMatch(displayedSaintName, wikiTitle) {
+function getSaintBioSlugs(rawName) {
+  const slugs = [];
+  const lowerRaw = (rawName || '').toLowerCase();
+  const cleanName = cleanSaintNameForWiki(rawName);
+  const baseName = cleanName.split(/[,–—-]/)[0].trim();
+
+  if (lowerRaw.includes('mark') && (lowerRaw.includes('pope') || cleanName.toLowerCase().includes('pope'))) {
+    slugs.push('Pope_Mark');
+  } else if (lowerRaw.includes('sergius') && (lowerRaw.includes('bacchus') || lowerRaw.includes('bacco'))) {
+    slugs.push('Sergius_and_Bacchus', 'Saints_Sergius_and_Bacchus');
+  } else if (lowerRaw.includes('vincent de paul')) {
+    slugs.push('Vincent_de_Paul');
+  } else if (lowerRaw.includes('pius of pietrelcina') || lowerRaw.includes('padre pio')) {
+    slugs.push('Padre_Pio');
+  } else if (lowerRaw.includes('cosmas and damian') || (lowerRaw.includes('cosmas') && lowerRaw.includes('damian'))) {
+    slugs.push('Cosmas_and_Damian', 'Saints_Cosmas_and_Damian');
+  } else if (lowerRaw.includes('wenceslaus')) {
+    slugs.push('Wenceslaus_I,_Duke_of_Bohemia', 'Wenceslaus_I', 'Saint_Wenceslaus');
+  } else if (lowerRaw.includes('eustachius') || lowerRaw.includes('eustochium')) {
+    slugs.push('Eustochium', 'Saint_Eustochium');
+  } else if (baseName.toLowerCase() === 'matthew') {
+    slugs.push('Matthew_the_Apostle', 'Saint_Matthew');
+  } else if (lowerRaw.includes('therese') || lowerRaw.includes('thérèse')) {
+    slugs.push('Thérèse_of_Lisieux', 'Therese_of_Lisieux');
+  } else if (lowerRaw.includes('francis of assisi')) {
+    slugs.push('Francis_of_Assisi');
+  } else if (lowerRaw.includes('mercy') && (lowerRaw.includes('mary') || lowerRaw.includes('lady'))) {
+    slugs.push('Virgin_of_Mercy', 'Our_Lady_of_Mercy');
+  } else if (lowerRaw.includes('sorrow')) {
+    slugs.push('Our_Lady_of_Sorrows');
+  } else if (lowerRaw.includes('rosary')) {
+    slugs.push('Our_Lady_of_the_Rosary');
+  } else if (lowerRaw.includes('carmel')) {
+    slugs.push('Our_Lady_of_Mount_Carmel');
+  } else if (lowerRaw.includes('lourdes')) {
+    slugs.push('Our_Lady_of_Lourdes');
+  } else if (lowerRaw.includes('fatima')) {
+    slugs.push('Our_Lady_of_Fatima');
+  } else if (lowerRaw.includes('guadalupe')) {
+    slugs.push('Our_Lady_of_Guadalupe');
+  } else if (lowerRaw.includes('mother of god')) {
+    slugs.push('Mary,_Mother_of_God', 'Theotokos');
+  } else if (lowerRaw.includes('archangel') || (lowerRaw.includes('michael') && lowerRaw.includes('gabriel'))) {
+    slugs.push('Michael_(archangel)');
+  }
+
+  // Handle specific historical saints
+  if (lowerRaw.includes('daniel') && (lowerRaw.includes('samuel') || lowerRaw.includes('franciscan') || lowerRaw.includes('ceuta'))) {
+    slugs.push('Daniel_and_companions', 'Saints_Daniel_and_companions');
+  } else if (lowerRaw.includes('paulinus') && (lowerRaw.includes('york') || lowerRaw.includes('gregory'))) {
+    slugs.push('Paulinus_of_York', 'Saint_Paulinus_of_York');
+  }
+
+  // Handle "and companions"
+  if (lowerRaw.includes('companion') || lowerRaw.includes('martyr')) {
+    const firstPerson = cleanName.split(/,|\band\b/i)[0].trim();
+    if (firstPerson) {
+      slugs.push(
+        `${firstPerson}_and_companions`,
+        `Saints_${firstPerson}_and_companions`,
+        `Saint_${firstPerson}_and_companions`
+      );
+    }
+  }
+
+  // Handle "Bishop of X", "Archbishop of X", "Duke of X", "of X"
+  const ofMatch = rawName.match(/(?:Bishop|Archbishop|Duke|Pope|Abbot|King|Queen)?\s*of\s+([A-Za-z\s]+?)(?:,|$)/i);
+  if (ofMatch && ofMatch[1] && baseName) {
+    const location = ofMatch[1].trim().replace(/\s+/g, '_');
+    const cleanBase = baseName.replace(/\s+/g, '_');
+    slugs.push(`${cleanBase}_of_${location}`);
+    slugs.push(`Saint_${cleanBase}_of_${location}`);
+  }
+
+  if (baseName) {
+    const cleanBase = baseName.replace(/\s+/g, '_');
+    slugs.push(
+      cleanBase,
+      `Saint_${cleanBase}`,
+      `Pope_${cleanBase}`
+    );
+  }
+
+  const parts = cleanName.split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length > 1) {
+    slugs.push(parts.slice(0, 2).join('_').replace(/\s+/g, '_'));
+  }
+
+  return [...new Set(slugs.filter(Boolean))];
+}
+
+/**
+ * Generates targeted Wikipedia full-text search queries.
+ */
+function getSaintSearchQueries(rawName) {
+  const clean = cleanSaintNameForWiki(rawName);
+  const lower = clean.toLowerCase();
+  const queries = [];
+  const baseName = clean.split(/[,–—-]/)[0].trim();
+
+  if (lower.includes('companion') || lower.includes('martyr')) {
+    const firstPerson = clean.split(/,|\band\b/i)[0].trim();
+    queries.push(`"${firstPerson}" and companions`);
+    queries.push(`${firstPerson} companions martyrs`);
+  }
+
+  const ofMatch = rawName.match(/(?:Bishop|Archbishop|Duke|Pope|Abbot|King|Queen)?\s*of\s+([A-Za-z\s]+?)(?:,|$)/i);
+  if (ofMatch && ofMatch[1]) {
+    queries.push(`"${baseName} of ${ofMatch[1].trim()}"`);
+    queries.push(`${baseName} ${ofMatch[0].trim().replace(/,$/, '')}`);
+  }
+
+  queries.push(`"Saint ${baseName}"`);
+  queries.push(`Saint ${baseName}`);
+  queries.push(baseName);
+  return [...new Set(queries.filter(Boolean))];
+}
+
+/**
+ * Validates that the fetched Wikipedia article corresponds to the displayed saint
+ * and is NOT an unwanted disambiguation or unrelated page.
+ */
+function validateWikiMatch(displayedSaintName, wikiTitle, extract = '') {
   if (!displayedSaintName || !wikiTitle) return false;
+  if (isDisambiguation(wikiTitle, extract)) return false;
+
   const cleanDisplay = cleanSaintNameForWiki(displayedSaintName).toLowerCase();
   const cleanWiki = cleanSaintNameForWiki(wikiTitle).toLowerCase();
+  const lowerExtract = (extract || '').toLowerCase();
+
+  if (cleanWiki.includes('disambiguation') || cleanWiki.includes('list of')) return false;
 
   if (cleanDisplay.includes('candida') && (cleanWiki.includes('elder') || cleanWiki.includes('vecchia') || cleanWiki.includes('carthage') || cleanWiki.includes('film'))) {
     return false;
@@ -309,17 +452,26 @@ function validateWikiMatch(displayedSaintName, wikiTitle) {
   if (cleanDisplay.includes('francis') && cleanWiki.includes('francis')) return true;
   if (cleanDisplay.includes('wenceslaus') && cleanWiki.includes('wenceslaus')) return true;
   if ((cleanDisplay.includes('eustachius') || cleanDisplay.includes('eustochium')) && (cleanWiki.includes('eustochium') || cleanWiki.includes('eustachius'))) return true;
+  if (cleanDisplay.includes('paulinus') && cleanWiki.includes('paulinus')) return true;
+  if (cleanDisplay.includes('daniel') && cleanWiki.includes('daniel')) return true;
 
-  const displayTokens = cleanDisplay.split(/\s+/).filter(w => w.length > 3 && !['saint', 'blessed', 'pope', 'martyr'].includes(w));
-  const wikiTokens = cleanWiki.split(/\s+/).filter(w => w.length > 3 && !['saint', 'blessed', 'pope', 'martyr'].includes(w));
+  const displayTokens = cleanDisplay.split(/\s+/).filter(w => w.length > 3 && !['saint', 'blessed', 'pope', 'martyr', 'martyrs', 'first', 'great', 'disciple', 'companions'].includes(w));
+  const wikiTokens = cleanWiki.split(/\s+/).filter(w => w.length > 3 && !['saint', 'blessed', 'pope', 'martyr', 'martyrs', 'first', 'great', 'disciple', 'companions'].includes(w));
+
+  const primaryToken = displayTokens[0];
+  if (primaryToken && !cleanWiki.includes(primaryToken) && !lowerExtract.slice(0, 200).includes(primaryToken)) {
+    return false;
+  }
+
   return displayTokens.some(t => wikiTokens.includes(t));
 }
 
 /**
- * Checks if a biography has sufficient detail (at least 3-4 readable lines, ~180+ chars, 2+ sentences).
+ * Checks if a biography has sufficient detail and is free of disambiguation text.
  */
 function isSufficientBio(text) {
   if (!text || typeof text !== 'string') return false;
+  if (isDisambiguation('', text)) return false;
   const trimmed = text.trim();
   if (trimmed.length < 180) return false;
   const sentences = splitIntoSentences(trimmed);
@@ -357,80 +509,97 @@ function generateComprehensiveCatholicBio(saintName, dateKey = '') {
 }
 
 /**
+ * Helper to fetch a direct Wikipedia article and extract its cleaned body text.
+ */
+async function fetchDirectWikiExtract(title, saintName, userAgent) {
+  try {
+    const url = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts|pageprops&explaintext=true&titles=${encodeURIComponent(title)}&format=json`;
+    const res = await axios.get(url, { headers: { 'User-Agent': userAgent }, timeout: 7000 });
+    const pages = res.data?.query?.pages || {};
+    const page = Object.values(pages)[0];
+    if (!page || page.pageid === -1 || !page.extract) return null;
+
+    if (page.pageprops && page.pageprops.disambiguation !== undefined) return null;
+    if (isDisambiguation(page.title, page.extract)) return null;
+    if (!validateWikiMatch(saintName, page.title, page.extract)) return null;
+
+    let cleanText = page.extract
+      .replace(/==\s*(References|External links|See also|Bibliography|Notes|Sources|Further reading)\s*==[\s\S]*$/i, '')
+      .replace(/==+\s*([^=]+)\s*==+/g, '\n\n$1:\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+
+    if (cleanText.length >= 200 && !isDisambiguation(page.title, cleanText)) {
+      return {
+        title: page.title,
+        text: cleanText,
+        url: `https://en.wikipedia.org/wiki/${encodeURIComponent(page.title.replace(/\s+/g, '_'))}`
+      };
+    }
+  } catch (e) {}
+  return null;
+}
+
+/**
  * Dynamically fetches a comprehensive multi-paragraph biography for any Saint from Wikipedia.
- * Uses MediaWiki extract API with intro paragraphs, falling back to search if needed.
+ * Uses MediaWiki extract API, resolving disambiguation entries and searching when required.
  */
 async function fetchWikipediaBio(saintName) {
   if (!saintName) return null;
   const cleanName = cleanSaintNameForWiki(saintName);
   if (!cleanName || cleanName.length < 2) return null;
 
-  const slugs = [
-    cleanName.replace(/\s+/g, '_'),
-    `Saint_${cleanName.replace(/\s+/g, '_')}`,
-    `Pope_${cleanName.replace(/\s+/g, '_')}`
-  ];
-
-  const lower = cleanName.toLowerCase();
-  const rawLower = (saintName || '').toLowerCase();
-  if (lower.includes('mark') && (lower.includes('pope') || rawLower.includes('pope'))) {
-    slugs.unshift('Pope_Mark');
-  } else if (lower.includes('sergius') && (lower.includes('bacchus') || rawLower.includes('bacchus') || lower.includes('bacco') || rawLower.includes('bacco'))) {
-    slugs.unshift('Sergius_and_Bacchus', 'Saints_Sergius_and_Bacchus');
-  } else if (lower.includes('vincent de paul')) {
-    slugs.unshift('Vincent_de_Paul');
-  } else if (lower.includes('pius of pietrelcina') || lower.includes('padre pio')) {
-    slugs.unshift('Padre_Pio');
-  } else if (lower.includes('cosmas and damian')) {
-    slugs.unshift('Cosmas_and_Damian', 'Saints_Cosmas_and_Damian');
-  } else if (lower.includes('wenceslaus') || rawLower.includes('wenceslaus')) {
-    slugs.unshift('Wenceslaus_I,_Duke_of_Bohemia', 'Wenceslaus_I', 'Saint_Wenceslaus');
-  } else if (lower.includes('eustachius') || lower.includes('eustochium') || rawLower.includes('eustachius')) {
-    slugs.unshift('Eustochium', 'Saint_Eustochium');
-  } else if (lower === 'matthew') {
-    slugs.unshift('Matthew_the_Apostle', 'Saint_Matthew');
-  } else if (lower.includes('therese')) {
-    slugs.unshift('Thérèse_of_Lisieux', 'Therese_of_Lisieux');
-  } else if (lower.includes('francis of assisi')) {
-    slugs.unshift('Francis_of_Assisi');
-  } else if (lower.includes('mercy') && (lower.includes('mary') || lower.includes('lady'))) {
-    slugs.unshift('Virgin_of_Mercy', 'Our_Lady_of_Mercy');
-  } else if (lower.includes('sorrow')) {
-    slugs.unshift('Our_Lady_of_Sorrows');
-  } else if (lower.includes('rosary')) {
-    slugs.unshift('Our_Lady_of_the_Rosary');
-  } else if (lower.includes('carmel')) {
-    slugs.unshift('Our_Lady_of_Mount_Carmel');
-  } else if (lower.includes('lourdes')) {
-    slugs.unshift('Our_Lady_of_Lourdes');
-  } else if (lower.includes('fatima')) {
-    slugs.unshift('Our_Lady_of_Fatima');
-  } else if (lower.includes('guadalupe')) {
-    slugs.unshift('Our_Lady_of_Guadalupe');
-  } else if (lower.includes('mother of god')) {
-    slugs.unshift('Mary,_Mother_of_God', 'Theotokos');
-  } else if (lower.includes('archangel') || (lower.includes('michael') && lower.includes('gabriel'))) {
-    slugs.unshift('Michael_(archangel)');
-  }
+  const slugs = getSaintBioSlugs(saintName);
+  const wikiUserAgent = `SJDBChurchApp/1.0 (Catholic Parish Management; contact: ${getChurchEmail() || 'office@example.com'})`;
 
   // 1. Direct candidate slugs via MediaWiki extracts API
   for (const slug of slugs) {
     try {
-      const wikiUserAgent = `SJDBChurchApp/1.0 (Catholic Parish Management; contact: ${getChurchEmail() || 'office@example.com'})`;
-      const url = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=true&explaintext=true&titles=${encodeURIComponent(slug)}&format=json`;
+      const url = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts|pageprops&explaintext=true&titles=${encodeURIComponent(slug)}&format=json`;
       const res = await axios.get(url, {
         headers: { 'User-Agent': wikiUserAgent },
-        timeout: 6000
+        timeout: 7000
       });
       const pages = res.data?.query?.pages || {};
       for (const pageId in pages) {
-        if (pageId !== '-1' && pages[pageId].extract && pages[pageId].extract.length >= 250) {
-          const text = pages[pageId].extract.trim().replace(/\n+/g, '\n\n');
-          if (validateWikiMatch(saintName, pages[pageId].title)) {
+        if (pageId === '-1') continue;
+        const p = pages[pageId];
+        if (!p.extract) continue;
+
+        const isDisambig = (p.pageprops && p.pageprops.disambiguation !== undefined) || isDisambiguation(p.title, p.extract);
+        if (isDisambig) {
+          console.log(`[Saint Service] Wikipedia slug "${slug}" -> "${p.title}" is disambiguation. Parsing entries for "${saintName}"...`);
+          const lines = p.extract.split('\n');
+          const cleanSaint = cleanSaintNameForWiki(saintName).toLowerCase();
+          const saintTokens = cleanSaint.split(/[\s,]+/).filter(t => t.length > 3 && !['saint', 'first', 'great', 'disciple', 'martyrs', 'companions'].includes(t));
+
+          for (const line of lines) {
+            const lowerLine = line.toLowerCase();
+            const matchCount = saintTokens.filter(t => lowerLine.includes(t)).length;
+            if (matchCount >= 2 || (saintTokens.length === 1 && matchCount === 1)) {
+              const candidateTitle = line.split(/[,–—(]|,\s*first|\s+was\s+|\s+is\s+/)[0].trim().replace(/^[\*\-\•\s]+/, '');
+              if (candidateTitle && candidateTitle.length > 3 && !candidateTitle.toLowerCase().includes('disambiguation')) {
+                console.log(`[Saint Service] Disambiguation resolved sub-candidate: "${candidateTitle}"`);
+                const subBio = await fetchDirectWikiExtract(candidateTitle, saintName, wikiUserAgent);
+                if (subBio) return subBio;
+              }
+            }
+          }
+          continue;
+        }
+
+        if (validateWikiMatch(saintName, p.title, p.extract)) {
+          let cleanText = p.extract
+            .replace(/==\s*(References|External links|See also|Bibliography|Notes|Sources|Further reading)\s*==[\s\S]*$/i, '')
+            .replace(/==+\s*([^=]+)\s*==+/g, '\n\n$1:\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+
+          if (cleanText.length >= 200 && !isDisambiguation(p.title, cleanText)) {
             return {
-              title: pages[pageId].title,
-              text,
-              url: `https://en.wikipedia.org/wiki/${encodeURIComponent(pages[pageId].title.replace(/\s+/g, '_'))}`
+              title: p.title,
+              text: cleanText,
+              url: `https://en.wikipedia.org/wiki/${encodeURIComponent(p.title.replace(/\s+/g, '_'))}`
             };
           }
         }
@@ -439,36 +608,22 @@ async function fetchWikipediaBio(saintName) {
   }
 
   // 2. Search fallback via Wikipedia search API
-  try {
-    const wikiUserAgent = `SJDBChurchApp/1.0 (Catholic Parish Management; contact: ${getChurchEmail() || 'office@example.com'})`;
-    const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent('Saint ' + cleanName)}&format=json&origin=*`;
-    const searchRes = await axios.get(searchUrl, {
-      headers: { 'User-Agent': wikiUserAgent },
-      timeout: 6000
-    });
-    const hits = searchRes.data?.query?.search || [];
-    for (const h of hits.slice(0, 4)) {
-      if (/disambiguation|list of|church|basilica|cathedral|parish|shrine|order of|congregation of/i.test(h.title)) continue;
-      const extractUrl = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=true&explaintext=true&titles=${encodeURIComponent(h.title)}&format=json`;
-      const exRes = await axios.get(extractUrl, {
+  const searchQueries = getSaintSearchQueries(saintName);
+  for (const q of searchQueries) {
+    try {
+      const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&format=json&origin=*`;
+      const searchRes = await axios.get(searchUrl, {
         headers: { 'User-Agent': wikiUserAgent },
-        timeout: 6000
+        timeout: 7000
       });
-      const pages = exRes.data?.query?.pages || {};
-      for (const pageId in pages) {
-        if (pageId !== '-1' && pages[pageId].extract && pages[pageId].extract.length >= 250) {
-          const text = pages[pageId].extract.trim().replace(/\n+/g, '\n\n');
-          if (validateWikiMatch(saintName, pages[pageId].title)) {
-            return {
-              title: pages[pageId].title,
-              text,
-              url: `https://en.wikipedia.org/wiki/${encodeURIComponent(pages[pageId].title.replace(/\s+/g, '_'))}`
-            };
-          }
-        }
+      const hits = searchRes.data?.query?.search || [];
+      for (const h of hits.slice(0, 4)) {
+        if (/disambiguation|list of|church|basilica|cathedral|parish|shrine|order of|congregation of/i.test(h.title)) continue;
+        const subBio = await fetchDirectWikiExtract(h.title, saintName, wikiUserAgent);
+        if (subBio) return subBio;
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+  }
 
   return null;
 }
@@ -1349,8 +1504,11 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
         const hasShortBio = !parsed.description || parsed.description.length < 250;
         const hasMissingSecondaryImages = parsed.saints && parsed.saints.length > 1 && parsed.saints.some(s => !s.image && !s.imageUrl);
         const hasMissingSecondaryBio = parsed.saints && parsed.saints.length > 1 && parsed.saints.some(s => !s.description || s.description.length < 200);
+        const hasDisambigBio = isDisambiguation('', parsed.description) ||
+          isDisambiguation('', parsed.primarySaint?.description) ||
+          (parsed.saints && parsed.saints.some(s => isDisambiguation('', s.description)));
 
-        if (!isStaleMissingStructure && !isStaleRosaryOnOct07 && !isStaleNilusOnSep26 && !isStaleGuardianAngelsOnOtherDate && !hasShortBio && !hasMissingSecondaryImages && !hasMissingSecondaryBio && parsed && parsed.date === dateKey && (parsed.saintName || parsed.name) && parsed.image && !parsed.imageFallback) {
+        if (!isStaleMissingStructure && !isStaleRosaryOnOct07 && !isStaleNilusOnSep26 && !isStaleGuardianAngelsOnOtherDate && !hasShortBio && !hasMissingSecondaryImages && !hasMissingSecondaryBio && !hasDisambigBio && parsed && parsed.date === dateKey && (parsed.saintName || parsed.name) && parsed.image && !parsed.imageFallback) {
           if (isCurrentToday) {
             dailySaint = parsed;
           }
@@ -1810,9 +1968,12 @@ async function loadCachedSaint() {
         );
 
         const hasShortBio = !parsed.description || parsed.description.length < 250;
+        const hasDisambigBio = isDisambiguation('', parsed.description) ||
+          isDisambiguation('', parsed.primarySaint?.description) ||
+          (parsed.saints && parsed.saints.some(s => isDisambiguation('', s.description)));
 
         // Valid cache: matches today's date AND has valid structure AND has valid image AND is not generic/boilerplate
-        if (parsed && parsed.date === todayStr && !isStaleMissingStructure && !isStaleRosaryOnOct07 && (parsed.saintName || parsed.name) && parsed.image && !isBrokenVirginMary && !isGarbageImage && !isStaleCatholicReadings && !isGenericName && !isBoilerplateBio && !hasShortBio) {
+        if (parsed && parsed.date === todayStr && !isStaleMissingStructure && !isStaleRosaryOnOct07 && (parsed.saintName || parsed.name) && parsed.image && !isBrokenVirginMary && !isGarbageImage && !isStaleCatholicReadings && !isGenericName && !isBoilerplateBio && !hasShortBio && !hasDisambigBio) {
           if (!parsed.imageAttachment && parsed.localPath) {
             try {
               const fs = require('fs');
