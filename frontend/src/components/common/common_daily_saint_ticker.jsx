@@ -366,28 +366,37 @@ export default function DailySaintTicker() {
                         : null;
 
                       return (
-                        <div className="flex flex-col md:flex-row flex-1 h-full md:h-full overflow-hidden">
-                          {/* SAINT IMAGE BANNER (LEFT SIDE) */}
-                          <div className="w-full md:w-5/12 relative min-h-[260px] sm:min-h-[280px] md:min-h-full md:h-full flex-shrink-0 bg-slate-950 overflow-hidden flex items-center justify-center">
+                        <div className="flex flex-col md:flex-row flex-1 h-full overflow-y-auto md:overflow-hidden custom-scrollbar">
+                          {/* SAINT IMAGE BANNER (LEFT SIDE on desktop, TOP on mobile) */}
+                          <div className="w-full md:w-5/12 relative h-[350px] sm:h-[420px] md:h-full md:min-h-full flex-shrink-0 bg-slate-950 overflow-hidden flex items-center justify-center">
                             {mImage ? (
-                              <img
-                                src={mImage}
-                                alt={mDisplayName}
-                                referrerPolicy="no-referrer"
-                                onError={handleImageError}
-                                className="w-full h-full object-contain object-center transition-transform duration-700 hover:scale-105"
-                              />
+                              <>
+                                {/* Ambient blurred backdrop so portrait images look rich, expansive, and never have dead black borders */}
+                                <img
+                                  src={mImage}
+                                  alt=""
+                                  aria-hidden="true"
+                                  className="absolute inset-0 w-full h-full object-cover blur-xl scale-125 opacity-40 select-none pointer-events-none"
+                                />
+                                <img
+                                  src={mImage}
+                                  alt={mDisplayName}
+                                  referrerPolicy="no-referrer"
+                                  onError={handleImageError}
+                                  className="relative z-10 w-full h-full object-cover object-top md:object-cover md:object-center transition-transform duration-700 hover:scale-105"
+                                />
+                              </>
                             ) : (
                               <div className="flex items-center justify-center bg-gradient-to-br from-church-royal-blue to-indigo-950 text-church-gold text-6xl w-full h-full">
                                 ✝
                               </div>
                             )}
 
-                            {/* Dark Gradient Overlay for Title Legibility */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 via-40% to-transparent pointer-events-none" />
+                            {/* Dark Gradient Overlay for Title Legibility on Desktop */}
+                            <div className="hidden md:block absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 via-40% to-transparent pointer-events-none z-10" />
 
-                            {/* Name & Title on Image */}
-                            <div className="absolute bottom-3 left-4 right-4 sm:bottom-5 sm:left-6 sm:right-6 text-white select-none">
+                            {/* Name & Title on Image (Desktop only - prevents covering saint face and clipping on mobile) */}
+                            <div className="hidden md:block absolute bottom-5 left-6 right-6 text-white select-none z-20">
                               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                                 <span className="inline-block bg-church-gold/95 text-amber-950 text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md shadow-xs">
                                   {isViewingPrimary 
@@ -410,15 +419,37 @@ export default function DailySaintTicker() {
                                 ) : null}
                               </div>
 
-                              <h2 className="text-lg sm:text-xl md:text-2xl font-bold font-display leading-tight drop-shadow-md text-white">
+                              <h2 className="text-xl md:text-2xl font-bold font-display leading-tight drop-shadow-md text-white">
                                 {mDisplayName}
                               </h2>
                             </div>
                           </div>
 
-                          {/* CONTENT DETAILS (RIGHT SIDE) — Overall scrolling, Vatican News button at bottom */}
-                          <div className="flex-1 min-w-0 p-5 sm:p-7 md:p-8 overflow-y-auto flex flex-col justify-between notranslate custom-scrollbar" translate="no">
+                          {/* CONTENT DETAILS (RIGHT SIDE on desktop, FLOWING on mobile) */}
+                          <div className="flex-1 min-w-0 p-5 sm:p-7 md:p-8 md:overflow-y-auto flex flex-col justify-between notranslate custom-scrollbar" translate="no">
                             <div className="space-y-4">
+                              {/* MOBILE-ONLY HEADER: Clean badges and full Saint Name so nothing hides or truncates */}
+                              <div className="block md:hidden pb-3 border-b border-gray-100">
+                                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                  <span className="inline-block bg-church-gold/95 text-amber-950 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md shadow-xs">
+                                    {isViewingPrimary 
+                                      ? (isTamil ? 'இன்றைய புனிதர்' : 'Saint of the Day')
+                                      : (isTamil ? 'பிற புனிதர்' : 'Other Saint')}
+                                  </span>
+                                  {celebrationType && (
+                                    <span className="inline-block bg-amber-500 text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md shadow-xs">
+                                      {celebrationType}
+                                    </span>
+                                  )}
+                                  <span className="inline-block bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-md border border-slate-200">
+                                    {mImage && (mImage.includes('vaticannews.va') || activeModalSaint.imageSource === 'vatican') ? 'Vatican News' : 'Wikipedia'}
+                                  </span>
+                                </div>
+                                <h2 className="text-xl sm:text-2xl font-bold font-display leading-snug text-gray-900 break-words">
+                                  {mDisplayName}
+                                </h2>
+                              </div>
+
                               {/* If viewing an other saint, show back button to primary celebration */}
                               {!isViewingPrimary && (
                                 <button
@@ -490,7 +521,9 @@ export default function DailySaintTicker() {
                                 </p>
                                 <div className="space-y-3 text-gray-800 leading-relaxed text-left">
                                   {(() => {
-                                    const paras = cleanBioParagraphs(mDescription);
+                                    const allParas = cleanBioParagraphs(mDescription);
+                                    // Show only first 2 clean paragraphs in the About section
+                                    const paras = allParas.slice(0, 2);
                                     if (paras.length === 0) {
                                       return (
                                         <p className="leading-relaxed text-left text-gray-500 italic">
@@ -578,7 +611,9 @@ export default function DailySaintTicker() {
                                   >
                                     <FiExternalLink className="text-base" />
                                     <span>
-                                      {isTamil ? (isContentFromWiki ? 'Wikipedia-ல் வாசிக்க' : 'Vatican News') : siteName}
+                                      {isTamil 
+                                        ? (isContentFromWiki ? 'முழு வரலாற்றையும் Wikipedia-வில் வாசிக்க' : 'முழு வரலாற்றையும் Vatican News-ல் வாசிக்க') 
+                                        : `Read full story on ${siteName}`}
                                     </span>
                                   </a>
                                 );

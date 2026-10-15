@@ -38,8 +38,16 @@ const getSettings = async (req, res) => {
       merchantName: process.env.MERCHANT_NAME || "St. John de Britto Church"
     };
     settings.forEach(s => { map[s.key] = s.value; });
-    if (map.whatsapp_channel_url && !map.whatsappChannelUrl) map.whatsappChannelUrl = map.whatsapp_channel_url;
-    if (map.whatsapp_channel_jid && !map.whatsappChannelJid) map.whatsappChannelJid = map.whatsapp_channel_jid;
+    if (map.whatsapp_channel_url) map.whatsappChannelUrl = map.whatsapp_channel_url;
+    if (map.whatsapp_channel_jid) map.whatsappChannelJid = map.whatsapp_channel_jid;
+    if (map.whatsappChannelUrl && map.whatsappChannelUrl.includes('0029Vbf3th71iUxSmSsBYg3D')) {
+      map.whatsappChannelUrl = 'https://whatsapp.com/channel/0029VbE3th71iUxSmSsBYg3D';
+      map.whatsapp_channel_url = 'https://whatsapp.com/channel/0029VbE3th71iUxSmSsBYg3D';
+    }
+    if (!map.whatsappChannelUrl) {
+      map.whatsappChannelUrl = 'https://whatsapp.com/channel/0029VbE3th71iUxSmSsBYg3D';
+      map.whatsapp_channel_url = 'https://whatsapp.com/channel/0029VbE3th71iUxSmSsBYg3D';
+    }
     if (map.contact_email && !map.churchEmail) map.churchEmail = map.contact_email;
     if (map.contact_phone && !map.churchPhone) map.churchPhone = map.contact_phone;
     cachedMap = map;

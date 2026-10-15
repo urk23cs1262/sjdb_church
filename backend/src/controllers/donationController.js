@@ -6,6 +6,7 @@ const Donation = require('../models/Donation');
 const User = require('../models/User');
 const { createAdminNotification, createUserNotification } = require('../services/requestNotificationService');
 const { generateDonationReceipt } = require('../services/pdfService');
+const { sendDonationNotifications } = require('../services/donationNotificationService');
 const { sendMail } = require('../config/mailer');
 const { getParishOfficePhone, getChurchEmail, getAdminEmail } = require('../config/contactConfig');
 
@@ -45,356 +46,9 @@ function safeEqualHex(expected, received) {
 }
 
 
-// ─── HELPER: SEND IDENTICAL RECEIPT EMAIL TO DONOR & ADMIN ───────────────────
-const sendDonationReceiptEmails = async (donation, { force = false } = {}) => {
-  try {
-    if (!donation) return;
-    if (donation.receiptSent && !force) {
-      console.log(`Receipt email already sent for donation ${donation._id}. Skipping duplicate.`);
-      return;
-    }
-
-    // 1. Generate / Ensure PDF exists
-    const receiptPath = await generateDonationReceipt(donation, donation.userId);
-    const receiptId = donation._id.toString().slice(-6).toUpperCase();
-    const receiptNumber = `SJBC-${new Date(donation.paidAt || donation.createdAt || Date.now()).getFullYear()}-${receiptId}`;
-    const filename = `Donation_Receipt_${receiptId}.pdf`;
-    const fullPath = path.join(__dirname, '..', '..', receiptPath);
-
-    const attachments = [];
-    if (fs.existsSync(fullPath)) {
-      attachments.push({
-        filename,
-        path: fullPath,
-        contentType: 'application/pdf',
-      });
-    }
-
-    const donorName = donation.donorName || 'Beloved Devotee';
-    const amountFormatted = `INR ${(donation.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-    const categoryLabel = DONATION_TYPES.find(t => t.id === donation.type)?.label || donation.type || 'General Offering';
-    const paymentRef = donation.razorpayPaymentId || donation.transactionId || 'N/A';
-    const paymentMethod = donation.razorpayPaymentId ? 'Razorpay (Online / UPI)' : (donation.paymentMethod?.toUpperCase() || 'UPI');
-    const paymentDateStr = new Date(donation.paidAt || donation.createdAt || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
-
-    const emailTemplate = `
-<div style="margin:0;padding:20px 10px;background-color:#f3f4f6;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;">
-  <!-- CONTAINER -->
-  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:600px;margin:0 auto;background-color:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
-    
-    <!-- TOP META BAR -->
-    <tr>
-      <td style="padding:16px 20px 10px;border-bottom:1px solid #f0f0f0;">
-        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
-          <tr>
-            <td align="left" style="font-size:11px;color:#555555;font-weight:normal;">
-              ${paymentDateStr}
-            </td>
-            <td align="right" style="font-size:11px;color:#1e3a8a;font-weight:bold;">
-              ${receiptNumber}
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-
-    <!-- CHURCH HEADER & TITLE -->
-    <tr>
-      <td style="padding:18px 20px 14px;border-bottom:2px solid #e5e5e5;">
-        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
-          <tr>
-            <td align="left" style="vertical-align:middle;">
-              <h1 style="margin:0;font-size:18px;line-height:22px;color:#1e3a8a;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">
-                ST. JOHN DE Britto CHURCH
-              </h1>
-              <p style="margin:3px 0 0;font-size:13px;color:#b8860b;font-weight:normal;">
-                புனித அருளானந்தர் தேவாலயம்
-              </p>
-              <p style="margin:2px 0 0;font-size:10px;color:#666666;line-height:14px;">
-                Murthi Nagar, Kalayarkoil, Tamil Nadu 630551, India.
-              </p>
-            </td>
-            <td align="right" style="vertical-align:middle;padding-left:10px;white-space:nowrap;">
-              <span style="font-size:20px;font-weight:bold;color:#111111;">Receipt</span>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-
-    <!-- TWO-COLUMN / STACKED DETAILS GRID -->
-    <tr>
-      <td style="padding:16px 20px;">
-        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="table-layout:fixed;">
-          <tr>
-            <td style="padding:5px 0;width:38%;font-size:12px;font-weight:bold;color:#444444;vertical-align:top;">Receipt No :</td>
-            <td style="padding:5px 0;width:62%;font-size:12px;font-weight:bold;color:#111111;text-align:right;word-break:break-all;">${receiptNumber}</td>
-          </tr>
-          <tr>
-            <td style="padding:5px 0;font-size:12px;font-weight:bold;color:#444444;vertical-align:top;">Name :</td>
-            <td style="padding:5px 0;font-size:12px;font-weight:bold;color:#111111;text-align:right;word-break:break-word;">${donorName}</td>
-          </tr>
-          <tr>
-            <td style="padding:5px 0;font-size:12px;font-weight:bold;color:#444444;vertical-align:top;">Donation Type :</td>
-            <td style="padding:5px 0;font-size:12px;color:#111111;text-align:right;">${categoryLabel}</td>
-          </tr>
-          <tr>
-            <td style="padding:5px 0;font-size:12px;font-weight:bold;color:#444444;vertical-align:top;">Purpose :</td>
-            <td style="padding:5px 0;font-size:12px;color:#111111;text-align:right;">${categoryLabel}</td>
-          </tr>
-          <tr>
-            <td style="padding:5px 0;font-size:12px;font-weight:bold;color:#444444;vertical-align:top;">Receipt Date :</td>
-            <td style="padding:5px 0;font-size:12px;color:#111111;text-align:right;">${paymentDateStr}</td>
-          </tr>
-          <tr>
-            <td style="padding:5px 0;font-size:12px;font-weight:bold;color:#444444;vertical-align:top;">Total Paid :</td>
-            <td style="padding:5px 0;font-size:13px;font-weight:bold;color:#b8860b;text-align:right;">${amountFormatted}</td>
-          </tr>
-          <tr>
-            <td style="padding:5px 0;font-size:12px;font-weight:bold;color:#444444;vertical-align:top;">Payment Method :</td>
-            <td style="padding:5px 0;font-size:12px;color:#111111;text-align:right;">${paymentMethod}</td>
-          </tr>
-          <tr>
-            <td style="padding:5px 0;font-size:12px;font-weight:bold;color:#444444;vertical-align:top;">Payment ID :</td>
-            <td style="padding:5px 0;font-size:11px;font-family:monospace,Courier,sans-serif;color:#333333;text-align:right;word-break:break-all;">${paymentRef}</td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-
-    <!-- TABLE: DESCRIPTION & AMOUNT -->
-    <tr>
-      <td style="padding:0 20px 16px;">
-        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="border-collapse:collapse;border:1px solid #e5e7eb;border-radius:6px;overflow:hidden;">
-          <thead>
-            <tr style="background-color:#f3f4f6;">
-              <th align="left" style="padding:10px 12px;font-size:12px;color:#111111;font-weight:bold;border-bottom:1px solid #e5e7eb;">Donation Description</th>
-              <th align="right" style="padding:10px 12px;font-size:12px;color:#111111;font-weight:bold;border-bottom:1px solid #e5e7eb;">Amount Paid</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td align="left" style="padding:12px;font-size:12px;color:#333333;">${categoryLabel}</td>
-              <td align="right" style="padding:12px;font-size:12px;font-weight:bold;color:#1e3a8a;">${amountFormatted}</td>
-            </tr>
-          </tbody>
-        </table>
-      </td>
-    </tr>
-
-    <!-- MESSAGE / INTENTION BOX -->
-    <tr>
-      <td style="padding:0 20px 16px;">
-        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#fafafa;border:1px solid #e5e7eb;border-radius:8px;">
-          <tr>
-            <td align="center" style="padding:12px 14px;">
-              <p style="margin:0 0 4px;font-size:11px;font-weight:bold;color:#555555;text-transform:uppercase;">Message / Intention :</p>
-              <p style="margin:0;font-size:12px;font-style:italic;color:#222222;line-height:16px;">
-                "${donation.note || donation.message || 'Prayers for parish and family blessings'}"
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-
-    <!-- THANK YOU & BLESSING -->
-    <tr>
-      <td align="center" style="padding:12px 20px;text-align:center;line-height:20px;font-size:12px;color:#333333;">
-        <p style="margin:0;">Thank you for your generous contribution</p>
-        <p style="margin:0;">towards the ministry and mission of</p>
-        <p style="margin:0;font-weight:bold;color:#1e3a8a;">St. John de Britto Church.</p>
-        <p style="margin:8px 0 0;color:#b8860b;font-weight:bold;">May God bless you abundantly.</p>
-      </td>
-    </tr>
-
-    <!-- CONTACT DETAILS -->
-    <tr>
-      <td align="center" style="padding:10px 20px 14px;text-align:center;font-size:11px;color:#666666;line-height:18px;">
-        <p style="margin:0;font-weight:bold;color:#444444;">Contact Details :</p>
-        <p style="margin:0;">Parish Office Phone : ${getParishOfficePhone() || 'Contact Church Office'}</p>
-        <p style="margin:0;">Parish Office Email : ${getChurchEmail() || 'Contact Church Office'}</p>
-        <p style="margin:0;">Parish Office Website : www.stjohnchurch.com</p>
-      </td>
-    </tr>
-
-    <!-- FOOTER STATEMENT -->
-    <tr>
-      <td align="center" style="padding:14px 20px 18px;background-color:#fafafa;border-top:1px solid #e5e7eb;text-align:center;font-size:12px;font-weight:bold;color:#000000;">
-        Computer Generated Receipt. <span style="color:#dc2626;">SIGNATURE NOT REQUIRED</span>
-        <p style="margin:6px 0 0;font-size:10px;color:#6b7280;font-weight:normal;">
-          (Official PDF copy is also attached to this email)
-        </p>
-      </td>
-    </tr>
-  </table>
-</div>
-    `;
-
-    // 2. Send email to Donor and all Church Admins with official receipt PDF attached.
-    const donorEmail = donation.email || (donation.userId && typeof donation.userId === 'object' ? donation.userId.email : null);
-    const emailJobs = [];
-
-    if (donorEmail) {
-      emailJobs.push(
-        sendMail({
-          to: donorEmail,
-          subject: `Donation Receipt ${receiptNumber} — St. John de Britto Church`,
-          html: emailTemplate,
-          attachments,
-        })
-      );
-    }
-
-    try {
-      const { getAllAdminEmailRecipients } = require('../services/requestNotificationService');
-      const adminRecipients = await getAllAdminEmailRecipients();
-      for (const adm of adminRecipients) {
-        if (adm.email && adm.email.toLowerCase() !== donorEmail?.toLowerCase()) {
-          emailJobs.push(
-            sendMail({
-              to: adm.email,
-              subject: `Admin Alert: New Donation Received (Paid) — ${donorName} (${receiptNumber})`,
-              html: emailTemplate,
-              attachments,
-            })
-          );
-        }
-      }
-    } catch (admEmailErr) {
-      console.warn('[Donation] Error resolving admin email recipients:', admEmailErr.message);
-      const fallbackAdminEmail = getAdminEmail() || process.env.SMTP_FROM || null;
-      if (fallbackAdminEmail && fallbackAdminEmail.toLowerCase() !== donorEmail?.toLowerCase()) {
-        emailJobs.push(
-          sendMail({
-            to: fallbackAdminEmail,
-            subject: `Admin Alert: New Donation Received (Paid) — ${donorName} (${receiptNumber})`,
-            html: emailTemplate,
-            attachments,
-          })
-        );
-      }
-    }
-
-    const emailResults = await Promise.allSettled(emailJobs);
-    emailResults.forEach(result => {
-      if (result.status === 'rejected') {
-        console.warn('[Donation] Receipt email error:', result.reason?.message || result.reason);
-      }
-    });
-
-    // 4. Send In-App & Push Notification to Donor (User)
-    if (donation.userId) {
-      createUserNotification({
-        userId: donation.userId,
-        type: 'REQUEST_STATUS_UPDATE',
-        requestType: 'DONATION',
-        requestId: receiptNumber,
-        status: 'PAID',
-        title: 'Thank You for Your Donation',
-        message: `Dear ${donorName}, thank you for your generous offering of ₹${donation.amount} towards ${categoryLabel} of St. John de Britto Church.\nReceipt No: ${receiptNumber}\nPayment ID: ${paymentRef}\nMay God bless you and your family abundantly!`,
-        actionUrl: '/dashboard/donations',
-        redirectUrl: '/dashboard/donations',
-        request: donation
-      }).catch(e => console.warn('[Donation] Donor in-app/push error:', e.message));
-    }
-
-    // 5. Send WhatsApp direct message & receipt document to Donor phone (if available)
-    const donorPhone = donation.phone || (donation.userId && typeof donation.userId === 'object' ? donation.userId.phone : null);
-    if (donorPhone) {
-      try {
-        const { sendWhatsAppNotification } = require('../services/whatsAppNotificationService');
-        const waCaption = `*ST. JOHN DE BRITTO CHURCH*\n\nDear *${donorName}*,\n\nThank you for your generous donation of *₹${donation.amount}* towards *${categoryLabel}*.\n\n*Receipt No:* ${receiptNumber}\n*Payment ID:* ${paymentRef}\n*Date:* ${paymentDateStr}\n\n_“God loves a cheerful giver.” — 2 Corinthians 9:7_\n\nMay Lord Jesus and St. John de Britto bless you abundantly.`;
-
-        const donorTarget = donation.userId || donorPhone;
-        if (fs.existsSync(fullPath)) {
-          sendWhatsAppNotification(donorTarget, waCaption, {
-            media: {
-              url: fullPath,
-              mimetype: 'application/pdf',
-              fileName: filename
-            }
-          }).catch(err => {
-            console.warn('[Donation] WhatsApp notification send fallback to text:', err.message);
-            sendWhatsAppNotification(donorTarget, waCaption).catch(e => console.warn('[Donation] WhatsApp text send error:', e.message));
-          });
-        } else {
-          sendWhatsAppNotification(donorTarget, waCaption).catch(e => console.warn('[Donation] WhatsApp text send error:', e.message));
-        }
-      } catch (waErr) {
-        console.warn('[Donation] WhatsApp dispatch error:', waErr.message);
-      }
-    }
-
-    // 6. Send WhatsApp direct notification WITH RECEIPT PDF, In-App, and Push Alert to Church Admins
-    try {
-      const adminWaCaption =
-`🔔 *Admin Alert: New Donation Received (Paid)*
-
-A new donation has been received!
-
-👤 *Donor:* ${donorName}
-💰 *Amount:* ₹${donation.amount}
-🏷️ *Category:* ${categoryLabel}
-🔖 *Receipt No:* ${receiptNumber}
-💳 *Payment ID:* ${paymentRef}
-📝 *Intention:* ${donation.note || donation.message || 'None'}
-📅 *Date:* ${paymentDateStr}
-
-📎 Official donation receipt PDF is attached for church records.`;
-
-      const fileBuffer = fs.existsSync(fullPath) ? fs.readFileSync(fullPath) : null;
-
-      // Deliver via Central Admin Notification Service (delivers to all admin WhatsApp bot numbers with PDF, in-app bell, push)
-      await createAdminNotification({
-        type: 'DONATION',
-        requestType: 'DONATION',
-        title: `New Donation Received: ₹${donation.amount} (${donorName})`,
-        message: `A new donation of ₹${donation.amount} was received from ${donorName} for ${categoryLabel}. Receipt: ${receiptNumber}. Payment ID: ${paymentRef}.`,
-        userId: donation.userId,
-        memberId: donation.userId?.parishMemberId,
-        requestId: receiptNumber,
-        status: 'PAID',
-        priority: 'high',
-        details: `Donation of ₹${donation.amount} towards ${categoryLabel} (Receipt: ${receiptNumber}, Payment ID: ${paymentRef})`,
-        actionUrl: '/admin/donations',
-        redirectUrl: '/admin/donations',
-        fileUrl: receiptPath,
-        pdfPath: fullPath,
-        skipEmail: true, // Rich admin email already dispatched with attached PDF in Step 3
-        mediaOptions: fileBuffer ? {
-          url: fullPath,
-          buffer: fileBuffer,
-          mimetype: 'application/pdf',
-          fileName: filename,
-          caption: adminWaCaption
-        } : null,
-        metadata: {
-          donationId: donation._id,
-          donorName,
-          amount: donation.amount,
-          category: categoryLabel,
-          receiptNumber,
-          paymentRef,
-          paymentDate: paymentDateStr,
-          receiptPath,
-          intention: donation.note || donation.message || 'None'
-        }
-      });
-    } catch (aErr) {
-      console.warn('[Donation] Admin notification / WhatsApp dispatch error:', aErr.message);
-    }
-
-    // 7. Update and persist donation record. Mark delivery successful only if
-    // at least one configured email was actually accepted by the mailer.
-    const emailDeliverySucceeded = emailJobs.length > 0 && emailResults.some(result => result.status === 'fulfilled');
-    donation.receiptUrl = receiptPath;
-    donation.receiptSent = emailDeliverySucceeded || donation.receiptSent;
-    donation.receiptSentAt = emailDeliverySucceeded ? new Date() : donation.receiptSentAt;
-    await donation.save();
-  } catch (err) {
-    console.error('Error sending donation receipt emails and notifications:', err);
-  }
+// ─── HELPER: AUTOMATED DONATION NOTIFICATIONS ACROSS ALL CHANNELS ─────────────
+const sendDonationReceiptEmails = async (donation, options = {}) => {
+  return sendDonationNotifications(donation, options);
 };
 
 // ─── 1. CREATE RAZORPAY ORDER ───────────────────────────────────────────────
@@ -814,26 +468,76 @@ const getDonationReceipt = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Donation not found.' });
     }
 
-    // Verify access
-    const role = (req.user?.role || '').toLowerCase();
-    const isAdminOrStaff = role === 'admin' || role === 'priest' || role === 'staff' || req.user?.isTechnicalTeam;
-    const isOwner = req.user && donation.userId && donation.userId._id?.toString() === req.user._id?.toString();
+    // Only allow receipts for completed, paid, or verified donations
+    const isPaidOrVerified = donation.status === 'paid' || donation.status === 'verified' || donation.isVerified;
+    if (!isPaidOrVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'Receipt is only available for completed and verified donations.'
+      });
+    }
 
-    if (!isAdminOrStaff && !isOwner) {
-      return res.status(403).json({ success: false, message: 'Not authorized to access this receipt.' });
+    // Authorization: Admin / Owner / Secure Receipt Token
+    const role = (req.user?.role || '').toLowerCase();
+    const isAdminOrStaff = Boolean(role === 'admin' || role === 'priest' || role === 'staff' || req.user?.isTechnicalTeam);
+    const isOwner = Boolean(req.user && donation.userId && donation.userId._id?.toString() === req.user._id?.toString());
+    const token = (req.query.token || req.headers['x-receipt-token'] || '').toString().trim();
+    const hasValidToken = Boolean(
+      token && donation.receiptAccessToken && safeEqualHex(donation.receiptAccessToken, token)
+    );
+
+    if (!isAdminOrStaff && !isOwner && !hasValidToken) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to access this receipt. Please log in or use the secure link provided in your donation notification.'
+      });
+    }
+
+    // Ensure persistent receipt number and access token
+    let needsSave = false;
+    if (!donation.receiptNumber) {
+      const year = new Date(donation.paidAt || donation.createdAt || Date.now()).getFullYear();
+      donation.receiptNumber = `SJBC-${year}-${donation._id.toString().slice(-6).toUpperCase()}`;
+      needsSave = true;
+    }
+    if (!donation.receiptAccessToken) {
+      donation.receiptAccessToken = crypto.randomBytes(24).toString('hex');
+      needsSave = true;
+    }
+    if (needsSave) {
+      await donation.save().catch(() => {});
     }
 
     const receiptPath = await generateDonationReceipt(donation, donation.userId);
-    const filename = `Donation_Receipt_${donation._id.toString().slice(-6).toUpperCase()}.pdf`;
-    const fullPath = path.join(__dirname, '..', '..', receiptPath);
+    const receiptNumber = donation.receiptNumber || `SJBC-${donation._id.toString().slice(-6).toUpperCase()}`;
+    let fullPath;
+    if (path.isAbsolute(receiptPath) && fs.existsSync(receiptPath)) {
+      fullPath = receiptPath;
+    } else {
+      const cleanRel = String(receiptPath).replace(/^[/\\]+/, '');
+      fullPath = path.join(__dirname, '..', '..', cleanRel);
+    }
 
+    if (!fs.existsSync(fullPath)) {
+      return res.status(500).json({ success: false, message: 'Receipt PDF could not be generated.' });
+    }
+
+    // Direct download requested
     if (req.query.download === 'true') {
       return res.download(fullPath, filename);
+    }
+
+    // Browser PDF preview or direct navigation
+    if (req.query.inline === 'true' || (req.headers.accept && req.headers.accept.includes('application/pdf'))) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+      return fs.createReadStream(fullPath).pipe(res);
     }
 
     return res.json({
       success: true,
       receiptUrl: receiptPath,
+      receiptNumber,
       filename,
       donation
     });
@@ -850,11 +554,12 @@ const resendReceiptEmail = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Donation not found.' });
     }
 
-    await sendDonationReceiptEmails(donation, { force: true });
+    const result = await sendDonationReceiptEmails(donation, { force: true });
 
     return res.json({
       success: true,
-      message: `Official donation receipt re-sent successfully to ${donation.email || 'donor'} and church admin copy.`,
+      message: `Official donation receipt re-sent successfully across channels to ${donation.email || donation.donorName || 'donor'} and church administrators.`,
+      notificationResult: result,
       donation
     });
   } catch (err) {

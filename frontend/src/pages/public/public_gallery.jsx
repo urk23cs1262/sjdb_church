@@ -46,7 +46,7 @@ export default function Gallery() {
 
   return (
     <div className="min-h-screen pt-10 bg-church-cream">
-      <PageHero title={<>{t('nav.gallery')}</>} subtitle={<>Visual Stories</>} />
+      <PageHero title={<>{t('gallery')}</>} subtitle={<>Visual Stories</>} />
 
       <section className="py-16">
         <div className="max-w-7xl mx-auto px-4">

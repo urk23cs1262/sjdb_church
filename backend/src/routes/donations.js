@@ -25,7 +25,7 @@ router.post('/webhook', razorpayWebhook);
 router.get('/', protect, adminOnly, getAll);
 router.get('/my', protect, getMyDonations);
 router.get('/stats', protect, adminOnly, getStats);
-router.get('/:id/receipt', protect, getDonationReceipt);
+router.get('/:id/receipt', optionalAuth, getDonationReceipt);
 router.post('/:id/resend-receipt', protect, adminOnly, resendReceiptEmail);
 router.post('/', protect, create);
 router.put('/:id/verify', protect, adminOnly, verify);

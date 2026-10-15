@@ -12,10 +12,39 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Medium screens & tablets */
+  @media (max-width: 1024px) {
+    html {
+      font-size: 16.5px;
+    }
+  }
+
+  /* Mobile devices (below 640px) */
+  @media (max-width: 640px) {
+    html {
+      font-size: 17.5px;
+    }
+  }
+
+  /* Small mobile devices (below 380px) */
+  @media (max-width: 380px) {
+    html {
+      font-size: 16.75px;
+    }
   }
 
   body {
     @apply bg-church-cream text-gray-800 font-sans;
+    font-size: 1rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     transition: background-color 0.3s, color 0.3s;
   }
 
@@ -230,6 +259,38 @@
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
+  }
+
+  /* Micro-text font size elevation across all devices */
+  .text-\[9px\] {
+    font-size: 10.5px !important;
+  }
+  .text-\[10px\] {
+    font-size: 11.5px !important;
+  }
+  .text-\[11px\] {
+    font-size: 12.5px !important;
+  }
+
+  /* Enhanced micro-text size on mobile for guaranteed legibility */
+  @media (max-width: 640px) {
+    .text-\[9px\] {
+      font-size: 11.5px !important;
+    }
+    .text-\[10px\] {
+      font-size: 12.5px !important;
+    }
+    .text-\[11px\] {
+      font-size: 13.5px !important;
+    }
+  }
+
+  /* Enhanced Tamil typography legibility */
+  :lang(ta),
+  [lang="ta"],
+  .font-tamil {
+    letter-spacing: 0.012em;
+    line-height: 1.68;
   }
 }
 

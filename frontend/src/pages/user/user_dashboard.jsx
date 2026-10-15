@@ -271,26 +271,25 @@ export default function UserDashboard() {
               </div>
             </div>
 
-            {/* Action Buttons: [ Complete Profile 80% ] [ Notifications ] [ Settings ] */}
+            {/* Action Buttons: [ Complete Profile (shown only when < 100%) ] [ Notifications ] [ Settings ] */}
             <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 flex-shrink-0 w-full lg:w-auto pt-2 lg:pt-0 border-t border-white/10 lg:border-t-0">
-              <Link
-                to="/dashboard/settings"
-                className={`btn-outline-gold text-xs sm:text-sm py-2 px-3 sm:py-2.5 sm:px-4 shadow-md border rounded-xl whitespace-nowrap flex items-center justify-center gap-2.5 transition-all flex-1 sm:flex-initial group ${profileCompletion.isComplete
-                    ? 'border-emerald-500/50 bg-emerald-950/30 text-emerald-300 hover:bg-emerald-900/40'
-                    : 'border-church-gold/60 hover:bg-church-gold/10'
-                  }`}
-                title={profileCompletion.isComplete ? "Profile Complete (100%)" : `Profile ${profileCompletion.percentage}% Complete — Click to update`}
-              >
-                <ProfileProgressRing percentage={profileCompletion.percentage} size={28} />
-                <div className="flex flex-col text-left leading-tight">
-                  <span className="font-bold text-xs sm:text-sm text-white group-hover:text-gold-300 transition-colors flex items-center gap-1">
-                    {profileCompletion.isComplete ? <>Profile Complete <FiCheck className="text-xs text-emerald-400" /></> : "Complete Profile"}
-                  </span>
-                  <span className="text-[10px] text-gray-300 opacity-90 font-medium">
-                    {profileCompletion.isComplete ? "100% Completed" : `${profileCompletion.completedCount} of ${profileCompletion.totalCount} completed`}
-                  </span>
-                </div>
-              </Link>
+              {profileCompletion.percentage < 100 && (
+                <Link
+                  to="/dashboard/settings"
+                  className="btn-outline-gold text-xs sm:text-sm py-2 px-3 sm:py-2.5 sm:px-4 shadow-md border rounded-xl whitespace-nowrap flex items-center justify-center gap-2.5 transition-all flex-1 sm:flex-initial group border-church-gold/60 hover:bg-church-gold/10"
+                  title={`Profile ${profileCompletion.percentage}% Complete — Click to update`}
+                >
+                  <ProfileProgressRing percentage={profileCompletion.percentage} size={28} />
+                  <div className="flex flex-col text-left leading-tight">
+                    <span className="font-bold text-xs sm:text-sm text-white group-hover:text-gold-300 transition-colors flex items-center gap-1">
+                      Complete Profile
+                    </span>
+                    <span className="text-[10px] text-gray-300 opacity-90 font-medium">
+                      {`${profileCompletion.completedCount} of ${profileCompletion.totalCount} completed`}
+                    </span>
+                  </div>
+                </Link>
+              )}
 
               <Link
                 to={notificationsLink}

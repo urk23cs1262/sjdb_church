@@ -33,6 +33,20 @@ export default {
           'dark-card': '#1e293b',
         },
       },
+      fontSize: {
+        '2xs': ['0.725rem', { lineHeight: '1.05rem' }],
+        xs: ['0.8125rem', { lineHeight: '1.2rem' }],      // ~13px baseline (+8.3%)
+        sm: ['0.9375rem', { lineHeight: '1.4rem' }],      // ~15px baseline (+7.1%)
+        base: ['1.0625rem', { lineHeight: '1.65rem' }],   // ~17px baseline (+6.25%)
+        lg: ['1.1875rem', { lineHeight: '1.8rem' }],      // ~19px baseline (+5.5%)
+        xl: ['1.3125rem', { lineHeight: '1.9rem' }],      // ~21px baseline (+5%)
+        '2xl': ['1.5625rem', { lineHeight: '2.1rem' }],   // ~25px
+        '3xl': ['1.95rem', { lineHeight: '2.35rem' }],    // ~31px
+        '4xl': ['2.35rem', { lineHeight: '2.6rem' }],     // ~37.5px
+        '5xl': ['3.15rem', { lineHeight: '1.1' }],        // ~50px
+        '6xl': ['3.9rem', { lineHeight: '1.1' }],         // ~62px
+        '7xl': ['4.75rem', { lineHeight: '1.1' }],        // ~76px
+      },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui'],
         serif: ['Playfair Display', 'Georgia', 'serif'],

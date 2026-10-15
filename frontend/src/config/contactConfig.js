@@ -55,12 +55,16 @@ export function getWhatsAppNumber() {
 }
 
 export function getWhatsAppChannelUrl() {
-  return (
+  const url = (
     dynamicSettings.whatsappChannelUrl ||
     dynamicSettings.whatsapp_channel_url ||
     import.meta.env.VITE_WHATSAPP_CHANNEL_URL ||
-    ''
+    'https://whatsapp.com/channel/0029VbE3th71iUxSmSsBYg3D'
   );
+  if (typeof url === 'string' && url.includes('0029Vbf3th71iUxSmSsBYg3D')) {
+    return 'https://whatsapp.com/channel/0029VbE3th71iUxSmSsBYg3D';
+  }
+  return url || 'https://whatsapp.com/channel/0029VbE3th71iUxSmSsBYg3D';
 }
 
 export default {

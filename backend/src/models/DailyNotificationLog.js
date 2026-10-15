@@ -68,7 +68,8 @@ const dailyNotificationLogSchema = new mongoose.Schema({
     email: { type: channelStatusSchema, default: () => ({ status: 'disabled' }) },
     inApp: { type: channelStatusSchema, default: () => ({ status: 'disabled' }) },
     push: { type: channelStatusSchema, default: () => ({ status: 'disabled' }) },
-    whatsapp: { type: channelStatusSchema, default: () => ({ status: 'disabled' }) }
+    whatsapp: { type: channelStatusSchema, default: () => ({ status: 'disabled' }) },
+    sms: { type: channelStatusSchema, default: () => ({ status: 'disabled' }) }
   },
   summary: {
     bibleRef: String,

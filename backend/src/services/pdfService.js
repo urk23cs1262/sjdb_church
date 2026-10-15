@@ -41,10 +41,12 @@ const generateDonationReceipt = async (donation, user) => {
       const paymentRef = donation.razorpayPaymentId || donation.transactionId || 'N/A';
       const paymentMethod = donation.razorpayPaymentId ? 'Razorpay (Online)' : (donation.paymentMethod ? (donation.paymentMethod.charAt(0).toUpperCase() + donation.paymentMethod.slice(1)) : 'UPI');
 
+      const receiptNumber = donation.receiptNumber || `SJBC-${createdAtDate.getFullYear()}-${receiptId}`;
+
       // ─── 1. Top Meta Line ──────────────────────────────────────────────────
       doc.fontSize(9.5).fillColor('#333333').font('Helvetica');
       doc.text(`${dateStr}, ${timeStr}`, 40, 35);
-      doc.text(`SJBC-${receiptId}`, 40, 35, { align: 'right', width: 515 });
+      doc.text(receiptNumber, 40, 35, { align: 'right', width: 515 });
 
       doc.moveDown(1.2);
 
@@ -79,65 +81,68 @@ const generateDonationReceipt = async (donation, user) => {
       doc.moveTo(40, lineY).lineTo(555, lineY).strokeColor('#e5e5e5').lineWidth(1.5).stroke();
 
       // ─── 3. Two-Column Grid ────────────────────────────────────────────────
-      const gridTop = lineY + 18;
-      doc.fontSize(10.5).fillColor('#111827');
+      const gridTop = lineY + 14;
+      doc.fontSize(10).fillColor('#111827');
 
       // Left Column
       const leftColX = 40;
-      const leftValX = 150;
+      const leftValX = 145;
 
       doc.font('Helvetica-Bold').text("Receipt No :", leftColX, gridTop);
-      doc.font('Helvetica').text(`SJBC-${createdAtDate.getFullYear()}-${receiptId}`, leftValX, gridTop);
+      doc.font('Helvetica').text(receiptNumber, leftValX, gridTop);
 
-      doc.font('Helvetica-Bold').text("Name :", leftColX, gridTop + 22);
-      doc.font('Helvetica').text(donorName, leftValX, gridTop + 22);
+      doc.font('Helvetica-Bold').text("Donor Name :", leftColX, gridTop + 20);
+      doc.font('Helvetica').text(donorName, leftValX, gridTop + 20, { width: 155, ellipsis: true });
 
-      doc.font('Helvetica-Bold').text("Donation Type :", leftColX, gridTop + 44);
-      doc.font('Helvetica').text(categoryLabel, leftValX, gridTop + 44);
+      doc.font('Helvetica-Bold').text("Donation Type :", leftColX, gridTop + 40);
+      doc.font('Helvetica').text(categoryLabel, leftValX, gridTop + 40);
 
-      doc.font('Helvetica-Bold').text("Purpose :", leftColX, gridTop + 66);
-      doc.font('Helvetica').text(purposeText, leftValX, gridTop + 66);
+      doc.font('Helvetica-Bold').text("Purpose :", leftColX, gridTop + 60);
+      doc.font('Helvetica').text(purposeText, leftValX, gridTop + 60, { width: 155, ellipsis: true });
 
       // Right Column
       const rightColX = 310;
-      const rightValX = 430;
+      const rightValX = 425;
 
       doc.font('Helvetica-Bold').text("Receipt Date :", rightColX, gridTop);
       doc.font('Helvetica').text(dateStr, rightValX, gridTop);
 
-      doc.font('Helvetica-Bold').text("Total Paid :", rightColX, gridTop + 22);
-      doc.font('Helvetica-Bold').text(`INR. ${(donation.amount || 0).toFixed(2)}`, rightValX, gridTop + 22);
+      doc.font('Helvetica-Bold').text("Total Paid :", rightColX, gridTop + 20);
+      doc.font('Helvetica-Bold').text(`INR ${(donation.amount || 0).toFixed(2)}`, rightValX, gridTop + 20);
 
-      doc.font('Helvetica-Bold').text("Payment Method :", rightColX, gridTop + 44);
-      doc.font('Helvetica').text(paymentMethod, rightValX, gridTop + 44);
+      doc.font('Helvetica-Bold').text("Payment Method :", rightColX, gridTop + 40);
+      doc.font('Helvetica').text(paymentMethod, rightValX, gridTop + 40);
 
-      doc.font('Helvetica-Bold').text("Payment ID :", rightColX, gridTop + 66);
-      doc.font('Helvetica').text(paymentRef, rightValX, gridTop + 66, { width: 125, ellipsis: true });
+      doc.font('Helvetica-Bold').text("Payment ID :", rightColX, gridTop + 60);
+      doc.font('Helvetica').text(paymentRef, rightValX, gridTop + 60, { width: 130, ellipsis: true });
+
+      doc.font('Helvetica-Bold').text("Payment Status :", rightColX, gridTop + 80);
+      doc.font('Helvetica-Bold').fillColor('#059669').text((donation.status || 'PAID').toUpperCase(), rightValX, gridTop + 80);
 
       // ─── 4. Table: Donation Description & Amount Paid ───────────────────────
-      const tableTop = gridTop + 105;
+      const tableTop = gridTop + 108;
 
       // Table Header (light grey background)
-      doc.rect(40, tableTop, 515, 26).fill('#f3f4f6').stroke('#dddddd');
-      doc.fontSize(10).fillColor('#000000').font('Helvetica-Bold');
-      doc.text("Donation Description", 52, tableTop + 8);
-      doc.text("Amount Paid", 450, tableTop + 8, { align: 'right', width: 90 });
+      doc.rect(40, tableTop, 515, 24).fill('#f3f4f6').stroke('#dddddd');
+      doc.fontSize(9.5).fillColor('#000000').font('Helvetica-Bold');
+      doc.text("Donation Description", 52, tableTop + 7);
+      doc.text("Amount Paid", 450, tableTop + 7, { align: 'right', width: 90 });
 
       // Table Row
-      doc.rect(40, tableTop + 26, 515, 34).stroke('#dddddd');
-      doc.fontSize(10).fillColor('#333333').font('Helvetica');
-      doc.text(purposeText, 52, tableTop + 37);
-      doc.font('Helvetica-Bold').text(`Rs. ${(donation.amount || 0).toFixed(2)}`, 450, tableTop + 37, { align: 'right', width: 90 });
+      doc.rect(40, tableTop + 24, 515, 30).stroke('#dddddd');
+      doc.fontSize(9.5).fillColor('#333333').font('Helvetica');
+      doc.text(purposeText, 52, tableTop + 33);
+      doc.font('Helvetica-Bold').text(`Rs. ${(donation.amount || 0).toFixed(2)}`, 450, tableTop + 33, { align: 'right', width: 90 });
 
       // ─── 5. Message / Intention Box ─────────────────────────────────────────
-      const noteY = tableTop + 75;
+      const noteY = tableTop + 68;
       const noteContent = donation.note || donation.message || 'Prayers for parish and family blessings';
 
-      doc.rect(40, noteY, 515, 50).fill('#fafafa').stroke('#dddddd');
-      doc.fontSize(9.5).fillColor('#000000').font('Helvetica-Bold');
-      doc.text("Message / Intention :", 40, noteY + 8, { align: 'center', width: 515 });
-      doc.fontSize(10).fillColor('#333333').font('Helvetica');
-      doc.text(`"${noteContent}"`, 55, noteY + 25, { align: 'center', width: 485 });
+      doc.rect(40, noteY, 515, 46).fill('#fafafa').stroke('#dddddd');
+      doc.fontSize(9).fillColor('#000000').font('Helvetica-Bold');
+      doc.text("Message / Intention :", 40, noteY + 6, { align: 'center', width: 515 });
+      doc.fontSize(9.5).fillColor('#333333').font('Helvetica');
+      doc.text(`"${noteContent}"`, 55, noteY + 22, { align: 'center', width: 485 });
 
       // ─── 6. Thank You & Blessing ────────────────────────────────────────────
       const blessingY = noteY + 70;

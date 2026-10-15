@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { motion } from 'framer-motion';
-import { GiChurch, GiCrucifix, GiDove } from 'react-icons/gi';
-import { FiFacebook, FiYoutube, FiInstagram, FiMapPin, FiPhone, FiMail, FiClock, FiShield, FiFileText, FiLock } from 'react-icons/fi';
+import { GiCrucifix, GiDove } from 'react-icons/gi';
+import { FiFacebook, FiYoutube, FiInstagram, FiMapPin, FiPhone, FiMail, FiClock, FiShield } from 'react-icons/fi';
 import { FaWhatsapp } from 'react-icons/fa';
 import churchLogo from '../../assets/church_extirior.png';
 import PolicyModal from './common_policy_modal';
@@ -43,7 +42,10 @@ export default function Footer() {
   const whatsappChannel = getWhatsAppChannelUrl() || 'https://whatsapp.com/channel/0029VbE3th71iUxSmSsBYg3D';
 
   return (
-    <footer className="bg-church-dark text-white">
+    <footer className="bg-church-dark text-white relative">
+      {/* Universal subtle merge fade into footer across all pages */}
+      <div className="absolute -top-10 sm:-top-12 left-0 right-0 h-10 sm:h-12 bg-gradient-to-b from-transparent to-church-dark pointer-events-none z-10" />
+
       {/* Centered Large Premium Title Banner with Refined Metallic Gold/White Gradient */}
       <div className="w-full text-center py-6 md:py-4 px-4 overflow-hidden bg-church-dark notranslate" translate="no">
         <h1 className="text-white text-6xl sm:text-7xl md:text-8xl lg:text-[7.5rem] font-premium-banner font-extrabold tracking-tight text-center leading-none text-white/95 drop-shadow-2xl select-none">

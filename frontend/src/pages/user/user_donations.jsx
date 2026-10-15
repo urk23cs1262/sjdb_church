@@ -99,36 +99,58 @@ export default function UserDonations() {
 
   const downloadReceipt = async (donation) => {
     setIsGeneratingPDF(true);
-    setTimeout(async () => {
-      try {
-        const element = receiptRef.current;
-        if (!element) throw new Error('Receipt template not found');
-        const canvas = await html2canvas(element, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pageWidth = pdf.internal.pageSize.getWidth();
-        const pageHeight = pdf.internal.pageSize.getHeight();
-        const imgWidth = pageWidth;
-        const imgHeight = (canvas.height * imgWidth) / canvas.width;
-        let heightLeft = imgHeight;
-        let position = 0;
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-        while (heightLeft > 0) {
-          position = heightLeft - imgHeight;
-          pdf.addPage();
+    const receiptNum = donation.receiptNumber || `SJBC-${donation._id.slice(-6).toUpperCase()}`;
+    const filename = `Donation_Receipt_${receiptNum}.pdf`;
+
+    try {
+      // 1. Fetch official church-branded server PDF
+      const response = await api.get(`/donations/${donation._id}/receipt?download=true`, {
+        responseType: 'blob',
+      });
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('Official receipt downloaded!');
+      setIsGeneratingPDF(false);
+    } catch (serverErr) {
+      console.warn('Server PDF download unavailable, generating client copy:', serverErr);
+      setTimeout(async () => {
+        try {
+          const element = receiptRef.current;
+          if (!element) throw new Error('Receipt template not found');
+          const canvas = await html2canvas(element, { scale: 3, useCORS: true, backgroundColor: '#ffffff' });
+          const imgData = canvas.toDataURL('image/png');
+          const pdf = new jsPDF('p', 'mm', 'a4');
+          const pageWidth = pdf.internal.pageSize.getWidth();
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          const imgWidth = pageWidth;
+          const imgHeight = (canvas.height * imgWidth) / canvas.width;
+          let heightLeft = imgHeight;
+          let position = 0;
           pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
           heightLeft -= pageHeight;
+          while (heightLeft > 0) {
+            position = heightLeft - imgHeight;
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+          }
+          pdf.save(filename);
+          toast.success('Receipt downloaded!');
+        } catch (e) {
+          console.error(e);
+          toast.error('Failed to generate PDF receipt');
+        } finally {
+          setIsGeneratingPDF(false);
         }
-        pdf.save(`Donation_Receipt_${donation._id.slice(-6).toUpperCase()}.pdf`);
-        toast.success('Receipt downloaded!');
-      } catch (e) {
-        console.error(e);
-        toast.error('Failed to generate PDF receipt');
-      } finally {
-        setIsGeneratingPDF(false);
-      }
-    }, 500);
+      }, 300);
+    }
   };
 
   return (

@@ -19,8 +19,8 @@ const DEFAULT_CONFIG = {
   parishOfficePhone: '',
   whatsappBotNumber: '',
   whatsappAdminNumber: '',
-  whatsappChannelUrl: '',
-  whatsappChannelJid: ''
+  whatsappChannelUrl: 'https://whatsapp.com/channel/0029VbE3th71iUxSmSsBYg3D',
+  whatsappChannelJid: '120363428965756244@newsletter'
 };
 
 /**
@@ -98,8 +98,12 @@ function getContactConfig() {
     DEFAULT_CONFIG.whatsappAdminNumber
   );
 
-  const whatsappChannelUrl = (process.env.WHATSAPP_CHANNEL_URL || '').trim();
-  const whatsappChannelJid = (process.env.WHATSAPP_CHANNEL_JID || '').trim();
+  let rawChannelUrl = (process.env.WHATSAPP_CHANNEL_URL || DEFAULT_CONFIG.whatsappChannelUrl || '').trim();
+  if (rawChannelUrl.includes('0029Vbf3th71iUxSmSsBYg3D')) {
+    rawChannelUrl = 'https://whatsapp.com/channel/0029VbE3th71iUxSmSsBYg3D';
+  }
+  const whatsappChannelUrl = rawChannelUrl;
+  const whatsappChannelJid = (process.env.WHATSAPP_CHANNEL_JID || DEFAULT_CONFIG.whatsappChannelJid || '').trim();
 
   return {
     churchEmail,

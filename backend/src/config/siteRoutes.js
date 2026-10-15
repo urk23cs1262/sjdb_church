@@ -86,6 +86,8 @@ const SITE_ROUTES = {
   TICKETS: '/dashboard/tickets',
   SETTINGS: '/dashboard/settings',
   NOTIFICATIONS: '/dashboard/notifications',
+  DONATIONS: '/dashboard/donations',
+  MY_DONATIONS: '/dashboard/donations',
 
   // Admin Routes
   ADMIN: '/admin',

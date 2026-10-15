@@ -57,7 +57,7 @@ function renderMassReadingsSection(massReadings, lang) {
         <div style="background-color: #F8FAFC; border-left: 4px solid #C5A059; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 14px;">
           <h3 style="margin: 0; color: #1E293B; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">DAILY MASS READINGS</h3>
           <div style="margin: 4px 0 0 0; color: #C5A059; font-size: 14px; font-weight: 700;">தமிழ்</div>
-          ${cleanHeaderTa ? `<p style="margin: 6px 0 0 0; color: #1E3A8A; font-size: 14px; font-weight: 700;">🗓️ ${escapeHtml(cleanHeaderTa)}</p>` : (massReadings.tamil?.title && massReadings.tamil.title !== 'New:' ? `<p style="margin: 4px 0 0 0; color: #64748B; font-size: 13px; font-weight: 600;">${escapeHtml(massReadings.tamil.title)}</p>` : '')}
+          ${cleanHeaderTa ? `<p style="margin: 6px 0 0 0; color: #1E3A8A; font-size: 14px; font-weight: 700;">${escapeHtml(cleanHeaderTa)}</p>` : (massReadings.tamil?.title && massReadings.tamil.title !== 'New:' ? `<p style="margin: 4px 0 0 0; color: #64748B; font-size: 13px; font-weight: 600;">${escapeHtml(massReadings.tamil.title)}</p>` : '')}
         </div>
         ${taReadings.length > 0 ? taReadings.map(r => `
           <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed #E2E8F0;">
@@ -80,7 +80,7 @@ function renderMassReadingsSection(massReadings, lang) {
         <div style="background-color: #F8FAFC; border-left: 4px solid #1E293B; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-bottom: 14px;">
           <h3 style="margin: 0; color: #1E293B; font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">DAILY MASS READINGS</h3>
           <div style="margin: 4px 0 0 0; color: #64748B; font-size: 14px; font-weight: 700;">English</div>
-          ${cleanHeaderEn ? `<p style="margin: 6px 0 0 0; color: #1E3A8A; font-size: 14px; font-weight: 700;">🗓️ ${escapeHtml(cleanHeaderEn)}</p>` : (massReadings.english?.title && massReadings.english.title !== 'New:' ? `<p style="margin: 4px 0 0 0; color: #64748B; font-size: 13px; font-weight: 600;">${escapeHtml(massReadings.english.title)}</p>` : '')}
+          ${cleanHeaderEn ? `<p style="margin: 6px 0 0 0; color: #1E3A8A; font-size: 14px; font-weight: 700;">${escapeHtml(cleanHeaderEn)}</p>` : (massReadings.english?.title && massReadings.english.title !== 'New:' ? `<p style="margin: 4px 0 0 0; color: #64748B; font-size: 13px; font-weight: 600;">${escapeHtml(massReadings.english.title)}</p>` : '')}
         </div>
         ${enReadings.length > 0 ? enReadings.map(r => `
           <div style="margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed #E2E8F0;">
@@ -291,7 +291,7 @@ function generateDailyNotificationHtml({
                         <div style="font-size: 12px; font-weight: 700; color: #C5A059; text-transform: uppercase; margin-bottom: 4px;">தமிழ் (Tamil)</div>
                         <h4 style="margin: 0 0 6px 0; font-size: 16px; color: #0F172A; font-weight: 700;">${escapeHtml(saint.nameTamil)}</h4>
                         ${saint.hasFeastInfo && saint.feastTitleTa ? `
-                        <div style="font-size: 13px; font-weight: 600; color: #B45309; margin-bottom: 6px;">🎉 ${escapeHtml(saint.feastTypeTa ? `${saint.feastTypeTa}: ` : '')}${escapeHtml(saint.feastTitleTa)}</div>
+                        <div style="font-size: 13px; font-weight: 600; color: #B45309; margin-bottom: 6px;">${escapeHtml(saint.feastTypeTa ? `${saint.feastTypeTa}: ` : '')}${escapeHtml(saint.feastTitleTa)}</div>
                         ` : ''}
                         <div style="color: #334155; font-size: 14px; line-height: 1.6;">${formatParagraphs(saint.descriptionTamil)}</div>
                       </div>
@@ -301,7 +301,7 @@ function generateDailyNotificationHtml({
                         <div style="font-size: 12px; font-weight: 700; color: #64748B; text-transform: uppercase; margin-bottom: 4px;">English</div>
                         <h4 style="margin: 0 0 6px 0; font-size: 16px; color: #0F172A; font-weight: 700;">${escapeHtml(saint.nameEnglish)}</h4>
                         ${saint.hasFeastInfo && saint.feastTitle ? `
-                        <div style="font-size: 13px; font-weight: 600; color: #B45309; margin-bottom: 6px;">🎉 ${escapeHtml(saint.feastType ? `${saint.feastType}: ` : '')}${escapeHtml(saint.feastTitle)}</div>
+                        <div style="font-size: 13px; font-weight: 600; color: #B45309; margin-bottom: 6px;">${escapeHtml(saint.feastType ? `${saint.feastType}: ` : '')}${escapeHtml(saint.feastTitle)}</div>
                         ` : ''}
                         <div style="color: #334155; font-size: 14px; line-height: 1.6;">${formatParagraphs(saint.descriptionEnglish)}</div>
                       </div>
@@ -330,40 +330,6 @@ function generateDailyNotificationHtml({
                     </a>
                     <div style="margin-top: 6px; font-size: 12px; color: #64748B; font-weight: 600;">
                       SJDB-ல் வாசிக்க
-                    </div>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Divider -->
-              <hr style="border: none; border-top: 1px solid #E2E8F0; margin: 24px 0 20px 0;" />
-
-              <!-- SECTION 6: HOLY SCRIPTURE (AT THE VERY END OF EMAIL BODY) -->
-              <!-- DYNAMIC_BIBLE_VERSE -->
-              <!-- DYNAMIC BILINGUAL BIBLE VERSE CARD -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin: 18px auto 8px auto; width: 100% !important; max-width: 100% !important; min-width: 100% !important; table-layout: fixed !important; border-collapse: separate !important; box-sizing: border-box !important;">
-                <tr>
-                  <td style="background: linear-gradient(135deg, #fffdf7 0%, #fef3c7 100%); border: 1px solid #fde68a; border-left: 4px solid #d97706; border-radius: 12px; padding: 14px 16px; box-shadow: 0 2px 8px rgba(217, 119, 6, 0.08); font-family: 'Segoe UI', Roboto, 'Noto Sans Tamil', 'Latha', 'Vijaya', Arial Unicode MS, Arial, sans-serif; text-align: left; box-sizing: border-box !important; width: 100% !important; max-width: 100% !important; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important; hyphens: auto;">
-                    <div style="font-size: 11px; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.8px; margin: 0 0 8px 0; line-height: 1.4; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important;">
-                      HOLY SCRIPTURE • Daily Scripture • Prayer
-                    </div>
-
-                    <!-- English Verse -->
-                    <p style="margin: 0 0 8px 0; font-size: 13.5px; font-style: italic; color: #1e293b; line-height: 1.6; font-family: 'Segoe UI', Roboto, Georgia, serif; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important; hyphens: auto; max-width: 100%;">
-                      "${escapeHtml(bible.english)}"
-                    </p>
-
-                    <!-- Tamil Verse -->
-                    <p style="margin: 0 0 10px 0; font-size: 13px; color: #78350f; line-height: 1.6; font-family: 'Noto Sans Tamil', 'Latha', 'Vijaya', 'Segoe UI', Roboto, Arial Unicode MS, sans-serif; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important; hyphens: auto; max-width: 100%;">
-                      "${escapeHtml(bible.tamil)}"
-                    </p>
-
-                    <div style="font-size: 12px; font-weight: 800; color: #b45309; text-align: right; line-height: 1.4; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important;">
-                      — ${escapeHtml(refEn)}${refTa && refTa !== refEn ? ` • ${escapeHtml(refTa)}` : ''}
-                    </div>
-
-                    <div style="margin-top: 10px; padding-top: 6px; border-top: 1px dashed #fcd34d; font-size: 11.5px; color: #92400e; text-align: right; word-wrap: break-word !important; overflow-wrap: anywhere !important; word-break: break-word !important;">
-                      Source: <a href="https://www.vatican.va/archive/bible/index.htm" target="_blank" style="color: #b45309; text-decoration: none; font-weight: 600;">Biblia Sacra / Catholic Holy Bible (NRSV-CE / திருவிவிலியம்)</a>
                     </div>
                   </td>
                 </tr>

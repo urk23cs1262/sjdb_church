@@ -36,19 +36,50 @@ const donationSchema = new mongoose.Schema({
   verifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   paidAt: { type: Date, default: null },
 
-  // Receipt & Email Delivery Tracking
+  // Receipt & Delivery Tracking
   receiptUrl: { type: String, default: null },
+  receiptNumber: { type: String, unique: true, sparse: true, index: true },
+  receiptAccessToken: { type: String, sparse: true, index: true },
   receiptSent: { type: Boolean, default: false },
   receiptSentAt: { type: Date, default: null },
+
+  // Comprehensive Multi-Channel Notification Tracking
+  notificationStatus: {
+    notified: { type: Boolean, default: false },
+    notifiedAt: { type: Date, default: null },
+    retries: { type: Number, default: 0 },
+    lastError: { type: String, default: null },
+    user: {
+      email: { sent: { type: Boolean, default: false }, sentAt: Date, error: String },
+      inApp: { sent: { type: Boolean, default: false }, sentAt: Date, error: String, notificationId: mongoose.Schema.Types.ObjectId },
+      whatsapp: { sent: { type: Boolean, default: false }, sentAt: Date, error: String },
+      push: { sent: { type: Boolean, default: false }, sentAt: Date, error: String }
+    },
+    admin: {
+      email: { sent: { type: Boolean, default: false }, sentAt: Date, error: String },
+      inApp: { sent: { type: Boolean, default: false }, sentAt: Date, error: String, notificationId: mongoose.Schema.Types.ObjectId },
+      whatsapp: { sent: { type: Boolean, default: false }, sentAt: Date, error: String },
+      push: { sent: { type: Boolean, default: false }, sentAt: Date, error: String }
+    }
+  }
 }, { timestamps: true });
 
-// Auto-sync note and message fields
+// Auto-sync note and message fields, receipt number, and access token
 donationSchema.pre('save', function (next) {
   if (this.message && !this.note) this.note = this.message;
   if (this.note && !this.message) this.message = this.note;
   if (this.status === 'paid' || this.status === 'verified') {
     this.isVerified = true;
     if (!this.paidAt) this.paidAt = new Date();
+    if (!this.receiptNumber) {
+      const year = new Date(this.paidAt || Date.now()).getFullYear();
+      const shortId = this._id ? this._id.toString().slice(-6).toUpperCase() : Math.random().toString(36).substring(2, 8).toUpperCase();
+      this.receiptNumber = `SJBC-${year}-${shortId}`;
+    }
+    if (!this.receiptAccessToken) {
+      const crypto = require('crypto');
+      this.receiptAccessToken = crypto.randomBytes(24).toString('hex');
+    }
   }
   next();
 });

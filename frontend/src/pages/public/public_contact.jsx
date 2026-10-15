@@ -1,4 +1,3 @@
-import churchLogo from '../../assets/church_extirior.png';
 import api from '../../services/api';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
@@ -16,7 +15,7 @@ export default function Contact() {
   const { t } = useTranslation();
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm();
   const [whatsappNumber, setWhatsappNumber] = useState(() => getWhatsAppNumber() || '');
-  const [whatsappChannelUrl, setWhatsappChannelUrl] = useState(() => getWhatsAppChannelUrl() || 'https://whatsapp.com/channel/0029Vbf3th71iUxSmSsBYg3D');
+  const [whatsappChannelUrl, setWhatsappChannelUrl] = useState(() => getWhatsAppChannelUrl() || 'https://whatsapp.com/channel/0029VbE3th71iUxSmSsBYg3D');
   const [instagramUrl, setInstagramUrl] = useState('https://www.instagram.com/sjdb_church?stkn=MW82ZXpsbW4xMTRyeQ==');
   const churchPhone = getChurchPhone() || '';
   const churchEmail = getChurchEmail() || '';
@@ -28,7 +27,10 @@ export default function Contact() {
         if (num) {
           setWhatsappNumber(String(num).replace(/\D/g, ''));
         }
-        const chanUrl = res.data?.settings?.whatsappChannelUrl || res.data?.settings?.whatsapp_channel_url;
+        let chanUrl = res.data?.settings?.whatsappChannelUrl || res.data?.settings?.whatsapp_channel_url;
+        if (chanUrl && chanUrl.includes('0029Vbf3th71iUxSmSsBYg3D')) {
+          chanUrl = 'https://whatsapp.com/channel/0029VbE3th71iUxSmSsBYg3D';
+        }
         if (chanUrl) {
           setWhatsappChannelUrl(chanUrl);
         }
@@ -134,7 +136,7 @@ export default function Contact() {
               {/* WhatsApp Channel & Instagram Horizontal 2-Column Action Buttons */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
                 <a
-                  href={whatsappChannelUrl || 'https://whatsapp.com/channel/0029Vbf3th71iUxSmSsBYg3D'}
+                  href={whatsappChannelUrl || 'https://whatsapp.com/channel/0029VbE3th71iUxSmSsBYg3D'}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center justify-center gap-2.5 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 text-white px-4 py-3.5 rounded-2xl transition-all shadow-lg font-bold text-xs sm:text-sm text-center border border-emerald-400/30"

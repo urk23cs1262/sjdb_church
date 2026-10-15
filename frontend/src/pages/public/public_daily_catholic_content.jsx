@@ -1184,22 +1184,35 @@ export default function DailyCatholicContent() {
 
                     <div className="flex flex-col md:flex-row items-stretch gap-6 md:gap-8">
                       {/* Image portrait */}
-                      <div className="w-full md:w-5/12 min-h-[280px] sm:min-h-[320px] md:min-h-[360px] h-[280px] sm:h-[320px] md:h-auto rounded-2xl overflow-hidden bg-slate-950 shadow-md relative flex-shrink-0 flex items-center justify-center">
+                      <div className="w-full md:w-5/12 min-h-[340px] sm:min-h-[400px] md:min-h-[420px] h-[340px] sm:h-[400px] md:h-auto rounded-2xl overflow-hidden bg-slate-950 shadow-md relative flex-shrink-0 flex items-center justify-center">
                         {(!saintImgError && activeImage) ? (
-                          <img
-                            src={activeImage}
-                            alt={activeName}
-                            referrerPolicy="no-referrer"
-                            onError={handleSaintImageError}
-                            className="w-full h-full object-contain object-center transition-transform duration-700 hover:scale-105"
-                          />
+                          <>
+                            {/* Ambient blurred backdrop so portrait images look rich, expansive, and never have dead black borders */}
+                            <img
+                              src={activeImage}
+                              alt=""
+                              aria-hidden="true"
+                              className="absolute inset-0 w-full h-full object-cover blur-xl scale-125 opacity-40 select-none pointer-events-none"
+                            />
+                            <img
+                              src={activeImage}
+                              alt={activeName}
+                              referrerPolicy="no-referrer"
+                              onError={handleSaintImageError}
+                              className="relative z-10 w-full h-full object-cover object-top md:object-cover md:object-center transition-transform duration-700 hover:scale-105"
+                            />
+                          </>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-church-royal-blue to-indigo-950 text-church-gold text-5xl">
                             ✝
                           </div>
                         )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
-                        <div className="absolute bottom-3 left-4 right-4 text-white">
+
+                        {/* Dark Gradient Overlay for Title Legibility on Desktop */}
+                        <div className="hidden md:block absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent pointer-events-none z-10" />
+
+                        {/* Desktop Name Overlay */}
+                        <div className="hidden md:block absolute bottom-3 left-4 right-4 text-white z-20">
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <span className="inline-block px-2.5 py-0.5 rounded-md bg-church-gold text-amber-950 font-black text-[10px] uppercase tracking-wider">
                               {isViewingPrimary 
@@ -1230,6 +1243,28 @@ export default function DailyCatholicContent() {
                       {/* Details & Biography */}
                       <div className="flex-1 min-w-0 space-y-4 text-left flex flex-col justify-between">
                         <div>
+                          {/* Mobile-only Header: Clean badges and full Saint Name so nothing hides or truncates */}
+                          <div className="block md:hidden pb-3 border-b border-gray-100">
+                            <div className="flex items-center gap-2 mb-2 flex-wrap">
+                              <span className="inline-block bg-church-gold/95 text-amber-950 text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-md shadow-xs">
+                                {isViewingPrimary 
+                                  ? (isTamil ? 'இன்றைய புனிதர்' : 'Saint of the Day')
+                                  : (isTamil ? 'பிற புனிதர்' : 'Other Saint')}
+                              </span>
+                              {celebrationType && (
+                                <span className="inline-block bg-amber-500 text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md shadow-xs">
+                                  {celebrationType}
+                                </span>
+                              )}
+                              <span className="inline-block bg-slate-100 text-slate-700 text-[10px] font-bold px-2 py-0.5 rounded-md border border-slate-200">
+                                {activeImage && (activeImage.includes('vaticannews.va') || activeSaint.imageSource === 'vatican') ? 'Vatican News' : 'Wikipedia'}
+                              </span>
+                            </div>
+                            <h3 className="text-xl sm:text-2xl font-bold font-display leading-snug text-gray-900 break-words">
+                              {activeName}
+                            </h3>
+                          </div>
+
                           {/* Dedicated OTHER SAINTS Section (ABOVE FEAST DAY) */}
                           {otherSaintsList.length > 0 && (
                             <div className="mb-4 pb-3 border-b border-amber-100">
@@ -1288,9 +1323,11 @@ export default function DailyCatholicContent() {
                             <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400 mb-1.5">
                               {isTamil ? 'புனிதரைப் பற்றி' : 'ABOUT THE SAINT'}
                             </p>
-                            <div className="max-h-[280px] sm:max-h-[320px] md:max-h-[350px] overflow-y-auto overflow-x-hidden pr-3 sm:pr-4 custom-scrollbar space-y-3 text-gray-800 text-sm sm:text-base leading-relaxed text-left break-words">
+                            <div className="max-h-none md:max-h-[360px] md:overflow-y-auto overflow-x-hidden md:pr-3 custom-scrollbar space-y-3 text-gray-800 text-sm sm:text-base leading-relaxed text-left break-words">
                               {(() => {
-                                const paras = cleanBioParagraphs(activeDesc);
+                                const allParas = cleanBioParagraphs(activeDesc);
+                                // Show only first 2 clean paragraphs in the About section
+                                const paras = allParas.slice(0, 2);
                                 if (paras.length === 0) {
                                   return (
                                     <p className="leading-relaxed text-left text-gray-500 italic">
@@ -1353,7 +1390,9 @@ export default function DailyCatholicContent() {
                               >
                                 <FiExternalLink />
                                 <span>
-                                  {isTamil ? (isContentFromWiki ? 'Wikipedia-ல் வாசிக்க' : 'Vatican News') : siteName}
+                                  {isTamil 
+                                    ? (isContentFromWiki ? 'முழு வரலாற்றையும் Wikipedia-வில் வாசிக்க' : 'முழு வரலாற்றையும் Vatican News-ல் வாசிக்க') 
+                                    : `Read full story on ${siteName}`}
                                 </span>
                               </a>
                             );

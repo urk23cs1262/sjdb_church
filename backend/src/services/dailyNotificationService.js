@@ -4,6 +4,7 @@ const BotSession = require('../models/BotSession');
 const Notification = require('../models/Notification');
 const DailyNotificationLog = require('../models/DailyNotificationLog');
 const { sendMail } = require('../config/mailer');
+const { sendSMS } = require('../config/twilio');
 const { getTodayDailyContent } = require('./dailyContentService');
 const { generateDailyNotificationHtml } = require('../templates/dailyNotificationEmail');
 const { sendPushBroadcast, sendPushToUser } = require('./webPushService');
@@ -51,18 +52,40 @@ function resolveUserLanguage(user) {
 
 /**
  * Format In-App notification text based on user language preference
- * Contains bilingual Bible verse (English & Tamil) under heading, followed by liturgy highlights
+ * Follows exact sequence:
+ * 1. Daily Bible Verse (Bilingual English & Tamil)
+ * 2. Daily Mass Readings
+ * 3. Daily Catholic Reflection
+ * 4. Saint of the Day
+ * Strictly ZERO emojis on church website and in notification templates.
  */
 function formatInAppMessage(dailyContent, userLang = 'ta') {
   const lang = userLang || 'ta';
   const isEn = lang === 'en';
-  const massTitle = isEn ? dailyContent.massReadings?.english?.title : dailyContent.massReadings?.tamil?.title;
-  const reflectionSnippet = isEn ? dailyContent.reflection?.english : dailyContent.reflection?.tamil;
-  const saintName = isEn ? dailyContent.saint?.nameEnglish : (dailyContent.saint?.nameTamil || dailyContent.saint?.nameEnglish);
+  const isBoth = lang === 'both';
+  const massTitle = isEn
+    ? dailyContent.massReadings?.english?.title
+    : (isBoth
+      ? `${dailyContent.massReadings?.tamil?.title || ''} / ${dailyContent.massReadings?.english?.title || ''}`
+      : dailyContent.massReadings?.tamil?.title);
+
+  const reflectionSnippet = isEn
+    ? dailyContent.reflection?.english
+    : (isBoth
+      ? `${dailyContent.reflection?.tamil || ''}\n\n${dailyContent.reflection?.english || ''}`
+      : dailyContent.reflection?.tamil);
+
+  const saintName = isEn
+    ? dailyContent.saint?.nameEnglish
+    : (isBoth
+      ? `${dailyContent.saint?.nameTamil || dailyContent.saint?.nameEnglish} / ${dailyContent.saint?.nameEnglish}`
+      : (dailyContent.saint?.nameTamil || dailyContent.saint?.nameEnglish));
+
+  const feastDay = dailyContent.saint?.feastDay ? ` (${dailyContent.saint.feastDay})` : '';
 
   const readingsObj = isEn ? dailyContent.massReadings?.english : dailyContent.massReadings?.tamil;
   const headerLines = extractLiturgicalHeaderLines(readingsObj, isEn ? 'en' : 'ta', dailyContent);
-  const cleanLitHeader = headerLines.map(l => l.replace(/^[^\w\u0B80-\u0BFF*]+/, '').replace(/\*/g, '')).join(' — ');
+  const cleanLitHeader = headerLines.map(l => l.replace(/^[^\w\u0B80-\u0BFF*]+/, '').replace(/\*/g, '')).join(' - ');
 
   const verseEn = (dailyContent?.bible?.english || dailyContent?.verse?.english || '').trim();
   const verseTa = (dailyContent?.bible?.tamil || dailyContent?.verse?.tamil || '').trim();
@@ -72,23 +95,43 @@ function formatInAppMessage(dailyContent, userLang = 'ta') {
   const refEn = getEnglishBibleReference(rawRef);
   const refTa = getTamilBibleReference(rawRef);
 
-  let verseSection = `📖 இன்றைய இறைவார்த்தை / DAILY BIBLE VERSE\n\n`;
-  if (verseEn) {
-    verseSection += `"${verseEn}"\n— ${refEn}\n\n`;
-  }
+  // 1. Daily Bible Verse
+  let verseSection = `இன்றைய இறைவார்த்தை / DAILY BIBLE VERSE\n\n`;
   if (verseTa) {
-    verseSection += `"${verseTa}"\n— ${refTa}`;
+    verseSection += `"${verseTa}"\n- ${refTa}\n\n`;
   }
+  if (verseEn) {
+    verseSection += `"${verseEn}"\n- ${refEn}`;
+  }
+
+  // 2. Daily Mass Readings
+  const readingsHeader = isEn ? 'Daily Mass Readings' : (isBoth ? 'திருப்பலி வாசகங்கள் / Mass Readings' : 'திருப்பலி வாசகங்கள்');
+  const readingsContent = cleanLitHeader || massTitle || 'Daily Liturgy';
+
+  // 3. Daily Catholic Reflection
+  const reflectionHeader = isEn ? 'Daily Catholic Reflection' : (isBoth ? 'இன்றைய தியானம் / Reflection' : 'இன்றைய தியானம்');
+  const reflectionText = reflectionSnippet ? `${reflectionSnippet.slice(0, 180)}...` : '';
+
+  // 4. Saint of the Day
+  const saintHeader = isEn ? 'Saint of the Day' : (isBoth ? 'இன்றைய புனிதர் / Saint of the Day' : 'இன்றைய புனிதர்');
+  const saintContent = `${saintName || 'Holy Saint'}${feastDay}`;
+
+  const fullContentLink = `${CLIENT_URL}/bible-verse`;
 
   return `${verseSection}
 
-${isEn ? 'Mass Readings' : 'திருப்பலி வாசகங்கள்'}: ${cleanLitHeader || massTitle || 'Daily Liturgy'}
-${isEn ? 'Saint of the Day' : 'இன்றைய புனிதர்'}: ${saintName || 'Holy Saint'}
-${isEn ? 'Reflection' : 'தியானம்'}: ${(reflectionSnippet || '').slice(0, 150)}...`;
+${readingsHeader}: ${readingsContent}
+
+${reflectionHeader}: ${reflectionText}
+
+${saintHeader}: ${saintContent}
+
+${isEn ? 'Read full daily liturgy and reflection on SJDB' : 'முழு வாசகங்கள் மற்றும் தியானத்தை வாசிக்க'}: ${fullContentLink}`;
 }
 
 /**
  * Format push notification payload for browser and mobile PWA push
+ * Strictly ZERO emojis on church website / notification templates.
  */
 function formatPushPayload(dailyContent, lang = 'ta') {
   const isEn = lang === 'en';
@@ -102,16 +145,16 @@ function formatPushPayload(dailyContent, lang = 'ta') {
 
   const readingsObj = isEn ? dailyContent.massReadings?.english : dailyContent.massReadings?.tamil;
   const headerLines = extractLiturgicalHeaderLines(readingsObj, isEn ? 'en' : 'ta', dailyContent);
-  const cleanLitHeader = headerLines.map(l => l.replace(/^[^\w\u0B80-\u0BFF*]+/, '').replace(/\*/g, '')).join(' — ');
+  const cleanLitHeader = headerLines.map(l => l.replace(/^[^\w\u0B80-\u0BFF*]+/, '').replace(/\*/g, '')).join(' - ');
 
   const bibleUrl = getSiteUrl(SITE_ROUTES.BIBLE_VERSE);
   const pushTitle = cleanLitHeader
-    ? `🗓️ ${cleanLitHeader}`
-    : `📖 இன்றைய இறைவார்த்தை / DAILY BIBLE VERSE`;
+    ? cleanLitHeader
+    : (isEn ? 'Daily Catholic Word and Readings' : 'இன்றைய இறைவார்த்தை & வாசகங்கள்');
 
   return {
     title: pushTitle,
-    body: `"${verseEn.slice(0, 80)}..." — ${refEn}\n"${verseTa.slice(0, 80)}..." — ${refTa}`,
+    body: `"${verseTa ? verseTa.slice(0, 75) + '...' : ''}" - ${refTa}\n"${verseEn ? verseEn.slice(0, 75) + '...' : ''}" - ${refEn}`,
     url: bibleUrl,
     image: `/api/settings/daily-verses/today/image`,
     tag: `sjdb-daily-${dailyContent.dateKey}`,
@@ -122,6 +165,44 @@ function formatPushPayload(dailyContent, lang = 'ta') {
       dateKey: dailyContent.dateKey
     }
   };
+}
+
+/**
+ * Format SMS notification in exact sequence:
+ * 1. Daily Bible Verse
+ * 2. Daily Mass Readings
+ * 3. Daily Catholic Reflection
+ * 4. Saint of the Day
+ * Strictly ZERO emojis.
+ */
+function formatSmsMessage(dailyContent, userLang = 'ta') {
+  const lang = userLang || 'ta';
+  const isEn = lang === 'en';
+  const verseText = isEn
+    ? (dailyContent?.bible?.english || dailyContent?.verse?.english || '').trim()
+    : (dailyContent?.bible?.tamil || dailyContent?.verse?.tamil || '').trim();
+  const rawRef = (dailyContent?.bible?.ref || dailyContent?.verse?.reference || '').trim();
+  const { getTamilBibleReference, getEnglishBibleReference } = require('../utils/bibleRefHelper');
+  const ref = isEn ? getEnglishBibleReference(rawRef) : getTamilBibleReference(rawRef);
+
+  const massTitle = isEn
+    ? (dailyContent.massReadings?.english?.title || 'Daily Mass Readings')
+    : (dailyContent.massReadings?.tamil?.title || 'திருப்பலி வாசகங்கள்');
+
+  const reflectionSnippet = isEn
+    ? (dailyContent.reflection?.english || '').slice(0, 80)
+    : (dailyContent.reflection?.tamil || '').slice(0, 80);
+
+  const saintName = isEn
+    ? (dailyContent.saint?.nameEnglish || 'Saint of the Day')
+    : (dailyContent.saint?.nameTamil || dailyContent.saint?.nameEnglish || 'இன்றைய புனிதர்');
+
+  return `SJDB Church Daily Catholic Content (${dailyContent.formattedDate || dailyContent.dateKey}):\n` +
+    `1. Verse: "${verseText}" - ${ref}\n` +
+    `2. Mass: ${massTitle}\n` +
+    `3. Reflection: ${reflectionSnippet}...\n` +
+    `4. Saint: ${saintName}\n` +
+    `Full details: ${CLIENT_URL}/bible-verse`;
 }
 
 /**
@@ -532,50 +613,32 @@ async function sendDailyChurchNotifications({
         .filter(Boolean)
     );
 
-    // Dedicated helper to check Daily Catholic Content eligibility
-    function isDailyCatholicEligible(record) {
-      if (!record) return false;
-      const isCompleted = record.dailyCatholicSetupCompleted === true;
-      const isSubscribed = record.dailyCatholicSubscribed === true;
-      const lang = (record.dailyCatholicLanguage || '').toLowerCase().trim();
-      const hasValidLang = ['english', 'tamil', 'both', 'en', 'ta'].includes(lang);
-      return isCompleted && isSubscribed && hasValidLang;
-    }
-
     function resolveDailyCatholicLanguage(record) {
-      const lang = (record?.dailyCatholicLanguage || '').toLowerCase().trim();
-      if (lang === 'english' || lang === 'en') return 'en';
-      if (lang === 'tamil' || lang === 'ta') return 'ta';
-      if (lang === 'both') return 'both';
-      return resolveUserLanguage(record);
+      return getUserDailyContentLanguage(record);
     }
 
-    // Active website users strictly eligible for Daily Catholic Content
+    // Active website users eligible for Daily Catholic Content (not unsubscribed or suspended)
     const rawUsers = await User.find({
       isActive: { $ne: false },
-      dailyCatholicSetupCompleted: true,
-      dailyCatholicSubscribed: true,
-      dailyCatholicLanguage: { $in: ['english', 'tamil', 'both', 'en', 'ta'] }
+      isSuspended: { $ne: true },
+      dailyCatholicSubscribed: { $ne: false }
     }).lean();
 
     const users = rawUsers.filter(u => {
       if (blockedUserIds.has(u._id.toString())) return false;
       const phone10 = (u.phone || '').replace(/\D/g, '').slice(-10);
       if (phone10 && blockedPhone10s.has(phone10)) return false;
-      // Dedicated completion & subscription check
-      if (!isDailyCatholicEligible(u)) {
-        return false;
-      }
       return true;
     });
 
-    // Standalone WhatsApp bot sessions with strictly completed Daily Catholic setup & active subscription
+    // Standalone WhatsApp bot sessions that completed onboarding or daily setup, and have not unsubscribed
     const rawBotSessions = await BotSession.find({
-      step: 'done',
-      isOnboarded: true,
-      dailyCatholicSetupCompleted: true,
-      dailyCatholicSubscribed: true,
-      dailyCatholicLanguage: { $in: ['english', 'tamil', 'both', 'en', 'ta'] }
+      $or: [
+        { step: 'done' },
+        { isOnboarded: true },
+        { dailyCatholicSetupCompleted: true }
+      ],
+      dailyCatholicSubscribed: { $ne: false }
     }).lean();
 
     const botSessions = rawBotSessions.filter(session => {
@@ -583,10 +646,6 @@ async function sendDailyChurchNotifications({
       if (!phone10) return false;
       if (blockedPhone10s.has(phone10)) {
         console.log(`[Daily Notification Service] Skipping restricted user phone ${phone10} from 4 AM broadcast.`);
-        return false;
-      }
-      // Dedicated completion & subscription check
-      if (!isDailyCatholicEligible(session)) {
         return false;
       }
       return true;
@@ -607,6 +666,7 @@ async function sendDailyChurchNotifications({
       const isInAppEnabled = userSettings.inApp !== false;
       const isPushEnabled = userSettings.push !== false;
       const isWhatsAppEnabled = userSettings.whatsapp !== false && Boolean(user.phone) && user.whatsappOptIn !== false;
+      const isSmsEnabled = userSettings.sms === true && Boolean(user.phone);
 
       const recipientKey = phone10 || `user_${user._id}`;
       recipientMap.set(recipientKey, {
@@ -619,13 +679,14 @@ async function sendDailyChurchNotifications({
         userLang,
         readingPreference: user.readingPreference || 'full',
         sendLinks: user.sendLinks !== false,
-        dailyCatholicSetupCompleted: true,
+        dailyCatholicSetupCompleted: user.dailyCatholicSetupCompleted !== false,
         dailyCatholicSubscribed: true,
-        dailyCatholicLanguage: user.dailyCatholicLanguage,
+        dailyCatholicLanguage: user.dailyCatholicLanguage || userLang,
         isEmailEnabled,
         isInAppEnabled,
         isPushEnabled,
         isWhatsAppEnabled,
+        isSmsEnabled,
         isBotOnly: false
       });
     }
@@ -660,11 +721,12 @@ async function sendDailyChurchNotifications({
         sendLinks: session.sendLinks !== false,
         dailyCatholicSetupCompleted: true,
         dailyCatholicSubscribed: true,
-        dailyCatholicLanguage: session.dailyCatholicLanguage,
+        dailyCatholicLanguage: session.dailyCatholicLanguage || sessionLang,
         isEmailEnabled: false,
         isInAppEnabled: false,
         isPushEnabled: false,
         isWhatsAppEnabled: true,
+        isSmsEnabled: false,
         isBotOnly: true
       });
     }
@@ -679,7 +741,8 @@ async function sendDailyChurchNotifications({
       email: { sent: 0, failed: 0, disabled: 0 },
       inApp: { sent: 0, failed: 0, disabled: 0 },
       push: { sent: 0, failed: 0, disabled: 0 },
-      whatsapp: { sent: 0, failed: 0, disabled: 0 }
+      whatsapp: { sent: 0, failed: 0, disabled: 0 },
+      sms: { sent: 0, failed: 0, disabled: 0 }
     };
 
     const waService = getWhatsApp();
@@ -732,7 +795,8 @@ async function sendDailyChurchNotifications({
                   email: { status: recipient.isEmailEnabled ? 'pending' : 'disabled' },
                   inApp: { status: recipient.isInAppEnabled ? 'pending' : 'disabled' },
                   push: { status: recipient.isPushEnabled ? 'pending' : 'disabled' },
-                  whatsapp: { status: recipient.isWhatsAppEnabled ? 'pending' : 'disabled' }
+                  whatsapp: { status: recipient.isWhatsAppEnabled ? 'pending' : 'disabled' },
+                  sms: { status: recipient.isSmsEnabled ? 'pending' : 'disabled' }
                 },
                 summary: {
                   bibleRef: dailyContent.bible?.ref,
@@ -763,11 +827,16 @@ async function sendDailyChurchNotifications({
         email: { status: recipient.isEmailEnabled ? 'pending' : 'disabled' },
         inApp: { status: recipient.isInAppEnabled ? 'pending' : 'disabled' },
         push: { status: recipient.isPushEnabled ? 'pending' : 'disabled' },
-        whatsapp: { status: recipient.isWhatsAppEnabled ? 'pending' : 'disabled' }
+        whatsapp: { status: recipient.isWhatsAppEnabled ? 'pending' : 'disabled' },
+        sms: { status: recipient.isSmsEnabled ? 'pending' : 'disabled' }
       };
 
       let userHadAtLeastOneSuccess = false;
       let userHadAnyAttempt = false;
+
+      const userReadingsObj = recipient.userLang === 'en' ? dailyContent.massReadings?.english : dailyContent.massReadings?.tamil;
+      const userHeaderLines = extractLiturgicalHeaderLines(userReadingsObj, recipient.userLang === 'en' ? 'en' : 'ta', dailyContent);
+      const userLitDay = userHeaderLines.map(l => l.replace(/^[^\w\u0B80-\u0BFF*]+/, '').replace(/\*/g, '')).join(' - ');
 
       // ── CHANNEL 1: EMAIL (If enabled) ─────────────────────────────────────
       if (recipient.isEmailEnabled && recipient.userEmail) {
@@ -780,10 +849,6 @@ async function sendDailyChurchNotifications({
             hasSaintImageAttachment: hasSaintImage,
             hasBibleImageAttachment: hasVerseImage
           });
-
-          const userReadingsObj = recipient.userLang === 'en' ? dailyContent.massReadings?.english : dailyContent.massReadings?.tamil;
-          const userHeaderLines = extractLiturgicalHeaderLines(userReadingsObj, recipient.userLang === 'en' ? 'en' : 'ta', dailyContent);
-          const userLitDay = userHeaderLines.map(l => l.replace(/^[^\w\u0B80-\u0BFF*]+/, '').replace(/\*/g, '')).join(' — ');
 
           const subject = recipient.userLang === 'en'
             ? `Good Morning - Your Daily Catholic Reading - ${dailyContent.formattedDate}${userLitDay ? ` (${userLitDay})` : ''}`
@@ -929,6 +994,47 @@ async function sendDailyChurchNotifications({
         channelStats.whatsapp.disabled++;
       }
 
+      // ── CHANNEL 5: SMS (If configured and enabled) ────────────────────────
+      if (recipient.isSmsEnabled && recipient.userPhone) {
+        userHadAnyAttempt = true;
+        try {
+          const smsText = formatSmsMessage(dailyContent, recipient.userLang);
+          const smsRes = await sendSMS(recipient.userPhone, smsText);
+          if (smsRes && smsRes.success) {
+            logChannels.sms = {
+              status: 'sent',
+              messageId: smsRes.sid || null,
+              phone: recipient.userPhone,
+              error: null,
+              sentAt: new Date()
+            };
+            channelStats.sms.sent++;
+            userHadAtLeastOneSuccess = true;
+            console.log(`[DELIVERY SMS] Daily Catholic Content SMS sent to ${recipient.userPhone}`);
+          } else {
+            logChannels.sms = {
+              status: 'failed',
+              messageId: null,
+              phone: recipient.userPhone,
+              error: smsRes?.error || 'SMS send failed',
+              sentAt: new Date()
+            };
+            channelStats.sms.failed++;
+          }
+        } catch (smsErr) {
+          logChannels.sms = {
+            status: 'failed',
+            messageId: null,
+            phone: recipient.userPhone,
+            error: smsErr.message,
+            sentAt: new Date()
+          };
+          channelStats.sms.failed++;
+        }
+      } else {
+        channelStats.sms.disabled++;
+      }
+
       // Determine overall user delivery status:
       // If WhatsApp was enabled for this user, do not mark as 'sent' if required messages failed
       let overallStatus = 'skipped';
@@ -1053,6 +1159,7 @@ async function getDailyNotificationStatus() {
     const inAppSent = await DailyNotificationLog.countDocuments({ dateKey, 'channels.inApp.status': 'sent' });
     const pushSent = await DailyNotificationLog.countDocuments({ dateKey, 'channels.push.status': 'sent' });
     const waSent = await DailyNotificationLog.countDocuments({ dateKey, 'channels.whatsapp.status': 'sent' });
+    const smsSent = await DailyNotificationLog.countDocuments({ dateKey, 'channels.sms.status': 'sent' });
 
     return {
       success: true,
@@ -1068,7 +1175,8 @@ async function getDailyNotificationStatus() {
         email: emailSent,
         inApp: inAppSent,
         push: pushSent,
-        whatsapp: waSent
+        whatsapp: waSent,
+        sms: smsSent
       },
       recentLogs
     };
@@ -1151,5 +1259,6 @@ module.exports = {
   sendDailyWhatsAppSequence,
   resolveUserLanguage,
   formatInAppMessage,
-  formatPushPayload
+  formatPushPayload,
+  formatSmsMessage
 };
