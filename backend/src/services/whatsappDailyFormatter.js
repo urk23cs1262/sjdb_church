@@ -825,23 +825,23 @@ function generateDailyMassReadingsMessage({ dailyContent, language = 'ta', readi
   if (lang === 'en') {
     const formattedEn = formatMassReadingsLangBlock(dailyContent.massReadings?.english, 'en', isShort);
     const headerLinesEn = extractLiturgicalHeaderLines(dailyContent.massReadings?.english, 'en', dailyContent);
-    const headerBlockEn = headerLinesEn.length > 0 ? `\n${headerLinesEn.join('\n')}` : '';
-    msg = `✝️ *Today's Catholic Mass Readings*\n📅 *${dateEn}*${headerBlockEn}\n\n${formattedEn || 'Readings are not available today.'}`;
+    const headerBlockEn = headerLinesEn.length > 0 ? `\n\n${headerLinesEn.join('\n\n')}` : '';
+    msg = `✝️ *Today's Catholic Mass Readings*\n\n📅 *${dateEn}*${headerBlockEn}\n\n${formattedEn || 'Readings are not available today.'}`;
   } else if (lang === 'both') {
     const formattedTa = formatMassReadingsLangBlock(dailyContent.massReadings?.tamil, 'ta', isShort);
     const formattedEn = formatMassReadingsLangBlock(dailyContent.massReadings?.english, 'en', isShort);
     const headerLinesTa = extractLiturgicalHeaderLines(dailyContent.massReadings?.tamil, 'ta', dailyContent);
-    const headerBlockTa = headerLinesTa.length > 0 ? `\n${headerLinesTa.join('\n')}` : '';
+    const headerBlockTa = headerLinesTa.length > 0 ? `\n\n${headerLinesTa.join('\n\n')}` : '';
     const headerLinesEn = extractLiturgicalHeaderLines(dailyContent.massReadings?.english, 'en', dailyContent);
-    const headerBlockEn = headerLinesEn.length > 0 ? `\n${headerLinesEn.join('\n')}` : '';
-    msg = `✝️ *இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள்*\n📅 *${dateTa}*${headerBlockTa}\n\n${formattedTa || 'இன்றைய வாசகம் கிடைக்கவில்லை.'}\n\n━━━━━━━━━━━━━━━━━━━━━\n\n✝️ *Today's Catholic Mass Readings*\n📅 *${dateEn}*${headerBlockEn}\n\n${formattedEn || 'Readings are not available today.'}`;
+    const headerBlockEn = headerLinesEn.length > 0 ? `\n\n${headerLinesEn.join('\n\n')}` : '';
+    msg = `✝️ *இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள்*\n\n📅 *${dateTa}*${headerBlockTa}\n\n${formattedTa || 'இன்றைய வாசகம் கிடைக்கவில்லை.'}\n\n━━━━━━━━━━━━━━━━━━━━━\n\n✝️ *Today's Catholic Mass Readings*\n\n📅 *${dateEn}*${headerBlockEn}\n\n${formattedEn || 'Readings are not available today.'}`;
   } else {
     // Tamil (default)
     const formattedTa = formatMassReadingsLangBlock(dailyContent.massReadings?.tamil, 'ta', isShort);
     const fallbackEn = !formattedTa ? formatMassReadingsLangBlock(dailyContent.massReadings?.english, 'en', isShort) : '';
     const headerLinesTa = extractLiturgicalHeaderLines(dailyContent.massReadings?.tamil, 'ta', dailyContent);
-    const headerBlockTa = headerLinesTa.length > 0 ? `\n${headerLinesTa.join('\n')}` : '';
-    msg = `✝️ *இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள்*\n📅 *${dateTa}*${headerBlockTa}\n\n${formattedTa || fallbackEn || 'இன்றைய வாசகம் கிடைக்கவில்லை.'}`;
+    const headerBlockTa = headerLinesTa.length > 0 ? `\n\n${headerLinesTa.join('\n\n')}` : '';
+    msg = `✝️ *இன்றைய கத்தோலிக்க திருப்பலி வாசகங்கள்*\n\n📅 *${dateTa}*${headerBlockTa}\n\n${formattedTa || fallbackEn || 'இன்றைய வாசகம் கிடைக்கவில்லை.'}`;
   }
 
   return removeAllUrls(msg.trim());

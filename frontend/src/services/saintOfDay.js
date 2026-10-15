@@ -20,13 +20,45 @@ export function cleanSaintName(name) {
     .trim();
 }
 
+export function cleanBioParagraphs(text) {
+  if (!text || typeof text !== 'string') return [];
+  return text
+    .split(/\n+/)
+    .map(t => t.trim())
+    .filter(t => {
+      if (!t || t.length < 5) return false;
+      if (/^https?:\/\//i.test(t)) return false;
+      if (/http:\/\/|https:\/\//i.test(t)) return false;
+      if (/^(angelus address|regina coeli address|general audience|message of pope|letter to the superior)/i.test(t)) return false;
+      return true;
+    });
+}
+
 export function formatFiveLines(text) {
   if (!text) return '';
-  const paras = text
-    .split(/\n\s*\n/)
-    .map(t => t.trim())
-    .filter(Boolean);
-  return paras.length > 0 ? paras.join('\n\n') : text.trim();
+  const clean = cleanBioParagraphs(text);
+  return clean.length > 0 ? clean.join('\n\n') : text.trim();
+}
+
+export function formatSaintSummary(text, maxChars = 380) {
+  if (!text) return '';
+  const clean = cleanBioParagraphs(text);
+  if (clean.length === 0) return '';
+  const fullText = clean.join(' ').replace(/\s+/g, ' ').trim();
+  if (fullText.length <= maxChars) return fullText;
+
+  // Split into sentences cleanly
+  const sentenceRegex = /[^.!?]+[.!?]+(\s|$)/g;
+  const sentences = fullText.match(sentenceRegex) || [fullText];
+  let result = '';
+  for (const s of sentences) {
+    if ((result + s).length <= maxChars || result.length === 0) {
+      result += s;
+    } else {
+      break;
+    }
+  }
+  return result.trim() || (fullText.slice(0, maxChars) + '...');
 }
 
 export async function fetchSaintOfTheDay(dateStr) {
@@ -58,8 +90,8 @@ export async function fetchSaintOfTheDay(dateStr) {
     if (res.data && res.data.success && (res.data.saintName || res.data.name)) {
       let rawSaintName = res.data.saintName || res.data.name || fallbackSaint.name;
       let rawEngName = res.data.englishName || res.data.saintName || res.data.name || fallbackSaint.name;
-      let rawDesc = res.data.description || fallbackSaint.description;
-      let rawDescTa = res.data.descriptionTa || fallbackSaint.descriptionTa;
+      let rawDesc = formatFiveLines(res.data.description || fallbackSaint.description);
+      let rawDescTa = formatFiveLines(res.data.descriptionTa || fallbackSaint.descriptionTa);
       let rawImg = res.data.image || fallbackSaint.image;
       let rawSource = res.data.source || "Vatican News";
       let rawSourceUrl = res.data.sourceUrl || `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`;
@@ -75,8 +107,8 @@ export async function fetchSaintOfTheDay(dateStr) {
         rawSourceUrl = `https://www.vaticannews.va/en/saints/${monthNum}/${dayNum}.html`;
         rawSaintName = fallbackSaint.name;
         rawEngName = fallbackSaint.name;
-        rawDesc = fallbackSaint.description;
-        rawDescTa = fallbackSaint.descriptionTa;
+        rawDesc = formatFiveLines(fallbackSaint.description);
+        rawDescTa = formatFiveLines(fallbackSaint.descriptionTa);
         rawImg = fallbackSaint.image;
         if (isStaleCatholicReadings) {
           rawSaintName = 'Blessed Virgin Mary of the Mercy';
@@ -98,6 +130,8 @@ export async function fetchSaintOfTheDay(dateStr) {
       const rawSaints = res.data.saints || res.data.allSaints || [];
       const normalizedSaints = rawSaints.map(s => ({
         ...s,
+        description: formatFiveLines(s.description || ''),
+        descriptionTa: formatFiveLines(s.descriptionTa || ''),
         image: s.image && s.image.startsWith('/uploads') ? getFileUrl(s.image) : s.image
       }));
 
@@ -106,6 +140,8 @@ export async function fetchSaintOfTheDay(dateStr) {
         ...rawPrimary,
         name: cleanSaintName(rawPrimary.name || rawPrimary.englishName),
         englishName: cleanSaintName(rawPrimary.englishName || rawPrimary.name),
+        description: formatFiveLines(rawPrimary.description || rawDesc),
+        descriptionTa: formatFiveLines(rawPrimary.descriptionTa || rawDescTa),
         image: rawPrimary.image && rawPrimary.image.startsWith('/uploads') ? getFileUrl(rawPrimary.image) : rawPrimary.image,
         sourceUrl: rawPrimary.sourceUrl || rawSourceUrl,
         detailUrl: rawPrimary.detailUrl || rawPrimary.sourceUrl || rawSourceUrl
@@ -129,6 +165,8 @@ export async function fetchSaintOfTheDay(dateStr) {
         ...s,
         name: cleanSaintName(s.name || s.englishName),
         englishName: cleanSaintName(s.englishName || s.name),
+        description: formatFiveLines(s.description || ''),
+        descriptionTa: formatFiveLines(s.descriptionTa || ''),
         image: s.image && s.image.startsWith('/uploads') ? getFileUrl(s.image) : s.image,
         sourceUrl: s.sourceUrl || rawSourceUrl,
         detailUrl: s.detailUrl || s.sourceUrl || rawSourceUrl
@@ -247,10 +285,11 @@ export async function fetchSaintOfTheDay(dateStr) {
   return fallbackPayload;
 }
 
-export async function searchSaintImage(saintName) {
+export async function searchSaintImage(saintName, date = null) {
   if (!saintName) return null;
   try {
-    const res = await api.get(`/saint-of-the-day/image-search?name=${encodeURIComponent(saintName)}`);
+    const dateParam = date ? `&date=${encodeURIComponent(date)}` : '';
+    const res = await api.get(`/saint-of-the-day/image-search?name=${encodeURIComponent(saintName)}${dateParam}`);
     if (res.data && res.data.success && res.data.image) {
       return res.data;
     }

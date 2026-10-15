@@ -271,12 +271,12 @@ const getSaintStatus = async (req, res) => {
 
 const searchSaintImage = async (req, res) => {
   try {
-    const { name } = req.query;
+    const { name, date } = req.query;
     if (!name || name.trim() === '') {
       return res.status(400).json({ success: false, message: 'Saint name is required' });
     }
     const { searchAndApplySaintImage } = require('../services/saintService');
-    const result = await searchAndApplySaintImage(name.trim());
+    const result = await searchAndApplySaintImage(name.trim(), date ? String(date).trim() : null);
     if (result && result.url) {
       return res.json({
         success: true,
@@ -286,10 +286,11 @@ const searchSaintImage = async (req, res) => {
         imageFallback: false
       });
     }
-    const { DIGNIFIED_FALLBACK_IMAGE } = require('../services/saintImageResolver');
+    const { getDignifiedFallbackImage } = require('../services/saintImageResolver');
+    const fallbackUrl = getDignifiedFallbackImage(name.trim());
     return res.json({
       success: true,
-      image: DIGNIFIED_FALLBACK_IMAGE,
+      image: fallbackUrl,
       imageSource: 'liturgical_fallback',
       imageFallback: true
     });

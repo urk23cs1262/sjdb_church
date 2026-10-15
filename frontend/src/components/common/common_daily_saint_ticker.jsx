@@ -7,7 +7,7 @@ import {
   fetchSaintOfTheDay, 
   searchSaintImage, 
   cleanSaintName, 
-  formatFiveLines 
+  cleanBioParagraphs
 } from '../../services/saintOfDay';
 import { getSaintForDate } from '../../data/catholic_saints_calendar';
 
@@ -77,7 +77,7 @@ export default function DailySaintTicker() {
                 .replace(/\s*[-–—|]\s*Saint of the Day.*$/i, '')
                 .replace(/\s+\d{4}\s*$/g, '')
                 .trim();
-              const found = await searchSaintImage(targetName);
+              const found = await searchSaintImage(targetName, data.date);
               if (found && found.image && !found.imageFallback) {
                 data.image = found.image;
                 data.imageSource = found.imageSource || 'wikipedia';
@@ -163,7 +163,7 @@ export default function DailySaintTicker() {
     const saintTarget = saintOfDay?.englishName || saintOfDay?.saintName || displayName;
     if (saintTarget) {
       try {
-        const found = await searchSaintImage(saintTarget);
+        const found = await searchSaintImage(saintTarget, saintOfDay?.date);
         if (found && found.image && !found.image.includes('shutterstock')) {
           setSaintOfDay(prev => ({
             ...prev,
@@ -206,16 +206,6 @@ export default function DailySaintTicker() {
       window.scrollTo(0, scrollY);
     };
   }, [showModal]);
-
-  // Helper to format clean, cohesive 5-line biography
-  const formatFiveLines = (text) => {
-    if (!text) return '';
-    return text
-      .split(/\n+/)
-      .map(t => t.trim())
-      .filter(Boolean)
-      .join(' ');
-  };
 
   // Open modal and ensure full saint details are refreshed if needed
   const handleOpenModal = () => {
@@ -310,7 +300,7 @@ export default function DailySaintTicker() {
                       overflow-hidden
                       max-h-[92vh]
                       h-auto
-                      md:h-[460px]
+                      md:h-[520px]
                       flex flex-col
                       border border-gray-100
                     "
@@ -376,9 +366,9 @@ export default function DailySaintTicker() {
                         : null;
 
                       return (
-                        <div className="flex flex-col md:flex-row flex-1 h-full md:h-full overflow-y-auto md:overflow-hidden">
+                        <div className="flex flex-col md:flex-row flex-1 h-full md:h-full overflow-hidden">
                           {/* SAINT IMAGE BANNER (LEFT SIDE) */}
-                          <div className="w-full md:w-5/12 relative min-h-[280px] h-[280px] sm:h-[320px] md:min-h-full md:h-full flex-shrink-0 bg-slate-950 overflow-hidden flex items-center justify-center">
+                          <div className="w-full md:w-5/12 relative min-h-[260px] sm:min-h-[280px] md:min-h-full md:h-full flex-shrink-0 bg-slate-950 overflow-hidden flex items-center justify-center">
                             {mImage ? (
                               <img
                                 src={mImage}
@@ -426,15 +416,15 @@ export default function DailySaintTicker() {
                             </div>
                           </div>
 
-                          {/* CONTENT DETAILS (RIGHT SIDE) */}
-                          <div className="flex-1 p-5 sm:p-7 md:p-8 overflow-y-auto flex flex-col justify-between notranslate custom-scrollbar" translate="no">
+                          {/* CONTENT DETAILS (RIGHT SIDE) — Overall scrolling, Vatican News button at bottom */}
+                          <div className="flex-1 min-w-0 p-5 sm:p-7 md:p-8 overflow-y-auto flex flex-col justify-between notranslate custom-scrollbar" translate="no">
                             <div className="space-y-4">
                               {/* If viewing an other saint, show back button to primary celebration */}
                               {!isViewingPrimary && (
                                 <button
                                   type="button"
                                   onClick={() => setSelectedModalIdx(0)}
-                                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-amber-950 bg-amber-100 hover:bg-amber-200 transition-colors flex items-center gap-1.5 cursor-pointer w-fit border border-amber-300/70 shadow-2xs"
+                                  className="px-3 py-1 rounded-xl text-xs font-bold text-amber-950 bg-amber-100 hover:bg-amber-200 transition-colors flex items-center gap-1.5 cursor-pointer w-fit border border-amber-300/70 shadow-2xs mb-1"
                                 >
                                   <span>←</span>
                                   <span>{isTamil ? 'முதன்மை கொண்டாட்டத்திற்குத் திரும்பு' : 'Back to Primary Celebration'}: <span className="underline font-black">{primaryDisplayName}</span></span>
@@ -443,13 +433,13 @@ export default function DailySaintTicker() {
 
                               {/* Dedicated OTHER SAINTS Section (ABOVE FEAST DAY) */}
                               {otherSaintsList.length > 0 && (
-                                <div className="pb-3 border-b border-gray-100">
-                                  <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-500 mb-2 flex items-center gap-1.5">
+                                <div className="pb-2 border-b border-gray-100">
+                                  <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-gray-500 mb-1 flex items-center gap-1.5">
                                     <span>{isTamil ? 'இன்று நினைவுகூரப்படும் பிற புனிதர்கள்' : 'OTHER SAINTS'}</span>
-                                    <span className="text-xs text-gray-400">({otherSaintsList.length})</span>
+                                    <span className="text-[10px] text-gray-400">({otherSaintsList.length})</span>
                                   </p>
-                                  <div className="flex flex-wrap gap-2">
-                                    {otherSaintsList.map((os, osIdx) => {
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {otherSaintsList.slice(0, 4).map((os, osIdx) => {
                                       const actualIdx = osIdx + 1;
                                       const isSelected = selectedModalIdx === actualIdx;
                                       const osName = cleanDisplayName(isTamil && os.tamilName ? os.tamilName : (os.englishName || os.name));
@@ -458,16 +448,16 @@ export default function DailySaintTicker() {
                                           key={osIdx}
                                           type="button"
                                           onClick={() => setSelectedModalIdx(actualIdx)}
-                                          className={`group px-3 py-1.5 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer shadow-2xs ${
+                                          className={`group px-2.5 py-1 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs ${
                                             isSelected
                                               ? 'bg-church-gold text-amber-950 ring-2 ring-church-gold/60 scale-102 font-bold'
                                               : 'bg-amber-50/80 hover:bg-amber-100 text-gray-800 border border-amber-200/60 hover:scale-102'
                                           }`}
                                         >
                                           {os.image && (
-                                            <img src={os.image} alt="" className="w-5 h-5 rounded-full object-cover border border-amber-300" />
+                                            <img src={os.image} alt="" className="w-4 h-4 rounded-full object-cover border border-amber-300" />
                                           )}
-                                          <span>{osName}</span>
+                                          <span className="truncate max-w-[130px]">{osName}</span>
                                           <span className="text-[10px] text-church-gold group-hover:translate-x-0.5 transition-transform">→</span>
                                         </button>
                                       );
@@ -479,31 +469,37 @@ export default function DailySaintTicker() {
                               {/* Feast Day Section with Celebration Type */}
                               <div className="border-b border-gray-100 pb-3 flex items-center justify-between flex-wrap gap-2">
                                 <div>
-                                  <p className="text-[11px] uppercase tracking-[0.25em] text-gray-500 font-bold mb-1">
+                                  <p className="text-[10px] uppercase tracking-[0.25em] text-gray-400 font-bold mb-0.5">
                                     {isTamil ? 'திருவிழா நாள்' : 'FEAST DAY'}
                                   </p>
-                                  <h2 className="text-xl sm:text-2xl font-bold text-church-gold font-display">
+                                  <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-church-gold font-display leading-tight">
                                     {formattedFeastDate}
                                   </h2>
                                 </div>
                                 {celebrationType && (
-                                  <span className="px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-amber-100 text-amber-950 border border-amber-300">
+                                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black uppercase tracking-wider bg-amber-100 text-amber-950 border border-amber-300">
                                     {celebrationType}
                                   </span>
                                 )}
                               </div>
 
-                              {/* Biography text */}
+                              {/* Biography text — Full content without inner scrolling */}
                               <div className="text-gray-700 leading-relaxed text-sm sm:text-base font-normal">
                                 <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400 mb-1.5">
                                   {isTamil ? 'புனிதரைப் பற்றி' : 'ABOUT THE SAINT'}
                                 </p>
-                                <div className="space-y-3 text-gray-800 leading-relaxed text-justify">
+                                <div className="space-y-3 text-gray-800 leading-relaxed text-left">
                                   {(() => {
-                                    const paras = (mDescription || '').split(/\n+/).map(p => p.trim()).filter(Boolean);
-                                    if (paras.length === 0) return <p>{mDescription || 'Daily Saint details.'}</p>;
+                                    const paras = cleanBioParagraphs(mDescription);
+                                    if (paras.length === 0) {
+                                      return (
+                                        <p className="leading-relaxed text-left text-gray-500 italic">
+                                          {mDescription || (isTamil ? 'புனிதர் விவரங்கள் கிடைக்கவில்லை.' : 'Daily Saint details.')}
+                                        </p>
+                                      );
+                                    }
                                     return paras.map((p, idx) => (
-                                      <p key={idx} className="leading-relaxed">
+                                      <p key={idx} className="leading-relaxed text-left">
                                         {p}
                                       </p>
                                     ));
@@ -512,8 +508,8 @@ export default function DailySaintTicker() {
                               </div>
                             </div>
 
-                            {/* Link to Original Website Page — Strictly Wikipedia or Vatican News only */}
-                            <div className="pt-4 mt-4 border-t border-gray-100 flex-shrink-0">
+                            {/* Action links row (Vatican/Wikipedia link centered at bottom, reached by scrolling down) */}
+                            <div className="pt-4 mt-6 border-t border-gray-100 flex items-center justify-center flex-shrink-0">
                               {(() => {
                                 // Content is ONLY from Wikipedia if the content was fetched with a confirmed, valid Wikipedia article URL.
                                 // Exclude invalid strings or unverified titles to avoid Wikipedia 404 pages.
@@ -562,6 +558,8 @@ export default function DailySaintTicker() {
                                       gap-2.5
                                       py-3
                                       px-6
+                                      w-full
+                                      sm:w-auto
                                       rounded-xl
                                       bg-gradient-to-r
                                       from-church-royal-blue

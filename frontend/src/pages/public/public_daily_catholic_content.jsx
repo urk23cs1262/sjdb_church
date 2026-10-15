@@ -10,7 +10,7 @@ import * as htmlToImage from 'html-to-image';
 import downloadjs from 'downloadjs';
 import PageHero from '../../components/common/common_page_hero';
 import api from '../../services/api';
-import { fetchSaintOfTheDay, searchSaintImage, cleanSaintName, formatFiveLines } from '../../services/saintOfDay';
+import { fetchSaintOfTheDay, searchSaintImage, cleanSaintName, formatFiveLines, cleanBioParagraphs } from '../../services/saintOfDay';
 import { getTamilBibleReference, getEnglishBibleReference } from '../../utils/bibleRefHelper';
 
 
@@ -342,7 +342,7 @@ export default function DailyCatholicContent() {
           const isBrittoFallback = data.image?.includes('St._John_De_Britto.jpg') && !data.saintName?.toLowerCase().includes('britto');
           if (!data.image || data.imageFallback || isBrittoFallback || data.image.includes('Virgin_Mary_by_Giovanni_Battista_Salvi_da_Sassoferrato')) {
             try {
-              const found = await searchSaintImage(data.englishName || data.saintName);
+              const found = await searchSaintImage(data.englishName || data.saintName, date);
               if (found && found.image && !found.imageFallback) {
                 data.image = found.image;
                 data.imageSource = found.imageSource || 'wikipedia';
@@ -366,7 +366,7 @@ export default function DailyCatholicContent() {
     const targetName = saintData?.englishName || saintData?.saintName;
     if (targetName) {
       try {
-        const found = await searchSaintImage(targetName);
+        const found = await searchSaintImage(targetName, date);
         if (found && found.image && !found.image.includes('shutterstock')) {
           setSaintData(prev => ({
             ...prev,
@@ -1228,7 +1228,7 @@ export default function DailyCatholicContent() {
                       </div>
 
                       {/* Details & Biography */}
-                      <div className="flex-1 space-y-4 text-left flex flex-col justify-between">
+                      <div className="flex-1 min-w-0 space-y-4 text-left flex flex-col justify-between">
                         <div>
                           {/* Dedicated OTHER SAINTS Section (ABOVE FEAST DAY) */}
                           {otherSaintsList.length > 0 && (
@@ -1268,7 +1268,7 @@ export default function DailyCatholicContent() {
                             </div>
                           )}
 
-                          <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-amber-100/70">
                             <div>
                               <span className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400">
                                 {isTamil ? 'திருவிழா நாள்' : 'FEAST DAY'}
@@ -1288,12 +1288,18 @@ export default function DailyCatholicContent() {
                             <p className="text-[11px] uppercase tracking-[0.2em] font-bold text-gray-400 mb-1.5">
                               {isTamil ? 'புனிதரைப் பற்றி' : 'ABOUT THE SAINT'}
                             </p>
-                            <div className="max-h-[260px] sm:max-h-[300px] md:max-h-[340px] overflow-y-auto pr-2 space-y-2.5 text-gray-800 leading-relaxed text-justify">
+                            <div className="max-h-[280px] sm:max-h-[320px] md:max-h-[350px] overflow-y-auto overflow-x-hidden pr-3 sm:pr-4 custom-scrollbar space-y-3 text-gray-800 text-sm sm:text-base leading-relaxed text-left break-words">
                               {(() => {
-                                const paras = activeDesc.split(/\n+/).map(p => p.trim()).filter(Boolean);
-                                if (paras.length === 0) return <p>{activeDesc}</p>;
+                                const paras = cleanBioParagraphs(activeDesc);
+                                if (paras.length === 0) {
+                                  return (
+                                    <p className="leading-relaxed text-left text-gray-500 italic">
+                                      {activeDesc || (isTamil ? 'புனிதர் விவரங்கள் கிடைக்கவில்லை.' : 'Daily Saint details.')}
+                                    </p>
+                                  );
+                                }
                                 return paras.map((p, idx) => (
-                                  <p key={idx} className="leading-relaxed">
+                                  <p key={idx} className="leading-relaxed text-left">
                                     {p}
                                   </p>
                                 ));

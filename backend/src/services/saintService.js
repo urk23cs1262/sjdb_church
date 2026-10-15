@@ -12,7 +12,8 @@ const {
   searchSaintFallback, 
   cleanSaintName, 
   verifyImageUrl,
-  DIGNIFIED_FALLBACK_IMAGE
+  DIGNIFIED_FALLBACK_IMAGE,
+  getDignifiedFallbackImage
 } = require('./saintImageResolver');
 
 // ─── SOURCE CONFIGURATION ────────────────────────────────────────────────────
@@ -118,6 +119,22 @@ function splitIntoSentences(text) {
     .replace(/Mrs_TEMP_DOT/g, 'Mrs.')
     .replace(/Fr_TEMP_DOT/g, 'Fr.')
   );
+}
+
+function isCleanBioParagraph(text) {
+  if (!text || typeof text !== 'string') return false;
+  const t = text.trim();
+  if (t.length <= 20) return false;
+  if (t.includes('The Saint of the day presents a daily calendar')) return false;
+  if (/^https?:\/\//i.test(t)) return false;
+  if (/http:\/\/|https:\/\//i.test(t)) return false;
+  if (/^(angelus address|regina coeli address|general audience|message of pope|letter to the superior)/i.test(t)) return false;
+  return true;
+}
+
+function sanitizeBioText(text) {
+  if (!text || typeof text !== 'string') return '';
+  return text.split(/\n+/).map(p => p.trim()).filter(isCleanBioParagraph).join('\n\n');
 }
 
 const saintTranslationCache = new Map();
@@ -357,6 +374,10 @@ function getSaintBioSlugs(rawName) {
     slugs.push('Paulinus_of_York', 'Saint_Paulinus_of_York');
   }
 
+  if (lowerRaw.includes('callistus') || lowerRaw.includes('callixtus') || lowerRaw.includes('calixtus')) {
+    slugs.push('Pope_Callixtus_I', 'Pope_Callistus_I', 'Callixtus_I', 'Callistus_I');
+  }
+
   // Handle "and companions"
   if (lowerRaw.includes('companion') || lowerRaw.includes('martyr')) {
     const firstPerson = cleanName.split(/,|\band\b/i)[0].trim();
@@ -378,8 +399,14 @@ function getSaintBioSlugs(rawName) {
     slugs.push(`Saint_${cleanBase}_of_${location}`);
   }
 
+  const isPope = lowerRaw.includes('pope') || cleanName.toLowerCase().includes('pope');
   if (baseName) {
     const cleanBase = baseName.replace(/\s+/g, '_');
+    if (isPope) {
+      slugs.push(`Pope_${cleanBase}`);
+      if (cleanBase.includes('Callistus')) slugs.push('Pope_Callixtus_I');
+      if (cleanBase.includes('Callixtus')) slugs.push('Pope_Callistus_I');
+    }
     slugs.push(
       cleanBase,
       `Saint_${cleanBase}`,
@@ -434,12 +461,39 @@ function validateWikiMatch(displayedSaintName, wikiTitle, extract = '') {
   const cleanWiki = cleanSaintNameForWiki(wikiTitle).toLowerCase();
   const lowerExtract = (extract || '').toLowerCase();
 
+  // Reject Patriarch of Constantinople / Ecumenical Patriarch when searching for Catholic saints/popes
+  if (
+    cleanWiki.includes('patriarch of constantinople') ||
+    cleanWiki.includes('ecumenical patriarch') ||
+    lowerExtract.slice(0, 300).includes('patriarch of constantinople') ||
+    lowerExtract.slice(0, 300).includes('ecumenical patriarch')
+  ) {
+    if (!cleanDisplay.includes('constantinople')) {
+      return false;
+    }
+  }
+
   if (cleanWiki.includes('disambiguation') || cleanWiki.includes('list of')) return false;
 
   if (cleanDisplay.includes('candida') && (cleanWiki.includes('elder') || cleanWiki.includes('vecchia') || cleanWiki.includes('carthage') || cleanWiki.includes('film'))) {
     return false;
   }
 
+  // Canonical phonetic & spelling normalizer
+  const norm = (s) => (s || '')
+    .replace(/callistus/gi, 'callixtus')
+    .replace(/calixtus/gi, 'callixtus')
+    .replace(/theresa/gi, 'teresa')
+    .replace(/thérèse/gi, 'teresa')
+    .replace(/matthew/gi, 'matteo')
+    .replace(/francis/gi, 'francisco')
+    .replace(/wenceslaus/gi, 'wenceslas')
+    .replace(/anthony/gi, 'antony');
+
+  const normDisplay = norm(cleanDisplay);
+  const normWiki = norm(cleanWiki);
+
+  if (normDisplay.includes(normWiki) || normWiki.includes(normDisplay)) return true;
   if (cleanDisplay.includes(cleanWiki) || cleanWiki.includes(cleanDisplay)) return true;
   if (cleanDisplay.includes('mark') && cleanWiki.includes('mark')) return true;
   if (cleanDisplay.includes('sergius') && cleanWiki.includes('sergius')) return true;
@@ -456,11 +510,11 @@ function validateWikiMatch(displayedSaintName, wikiTitle, extract = '') {
   if (cleanDisplay.includes('paulinus') && cleanWiki.includes('paulinus')) return true;
   if (cleanDisplay.includes('daniel') && cleanWiki.includes('daniel')) return true;
 
-  const displayTokens = cleanDisplay.split(/\s+/).filter(w => w.length > 3 && !['saint', 'blessed', 'pope', 'martyr', 'martyrs', 'first', 'great', 'disciple', 'companions'].includes(w));
-  const wikiTokens = cleanWiki.split(/\s+/).filter(w => w.length > 3 && !['saint', 'blessed', 'pope', 'martyr', 'martyrs', 'first', 'great', 'disciple', 'companions'].includes(w));
+  const displayTokens = normDisplay.split(/\s+/).filter(w => w.length > 3 && !['saint', 'blessed', 'pope', 'martyr', 'martyrs', 'first', 'great', 'disciple', 'companions'].includes(w));
+  const wikiTokens = normWiki.split(/\s+/).filter(w => w.length > 3 && !['saint', 'blessed', 'pope', 'martyr', 'martyrs', 'first', 'great', 'disciple', 'companions'].includes(w));
 
   const primaryToken = displayTokens[0];
-  if (primaryToken && !cleanWiki.includes(primaryToken) && !lowerExtract.slice(0, 200).includes(primaryToken)) {
+  if (primaryToken && !normWiki.includes(primaryToken) && !norm(lowerExtract.slice(0, 300)).includes(primaryToken)) {
     return false;
   }
 
@@ -514,7 +568,7 @@ function generateComprehensiveCatholicBio(saintName, dateKey = '') {
  */
 async function fetchDirectWikiExtract(title, saintName, userAgent) {
   try {
-    const url = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts|pageprops&explaintext=true&titles=${encodeURIComponent(title)}&format=json`;
+    const url = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts|pageprops&explaintext=true&redirects=1&titles=${encodeURIComponent(title)}&format=json`;
     const res = await axios.get(url, { headers: { 'User-Agent': userAgent }, timeout: 7000 });
     const pages = res.data?.query?.pages || {};
     const page = Object.values(pages)[0];
@@ -556,7 +610,7 @@ async function fetchWikipediaBio(saintName) {
   // 1. Direct candidate slugs via MediaWiki extracts API
   for (const slug of slugs) {
     try {
-      const url = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts|pageprops&explaintext=true&titles=${encodeURIComponent(slug)}&format=json`;
+      const url = `https://en.wikipedia.org/w/api.php?action=query&prop=extracts|pageprops&explaintext=true&redirects=1&titles=${encodeURIComponent(slug)}&format=json`;
       const res = await axios.get(url, {
         headers: { 'User-Agent': wikiUserAgent },
         timeout: 7000
@@ -1219,7 +1273,7 @@ async function fetchFromVaticanNews(month, day, year = new Date().getFullYear())
       const paragraphs = [];
       $(el).find('.section__content p').each((pi, pel) => {
         const text = $(pel).text().replace(/\s+/g, ' ').trim();
-        if (text && !text.includes('The Saint of the day presents a daily calendar') && text.length > 20) {
+        if (text && isCleanBioParagraph(text)) {
           paragraphs.push(text);
         }
       });
@@ -1248,7 +1302,7 @@ async function fetchFromVaticanNews(month, day, year = new Date().getFullYear())
             const deepParas = [];
             $$('article p, .section__content p').each((dpi, dpel) => {
               const dt = $$(dpel).text().replace(/\s+/g, ' ').trim();
-              if (dt && !dt.includes('The Saint of the day presents a daily calendar') && dt.length > 20) {
+              if (dt && isCleanBioParagraph(dt)) {
                 deepParas.push(dt);
               }
             });
@@ -1510,6 +1564,10 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
           (parsed.saints && parsed.saints.some(s => isDisambiguation('', s.description)));
 
         if (!isStaleMissingStructure && !isStaleRosaryOnOct07 && !isStaleNilusOnSep26 && !isStaleGuardianAngelsOnOtherDate && !hasShortBio && !hasMissingSecondaryImages && !hasMissingSecondaryBio && !hasDisambigBio && parsed && parsed.date === dateKey && (parsed.saintName || parsed.name) && parsed.image && !parsed.imageFallback) {
+          parsed.description = sanitizeBioText(parsed.description);
+          if (parsed.primarySaint) parsed.primarySaint.description = sanitizeBioText(parsed.primarySaint.description);
+          if (parsed.saints) parsed.saints.forEach(s => s.description = sanitizeBioText(s.description));
+          if (parsed.allSaints) parsed.allSaints.forEach(s => s.description = sanitizeBioText(s.description));
           if (isCurrentToday) {
             dailySaint = parsed;
           }
@@ -1625,11 +1683,12 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
   }
 
   if (!primaryImageResult || !primaryImageResult.url) {
-    const cachedFallback = await cacheSaintImageFile(DIGNIFIED_FALLBACK_IMAGE, 'saint_sacred_portrait');
+    const fallbackImg = getDignifiedFallbackImage(primaryName);
+    const cachedFallback = await cacheSaintImageFile(fallbackImg, primaryName || 'saint_sacred_portrait');
     primaryImageResult = {
-      url: DIGNIFIED_FALLBACK_IMAGE,
-      imageUrl: DIGNIFIED_FALLBACK_IMAGE,
-      remoteUrl: DIGNIFIED_FALLBACK_IMAGE,
+      url: fallbackImg,
+      imageUrl: fallbackImg,
+      remoteUrl: fallbackImg,
       localUrl: cachedFallback.localUrl,
       localPath: cachedFallback.localPath,
       buffer: cachedFallback.buffer,
@@ -1639,7 +1698,7 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
     };
   }
 
-  const primaryImageUrl = primaryImageResult.remoteUrl || primaryImageResult.url || DIGNIFIED_FALLBACK_IMAGE;
+  const primaryImageUrl = primaryImageResult.remoteUrl || primaryImageResult.url || getDignifiedFallbackImage(primaryName);
 
   // Primary Tamil translation
   let primaryTamilName = '';
@@ -1989,6 +2048,10 @@ async function loadCachedSaint() {
             } catch (e) {}
           }
 
+          parsed.description = sanitizeBioText(parsed.description);
+          if (parsed.primarySaint) parsed.primarySaint.description = sanitizeBioText(parsed.primarySaint.description);
+          if (parsed.saints) parsed.saints.forEach(s => s.description = sanitizeBioText(s.description));
+          if (parsed.allSaints) parsed.allSaints.forEach(s => s.description = sanitizeBioText(s.description));
           dailySaint = parsed;
           if (dailySaint.lastSynced) {
             dailySaint.lastSynced = new Date(dailySaint.lastSynced);
@@ -2090,18 +2153,51 @@ cron.schedule('0 12 * * *', async () => {
 console.log('✅ [Saint Service] 12:00 AM & 12:00 PM IST Cron Schedulers registered (Asia/Kolkata).');
 
 // ─── Search and apply verified Wikipedia saint image ──────────────────────────
-async function searchAndApplySaintImage(saintName) {
+async function searchAndApplySaintImage(saintName, targetDateKey = null) {
   if (!saintName) return null;
   const { searchWikipediaSaintImage } = require('./saintImageResolver');
   
   const found = await searchWikipediaSaintImage(saintName);
   if (found && found.url) {
-    if (dailySaint) {
+    const currentIst = getISTDateParts().dateKey;
+    const dateToUpdate = targetDateKey || (dailySaint?.date || currentIst);
+    
+    if (dailySaint && (!targetDateKey || targetDateKey === currentIst || targetDateKey === dailySaint.date)) {
       dailySaint.image = found.url;
+      dailySaint.imageUrl = found.url;
       dailySaint.imageSource = found.source || 'wikipedia';
       dailySaint.imageSourceUrl = found.sourceUrl;
       dailySaint.imageFallback = false;
+      if (dailySaint.primarySaint) {
+        dailySaint.primarySaint.image = found.url;
+        dailySaint.primarySaint.imageUrl = found.url;
+        dailySaint.primarySaint.imageSource = found.source || 'wikipedia';
+      }
       await saveSaintToDatabase(dailySaint, true);
+    }
+
+    if (dateToUpdate) {
+      try {
+        const SiteSettings = require('../models/SiteSettings');
+        const cached = await SiteSettings.findOne({ key: `daily_saint_cache_${dateToUpdate}` });
+        if (cached && cached.value) {
+          const parsed = typeof cached.value === 'string' ? JSON.parse(cached.value) : cached.value;
+          parsed.image = found.url;
+          parsed.imageUrl = found.url;
+          parsed.imageSource = found.source || 'wikipedia';
+          parsed.imageFallback = false;
+          if (parsed.primarySaint) {
+            parsed.primarySaint.image = found.url;
+            parsed.primarySaint.imageUrl = found.url;
+            parsed.primarySaint.imageSource = found.source || 'wikipedia';
+          }
+          cached.value = JSON.stringify(parsed);
+          await cached.save();
+          console.log(`[Saint Service] Updated image in cache for ${dateToUpdate}: ${found.url}`);
+        }
+      } catch (e) {
+        console.warn('[Saint Service] Error updating date cache with new saint image:', e.message);
+      }
     }
     return found;
   }
