@@ -1889,6 +1889,74 @@ async function fetchDailySaint(targetDate = new Date(), forceRefresh = false) {
 
 // ─── DATABASE CACHE ──────────────────────────────────────────────────────────
 
+/**
+ * Strips raw binary buffers and ephemeral email attachments before persisting saint metadata to MongoDB.
+ * Ensures saint images, feast info, Tamil/English content, and required metadata are 100% preserved.
+ */
+function prepareSaintForDbStorage(saintObj) {
+  if (!saintObj || typeof saintObj !== 'object') return null;
+  const clone = { ...saintObj };
+
+  // Never store binary buffers or serialized Buffer arrays in MongoDB documents
+  delete clone.imageAttachment;
+  if (clone.primaryImageResult && clone.primaryImageResult.buffer) {
+    clone.primaryImageResult = { ...clone.primaryImageResult };
+    delete clone.primaryImageResult.buffer;
+  }
+  if (clone.primarySaint) {
+    clone.primarySaint = { ...clone.primarySaint };
+    delete clone.primarySaint.imageAttachment;
+    if (!clone.primarySaint.image && !clone.primarySaint.imageUrl) {
+      const fallback = getDignifiedFallbackImage(clone.primarySaint.name || clone.saintName);
+      clone.primarySaint.image = fallback;
+      clone.primarySaint.imageUrl = fallback;
+    }
+  }
+  if (Array.isArray(clone.otherSaints)) {
+    clone.otherSaints = clone.otherSaints.map(s => {
+      if (s && typeof s === 'object') {
+        const { imageAttachment, ...rest } = s;
+        if (!rest.image && !rest.imageUrl) {
+          const fallback = getDignifiedFallbackImage(rest.name);
+          rest.image = fallback;
+          rest.imageUrl = fallback;
+        }
+        return rest;
+      }
+      return s;
+    });
+  }
+  if (Array.isArray(clone.allSaints)) {
+    clone.allSaints = clone.allSaints.map(s => {
+      if (s && typeof s === 'object') {
+        const { imageAttachment, ...rest } = s;
+        return rest;
+      }
+      return s;
+    });
+  }
+  if (Array.isArray(clone.saints)) {
+    clone.saints = clone.saints.map(s => {
+      if (s && typeof s === 'object') {
+        const { imageAttachment, ...rest } = s;
+        return rest;
+      }
+      return s;
+    });
+  }
+
+  // Fallback for primary image if missing or invalid
+  if (!clone.image && !clone.imageUrl) {
+    const fallback = getDignifiedFallbackImage(clone.saintName || clone.name);
+    clone.image = fallback;
+    clone.imageUrl = fallback;
+    clone.remoteUrl = fallback;
+    clone.imageFallback = true;
+  }
+
+  return clone;
+}
+
 async function saveSaintToDatabase(saintObj, isToday = false) {
   try {
     if (!saintObj || !saintObj.date) return;
@@ -1902,10 +1970,13 @@ async function saveSaintToDatabase(saintObj, isToday = false) {
     }
     const SiteSettings = require('../models/SiteSettings');
     
+    const dbPayload = prepareSaintForDbStorage(saintObj);
+    const dbJson = JSON.stringify(dbPayload);
+
     // Always persist in date-specific cache entry
     await SiteSettings.findOneAndUpdate(
       { key: `daily_saint_cache_${saintObj.date}` },
-      { value: JSON.stringify(saintObj), label: `Daily Saint Cache for ${saintObj.date}`, type: 'text' },
+      { value: dbJson, label: `Daily Saint Cache for ${saintObj.date}`, type: 'text' },
       { upsert: true, new: true }
     );
 
@@ -1913,10 +1984,11 @@ async function saveSaintToDatabase(saintObj, isToday = false) {
     if (isToday) {
       await SiteSettings.findOneAndUpdate(
         { key: 'daily_saint_cache' },
-        { value: JSON.stringify(saintObj), label: 'Daily Saint Cache', type: 'text' },
+        { value: dbJson, label: 'Daily Saint Cache', type: 'text' },
         { upsert: true, new: true }
       );
     }
+    console.log(`[SaintService] Persisted optimized saint cache for ${saintObj.date} (${dbJson.length} chars, zero binary buffers)`);
   } catch (err) {
     console.error('Failed to save daily saint cache to database:', err.message);
   }
@@ -2215,6 +2287,7 @@ module.exports = {
   searchAndApplySaintImage, 
   getISTDateParts, 
   saveSaintToDatabase,
+  prepareSaintForDbStorage,
   buildVaticanNewsUrl,
   fetchWikipediaBio,
   fetchWikipediaSummary: fetchWikipediaBio

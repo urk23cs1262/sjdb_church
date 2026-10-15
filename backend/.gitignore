@@ -10,6 +10,8 @@ node_modules/
 # Scratch & temporary test files
 scratch/
 uploads/
+backups/
+gridfs_export/
 
 # Logs
 logs/

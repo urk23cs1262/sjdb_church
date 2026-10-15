@@ -1,9 +1,11 @@
 const { uploadToGridFS, getGridFSStream, getGridFSFileDoc, deleteFromGridFS } = require('../services/gridfsService');
+const { isR2Configured, uploadToR2, getR2Object, deleteFromR2 } = require('../services/r2StorageService');
 const path = require('path');
 const fs = require('fs');
+const mongoose = require('mongoose');
 
 /**
- * Upload single file to GridFS
+ * Upload single file to Object Storage (R2) or GridFS fallback
  */
 const uploadFile = async (req, res) => {
   try {
@@ -11,6 +13,33 @@ const uploadFile = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
+    // If Cloudflare R2 is configured, upload directly to R2 object storage
+    if (isR2Configured()) {
+      const fileId = new mongoose.Types.ObjectId().toString();
+      const r2Result = await uploadToR2(
+        req.file.buffer,
+        fileId,
+        req.file.mimetype,
+        { originalName: req.file.originalname }
+      );
+      return res.json({
+        success: true,
+        message: 'File uploaded successfully to Cloudflare R2',
+        file: {
+          fileId: r2Result.key,
+          filename: req.file.originalname,
+          contentType: req.file.mimetype,
+          size: req.file.size,
+          url: `/api/files/${r2Result.key}`,
+          storage: 'r2',
+          publicUrl: r2Result.publicUrl
+        },
+        fileId: r2Result.key,
+        url: `/api/files/${r2Result.key}`
+      });
+    }
+
+    // Fallback: GridFS
     const fileInfo = await uploadToGridFS(req.file.buffer, req.file.originalname, req.file.mimetype);
     res.json({
       success: true,
@@ -20,17 +49,52 @@ const uploadFile = async (req, res) => {
       url: fileInfo.url
     });
   } catch (err) {
-    console.error('GridFS Upload Error:', err);
+    console.error('File Upload Error:', err);
     res.status(500).json({ success: false, message: err.message || 'File upload failed' });
   }
 };
 
 /**
- * Stream file from GridFS or fallback to local disk
+ * Stream file from Cloudflare R2, GridFS, or fallback to local disk
  */
 const getFile = async (req, res) => {
   try {
     const idOrFilename = req.params.id;
+
+    // 1. Try Cloudflare R2 object storage if configured
+    if (isR2Configured()) {
+      const r2Obj = await getR2Object(idOrFilename, req.headers.range);
+      if (r2Obj) {
+        const headers = {
+          'Content-Type': r2Obj.contentType || 'application/octet-stream',
+          'Accept-Ranges': 'bytes',
+          'Cache-Control': 'public, max-age=31536000, immutable'
+        };
+        if (r2Obj.contentLength) {
+          headers['Content-Length'] = r2Obj.contentLength;
+        }
+        if (r2Obj.contentRange) {
+          headers['Content-Range'] = r2Obj.contentRange;
+        }
+        if (r2Obj.eTag) {
+          headers['ETag'] = r2Obj.eTag;
+        }
+
+        res.status(r2Obj.status).set(headers);
+
+        req.on('close', () => {
+          try {
+            if (r2Obj.stream && typeof r2Obj.stream.destroy === 'function') {
+              r2Obj.stream.destroy();
+            }
+          } catch (_) {}
+        });
+
+        return r2Obj.stream.pipe(res);
+      }
+    }
+
+    // 2. Check GridFS
     const doc = await getGridFSFileDoc(idOrFilename);
 
     if (doc) {
@@ -108,7 +172,7 @@ const getFile = async (req, res) => {
       }
     }
 
-    // Fallback: Check local disk uploads folder for legacy files
+    // 3. Fallback: Check local disk uploads folder for legacy files
     const legacyPath = path.join(__dirname, '../../uploads', idOrFilename);
     if (fs.existsSync(legacyPath)) {
       return res.sendFile(legacyPath);
@@ -121,13 +185,17 @@ const getFile = async (req, res) => {
 };
 
 /**
- * Delete file from GridFS
+ * Delete file from R2 or GridFS
  */
 const deleteFile = async (req, res) => {
   try {
-    const success = await deleteFromGridFS(req.params.id);
-    if (success) {
-      res.json({ success: true, message: 'File deleted from GridFS' });
+    let deleted = false;
+    if (isR2Configured()) {
+      deleted = await deleteFromR2(req.params.id);
+    }
+    const gridfsDeleted = await deleteFromGridFS(req.params.id);
+    if (deleted || gridfsDeleted) {
+      res.json({ success: true, message: 'File deleted successfully' });
     } else {
       res.status(404).json({ success: false, message: 'File not found' });
     }

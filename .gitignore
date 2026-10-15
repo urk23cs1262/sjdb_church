@@ -24,6 +24,10 @@ frontend/build/
 # Uploads & Temp files
 backend/scratch/
 scratch/
+backend/backups/
+backend/gridfs_export/
+backups/
+gridfs_export/
 
 # Logs
 logs/

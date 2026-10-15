@@ -20,6 +20,7 @@
     "node": "22.x"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1152.0",
     "@whiskeysockets/baileys": "^7.0.0-rc13",
     "adm-zip": "^0.6.0",
     "axios": "^1.16.0",
