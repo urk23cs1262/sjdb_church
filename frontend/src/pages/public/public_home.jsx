@@ -486,19 +486,24 @@ export default function Home() {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.1 }}
-                  className="church-card group"
                 >
-                  <div className="flex items-start gap-4">
-                    <div className="min-w-14 h-14 rounded-xl bg-church-gradient flex flex-col items-center justify-center shadow-gold">
-                      <span className="text-white text-xl font-bold leading-none">{new Date(ev.date).getDate()}</span>
-                      <span className="text-gold-300 text-xs">{new Date(ev.date).toLocaleString('default', { month: 'short' })}</span>
+                  <Link
+                    to={`/events?eventId=${ev._id}`}
+                    className="church-card group block hover:shadow-lg transition-all h-full"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="min-w-14 h-14 rounded-xl bg-church-gradient flex flex-col items-center justify-center shadow-gold shrink-0">
+                        <span className="text-white text-xl font-bold leading-none">{new Date(ev.date).getDate()}</span>
+                        <span className="text-gold-300 text-xs">{new Date(ev.date).toLocaleString('default', { month: 'short' })}</span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="badge badge-gold mb-2 capitalize">{ev.category}</span>
+                        <h3 className="font-semibold text-gray-800 group-hover:text-church-gold transition-colors truncate">{ev.title}</h3>
+                        {ev.time && <p className="text-gray-500 text-xs mt-1 flex items-center gap-1"><FiClock className="text-church-gold shrink-0" /> {ev.time}</p>}
+                        {ev.venue && <p className="text-gray-500 text-xs mt-1 flex items-center gap-1 truncate"><FiMapPin className="text-church-gold shrink-0" /> {ev.venue}</p>}
+                      </div>
                     </div>
-                    <div>
-                      <span className="badge badge-gold mb-2 capitalize">{ev.category}</span>
-                      <h3 className="font-semibold text-gray-800 group-hover:text-church-gold transition-colors">{ev.title}</h3>
-                      {ev.venue && <p className="text-gray-500 text-xs mt-1 flex items-center gap-1"><FiMapPin /> {ev.venue}</p>}
-                    </div>
-                  </div>
+                  </Link>
                 </motion.div>
               ))}
             </div>

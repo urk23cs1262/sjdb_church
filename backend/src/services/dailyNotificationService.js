@@ -589,7 +589,7 @@ async function sendDailyChurchNotifications({
     // ── 0. PUBLIC WHATSAPP CHANNEL BROADCAST (Zero Contamination with Private Bot) ──
     try {
       const { publishChannelDailyContent } = require('./whatsappChannelService');
-      await publishChannelDailyContent(targetDate, {
+      await publishChannelDailyContent(today, {
         force: force || manualTest,
         source: manualTest ? 'admin_manual' : 'scheduled_cron',
         triggerType: '4_am_daily'
@@ -1231,6 +1231,20 @@ async function checkAndSendOnStartup() {
     }
 
     console.log(`[Daily Notification Service] Startup/Deployment Trigger: Today's daily notification (${todayDateKey}) has not been sent yet.`);
+
+    // If today's 4:00 AM IST broadcast was missed (e.g. server was off or sleeping overnight)
+    // and it is already past 4:00 AM IST, automatically trigger the daily broadcast catch-up.
+    const nowParts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      hour: 'numeric',
+      hour12: false
+    }).format(new Date());
+    const currentHourIst = parseInt(nowParts, 10);
+
+    if (currentHourIst >= 4) {
+      console.log(`[Daily Notification Service] Startup Catch-Up: 4:00 AM broadcast was missed for ${todayDateKey} (current IST hour: ${currentHourIst}). Automatically initiating catch-up broadcast...`);
+      return await sendDailyChurchNotifications();
+    }
   } catch (err) {
     console.error('[Daily Notification Service] Startup trigger error:', err.message);
   }

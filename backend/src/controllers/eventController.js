@@ -11,16 +11,41 @@ function sendWA(phone, text) {
   return sendWhatsAppNotification(phone, text).catch(() => { });
 }
 
+function getStartOfToday() {
+  const now = new Date();
+  const istFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  const istDateStr = istFormatter.format(now);
+  const [y, m, d] = istDateStr.split('-').map(Number);
+  const istMidnight = new Date(Date.UTC(y, m - 1, d, 0, 0, 0) - (5.5 * 60 * 60 * 1000));
+  const utcMidnight = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+  const localMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  return new Date(Math.min(istMidnight.getTime(), utcMidnight.getTime(), localMidnight.getTime()));
+}
+
 const getAll = async (req, res) => {
   try {
     const { category, upcoming, featured, page = 1, limit = 20, all } = req.query;
     const query = {};
     if (all !== 'true') query.isPublished = true;
     if (category) query.category = category;
-    if (upcoming === 'true') query.date = { $gte: new Date() };
+
+    const startOfToday = getStartOfToday();
+    if (upcoming === 'true') {
+      query.date = { $gte: startOfToday };
+    } else if (upcoming === 'false') {
+      query.date = { $lt: startOfToday };
+    }
+
     if (featured === 'true') query.isFeatured = true;
     const total = await Event.countDocuments(query);
-    const rawEvents = await Event.find(query).sort({ date: 1 }).skip((page - 1) * limit).limit(Number(limit)).lean();
+    const sortOrder = upcoming === 'false' ? { date: -1 } : { date: 1 };
+    const rawEvents = await Event.find(query).sort(sortOrder).skip((page - 1) * limit).limit(Number(limit)).lean();
 
     const isAdmin = req.user && ['admin', 'priest'].includes(req.user.role);
     const events = rawEvents.map(e => {

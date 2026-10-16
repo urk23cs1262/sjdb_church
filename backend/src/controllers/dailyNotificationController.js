@@ -61,7 +61,7 @@ const sendTestEmail = async (req, res) => {
 const triggerBroadcast = async (req, res) => {
   try {
     console.log(`[Daily Notification Controller] 4-Channel Manual broadcast triggered by ${req.user?.email || 'admin'}...`);
-    const result = await sendDailyChurchNotifications({ isManualTest: false });
+    const result = await sendDailyChurchNotifications({ isManualTest: false, force: true });
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

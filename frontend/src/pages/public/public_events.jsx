@@ -67,6 +67,7 @@ export default function Events() {
     const params = new URLSearchParams();
     if (category !== 'all') params.set('category', category);
     if (view === 'upcoming') params.set('upcoming', 'true');
+    else if (view === 'past') params.set('upcoming', 'false');
     api.get(`/events?${params}`)
       .then(r => setEvents(r.data.events || []))
       .catch(() => { })
