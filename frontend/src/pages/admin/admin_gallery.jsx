@@ -27,9 +27,10 @@ export default function AdminGallery() {
         { name: 'description', label: 'Description', type: 'textarea' },
         { name: 'category', label: 'Category', type: 'select', options: ['church', 'feast', 'events', 'priests', 'community', 'other'] },
         { name: 'album', label: 'Album Name' },
-        { name: 'isPublished', label: 'Published', type: 'checkbox' },
+        { name: 'isPublished', label: 'Published', type: 'checkbox', defaultValue: true },
       ]}
       hasImage
+      allowMultipleImages={true}
       categories={['all', 'church', 'feast', 'events', 'priests', 'community', 'other']}
       onDeleteAll={handleDeleteAll}
     />

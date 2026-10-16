@@ -4,8 +4,8 @@ const { protect, adminOnly } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
 router.get('/', getAll);
-router.post('/', protect, adminOnly, (req, res, next) => { req.uploadFolder = 'gallery'; next(); }, upload.single('image'), create);
-router.put('/:id', protect, adminOnly, (req, res, next) => { req.uploadFolder = 'gallery'; next(); }, upload.single('image'), update);
+router.post('/', protect, adminOnly, (req, res, next) => { req.uploadFolder = 'gallery'; next(); }, upload.any(), create);
+router.put('/:id', protect, adminOnly, (req, res, next) => { req.uploadFolder = 'gallery'; next(); }, upload.any(), update);
 router.delete('/all', protect, adminOnly, removeAll);
 router.delete('/:id', protect, adminOnly, remove);
 

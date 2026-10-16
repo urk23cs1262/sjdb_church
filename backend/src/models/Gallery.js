@@ -4,6 +4,7 @@ const gallerySchema = new mongoose.Schema({
   title: { type: String, required: true },
   description: { type: String },
   imageUrl: { type: String, required: true },
+  images: [{ type: String }],
   category: { type: String, enum: ['church', 'feast', 'events', 'priests', 'community', 'other'], default: 'other' },
   album: { type: String },
   isVideo: { type: Boolean, default: false },

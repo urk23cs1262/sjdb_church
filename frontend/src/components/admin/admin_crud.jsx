@@ -7,13 +7,16 @@ import { FiPlus, FiTrash2, FiEdit, FiX } from 'react-icons/fi';
 import api, { UPLOADS_URL, getMediaUrl } from '../../services/api';
 import { SectionLoader } from '../common/common_loader';
 
-export default function AdminCRUD({ resource, title, fields, hasImage, categories, onDeleteAll }) {
+export default function AdminCRUD({ resource, title, fields, hasImage, allowMultipleImages, categories, onDeleteAll }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isImageRemoved, setIsImageRemoved] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [filePreviews, setFilePreviews] = useState([]);
+  const [existingImages, setExistingImages] = useState([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -82,6 +85,10 @@ export default function AdminCRUD({ resource, title, fields, hasImage, categorie
     setEditing(null);
     setImagePreview(null);
     setIsImageRemoved(false);
+    setExistingImages([]);
+    filePreviews.forEach(p => { if (p?.url?.startsWith('blob:')) URL.revokeObjectURL(p.url); });
+    setSelectedFiles([]);
+    setFilePreviews([]);
     const defaultVals = {};
     fields.forEach(f => {
       if (f.defaultValue !== undefined) defaultVals[f.name] = f.defaultValue;
@@ -92,29 +99,120 @@ export default function AdminCRUD({ resource, title, fields, hasImage, categorie
 
   const openEdit = (item) => {
     setEditing(item);
-    setImagePreview(item.imageUrl || item.photo || item.image || null);
+    const itemImages = (item.images && item.images.length > 0)
+      ? item.images
+      : ((item.imageUrl || item.photo || item.image) ? [item.imageUrl || item.photo || item.image] : []);
+    setExistingImages(itemImages);
+    setImagePreview(itemImages[0] || null);
     setIsImageRemoved(false);
+    filePreviews.forEach(p => { if (p?.url?.startsWith('blob:')) URL.revokeObjectURL(p.url); });
+    setSelectedFiles([]);
+    setFilePreviews([]);
     fields.forEach(f => setValue(f.name, item[f.name]));
     setModal(true);
   };
 
+  const removeExistingImage = (idx) => {
+    setExistingImages(prev => {
+      const next = prev.filter((_, i) => i !== idx);
+      if (next.length === 0) {
+        setIsImageRemoved(true);
+        setImagePreview(null);
+      } else {
+        setImagePreview(next[0]);
+      }
+      return next;
+    });
+  };
+
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    if (allowMultipleImages) {
+      setSelectedFiles(prev => [...prev, ...files]);
+      const newPreviews = files.map(file => ({
+        url: URL.createObjectURL(file),
+        name: file.name
+      }));
+      setFilePreviews(prev => [...prev, ...newPreviews]);
+      setIsImageRemoved(false);
+    } else {
+      const singleFile = files[0];
+      setSelectedFiles([singleFile]);
+      setImagePreview(URL.createObjectURL(singleFile));
+      setIsImageRemoved(false);
+    }
+    e.target.value = '';
+  };
+
+  const removeSingleSelectedFile = (idx) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== idx));
+    setFilePreviews(prev => {
+      const target = prev[idx];
+      if (target?.url?.startsWith('blob:')) {
+        URL.revokeObjectURL(target.url);
+      }
+      return prev.filter((_, i) => i !== idx);
+    });
+  };
+
+  const clearAllSelectedFiles = () => {
+    filePreviews.forEach(p => {
+      if (p?.url?.startsWith('blob:')) URL.revokeObjectURL(p.url);
+    });
+    setSelectedFiles([]);
+    setFilePreviews([]);
+  };
+
   const onSubmit = async (data) => {
     try {
+      if (allowMultipleImages || resource === 'gallery') {
+        const totalImages = existingImages.length + selectedFiles.length;
+        if (totalImages === 0 && !data.imageUrl) {
+          toast.error('A gallery item must have at least one image');
+          return;
+        }
+      }
+
       const formData = new FormData();
       Object.entries(data).forEach(([k, v]) => {
-        if (k === 'imageFile' && v?.[0]) formData.append('image', v[0]);
-        else if (v !== undefined && v !== '') formData.append(k, v);
+        if (k === 'imageFile') return;
+        if (v !== undefined && v !== '') formData.append(k, v);
       });
-      if (isImageRemoved && !data.imageFile?.[0]) {
+
+      if (editing) {
+        formData.append('existingImages', JSON.stringify(existingImages));
+      }
+
+      if (selectedFiles.length > 0) {
+        if (allowMultipleImages) {
+          selectedFiles.forEach(file => {
+            formData.append('images', file);
+          });
+        } else {
+          formData.append('image', selectedFiles[0]);
+        }
+      } else if (data.imageFile?.[0]) {
+        formData.append('image', data.imageFile[0]);
+      }
+
+      if (isImageRemoved && !data.imageFile?.[0] && selectedFiles.length === 0 && existingImages.length === 0) {
         formData.append('removeImage', 'true');
       }
+
       const config = hasImage ? { headers: { 'Content-Type': 'multipart/form-data' } } : {};
       if (editing) {
         await api.put(`/${resource}/${editing._id}`, hasImage ? formData : data, config);
         toast.success(`${singularTitle} updated`);
       } else {
-        await api.post(`/${resource}`, hasImage ? formData : data, config);
-        toast.success(`${singularTitle} added`);
+        const res = await api.post(`/${resource}`, hasImage ? formData : data, config);
+        const count = res.data?.count || (res.data?.items?.length) || (selectedFiles.length > 1 ? selectedFiles.length : 1);
+        if (count > 1) {
+          toast.success(`${count} ${pluralTitle.toLowerCase()} added successfully!`);
+        } else {
+          toast.success(`${singularTitle} added`);
+        }
       }
       setModal(false);
       fetchItems();
@@ -214,14 +312,26 @@ export default function AdminCRUD({ resource, title, fields, hasImage, categorie
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           {(hasImage && (item.imageUrl || item.photo || item.image)) && (
-                            <img 
-                              src={getMediaUrl(item.imageUrl || item.photo || item.image)} 
-                              alt="" 
-                              onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.style.display = 'none'; }}
-                              className="w-10 h-10 rounded-lg object-cover" 
-                            />
+                            <div className="relative shrink-0">
+                              <img 
+                                src={getMediaUrl(item.imageUrl || item.photo || item.image)} 
+                                alt="" 
+                                onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.style.display = 'none'; }}
+                                className="w-10 h-10 rounded-lg object-cover border border-gray-200" 
+                              />
+                              {item.images && item.images.length > 1 && (
+                                <span className="absolute -bottom-1 -right-1 bg-church-royal-blue text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full shadow-xs">
+                                  {item.images.length}
+                                </span>
+                              )}
+                            </div>
                           )}
-                          <p className="font-semibold text-gray-800 text-sm truncate max-w-xs">{displayValue(item)}</p>
+                          <div>
+                            <p className="font-semibold text-gray-800 text-sm truncate max-w-xs">{displayValue(item)}</p>
+                            {item.images && item.images.length > 1 && (
+                              <p className="text-[11px] text-blue-600 font-semibold">{item.images.length} photos album</p>
+                            )}
+                          </div>
                         </div>
                       </td>
                       {fields.slice(0, 2).filter(f => !['checkbox'].includes(f.type)).map(f => (
@@ -300,12 +410,78 @@ export default function AdminCRUD({ resource, title, fields, hasImage, categorie
                 ))}
                 {hasImage && (
                   <div className="border-t border-gray-100 pt-3">
-                    <label className="church-label mb-2 block">Image</label>
-                    {(imagePreview || (editing?.image && !isImageRemoved)) && (
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="church-label mb-0 block font-semibold text-gray-700">
+                        {allowMultipleImages 
+                          ? (editing ? `Gallery Photos (${existingImages.length + selectedFiles.length})` : 'Gallery Photos (Upload Multiple)')
+                          : 'Image'}
+                      </label>
+                      {selectedFiles.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-church-royal-blue border border-blue-200">
+                            {selectedFiles.length} new {selectedFiles.length === 1 ? 'photo' : 'photos'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={clearAllSelectedFiles}
+                            className="text-xs text-red-600 hover:text-red-700 font-medium underline cursor-pointer"
+                          >
+                            Clear new
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* EDITING MULTI-IMAGE GALLERY: Show All Existing Photos with Individual Delete */}
+                    {allowMultipleImages && editing && (
+                      <div className="mb-4">
+                        {existingImages.length > 0 ? (
+                          <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                              <span className="text-xs font-bold text-gray-600">
+                                Current Photos in Album ({existingImages.length})
+                              </span>
+                              <span className="text-[11px] text-gray-400">
+                                Click <FiTrash2 className="inline text-red-500" /> to delete photo
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 max-h-52 overflow-y-auto p-2 bg-gray-50 rounded-xl border border-gray-200 custom-scrollbar">
+                              {existingImages.map((imgUrl, idx) => (
+                                <div key={idx} className="relative group rounded-lg overflow-hidden border border-gray-200 bg-white aspect-square shadow-xs">
+                                  <img 
+                                    src={getMediaUrl(imgUrl)} 
+                                    alt="" 
+                                    className="w-full h-full object-cover" 
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => removeExistingImage(idx)}
+                                    className="absolute top-1 right-1 bg-red-600 hover:bg-red-700 text-white p-1.5 rounded-full shadow-md transition-all opacity-85 hover:opacity-100 cursor-pointer"
+                                    title="Delete this photo from album"
+                                  >
+                                    <FiTrash2 size={12} />
+                                  </button>
+                                  <span className="absolute bottom-0 inset-x-0 bg-black/60 text-[10px] text-white truncate px-1 py-0.5 text-center">
+                                    #{idx + 1}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs font-medium">
+                            All previous photos were deleted. Please choose at least one photo below.
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Single Image Mode (Editing single resource like Events, or Add single) */}
+                    {!allowMultipleImages && (imagePreview || (editing?.image && !isImageRemoved) || (editing?.imageUrl && !isImageRemoved)) && (
                       <div className="mb-3 flex items-center justify-between gap-3 bg-gray-50 p-2.5 rounded-xl border border-gray-200">
                         <div className="flex items-center gap-3">
                           <img
-                            src={imagePreview || getMediaUrl(editing?.image)}
+                            src={imagePreview || getMediaUrl(editing?.image || editing?.imageUrl)}
                             alt="Preview"
                             className="w-12 h-12 rounded-lg object-cover border border-gray-200"
                           />
@@ -323,9 +499,9 @@ export default function AdminCRUD({ resource, title, fields, hasImage, categorie
                           onClick={() => {
                             setIsImageRemoved(true);
                             setImagePreview(null);
-                            setValue('imageFile', null);
+                            setSelectedFiles([]);
                           }}
-                          className="flex items-center gap-1 text-xs text-red-600 hover:bg-red-100 bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-lg font-bold transition-all flex-shrink-0"
+                          className="flex items-center gap-1 text-xs text-red-600 hover:bg-red-100 bg-red-50 border border-red-200 px-2.5 py-1.5 rounded-lg font-bold transition-all flex-shrink-0 cursor-pointer"
                           title="Remove Image"
                         >
                           <FiTrash2 size={12} /> Remove
@@ -333,24 +509,53 @@ export default function AdminCRUD({ resource, title, fields, hasImage, categorie
                       </div>
                     )}
 
-                    {isImageRemoved && !imagePreview && (
-                      <div className="mb-3 p-2 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200 font-medium">
-                         Image will be removed upon saving unless a new image is selected below.
+                    {/* Newly Selected Photos Preview Grid */}
+                    {filePreviews.length > 0 && (
+                      <div className="mb-3">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs font-bold text-church-royal-blue">
+                            {editing ? 'New Photos to Add' : 'Selected Photos'} ({filePreviews.length})
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 max-h-48 overflow-y-auto p-2 bg-blue-50/50 rounded-xl border border-blue-200/80 custom-scrollbar">
+                          {filePreviews.map((preview, idx) => (
+                            <div key={idx} className="relative group rounded-lg overflow-hidden border border-blue-200 bg-white aspect-square flex items-center justify-center shadow-xs">
+                              <img src={preview.url} alt={preview.name} className="w-full h-full object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => removeSingleSelectedFile(idx)}
+                                className="absolute top-1 right-1 bg-red-600/90 hover:bg-red-700 text-white p-1 rounded-full shadow-md transition-all opacity-90 hover:opacity-100 cursor-pointer"
+                                title="Remove new photo"
+                              >
+                                <FiX size={12} />
+                              </button>
+                              <span className="absolute bottom-0 inset-x-0 bg-blue-900/70 text-[10px] text-white truncate px-1 py-0.5 text-center">
+                                +New #{idx + 1}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
 
-                    <input
-                      {...register('imageFile')}
-                      type="file"
-                      accept="image/*"
-                      className="church-input"
-                      onChange={e => {
-                        if (e.target.files?.[0]) {
-                          setImagePreview(URL.createObjectURL(e.target.files[0]));
-                          setIsImageRemoved(false);
-                        }
-                      }}
-                    />
+                    {/* File Upload Input */}
+                    <div className="mt-2">
+                      <label className="text-xs text-gray-600 font-semibold mb-1 block">
+                        {allowMultipleImages ? (editing ? 'Add More Photos to this Album' : 'Choose Photos') : 'Select Image'}
+                      </label>
+                      <input
+                        type="file"
+                        multiple={Boolean(allowMultipleImages)}
+                        accept="image/*"
+                        className="church-input file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-church-gold file:text-white hover:file:bg-amber-600 cursor-pointer"
+                        onChange={handleFileChange}
+                      />
+                      {allowMultipleImages && (
+                        <p className="text-[11px] text-gray-500 mt-1.5">
+                          Select one or multiple photos using <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px]">Ctrl</kbd> or <kbd className="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded text-[10px]">Shift</kbd>.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -359,7 +564,7 @@ export default function AdminCRUD({ resource, title, fields, hasImage, categorie
                   Cancel
                 </button>
                 <button type="submit" disabled={isSubmitting} className="btn-gold flex-1 justify-center py-2.5 text-xs font-bold shadow-gold cursor-pointer">
-                  {isSubmitting ? 'Saving...' : editing ? `Update ${singularTitle}` : `Add ${singularTitle}`}
+                  {isSubmitting ? 'Saving...' : editing ? `Update ${singularTitle}` : (allowMultipleImages && selectedFiles.length > 1) ? `Upload ${selectedFiles.length} Photos` : `Add ${singularTitle}`}
                 </button>
               </div>
             </form>
